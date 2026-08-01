@@ -1,0 +1,3 @@
+[submodule "vendor/ab-download-manager"]
+	path = vendor/ab-download-manager
+	url = https://github.com/amir1376/ab-download-manager
