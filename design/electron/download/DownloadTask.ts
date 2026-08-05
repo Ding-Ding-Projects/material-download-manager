@@ -268,24 +268,74 @@ export class DownloadTask extends EventEmitter {
       attempt(retriesLeft);
       return;
     }
-    if (status !== 200 && status !== 206) {
+    const expectsRange = this.item.resumeSupport && (this.item.parts.length > 1 || part.to !== null);
+    const retryResponse = (message: string) => {
       res.resume();
       this.activeRequests.delete(req);
       if (retriesLeft > 0) {
-        setTimeout(() => attempt(retriesLeft - 1), 1500);
+        setTimeout(() => attempt(retriesLeft - 1), 1000);
       } else {
         part.status = "error";
-        this.fatalError = `Unexpected server status ${status}`;
+        this.fatalError = message;
         resolve();
       }
+    };
+
+    if ((expectsRange && status !== 206) || (!expectsRange && status !== 200 && status !== 206)) {
+      retryResponse(expectsRange ? `Expected a ranged response, got ${status}` : `Unexpected server status ${status}`);
       return;
     }
+
+    let expectedResponseBytes: number | null = null;
+    if (expectsRange) {
+      const header = res.headers["content-range"];
+      const contentRange = Array.isArray(header) ? header[0] : header;
+      const match = /^bytes (\d+)-(\d+)\/(\d+|\*)$/i.exec(contentRange ?? "");
+      const requestedStart = part.current;
+      const rangeStart = match ? Number(match[1]) : NaN;
+      const rangeEnd = match ? Number(match[2]) : NaN;
+      const total = match && match[3] !== "*" ? Number(match[3]) : null;
+      const requestedEnd = part.to;
+      const validRange =
+        !!match &&
+        Number.isSafeInteger(rangeStart) &&
+        Number.isSafeInteger(rangeEnd) &&
+        rangeStart === requestedStart &&
+        rangeEnd >= rangeStart &&
+        (requestedEnd === null || rangeEnd <= requestedEnd) &&
+        (total === null || (Number.isSafeInteger(total) && rangeEnd < total));
+      if (!validRange) {
+        retryResponse("Server returned an invalid Content-Range");
+        return;
+      }
+      expectedResponseBytes = rangeEnd - rangeStart + 1;
+      const declaredLengthHeader = res.headers["content-length"];
+      const declaredLength = declaredLengthHeader ? Number(declaredLengthHeader) : null;
+      if (declaredLength !== null && Number.isFinite(declaredLength) && declaredLength !== expectedResponseBytes) {
+        retryResponse("Server Content-Length does not match Content-Range");
+        return;
+      }
+      if (requestedEnd === null && total !== null) {
+        this.item.totalSize = total;
+        part.to = total - 1;
+      }
+    }
+
     part.status = "downloading";
     let writeChain: Promise<void> = Promise.resolve();
+    let responseBytes = 0;
+    let responseInvalid = false;
 
     const limiters = this.options.speedLimiters;
 
     res.on("data", (chunk: Buffer) => {
+      if (responseInvalid) return;
+      if (expectedResponseBytes !== null && responseBytes + chunk.length > expectedResponseBytes) {
+        responseInvalid = true;
+        res.destroy(new Error("Server sent more bytes than its Content-Range"));
+        return;
+      }
+      responseBytes += chunk.length;
       res.pause();
       writeChain = writeChain
         .then(async () => {
@@ -314,6 +364,7 @@ export class DownloadTask extends EventEmitter {
     });
 
     res.on("end", async () => {
+      if (responseInvalid) return;
       await writeChain;
       this.activeRequests.delete(req);
       if (this.stopped || this.destroyed) {

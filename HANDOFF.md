@@ -12,7 +12,7 @@ The repository previously had two incompatible meanings for `design/`:
 The reconciliation keeps both states without allowing one to overwrite the
 other:
 
-- [`design/`](design/) is now the production application tree restored from the
+- [`design/`](design/) is now the runnable application tree restored from the
   handoff branch.
 - [`prototype/`](prototype/) contains the former `main` prototype with its
   relative assets and custom runtime preserved.
@@ -36,7 +36,7 @@ The application under `design/` includes:
 The prototype under `prototype/` is not loaded by the Electron build. Its
 simulated network layer remains reference-only.
 
-## Verification sequence
+## Verification evidence
 
 Run from `design/`:
 
@@ -48,9 +48,26 @@ npm run build:electron
 npm run test:engine
 ```
 
-The final handoff must record the actual result of each command. A Windows
-packaging run (`npm run dist:win`) is still required before publishing an
-installer; a compile-only success is not packaging evidence.
+On 2026-08-05, the following checks passed on
+`codex/handoff-reconcile`:
+
+| Check | Result |
+| --- | --- |
+| `npm ci` | Installed 396 packages from the lockfile; npm reported 11 audit findings and install-script approval warnings. |
+| `npm run typecheck` | Passed renderer and Electron TypeScript checks. |
+| `npm run build` | Passed Vite renderer and Electron main-process compilation. |
+| `npm run test:engine` | 8/8 passed, including Range integrity, pause/resume, non-resumable fallback, filename sanitization, malformed Range rejection, categories, and throttling. |
+| `npm run test:electron` | 2/2 passed for compiled renderer-path and launch-mode resolution. |
+| Hidden-desktop smoke | Passed: direct Electron `v31.7.7` launch opened `Material Download Manager` at 1150×720 and rendered the empty state; the process and headless desktop were then cleaned up. |
+
+The hardening milestone also corrected the compiled renderer path and made
+unpackaged production launches load the built renderer unless
+`NODE_ENV=development` is explicit. Server- or user-supplied filenames are
+constrained to one safe Windows path segment, and ranged responses must agree
+with their `Content-Range` before bytes are written.
+
+A Windows packaging run (`npm run dist:win`) is still required before publishing
+an installer; a compile-only success is not packaging evidence.
 
 ## Known follow-up work
 
@@ -66,6 +83,11 @@ reconciliation:
 4. Add the remaining product features only after their scope and production
    behavior are defined; do not wire the prototype's simulated engine into the
    app.
+5. Pass custom request headers through the real transfer path, enforce the
+   global active-download limit across queues, and add redirect/idle timeout
+   policy before relying on authenticated or long-lived downloads.
+6. Add renderer, IPC, packaging, accessibility, error-notification, and
+   destructive-action coverage before calling the application release-ready.
 
 ## Git state and ownership
 

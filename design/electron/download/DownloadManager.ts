@@ -14,7 +14,7 @@ import type {
 import { DEFAULT_QUEUE_ID } from "../../shared/types";
 import { StateStore } from "./persistence";
 import { detectCategory } from "./categories";
-import { probeUrl as httpProbeUrl } from "./HttpProbe";
+import { probeUrl as httpProbeUrl, sanitizeFileName } from "./HttpProbe";
 import { DownloadTask } from "./DownloadTask";
 import { SpeedLimiter } from "./SpeedLimiter";
 
@@ -61,6 +61,7 @@ export class DownloadManager extends EventEmitter {
       });
     }
     for (const item of state.items) {
+      item.fileName = sanitizeFileName(item.fileName);
       this.items.set(item.id, item);
       this.itemOrder.push(item.id);
     }
@@ -103,7 +104,7 @@ export class DownloadManager extends EventEmitter {
   async addDownload(req: AddDownloadRequest): Promise<string> {
     const id = crypto.randomUUID();
     const folder = req.folder || this.settings.defaultSaveFolder;
-    let fileName = req.fileName || "download";
+    let fileName = sanitizeFileName(req.fileName || "download");
     fileName = await this.resolveNameCollision(folder, fileName);
 
     const item: DownloadItem = {
@@ -150,6 +151,7 @@ export class DownloadManager extends EventEmitter {
   }
 
   private async resolveNameCollision(folder: string, fileName: string): Promise<string> {
+    fileName = sanitizeFileName(fileName);
     const ext = path.extname(fileName);
     const base = path.basename(fileName, ext);
     let candidate = fileName;

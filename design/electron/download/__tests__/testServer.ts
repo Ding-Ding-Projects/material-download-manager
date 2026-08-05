@@ -14,8 +14,12 @@ export interface TestServerHandle {
  * file at `/file.bin`, with full Range/Accept-Ranges support so the
  * multi-connection segmented downloader has something real to exercise.
  */
-export function startTestServer(sizeBytes: number, opts: { supportRanges?: boolean } = {}): Promise<TestServerHandle> {
+export function startTestServer(
+  sizeBytes: number,
+  opts: { supportRanges?: boolean; ignoreRange?: boolean } = {}
+): Promise<TestServerHandle> {
   const supportRanges = opts.supportRanges ?? true;
+  const honorRange = supportRanges && !opts.ignoreRange;
   const buffer = crypto.randomBytes(sizeBytes);
 
   const server = http.createServer((req, res) => {
@@ -36,7 +40,7 @@ export function startTestServer(sizeBytes: number, opts: { supportRanges?: boole
     }
 
     const range = req.headers.range;
-    if (supportRanges && range) {
+    if (honorRange && range) {
       const match = /bytes=(\d+)-(\d*)/.exec(range);
       if (match) {
         const start = parseInt(match[1], 10);

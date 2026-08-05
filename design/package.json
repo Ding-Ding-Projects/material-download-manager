@@ -17,7 +17,8 @@
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p electron/tsconfig.json --noEmit",
     "dist:win": "npm run build && electron-builder --win --x64",
     "dist:win:dir": "npm run build && electron-builder --win --x64 --dir",
-    "test:engine": "node --test dist-electron/electron/download/__tests__/*.test.js"
+    "test:engine": "node --test dist-electron/electron/download/__tests__/*.test.js",
+    "test:electron": "node --test dist-electron/electron/__tests__/*.test.js"
   },
   "dependencies": {
     "zustand": "^4.5.5"

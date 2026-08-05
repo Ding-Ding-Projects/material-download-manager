@@ -3,8 +3,9 @@ import path from "node:path";
 import { IPC } from "../shared/types";
 import type { AddDownloadRequest, AppSettings, DownloadItem, DownloadQueue } from "../shared/types";
 import { DownloadManager } from "./download/DownloadManager";
+import { isDevelopmentLaunch, resolveRendererPath } from "./runtimePaths";
 
-const isDev = !app.isPackaged;
+const isDev = isDevelopmentLaunch(app.isPackaged);
 
 // Windows/Linux: only one instance of a download manager should ever run at
 // once (a second launch — e.g. from a browser's "open with" — should just
@@ -43,7 +44,7 @@ function createWindow() {
     mainWindow.loadURL("http://localhost:5173");
     mainWindow.webContents.openDevTools({ mode: "detach" });
   } else {
-    mainWindow.loadFile(path.join(__dirname, "../dist/index.html"));
+    mainWindow.loadFile(resolveRendererPath(__dirname));
   }
 
   mainWindow.on("closed", () => {

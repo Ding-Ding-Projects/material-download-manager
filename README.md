@@ -5,7 +5,7 @@ AB Download Manager codebase.
 
 ## Quick index
 
-- Production app: [`design/`](design/)
+- Runnable app: [`design/`](design/)
 - Preserved visual prototype: [`prototype/`](prototype/)
 - Handoff: [`HANDOFF.md`](HANDOFF.md)
 - Shared project guidance mirror: [`AGENTS.md`](AGENTS.md)
@@ -22,6 +22,7 @@ npm run typecheck
 npm run build
 npm run build:electron
 npm run test:engine
+npm run test:electron
 ```
 
 The Windows packaging command is `npm run dist:win`. Its installer output still

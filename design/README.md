@@ -33,7 +33,9 @@ npm run electron:dev   # vite + tsc --watch + electron, live reload
 
 ```bash
 npm run build           # renderer (vite) + main process (tsc)
-npm run dist:win        # electron-builder: NSIS installer + portable exe
+npm run test:engine     # downloader and transfer tests
+npm run test:electron   # compiled Electron path/launch-mode tests
+npm run dist:win        # electron-builder Windows package (validate before release)
 ```
 
 Output lands in `release/`. Packaging still needs a supported Windows build

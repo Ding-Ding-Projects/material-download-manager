@@ -5,6 +5,8 @@ import path from "node:path";
 import type { NewDownloadInfo } from "../../shared/types";
 
 const MAX_REDIRECTS = 10;
+const MAX_FILENAME_LENGTH = 255;
+const WINDOWS_RESERVED_NAME = /^(con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\..*)?$/i;
 
 function pickClient(u: URL) {
   return u.protocol === "http:" ? http : https;
@@ -25,11 +27,23 @@ function filenameFromContentDisposition(header: string | undefined): string | nu
   return null;
 }
 
+/** Keep a server- or user-supplied name to one safe Windows path segment. */
+export function sanitizeFileName(input: string): string {
+  const cleaned = input
+    .normalize("NFC")
+    .replace(/[<>:"/\\|?*\u0000-\u001f\u007f]/g, "_")
+    .trim()
+    .replace(/[. ]+$/g, "")
+    .slice(0, MAX_FILENAME_LENGTH);
+  if (!cleaned || cleaned === "." || cleaned === "..") return "download";
+  return WINDOWS_RESERVED_NAME.test(cleaned) ? `_${cleaned}` : cleaned;
+}
+
 function filenameFromUrl(url: string): string {
   try {
     const u = new URL(url);
     const base = path.basename(u.pathname);
-    return base && base !== "/" ? decodeURIComponent(base) : "download";
+    return base && base !== "/" ? sanitizeFileName(decodeURIComponent(base)) : "download";
   } catch {
     return "download";
   }
@@ -88,7 +102,7 @@ export function probeUrl(
           filenameFromUrl(target.toString());
         resolve({
           url: target.toString(),
-          suggestedFileName: suggested,
+          suggestedFileName: sanitizeFileName(suggested),
           contentLength: Number.isFinite(contentLength) ? contentLength : null,
           resumeSupport,
           contentType: res.headers["content-type"] ?? null,

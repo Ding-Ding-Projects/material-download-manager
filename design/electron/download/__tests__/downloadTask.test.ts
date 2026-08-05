@@ -7,7 +7,7 @@ import path from "node:path";
 import crypto from "node:crypto";
 
 import { startTestServer } from "./testServer";
-import { probeUrl } from "../HttpProbe";
+import { probeUrl, sanitizeFileName } from "../HttpProbe";
 import { DownloadTask } from "../DownloadTask";
 import { SpeedLimiter } from "../SpeedLimiter";
 import { detectCategory } from "../categories";
@@ -54,6 +54,14 @@ test("probeUrl reports size + resume support + suggested filename", async () => 
   } finally {
     await srv.close();
   }
+});
+
+test("filename suggestions cannot escape the selected folder", () => {
+  const safe = sanitizeFileName("..\\..\\CON.txt");
+  assert.equal(safe.includes("\\"), false);
+  assert.equal(safe.includes("/"), false);
+  assert.notEqual(safe.toUpperCase(), "CON.TXT");
+  assert.equal(sanitizeFileName("   "), "download");
 });
 
 test("multi-connection segmented download reconstructs the exact file", async () => {
@@ -162,6 +170,34 @@ test("non-resumable server falls back to a single streamed connection", async ()
     assert.equal(item.parts.length, 1, "non-resumable downloads must use exactly one connection");
     const written = await fsp.readFile(path.join(folder, "file.bin"));
     assert.equal(hash(written), hash(srv.buffer));
+  } finally {
+    await srv.close();
+    await fsp.rm(folder, { recursive: true, force: true });
+  }
+});
+
+test("ranged downloads reject a server that ignores the Range header", async () => {
+  const size = 512 * 1024;
+  const srv = await startTestServer(size, { supportRanges: true, ignoreRange: true });
+  const folder = await tmpDir();
+  try {
+    const item = makeItem({
+      url: srv.url,
+      folder,
+      totalSize: size,
+      resumeSupport: true,
+    });
+    const task = new DownloadTask(item, {
+      maxConnections: 1,
+      minPartSize: 512 * 1024,
+      speedLimiters: [new SpeedLimiter(0)],
+    });
+    let errorMsg: string | null = null;
+    task.on("error", (message) => (errorMsg = message));
+    await task.start();
+
+    assert.equal(item.status, "error");
+    assert.match(errorMsg ?? "", /ranged response/i);
   } finally {
     await srv.close();
     await fsp.rm(folder, { recursive: true, force: true });
