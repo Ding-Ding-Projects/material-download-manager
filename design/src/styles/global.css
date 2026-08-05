@@ -1,0 +1,16 @@
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: #16171d;
+  font-family: "Segoe UI", "Inter", system-ui, -apple-system, sans-serif;
+  overflow: hidden;
+}
