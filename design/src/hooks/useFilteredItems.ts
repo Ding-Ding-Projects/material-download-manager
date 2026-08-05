@@ -1,8 +1,8 @@
 import { useMemo } from "react";
 import type { DownloadItem } from "@shared/types";
-import { useAppStore } from "../store/useAppStore";
+import { useAppStore, type SidebarFilter } from "../store/useAppStore";
 
-function matchesFilter(item: DownloadItem, filter: ReturnType<typeof useAppStore.getState>["filter"]): boolean {
+function matchesFilter(item: DownloadItem, filter: SidebarFilter): boolean {
   switch (filter.kind) {
     case "all":
       return true;

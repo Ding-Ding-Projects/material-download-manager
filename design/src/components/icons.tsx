@@ -265,6 +265,16 @@ export function ClipboardIcon({ size = 16, className, style }: IconProps) {
   );
 }
 
+export function InfoIcon({ size = 16, className, style }: IconProps) {
+  return (
+    <svg {...base(size)} className={className} style={style}>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 11v5.5" />
+      <circle cx="12" cy="7.7" r="0.4" fill="currentColor" stroke="none" />
+    </svg>
+  );
+}
+
 export function ErrorIcon({ size = 16, className, style }: IconProps) {
   return (
     <svg {...base(size)} className={className} style={style}>
