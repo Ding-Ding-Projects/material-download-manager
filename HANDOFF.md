@@ -69,6 +69,10 @@ with their `Content-Range` before bytes are written.
 A Windows packaging run (`npm run dist:win`) is still required before publishing
 an installer; a compile-only success is not packaging evidence.
 
+The repository now has a Windows push/dispatch workflow at
+[`.github/workflows/ci.yml`](.github/workflows/ci.yml) for the checks above. It
+does not claim installer, updater, or release verification.
+
 ## Known follow-up work
 
 These items remain open and are deliberately not hidden by the directory

@@ -1,0 +1,48 @@
+name: Windows verification
+
+on:
+  push:
+    branches:
+      - "**"
+  workflow_dispatch:
+
+concurrency:
+  group: windows-verification-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: windows-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: design/package-lock.json
+
+      - name: Install dependencies
+        working-directory: design
+        run: npm ci
+
+      - name: Typecheck
+        working-directory: design
+        run: npm run typecheck
+
+      - name: Build
+        working-directory: design
+        run: npm run build
+
+      - name: Test downloader
+        working-directory: design
+        run: npm run test:engine
+
+      - name: Test Electron paths
+        working-directory: design
+        run: npm run test:electron

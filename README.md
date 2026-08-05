@@ -9,6 +9,7 @@ AB Download Manager codebase.
 - Preserved visual prototype: [`prototype/`](prototype/)
 - Handoff: [`HANDOFF.md`](HANDOFF.md)
 - Shared project guidance mirror: [`AGENTS.md`](AGENTS.md)
+- CI workflow: [Windows verification](.github/workflows/ci.yml)
 - Website: not published
 
 <details>
@@ -28,6 +29,9 @@ npm run test:electron
 The Windows packaging command is `npm run dist:win`. Its installer output still
 needs validation on a Windows build host before it is treated as a release
 artifact.
+
+The Windows verification workflow runs the typecheck, build, downloader tests,
+and compiled Electron path tests on every push and on manual dispatch.
 
 </details>
 
