@@ -1,0 +1,148 @@
+/* Color / spacing tokens for both themes. Dark is the primary, default
+   target (matches app-home_dark.png / app-download_dark.png); light mirrors
+   the same layout with a lighter palette. Theme is selected by stamping
+   data-theme="dark" | "light" on <html> (see App.tsx / useThemeEffect). */
+
+:root,
+:root[data-theme="dark"] {
+  color-scheme: dark;
+
+  --bg-app: #16171d;
+  --bg-titlebar: #1a1b22;
+  --bg-sidebar: #1a1b22;
+  --bg-toolbar: #1c1d25;
+  --bg-panel: #1c1d25;
+  --bg-table-header: #1e1f28;
+  --bg-row: transparent;
+  --bg-row-alt: rgba(255, 255, 255, 0.015);
+  --bg-row-hover: rgba(255, 255, 255, 0.04);
+  --bg-row-selected: rgba(124, 92, 255, 0.16);
+  --bg-dialog: #1c1d25;
+  --bg-dialog-header: #202128;
+  --bg-input: #24252f;
+  --bg-input-hover: #2b2c38;
+  --bg-chip: #262733;
+  --bg-scrim: rgba(8, 8, 12, 0.55);
+
+  --border-color: #2a2b35;
+  --border-color-strong: #34353f;
+
+  --text-primary: #eceef4;
+  --text-secondary: #9a9caa;
+  --text-tertiary: #6d6f7d;
+  --text-disabled: #4b4c58;
+  --text-on-accent: #ffffff;
+
+  --accent-blue: #4f8cff;
+  --accent-purple: #a855f7;
+  --accent-gradient: linear-gradient(90deg, var(--accent-blue), var(--accent-purple));
+  --accent-gradient-diag: linear-gradient(135deg, var(--accent-blue), var(--accent-purple));
+  --accent-solid: #7c5cff;
+
+  --status-downloading: #6fa8ff;
+  --status-paused: #f5a623;
+  --status-finished: #eceef4;
+  --status-error: #ef5a5a;
+  --status-added: #9a9caa;
+
+  --danger: #ef5a5a;
+  --success: #3ecf6e;
+
+  --radius-sm: 4px;
+  --radius: 8px;
+  --radius-lg: 12px;
+
+  --shadow-dialog: 0 24px 60px rgba(0, 0, 0, 0.55);
+  --shadow-menu: 0 12px 28px rgba(0, 0, 0, 0.45);
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
+
+  --bg-app: #f3f4f8;
+  --bg-titlebar: #ffffff;
+  --bg-sidebar: #ffffff;
+  --bg-toolbar: #ffffff;
+  --bg-panel: #ffffff;
+  --bg-table-header: #eef0f5;
+  --bg-row: transparent;
+  --bg-row-alt: rgba(0, 0, 0, 0.012);
+  --bg-row-hover: rgba(20, 20, 40, 0.045);
+  --bg-row-selected: rgba(124, 92, 255, 0.14);
+  --bg-dialog: #ffffff;
+  --bg-dialog-header: #f4f5f9;
+  --bg-input: #eef0f5;
+  --bg-input-hover: #e4e6ee;
+  --bg-chip: #e9eaf1;
+  --bg-scrim: rgba(20, 20, 30, 0.35);
+
+  --border-color: #e1e3ea;
+  --border-color-strong: #cdd0da;
+
+  --text-primary: #1c1d25;
+  --text-secondary: #63667a;
+  --text-tertiary: #8b8ea0;
+  --text-disabled: #b3b5c2;
+  --text-on-accent: #ffffff;
+
+  --accent-blue: #3f7ae0;
+  --accent-purple: #9333ea;
+  --accent-gradient: linear-gradient(90deg, var(--accent-blue), var(--accent-purple));
+  --accent-gradient-diag: linear-gradient(135deg, var(--accent-blue), var(--accent-purple));
+  --accent-solid: #7c5cff;
+
+  --status-downloading: #3f7ae0;
+  --status-paused: #b9760f;
+  --status-finished: #1c1d25;
+  --status-error: #d5453f;
+  --status-added: #63667a;
+
+  --danger: #d5453f;
+  --success: #1e9e53;
+
+  --radius-sm: 4px;
+  --radius: 8px;
+  --radius-lg: 12px;
+
+  --shadow-dialog: 0 24px 60px rgba(20, 20, 40, 0.18);
+  --shadow-menu: 0 12px 28px rgba(20, 20, 40, 0.16);
+}
+
+/* Fallback: when no explicit data-theme is stamped yet, respect the OS. */
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme]) {
+    color-scheme: light;
+    --bg-app: #f3f4f8;
+    --bg-titlebar: #ffffff;
+    --bg-sidebar: #ffffff;
+    --bg-toolbar: #ffffff;
+    --bg-panel: #ffffff;
+    --bg-table-header: #eef0f5;
+    --bg-row: transparent;
+    --bg-row-alt: rgba(0, 0, 0, 0.012);
+    --bg-row-hover: rgba(20, 20, 40, 0.045);
+    --bg-row-selected: rgba(124, 92, 255, 0.14);
+    --bg-dialog: #ffffff;
+    --bg-dialog-header: #f4f5f9;
+    --bg-input: #eef0f5;
+    --bg-input-hover: #e4e6ee;
+    --bg-chip: #e9eaf1;
+    --bg-scrim: rgba(20, 20, 30, 0.35);
+    --border-color: #e1e3ea;
+    --border-color-strong: #cdd0da;
+    --text-primary: #1c1d25;
+    --text-secondary: #63667a;
+    --text-tertiary: #8b8ea0;
+    --text-disabled: #b3b5c2;
+    --text-on-accent: #ffffff;
+    --accent-blue: #3f7ae0;
+    --accent-purple: #9333ea;
+    --status-downloading: #3f7ae0;
+    --status-paused: #b9760f;
+    --status-finished: #1c1d25;
+    --status-error: #d5453f;
+    --status-added: #63667a;
+    --danger: #d5453f;
+    --success: #1e9e53;
+  }
+}

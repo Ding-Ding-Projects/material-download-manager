@@ -1,0 +1,58 @@
+import { contextBridge, ipcRenderer } from "electron";
+import { IPC } from "../shared/types";
+import type {
+  AddDownloadRequest,
+  AppSettings,
+  DownloadQueue,
+  StateSnapshot,
+  NewDownloadInfo,
+} from "../shared/types";
+
+// Everything exposed to the renderer goes through this bridge. No direct
+// Node/ipcRenderer access is ever given to renderer code.
+const api = {
+  getState: (): Promise<StateSnapshot> => ipcRenderer.invoke(IPC.GET_STATE),
+
+  onStateChanged: (cb: (state: StateSnapshot) => void) => {
+    const listener = (_: unknown, state: StateSnapshot) => cb(state);
+    ipcRenderer.on(IPC.STATE_CHANGED, listener);
+    return () => ipcRenderer.removeListener(IPC.STATE_CHANGED, listener);
+  },
+
+  probeUrl: (url: string): Promise<NewDownloadInfo> =>
+    ipcRenderer.invoke(IPC.PROBE_URL, url),
+
+  addDownload: (req: AddDownloadRequest): Promise<string> =>
+    ipcRenderer.invoke(IPC.ADD_DOWNLOAD, req),
+
+  pauseDownload: (id: string): Promise<void> => ipcRenderer.invoke(IPC.PAUSE, id),
+  resumeDownload: (id: string): Promise<void> => ipcRenderer.invoke(IPC.RESUME, id),
+  cancelDownload: (id: string): Promise<void> => ipcRenderer.invoke(IPC.CANCEL, id),
+  removeDownload: (id: string, deleteFile: boolean): Promise<void> =>
+    ipcRenderer.invoke(IPC.REMOVE, id, deleteFile),
+  retryDownload: (id: string): Promise<void> => ipcRenderer.invoke(IPC.RETRY, id),
+  openFile: (id: string): Promise<void> => ipcRenderer.invoke(IPC.OPEN_FILE, id),
+  openFolder: (id: string): Promise<void> => ipcRenderer.invoke(IPC.OPEN_FOLDER, id),
+
+  getSettings: (): Promise<AppSettings> => ipcRenderer.invoke(IPC.SETTINGS_GET),
+  setSettings: (settings: Partial<AppSettings>): Promise<AppSettings> =>
+    ipcRenderer.invoke(IPC.SETTINGS_SET, settings),
+
+  createQueue: (queue: Partial<DownloadQueue>): Promise<DownloadQueue> =>
+    ipcRenderer.invoke(IPC.QUEUE_CREATE, queue),
+  updateQueue: (queue: DownloadQueue): Promise<void> =>
+    ipcRenderer.invoke(IPC.QUEUE_UPDATE, queue),
+  deleteQueue: (id: string): Promise<void> => ipcRenderer.invoke(IPC.QUEUE_DELETE, id),
+  startQueue: (id: string): Promise<void> => ipcRenderer.invoke(IPC.QUEUE_START, id),
+  stopQueue: (id: string): Promise<void> => ipcRenderer.invoke(IPC.QUEUE_STOP, id),
+
+  pickFolder: (): Promise<string | null> => ipcRenderer.invoke(IPC.PICK_FOLDER),
+
+  minimizeWindow: () => ipcRenderer.send(IPC.WINDOW_MINIMIZE),
+  maximizeWindow: () => ipcRenderer.send(IPC.WINDOW_MAXIMIZE),
+  closeWindow: () => ipcRenderer.send(IPC.WINDOW_CLOSE),
+};
+
+contextBridge.exposeInMainWorld("api", api);
+
+export type MaterialDownloadManagerAPI = typeof api;
