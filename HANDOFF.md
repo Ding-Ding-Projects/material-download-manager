@@ -59,6 +59,7 @@ On 2026-08-05, the following checks passed on
 | `npm run test:engine` | 8/8 passed, including Range integrity, pause/resume, non-resumable fallback, filename sanitization, malformed Range rejection, categories, and throttling. |
 | `npm run test:electron` | 2/2 passed for compiled renderer-path and launch-mode resolution. |
 | Hidden-desktop smoke | Passed: direct Electron `v31.7.7` launch opened `Material Download Manager` at 1150×720 and rendered the empty state; the process and headless desktop were then cleaned up. |
+| Remote GitHub Actions | Blocked: `gh workflow run "Windows verification" --ref main` returned HTTP 422, `Actions has been disabled for this user`; no remote run exists to verify. |
 
 The hardening milestone also corrected the compiled renderer path and made
 unpackaged production launches load the built renderer unless
@@ -71,7 +72,8 @@ an installer; a compile-only success is not packaging evidence.
 
 The repository now has a Windows push/dispatch workflow at
 [`.github/workflows/ci.yml`](.github/workflows/ci.yml) for the checks above. It
-does not claim installer, updater, or release verification.
+does not claim installer, updater, or release verification. Remote execution
+still needs GitHub Actions to be enabled for the authenticated user.
 
 ## Known follow-up work
 
