@@ -1,13 +1,23 @@
-import { app, BrowserWindow, ipcMain, shell, dialog } from "electron";
+import { app, BrowserWindow, ipcMain, shell, dialog, Notification } from "electron";
 import path from "node:path";
 import { IPC } from "../shared/types";
-import type { AddDownloadRequest, AppSettings, DownloadQueue } from "../shared/types";
+import type { AddDownloadRequest, AppSettings, DownloadItem, DownloadQueue } from "../shared/types";
 import { DownloadManager } from "./download/DownloadManager";
 
 const isDev = !app.isPackaged;
 
+// Windows/Linux: only one instance of a download manager should ever run at
+// once (a second launch — e.g. from a browser's "open with" — should just
+// focus the existing window instead of starting a second download engine).
+const gotSingleInstanceLock = app.requestSingleInstanceLock();
+if (!gotSingleInstanceLock) {
+  app.quit();
+}
+
 let mainWindow: BrowserWindow | null = null;
 let manager: DownloadManager;
+
+const appIconPath = path.join(__dirname, "../../build/icon.ico");
 
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -18,6 +28,7 @@ function createWindow() {
     show: false,
     frame: false,
     backgroundColor: "#16171d",
+    icon: appIconPath,
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),
       contextIsolation: true,
@@ -88,10 +99,27 @@ function registerIpcHandlers() {
   ipcMain.on(IPC.WINDOW_CLOSE, () => mainWindow?.close());
 }
 
+function notifyDownloadComplete(item: DownloadItem) {
+  if (!Notification.isSupported()) return;
+  new Notification({
+    title: "Download complete",
+    body: item.fileName,
+    icon: appIconPath,
+  }).show();
+}
+
+app.on("second-instance", () => {
+  if (!mainWindow) return;
+  if (mainWindow.isMinimized()) mainWindow.restore();
+  mainWindow.focus();
+});
+
 app.whenReady().then(async () => {
   manager = new DownloadManager(app.getPath("userData"));
   await manager.init();
   manager.on("stateChanged", broadcastState);
+  manager.on("itemCompleted", notifyDownloadComplete);
+  app.setLoginItemSettings({ openAtLogin: manager.getSettings().startOnSystemStartup });
 
   registerIpcHandlers();
   createWindow();
