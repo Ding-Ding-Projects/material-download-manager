@@ -2,7 +2,7 @@ import { EventEmitter } from "node:events";
 import path from "node:path";
 import fsp from "node:fs/promises";
 import crypto from "node:crypto";
-import { shell } from "electron";
+import { app, shell } from "electron";
 import type {
   AddDownloadRequest,
   AppSettings,
@@ -179,6 +179,7 @@ export class DownloadManager extends EventEmitter {
       this.tasks.delete(item.id);
       await this.persist();
       this.scheduleNotify();
+      this.emit("itemCompleted", item);
       if (item.queueId) this.processQueue(item.queueId);
     });
     task.on("error", async () => {
@@ -312,6 +313,9 @@ export class DownloadManager extends EventEmitter {
   async setSettings(partial: Partial<AppSettings>): Promise<AppSettings> {
     this.settings = { ...this.settings, ...partial };
     this.globalSpeedLimiter.setLimit(this.settings.globalSpeedLimitBytes);
+    if (partial.startOnSystemStartup !== undefined && process.platform !== "linux") {
+      app.setLoginItemSettings({ openAtLogin: partial.startOnSystemStartup });
+    }
     await this.persist();
     this.scheduleNotify();
     return this.settings;
