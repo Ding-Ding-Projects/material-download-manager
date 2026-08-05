@@ -101,6 +101,6 @@ The reconciliation is merged into `main`, and the original handoff history is
 preserved as a parent of the integration commit. The agent-created branch can
 be removed only after the pushed ancestry proof; the original handoff branch is
 retained unless its ownership is clear. There are no open GitHub issues at the
-time this handoff was refreshed. GitHub Discussions are disabled for this
-repository, so progress must remain in Git history and the handoff until that
-external setting changes.
+time this handoff was refreshed. GitHub Discussions are disabled, the wiki
+setting is enabled but its wiki repository is not initialized, and GitHub Pages
+is not configured. No unverified wiki or site is claimed here.
