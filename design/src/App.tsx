@@ -1,20 +1,56 @@
-import { useEffect, useState } from "react";
-import type { StateSnapshot } from "@shared/types";
+import { useEffect } from "react";
+import { useAppStore } from "./store/useAppStore";
+import TitleBar from "./components/TitleBar";
+import Sidebar from "./components/Sidebar";
+import Toolbar from "./components/Toolbar";
+import DownloadTable from "./components/DownloadTable";
+import StatusBar from "./components/StatusBar";
+import AddDownloadDialog from "./components/AddDownloadDialog";
+import DownloadDetailsDialog from "./components/DownloadDetailsDialog";
+import SettingsDialog from "./components/SettingsDialog";
+import QueuesDialog from "./components/QueuesDialog";
 
-// Placeholder root component. This gets fleshed out into the full
-// AB-Download-Manager-style UI (title bar, sidebar, download list, dialogs).
 export default function App() {
-  const [state, setState] = useState<StateSnapshot | null>(null);
+  const ready = useAppStore((s) => s.ready);
+  const theme = useAppStore((s) => s.settings?.theme ?? "system");
+  const dialogs = useAppStore((s) => s.dialogs);
 
   useEffect(() => {
-    window.api.getState().then(setState);
-    return window.api.onStateChanged(setState);
+    const unsubscribe = useAppStore.getState().init();
+    return unsubscribe;
   }, []);
 
+  useEffect(() => {
+    const root = document.documentElement;
+    if (theme === "system") {
+      root.removeAttribute("data-theme");
+    } else {
+      root.setAttribute("data-theme", theme);
+    }
+  }, [theme]);
+
   return (
-    <div style={{ color: "#e6e6e6", padding: 24, fontFamily: "sans-serif" }}>
-      <h1>Material Download Manager</h1>
-      <p>{state ? `${state.items.length} downloads tracked` : "Loading…"}</p>
+    <div className="app">
+      <TitleBar />
+      <div className="app-body">
+        <Sidebar />
+        <main className="main-pane">
+          <Toolbar />
+          <DownloadTable />
+          <StatusBar />
+        </main>
+      </div>
+
+      {!ready && (
+        <div className="boot-overlay">
+          <div className="spinner-lg" />
+        </div>
+      )}
+
+      {dialogs.addDownload && <AddDownloadDialog />}
+      {dialogs.detailsItemId && <DownloadDetailsDialog itemId={dialogs.detailsItemId} />}
+      {dialogs.settings && <SettingsDialog />}
+      {dialogs.queues && <QueuesDialog />}
     </div>
   );
 }
