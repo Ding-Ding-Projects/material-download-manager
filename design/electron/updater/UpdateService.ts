@@ -13,6 +13,8 @@ const MIN_BACKGROUND_INTERVAL_MS = 60_000;
 const MAX_BACKGROUND_INTERVAL_MS = 7 * 24 * 60 * 60 * 1_000;
 const MAX_CHECK_TIMEOUT_MS = 60_000;
 const MAX_DOWNLOAD_TIMEOUT_MS = 2 * 60 * 60 * 1_000;
+export const DEFAULT_UPDATE_FEED_URL =
+  "https://github.com/Ding-Ding-Projects/material-download-manager/releases/latest/download/";
 const DEFAULT_RELEASE_NOTES_BASE_URL =
   "https://github.com/Ding-Ding-Projects/material-download-manager/releases/";
 
@@ -224,7 +226,7 @@ function normalizeReleaseNotesBaseUrl(value: unknown): string | null {
 
 export function readUpdateFeedUrl(environment: NodeJS.ProcessEnv = process.env): string | undefined {
   const value = environment.MDM_UPDATE_FEED_URL?.trim();
-  return value || undefined;
+  return value || DEFAULT_UPDATE_FEED_URL;
 }
 
 export function readUpdateReleaseNotesBaseUrl(environment: NodeJS.ProcessEnv = process.env): string | undefined {
