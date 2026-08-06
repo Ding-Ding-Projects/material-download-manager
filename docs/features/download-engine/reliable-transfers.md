@@ -21,6 +21,11 @@ headers (`Authorization`, cookies, and proxy authorization) are stripped when
 a redirect crosses the original origin, including when a later redirect tries
 to bounce back.
 
+State snapshots are written atomically. Each `StateStore` serializes saves so
+overlapping manager updates cannot race on one temporary path, and every save
+uses a unique temporary filename before replacing `state.json`. Temporary files
+are removed after both successful and failed writes.
+
 ## Configuration
 
 The queue and transfer controls are persisted in the app state:
@@ -60,9 +65,13 @@ npm run test:engine
 ```
 
 The engine tests cover persisted headers, cross-origin credential stripping,
-Range reconstruction, pause/resume, concurrency across queues, schedule
-windows and race handling, redirect limits, timeout behavior, malformed range
-responses, categories, and throttling.
+Range reconstruction, pause/resume, concurrency across queues, serialized
+StateStore saves, schedule windows and race handling, redirect limits, timeout
+behavior, malformed range responses, categories, and throttling. The
+`test:engine` script uses Node's `--test-concurrency=1` and
+`--test-timeout=30000` because the manager tests exercise process-global Windows
+profile state intentionally and a blocked test must fail within a bounded
+interval.
 
 ## Suggested articles
 

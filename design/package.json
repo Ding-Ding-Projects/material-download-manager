@@ -7,6 +7,9 @@
   "type": "commonjs",
   "author": "Material Download Manager",
   "license": "MIT",
+  "engines": {
+    "node": ">=18.19.0"
+  },
   "scripts": {
     "dev": "vite",
     "build:renderer": "vite build",
@@ -17,8 +20,8 @@
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p electron/tsconfig.json --noEmit",
     "dist:win": "npm run build && electron-builder --win squirrel --x64",
     "dist:win:dir": "npm run build && electron-builder --win --x64 --dir",
-    "test:engine": "node --test dist-electron/electron/download/__tests__/*.test.js",
-    "test:electron": "node --test dist-electron/electron/__tests__/*.test.js"
+    "test:engine": "node --test --test-concurrency=1 --test-timeout=30000 dist-electron/electron/download/__tests__/*.test.js",
+    "test:electron": "node --test --test-timeout=30000 dist-electron/electron/__tests__/*.test.js"
   },
   "dependencies": {
     "zustand": "^4.5.5"

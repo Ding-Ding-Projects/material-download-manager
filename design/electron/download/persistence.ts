@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import fsp from "node:fs/promises";
+import { randomUUID } from "node:crypto";
 import path from "node:path";
 import type { AppSettings, DownloadItem, DownloadQueue } from "../../shared/types";
 import { DEFAULT_QUEUE_ID } from "../../shared/types";
@@ -95,10 +96,11 @@ export function defaultQueues(): DownloadQueue[] {
 }
 
 export class StateStore {
+  private static readonly saveChains = new Map<string, Promise<void>>();
   private filePath: string;
 
   constructor(userDataPath: string) {
-    this.filePath = path.join(userDataPath, "state.json");
+    this.filePath = path.resolve(userDataPath, "state.json");
   }
 
   async load(defaultSaveFolder: string): Promise<PersistedState> {
@@ -132,9 +134,25 @@ export class StateStore {
   }
 
   async save(state: PersistedState): Promise<void> {
-    const tmp = this.filePath + ".tmp";
-    await fsp.mkdir(path.dirname(this.filePath), { recursive: true });
-    await fsp.writeFile(tmp, JSON.stringify(state, null, 2));
-    await fsp.rename(tmp, this.filePath);
+    const serialized = JSON.stringify(state, null, 2);
+    const previousSave = StateStore.saveChains.get(this.filePath) ?? Promise.resolve();
+    const saveOperation = previousSave.catch(() => undefined).then(async () => {
+      const tmp = `${this.filePath}.${randomUUID()}.tmp`;
+      await fsp.mkdir(path.dirname(this.filePath), { recursive: true });
+      try {
+        await fsp.writeFile(tmp, serialized);
+        await fsp.rename(tmp, this.filePath);
+      } finally {
+        await fsp.rm(tmp, { force: true }).catch(() => {});
+      }
+    });
+    StateStore.saveChains.set(this.filePath, saveOperation);
+    try {
+      await saveOperation;
+    } finally {
+      if (StateStore.saveChains.get(this.filePath) === saveOperation) {
+        StateStore.saveChains.delete(this.filePath);
+      }
+    }
   }
 }

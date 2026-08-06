@@ -99,3 +99,59 @@ test("settings round-trip keeps the new values and marks them persisted", async 
     await fsp.rm(userDataPath, { recursive: true, force: true });
   }
 });
+
+test("StateStore serializes concurrent saves without corrupting the atomic file", async () => {
+  const userDataPath = await fsp.mkdtemp(path.join(os.tmpdir(), "mdm-concurrent-saves-"));
+  try {
+    const stores = [new StateStore(userDataPath), new StateStore(userDataPath)];
+    const initial = createDefaultSettings("C:/Downloads/MaterialDownloadManager");
+    const states = Array.from({ length: 32 }, (_, index) => ({
+      items: [],
+      queues: [],
+      settings: { ...initial, defaultSaveFolder: `C:/Downloads/run-${index}` },
+    }));
+
+    await Promise.all(states.map((state, index) => stores[index % stores.length].save(state)));
+
+    const saved = JSON.parse(await fsp.readFile(path.join(userDataPath, "state.json"), "utf8")) as {
+      settings: { defaultSaveFolder: string };
+    };
+    assert.equal(saved.settings.defaultSaveFolder, "C:/Downloads/run-31");
+    const temporaryFiles = (await fsp.readdir(userDataPath)).filter((name) => name.endsWith(".tmp"));
+    assert.deepEqual(temporaryFiles, []);
+  } finally {
+    await fsp.rm(userDataPath, { recursive: true, force: true });
+  }
+});
+
+test("StateStore removes a failed temporary write and recovers on the next save", async () => {
+  const userDataPath = await fsp.mkdtemp(path.join(os.tmpdir(), "mdm-save-recovery-"));
+  const statePath = path.join(userDataPath, "state.json");
+  try {
+    const store = new StateStore(userDataPath);
+    const initial = createDefaultSettings("C:/Downloads/MaterialDownloadManager");
+    await fsp.mkdir(statePath);
+
+    await assert.rejects(
+      store.save({ items: [], queues: [], settings: initial }),
+      /EEXIST|EISDIR|EPERM|directory/i
+    );
+    assert.deepEqual(
+      (await fsp.readdir(userDataPath)).filter((name) => name.endsWith(".tmp")),
+      []
+    );
+
+    await fsp.rm(statePath, { recursive: true, force: true });
+    await store.save({
+      items: [],
+      queues: [],
+      settings: { ...initial, defaultSaveFolder: "C:/Downloads/recovered" },
+    });
+    const recovered = JSON.parse(await fsp.readFile(statePath, "utf8")) as {
+      settings: { defaultSaveFolder: string };
+    };
+    assert.equal(recovered.settings.defaultSaveFolder, "C:/Downloads/recovered");
+  } finally {
+    await fsp.rm(userDataPath, { recursive: true, force: true });
+  }
+});

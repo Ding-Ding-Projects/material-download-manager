@@ -50,6 +50,19 @@ proven ref conflict and retains reservation tombstones after a failed build, so
 concurrent branch triggers cannot select duplicate repository-global release
 identities and no pending trigger is replaced by a global concurrency queue.
 
+The latest unsigned hosted verification reached the engine suite but exposed a
+real concurrent StateStore write race: two saves shared `state.json.tmp`, and
+one could rename it before the other. StateStore now serializes saves per store,
+uses a unique temporary filename for each atomic write, and cleans up temporary
+files after success or failure. The engine test command also runs with
+`--test-concurrency=1 --test-timeout=30000` because its manager tests
+intentionally exercise process-global Windows profile state and a blocked test
+must fail within a bounded interval. Both Windows jobs have a 30-minute timeout.
+Hosted run
+[31129129233](https://github.com/Ding-Ding-Projects/material-download-manager/actions/runs/31129129233)
+was canceled after recording the race; the next unsigned dispatch is required
+before any release result can be claimed.
+
 ## Runnable application
 
 The application under `design/` includes:
@@ -84,17 +97,16 @@ npm run test:engine
 npm run test:electron
 ```
 
-On the final integrated tree (`main` at `ad6f44c`), the following checks
-passed:
+On the current verification tree, the following checks passed locally:
 
 | Check | Result |
 | --- | --- |
 | `npm run typecheck` | Passed renderer and Electron TypeScript checks. |
 | `npm run build` | Passed Vite renderer and Electron main-process compilation. |
-| `npm run test:engine` | 29/29 passed, including Range integrity, pause/resume, non-resumable fallback, custom-header persistence and cross-origin header stripping, global queue limits, schedule race handling, manager history hooks, filename sanitization, malformed Range rejection, categories, throttling, and URL redaction. |
+| `npm run test:engine` | 31/31 passed locally, including concurrent and cross-instance StateStore saves, failed-write recovery, Range integrity, pause/resume, non-resumable fallback, custom-header persistence and cross-origin header stripping, global queue limits, schedule race handling, manager history hooks, filename sanitization, malformed Range rejection, categories, throttling, and URL redaction. |
 | `npm run test:electron` | 31/31 passed for export, local history, regex, tabs, command-palette foundations, compiled renderer-path resolution, secure updater IPC, version monotonicity, timeout/stale-event recovery, native Squirrel download-overlap protection, queue payload validation, Settings Escape handling, and completion-notification preference handling. |
 | Hidden-desktop smoke | Passed through the cheap hidden-desktop route: direct Electron `v31.7.7` launch opened `Material Download Manager` at 1150×720, rendered the empty state and update state, opened Settings, filtered Settings with its anchored regex builder, and returned focus after Escape. The hidden desktop and process were cleaned up. |
-| Remote GitHub Actions | Passed for `ad6f44c`: [Windows verification run 31072760389](https://github.com/Ding-Ding-Projects/material-download-manager/actions/runs/31072760389). |
+| Remote GitHub Actions | The earlier Windows verification run [31072760389](https://github.com/Ding-Ding-Projects/material-download-manager/actions/runs/31072760389) passed. Unsigned release run [31129129233](https://github.com/Ding-Ding-Projects/material-download-manager/actions/runs/31129129233) was canceled after the StateStore `ENOENT` race; no release was attempted. |
 
 The hardening milestone corrected the compiled renderer path and made
 unpackaged production launches load the built renderer unless
