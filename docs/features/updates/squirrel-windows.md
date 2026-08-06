@@ -19,20 +19,34 @@ until a signed feed exists. `npm run dist:win` is the packaging command;
 It performs one bounded startup check and then bounded background checks. It
 exposes these explicit states: `current`, `available`, `downloading`, `ready`,
 `failed`, and `offline`. Downloads are staged in the background. Installation
-is never automatic: a later UI/IPC surface must explicitly call
-`quitAndInstall()` after showing the exact version and the restart action.
+is never automatic: the renderer banner exposes manual check, release-notes,
+`Later`, and `Restart to install update` actions, and the main process only
+calls `quitAndInstall()` after a fresh unsaved-work assertion succeeds.
 Electron's built-in Squirrel event does not include the version in its initial
 `update-available` notification, so the available/downloading state may carry
-`version: null` until the downloaded event supplies its release name. A future
-renderer must show that as an honest pending version rather than inventing one.
+`version: null` until the downloaded event supplies its release name. The
+banner labels that state as the latest version rather than inventing a number.
+The shared state validator rejects malformed versions, unsafe release-notes
+URLs, and invalid progress values before they reach the renderer.
+
+Checks and downloads use operation leases. A caller timeout marks the lease
+stale but keeps it busy until the adapter settles, so a late event cannot start
+an overlapping native Squirrel operation or overwrite a ready state. Candidate
+versions must be strictly newer than the installed version before download or
+installation can proceed.
 
 ## Configuration
 
 The service accepts the public feed URL from the main-process-only
-`MDM_UPDATE_FEED_URL` environment variable. It accepts only HTTPS URLs with
-no username, password, or query string, and it never sends credentials to the
-renderer. The current repository has no committed feed URL because no signed
-release feed has been published yet.
+`MDM_UPDATE_FEED_URL` environment variable and an optional release-notes base
+from `MDM_UPDATE_RELEASE_NOTES_BASE_URL`. Both accept only HTTPS URLs with no
+username, password, query, or fragment, and the main process never sends raw
+errors or credentials to the renderer. The current repository has no committed
+feed URL because no signed release feed has been published yet.
+
+Every updater IPC handler checks the sender window and frame. The preload
+bridge exposes only typed operations and validates returned state, install
+results, and unsaved-work payloads before the renderer consumes them.
 
 The compatibility setting `showCompleteDialog` now truthfully controls the
 non-blocking OS completion notification as well as the renderer's setting
@@ -46,7 +60,10 @@ decision logic injectable for focused tests.
 - Network failures produce `offline`; raw error strings are not placed in the
   public state, so URLs and accidental credentials cannot leak through update
   diagnostics.
-- Checks and downloads have bounded timeouts and refuse overlapping checks.
+- Checks and downloads have bounded timeouts, retain stale operation leases until
+  adapter settlement, and refuse overlapping checks or downloads.
+- Equal, older, malformed, and unverified candidate versions never become
+  downloadable or ready.
 - The updater only stages an update. The app does not call `quitAndInstall()`
   during startup, active downloads, or background checks.
 - Squirrel signing, the public HTTPS feed, the `RELEASES` index, and the

@@ -1,4 +1,7 @@
 import { EventEmitter } from "node:events";
+import type { UpdateState } from "../../shared/types";
+
+export type { UpdateState } from "../../shared/types";
 
 export const UPDATE_STARTUP_DELAY_MS = 15_000;
 export const UPDATE_BACKGROUND_INTERVAL_MS = 6 * 60 * 60 * 1_000;
@@ -10,19 +13,13 @@ const MIN_BACKGROUND_INTERVAL_MS = 60_000;
 const MAX_BACKGROUND_INTERVAL_MS = 7 * 24 * 60 * 60 * 1_000;
 const MAX_CHECK_TIMEOUT_MS = 60_000;
 const MAX_DOWNLOAD_TIMEOUT_MS = 2 * 60 * 60 * 1_000;
-
-export type UpdateState =
-  | { status: "current"; version: string; checkedAt: number }
-  | { status: "available"; version: string | null; checkedAt: number }
-  | { status: "downloading"; version: string | null; checkedAt: number; percent: number }
-  | { status: "ready"; version: string | null; checkedAt: number }
-  | { status: "failed"; version: string | null; checkedAt: number; message: string }
-  | { status: "offline"; version: string | null; checkedAt: number; message: string };
+const DEFAULT_RELEASE_NOTES_BASE_URL =
+  "https://github.com/Ding-Ding-Projects/material-download-manager/releases/";
 
 export interface UpdateInfoLike {
   version?: unknown;
+  releaseNotesUrl?: unknown;
 }
-
 export interface UpdateCheckResultLike {
   updateInfo?: UpdateInfoLike;
 }
@@ -47,6 +44,7 @@ export interface UpdateServiceOptions {
   isPackaged: boolean;
   supportedPlatform?: boolean;
   feedUrl?: string;
+  releaseNotesBaseUrl?: string;
   now?: () => number;
   schedule?: (callback: () => void, delayMs: number) => ReturnType<typeof setTimeout>;
   cancelSchedule?: (handle: ReturnType<typeof setTimeout>) => void;
@@ -54,10 +52,37 @@ export interface UpdateServiceOptions {
   backgroundIntervalMs?: number;
   checkTimeoutMs?: number;
   downloadTimeoutMs?: number;
+  canInstall?: () => boolean;
   logger?: (message: string) => void;
 }
 
 type TimerHandle = ReturnType<typeof setTimeout>;
+
+interface ParsedVersion {
+  core: [number, number, number];
+  prerelease: string[];
+}
+
+interface CheckLease {
+  id: number;
+  promise: Promise<UpdateCheckResultLike | null | void>;
+  resolve: (value: UpdateCheckResultLike | null | void) => void;
+  reject: (reason: unknown) => void;
+  settled: boolean;
+  timedOut: boolean;
+  eventHandled: boolean;
+}
+
+interface DownloadLease {
+  id: number;
+  version: string | null;
+  releaseNotesUrl: string | null;
+  promise: Promise<unknown> | null;
+  resolve?: () => void;
+  reject?: (reason: unknown) => void;
+  settled: boolean;
+  timedOut: boolean;
+}
 
 function boundedDelay(value: number | undefined, fallback: number, min: number, max: number): number {
   if (!Number.isFinite(value)) return fallback;
@@ -65,7 +90,49 @@ function boundedDelay(value: number | undefined, fallback: number, min: number, 
 }
 
 function updateVersion(value: unknown): string | null {
-  return typeof value === "string" && value.trim() ? value.trim() : null;
+  return typeof value === "string" && value.trim().length > 0 && value.trim().length <= 128
+    ? value.trim()
+    : null;
+}
+
+function parseVersion(value: string): ParsedVersion | null {
+  const match = /^v?(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.-]+))?(?:\+[0-9A-Za-z.-]+)?$/.exec(value.trim());
+  if (!match) return null;
+  const core = [Number(match[1]), Number(match[2]), Number(match[3])] as [number, number, number];
+  if (core.some((part) => !Number.isSafeInteger(part))) return null;
+  return { core, prerelease: match[4] ? match[4].split(".") : [] };
+}
+
+function compareVersions(left: string, right: string): number | null {
+  const a = parseVersion(left);
+  const b = parseVersion(right);
+  if (!a || !b) return null;
+
+  for (let index = 0; index < a.core.length; index += 1) {
+    if (a.core[index] !== b.core[index]) return a.core[index] > b.core[index] ? 1 : -1;
+  }
+  if (a.prerelease.length === 0 && b.prerelease.length > 0) return 1;
+  if (a.prerelease.length > 0 && b.prerelease.length === 0) return -1;
+  for (let index = 0; index < Math.max(a.prerelease.length, b.prerelease.length); index += 1) {
+    const aPart = a.prerelease[index];
+    const bPart = b.prerelease[index];
+    if (aPart === undefined) return -1;
+    if (bPart === undefined) return 1;
+    if (aPart === bPart) continue;
+    const aNumber = /^\d+$/.test(aPart) ? Number(aPart) : null;
+    const bNumber = /^\d+$/.test(bPart) ? Number(bPart) : null;
+    if (aNumber !== null && bNumber !== null) return aNumber > bNumber ? 1 : -1;
+    if (aNumber !== null) return -1;
+    if (bNumber !== null) return 1;
+    return aPart > bPart ? 1 : -1;
+  }
+  return 0;
+}
+
+export function isNewerVersion(candidate: unknown, current: string): candidate is string {
+  const version = updateVersion(candidate);
+  const comparison = version ? compareVersions(version, current) : null;
+  return comparison !== null && comparison > 0;
 }
 
 function networkFailure(error: unknown): boolean {
@@ -118,19 +185,40 @@ async function withTimeout<T>(operation: Promise<T>, timeoutMs: number): Promise
 }
 
 /**
- * Accept only a public HTTPS feed URL. Credentials in URLs and query strings
- * are rejected so an update secret cannot accidentally enter process state or
- * renderer-facing diagnostics.
+ * Accept only a public HTTPS feed URL. Credentials, queries, and fragments
+ * are rejected so an update secret cannot enter process state or diagnostics.
  */
 export function normalizeUpdateFeedUrl(value: unknown): string | null {
   if (typeof value !== "string" || !value.trim()) return null;
   try {
     const url = new URL(value.trim());
-    if (url.protocol !== "https:" || !url.hostname || url.username || url.password || url.search) return null;
+    if (url.protocol !== "https:" || !url.hostname || url.username || url.password || url.search || url.hash) {
+      return null;
+    }
     return url.toString();
   } catch {
     return null;
   }
+}
+
+export function normalizeReleaseNotesUrl(value: unknown): string | null {
+  if (typeof value !== "string" || !value.trim()) return null;
+  try {
+    const url = new URL(value.trim());
+    if (url.protocol !== "https:" || !url.hostname || url.username || url.password || url.search || url.hash) return null;
+    return url.toString();
+  } catch {
+    return null;
+  }
+}
+
+function normalizeReleaseNotesBaseUrl(value: unknown): string | null {
+  const normalized = normalizeReleaseNotesUrl(value);
+  if (!normalized) return null;
+  const url = new URL(normalized);
+  if (url.search || url.hash) return null;
+  if (!url.pathname.endsWith("/")) url.pathname += "/";
+  return url.toString();
 }
 
 export function readUpdateFeedUrl(environment: NodeJS.ProcessEnv = process.env): string | undefined {
@@ -138,10 +226,30 @@ export function readUpdateFeedUrl(environment: NodeJS.ProcessEnv = process.env):
   return value || undefined;
 }
 
+export function readUpdateReleaseNotesBaseUrl(environment: NodeJS.ProcessEnv = process.env): string | undefined {
+  const value = environment.MDM_UPDATE_RELEASE_NOTES_BASE_URL?.trim();
+  return value || undefined;
+}
+
+function releaseNotesUrlFor(version: string, candidate: unknown, baseUrl: string): string {
+  const direct = normalizeReleaseNotesUrl(candidate);
+  if (direct) return direct;
+  const base = normalizeReleaseNotesBaseUrl(baseUrl) ?? DEFAULT_RELEASE_NOTES_BASE_URL;
+  const url = new URL(base);
+  const releaseVersion = version.startsWith("v") ? version : `v${version}`;
+  url.pathname = `${url.pathname}tag/${encodeURIComponent(releaseVersion)}`;
+  return url.toString();
+}
+
+function isPromiseLike<T>(value: unknown): value is PromiseLike<T> {
+  return typeof value === "object" && value !== null && "then" in value && typeof value.then === "function";
+}
+
 /**
- * Main-process update coordinator for Squirrel.Windows. It never installs an
- * update during active work: download is backgrounded, while installation is
- * exposed as an explicit `quitAndInstall` action for a later UI/IPC surface.
+ * Main-process update coordinator for Squirrel.Windows. It stages downloads
+ * in the background and exposes installation only through an explicit action.
+ * Operation leases stay busy until the adapter settles, even after a caller
+ * timeout, so recovery cannot start overlapping checks or downloads.
  */
 export class UpdateService extends EventEmitter {
   private readonly adapter: UpdaterAdapter;
@@ -149,6 +257,7 @@ export class UpdateService extends EventEmitter {
   private readonly isPackaged: boolean;
   private readonly supportedPlatform: boolean;
   private readonly feedUrl: string | null;
+  private readonly releaseNotesBaseUrl: string;
   private readonly now: () => number;
   private readonly schedule: (callback: () => void, delayMs: number) => TimerHandle;
   private readonly cancelSchedule: (handle: TimerHandle) => void;
@@ -156,55 +265,121 @@ export class UpdateService extends EventEmitter {
   private readonly backgroundIntervalMs: number;
   private readonly checkTimeoutMs: number;
   private readonly downloadTimeoutMs: number;
+  private readonly canInstall: () => boolean;
   private readonly logger: (message: string) => void;
   private state: UpdateState;
   private timer: TimerHandle | null = null;
   private started = false;
   private stopped = false;
-  private checkInFlight: Promise<unknown> | null = null;
-  private downloadInFlight = false;
+  private operationId = 0;
+  private checkInFlight: CheckLease | null = null;
+  private downloadInFlight: DownloadLease | null = null;
   private availableVersion: string | null = null;
+  private availableReleaseNotesUrl: string | null = null;
 
   private readonly handleUpdateAvailable = (info?: UpdateInfoLike) => {
+    const lease = this.checkInFlight;
+    if (!lease || this.state.status === "ready") return;
+    if (lease.timedOut) {
+      this.settleCheck(lease);
+      return;
+    }
+    lease.eventHandled = true;
+
     const version = updateVersion(info?.version);
+    if (version && !isNewerVersion(version, this.currentVersion)) {
+      this.availableVersion = null;
+      this.availableReleaseNotesUrl = null;
+      this.setCurrent();
+      this.settleCheck(lease);
+      return;
+    }
+
     this.availableVersion = version;
-    this.setState({ status: "available", version });
+    this.availableReleaseNotesUrl = normalizeReleaseNotesUrl(info?.releaseNotesUrl);
+    this.setAvailable(version, this.availableReleaseNotesUrl);
+    this.settleCheck(lease);
     void this.downloadAvailableUpdate();
   };
 
   private readonly handleUpdateNotAvailable = () => {
-    if (this.downloadInFlight || this.state.status === "ready") return;
-    this.setState({ status: "current", version: this.currentVersion });
+    const lease = this.checkInFlight;
+    if (!lease) return;
+    if (lease.timedOut) {
+      this.settleCheck(lease);
+      return;
+    }
+    lease.eventHandled = true;
+    if (this.state.status !== "ready" && !this.downloadInFlight) this.setCurrent();
+    this.settleCheck(lease);
   };
 
   private readonly handleDownloadProgress = (progress: UpdateProgressLike) => {
-    const version = this.availableVersion;
-    if (!version || (this.state.status !== "downloading" && this.state.status !== "available")) return;
-    const percent = typeof progress?.percent === "number" && Number.isFinite(progress.percent)
-      ? Math.min(100, Math.max(0, progress.percent))
-      : 0;
-    this.setState({ status: "downloading", version, percent });
+    const lease = this.downloadInFlight;
+    if (!lease || lease.timedOut || this.state.status === "ready") return;
+    const percent =
+      typeof progress?.percent === "number" && Number.isFinite(progress.percent)
+        ? Math.min(100, Math.max(0, progress.percent))
+        : 0;
+    this.setDownloading(lease.version, lease.releaseNotesUrl, percent);
   };
 
   private readonly handleUpdateDownloaded = (...args: unknown[]) => {
+    const lease = this.downloadInFlight;
+    if (!lease) return;
+    if (lease.timedOut || this.state.status === "ready") {
+      this.settleDownload(lease);
+      return;
+    }
+
     const releaseName = updateVersion(args[2]);
-    const version = releaseName ?? this.availableVersion;
+    const version = releaseName ?? lease.version ?? this.availableVersion;
+    if (!version || !isNewerVersion(version, this.currentVersion)) {
+      this.settleDownload(lease);
+      this.fail("The update did not provide a newer verified version.");
+      return;
+    }
+
     this.availableVersion = version;
-    this.setState({ status: "ready", version });
+    this.setReady(version, lease.releaseNotesUrl ?? this.availableReleaseNotesUrl);
+    this.settleDownload(lease);
   };
 
   private readonly handleError = (error: unknown) => {
+    if (this.state.status === "ready") return;
+    const download = this.downloadInFlight;
+    if (download) {
+      if (download.timedOut) {
+        this.settleDownload(download);
+        return;
+      }
+      this.settleDownload(download);
+      if (networkFailure(error)) this.offline();
+      else this.fail("The update download failed.");
+      return;
+    }
+
+    const check = this.checkInFlight;
+    if (!check) return;
+    if (check.timedOut) {
+      this.settleCheck(check);
+      return;
+    }
+    check.eventHandled = true;
+    this.settleCheck(check, error);
     if (networkFailure(error)) this.offline();
-    else this.fail("The update operation failed.");
+    else this.fail("The update check failed.");
   };
 
   constructor(options: UpdateServiceOptions) {
     super();
     this.adapter = options.adapter;
-    this.currentVersion = options.currentVersion;
+    this.currentVersion = updateVersion(options.currentVersion) ?? "0.0.0";
     this.isPackaged = options.isPackaged;
     this.supportedPlatform = options.supportedPlatform ?? true;
     this.feedUrl = normalizeUpdateFeedUrl(options.feedUrl);
+    this.releaseNotesBaseUrl =
+      normalizeReleaseNotesBaseUrl(options.releaseNotesBaseUrl) ?? DEFAULT_RELEASE_NOTES_BASE_URL;
     this.now = options.now ?? Date.now;
     this.schedule = options.schedule ?? ((callback, delayMs) => setTimeout(callback, delayMs));
     this.cancelSchedule = options.cancelSchedule ?? ((handle) => clearTimeout(handle));
@@ -219,15 +394,25 @@ export class UpdateService extends EventEmitter {
     this.downloadTimeoutMs = boundedDelay(
       options.downloadTimeoutMs,
       UPDATE_DOWNLOAD_TIMEOUT_MS,
-      5_000,
+      1_000,
       MAX_DOWNLOAD_TIMEOUT_MS
     );
+    this.canInstall = options.canInstall ?? (() => false);
     this.logger = options.logger ?? (() => {});
-    this.state = { status: "current", version: this.currentVersion, checkedAt: 0 };
+    this.state = {
+      status: "current",
+      version: this.currentVersion,
+      releaseNotesUrl: null,
+      checkedAt: 0,
+    };
   }
 
   getState(): UpdateState {
     return { ...this.state };
+  }
+
+  getReleaseNotesUrl(): string | null {
+    return this.state.status === "ready" ? this.state.releaseNotesUrl : null;
   }
 
   onStateChanged(listener: (state: UpdateState) => void): () => void {
@@ -271,44 +456,34 @@ export class UpdateService extends EventEmitter {
       this.cancelSchedule(this.timer);
       this.timer = null;
     }
+    if (this.checkInFlight) this.checkInFlight.timedOut = true;
+    if (this.downloadInFlight) this.downloadInFlight.timedOut = true;
     this.detachListeners();
   }
 
   async checkForUpdates(): Promise<UpdateState> {
     if (this.stopped || !this.started) return this.getState();
     if (!this.isPackaged || !this.supportedPlatform || !this.feedUrl) return this.getState();
-    if (
-      this.checkInFlight ||
-      this.downloadInFlight ||
-      this.state.status === "available" ||
-      this.state.status === "downloading" ||
-      this.state.status === "ready"
-    ) {
+    if (this.checkInFlight || this.downloadInFlight || ["available", "downloading", "ready"].includes(this.state.status)) {
       return this.getState();
     }
 
-    let operation: Promise<UpdateCheckResultLike | null | void>;
+    const lease = this.beginCheck();
     try {
-      operation = Promise.resolve(this.adapter.checkForUpdates());
-    } catch {
-      this.fail("The update check could not start.");
-      return this.getState();
-    }
-    this.checkInFlight = operation;
-    void operation.then(
-      () => this.clearCheck(operation),
-      () => this.clearCheck(operation)
-    );
-
-    try {
-      const result = await withTimeout(operation, this.checkTimeoutMs);
-      if (this.state.status === "current" || this.state.status === "failed" || this.state.status === "offline") {
-        const info = result?.updateInfo;
-        if (info) this.handleUpdateAvailable(info);
-        else this.setState({ status: "current", version: this.currentVersion });
+      const result = await withTimeout(lease.promise, this.checkTimeoutMs);
+      if (lease.timedOut || this.stopped) return this.getState();
+      if (!lease.eventHandled) {
+        if (result && result.updateInfo) this.handleUpdateAvailable(result.updateInfo);
+        else if (this.state.status !== "ready" && !this.downloadInFlight) this.setCurrent();
       }
+      this.settleCheck(lease, undefined, result);
     } catch (error) {
-      if (this.state.status !== "failed" && this.state.status !== "offline") {
+      if (error instanceof Error && error.message === "Update operation timed out") {
+        lease.timedOut = true;
+      } else {
+        this.settleCheck(lease, error);
+      }
+      if (!this.isReady() && !this.downloadInFlight && !this.isFailure()) {
         if (networkFailure(error)) this.offline();
         else this.fail("The update check failed.");
       }
@@ -318,35 +493,87 @@ export class UpdateService extends EventEmitter {
 
   async downloadAvailableUpdate(): Promise<boolean> {
     if (this.stopped || !this.started || !this.isPackaged || !this.feedUrl || this.downloadInFlight) return false;
-    const version = this.availableVersion ?? (this.state.status === "available" ? this.state.version : null);
-    if (!version && this.state.status !== "available") return false;
+    if (this.state.status !== "available" && this.state.status !== "downloading") return false;
 
-    this.downloadInFlight = true;
-    this.setState({ status: "downloading", version, percent: 0 });
-    if (!this.adapter.downloadUpdate) {
-      // Electron's built-in Squirrel autoUpdater starts this download as part
-      // of checkForUpdates(). Its progress and completion events finish the
-      // state transition; there is no second download call to make here.
-      this.downloadInFlight = false;
+    const version = this.availableVersion ?? this.state.version;
+    const releaseNotesUrl = this.availableReleaseNotesUrl ?? this.state.releaseNotesUrl;
+    if (version && !isNewerVersion(version, this.currentVersion)) {
+      this.setCurrent();
       return false;
     }
+
+    if (!this.adapter.downloadUpdate) {
+      const lease: DownloadLease = {
+        id: ++this.operationId,
+        version,
+        releaseNotesUrl,
+        promise: null,
+        settled: false,
+        timedOut: false,
+      };
+      this.downloadInFlight = lease;
+      this.setDownloading(version, releaseNotesUrl, 0);
+      // Electron's native Squirrel updater owns the actual download. Its
+      // update-downloaded or error event closes this lease.
+      return false;
+    }
+
+    if (!version || !isNewerVersion(version, this.currentVersion)) {
+      this.fail("The update feed did not provide a newer verified version.");
+      return false;
+    }
+
+    let rawOperation: Promise<unknown>;
     try {
-      await withTimeout(Promise.resolve(this.adapter.downloadUpdate()), this.downloadTimeoutMs);
-      if (this.state.status === "downloading") this.setState({ status: "ready", version });
-      return this.state.status === "ready";
+      rawOperation = Promise.resolve(this.adapter.downloadUpdate());
+    } catch {
+      this.fail("The update download could not start.");
+      return false;
+    }
+
+    const lease: DownloadLease = {
+      id: ++this.operationId,
+      version,
+      releaseNotesUrl,
+      promise: rawOperation,
+      settled: false,
+      timedOut: false,
+    };
+    this.downloadInFlight = lease;
+    this.setDownloading(version, releaseNotesUrl, 0);
+    void rawOperation.then(
+      () => {
+        if (this.downloadInFlight !== lease) return;
+        if (!lease.timedOut && !this.isReady()) this.setReady(version, releaseNotesUrl);
+        this.settleDownload(lease);
+      },
+      (error: unknown) => {
+        if (this.downloadInFlight !== lease) return;
+        if (!lease.timedOut && !this.isReady()) {
+          if (networkFailure(error)) this.offline();
+          else this.fail("The update download failed.");
+        }
+        this.settleDownload(lease);
+      }
+    );
+
+    try {
+      await withTimeout(rawOperation, this.downloadTimeoutMs);
+      return this.isReady();
     } catch (error) {
-      if (this.state.status !== "ready") {
+      if (this.downloadInFlight === lease && error instanceof Error && error.message === "Update operation timed out") {
+        lease.timedOut = true;
+      }
+      if (!this.isReady() && !this.isFailure()) {
         if (networkFailure(error)) this.offline();
         else this.fail("The update download failed.");
       }
       return false;
-    } finally {
-      this.downloadInFlight = false;
     }
   }
 
   quitAndInstall(): boolean {
-    if (this.state.status !== "ready") return false;
+    if (this.state.status !== "ready" || !this.canInstall()) return false;
     try {
       this.adapter.quitAndInstall();
       return true;
@@ -356,39 +583,145 @@ export class UpdateService extends EventEmitter {
     }
   }
 
-  private clearCheck(operation: Promise<unknown>) {
-    if (this.checkInFlight === operation) this.checkInFlight = null;
+  private beginCheck(): CheckLease {
+    let resolve!: CheckLease["resolve"];
+    let reject!: CheckLease["reject"];
+    const lease: CheckLease = {
+      id: ++this.operationId,
+      promise: new Promise<UpdateCheckResultLike | null | void>((resolvePromise, rejectPromise) => {
+        resolve = resolvePromise;
+        reject = rejectPromise;
+      }),
+      resolve: () => {},
+      reject: () => {},
+      settled: false,
+      timedOut: false,
+      eventHandled: false,
+    };
+    lease.resolve = resolve;
+    lease.reject = reject;
+    this.checkInFlight = lease;
+
+    let result: UpdateCheckResultLike | null | Promise<UpdateCheckResultLike | null> | void;
+    try {
+      result = this.adapter.checkForUpdates();
+    } catch (error) {
+      this.settleCheck(lease, error);
+      return lease;
+    }
+
+    if (isPromiseLike<UpdateCheckResultLike | null>(result)) {
+      void Promise.resolve(result).then(
+        (value) => {
+          if (!lease.eventHandled && !lease.timedOut && value?.updateInfo) this.handleUpdateAvailable(value.updateInfo);
+          if (!lease.eventHandled && !lease.timedOut && !this.downloadInFlight && this.state.status !== "ready") {
+            this.setCurrent();
+          }
+          this.settleCheck(lease, undefined, value);
+        },
+        (error: unknown) => this.settleCheck(lease, error)
+      );
+    } else if (result !== undefined) {
+      if (!lease.eventHandled && result?.updateInfo) this.handleUpdateAvailable(result.updateInfo);
+      if (!lease.eventHandled && !this.downloadInFlight && this.state.status !== "ready") this.setCurrent();
+      this.settleCheck(lease, undefined, result);
+    }
+    return lease;
   }
 
-  private setState(next: { status: "current" | "available" | "downloading" | "ready"; version: string | null; percent?: number }) {
-    const checkedAt = this.now();
-    switch (next.status) {
-      case "current":
-        this.state = { status: "current", version: next.version ?? this.currentVersion, checkedAt };
-        break;
-      case "available":
-        this.state = { status: "available", version: next.version, checkedAt };
-        break;
-      case "downloading":
-        this.state = { status: "downloading", version: next.version, percent: next.percent ?? 0, checkedAt };
-        break;
-      case "ready":
-        this.state = { status: "ready", version: next.version, checkedAt };
-        break;
-    }
+  private settleCheck(lease: CheckLease, error?: unknown, value?: UpdateCheckResultLike | null | void) {
+    if (lease.settled) return;
+    lease.settled = true;
+    if (this.checkInFlight === lease) this.checkInFlight = null;
+    if (error !== undefined) lease.reject(error);
+    else lease.resolve(value);
+  }
+
+  private settleDownload(lease: DownloadLease) {
+    if (lease.settled) return;
+    lease.settled = true;
+    if (this.downloadInFlight === lease) this.downloadInFlight = null;
+    lease.resolve?.();
+  }
+
+  private setCurrent() {
+    if (this.state.status === "ready") return;
+    this.state = {
+      status: "current",
+      version: this.currentVersion,
+      releaseNotesUrl: null,
+      checkedAt: this.now(),
+    };
+    this.emit("state-changed", this.getState());
+  }
+
+  private isReady() {
+    return this.state.status === "ready";
+  }
+
+  private isFailure() {
+    return this.state.status === "failed" || this.state.status === "offline";
+  }
+
+  private setAvailable(version: string | null, releaseNotesUrl: string | null) {
+    if (this.state.status === "ready") return;
+    this.state = {
+      status: "available",
+      version,
+      releaseNotesUrl,
+      checkedAt: this.now(),
+    };
+    this.emit("state-changed", this.getState());
+  }
+
+  private setDownloading(version: string | null, releaseNotesUrl: string | null, percent: number) {
+    if (this.state.status === "ready") return;
+    this.state = {
+      status: "downloading",
+      version,
+      releaseNotesUrl,
+      percent,
+      checkedAt: this.now(),
+    };
+    this.emit("state-changed", this.getState());
+  }
+
+  private setReady(version: string, candidateReleaseNotesUrl: string | null) {
+    if (this.state.status === "ready") return;
+    const releaseNotesUrl = releaseNotesUrlFor(version, candidateReleaseNotesUrl, this.releaseNotesBaseUrl);
+    this.state = {
+      status: "ready",
+      version,
+      releaseNotesUrl,
+      checkedAt: this.now(),
+    };
     this.emit("state-changed", this.getState());
   }
 
   private fail(message: string) {
+    if (this.state.status === "ready") return;
     this.logger("Updater failed: " + message);
-    this.state = { status: "failed", version: this.state.version, checkedAt: this.now(), message };
+    this.state = {
+      status: "failed",
+      version: this.state.version,
+      releaseNotesUrl: this.state.releaseNotesUrl,
+      checkedAt: this.now(),
+      message,
+    };
     this.emit("state-changed", this.getState());
   }
 
   private offline() {
+    if (this.state.status === "ready") return;
     const message = "The update feed is unreachable; the current installation was left unchanged.";
     this.logger("Updater offline");
-    this.state = { status: "offline", version: this.state.version, checkedAt: this.now(), message };
+    this.state = {
+      status: "offline",
+      version: this.state.version,
+      releaseNotesUrl: this.state.releaseNotesUrl,
+      checkedAt: this.now(),
+      message,
+    };
     this.emit("state-changed", this.getState());
   }
 
@@ -422,9 +755,7 @@ export class UpdateService extends EventEmitter {
     if (
       this.checkInFlight ||
       this.downloadInFlight ||
-      this.state.status === "available" ||
-      this.state.status === "downloading" ||
-      this.state.status === "ready"
+      ["available", "downloading", "ready"].includes(this.state.status)
     ) {
       this.scheduleNext(this.backgroundIntervalMs);
       return;
