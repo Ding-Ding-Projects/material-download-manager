@@ -21,9 +21,11 @@ test("records append-only local Git revisions and restores as a new action", asy
   assert.ok(restored);
   assert.equal(restored?.action, "restored");
   assert.equal(await history.readSnapshot(), "{\"value\":1}");
+  const repeatedRestore = await history.restore(restored!.id);
+  assert.ok(repeatedRestore);
 
   const revisions = await history.listRevisions();
-  assert.equal(revisions.length, 3);
+  assert.equal(revisions.length, 4);
   assert.equal((await history.listRevisions({ actions: ["updated"] })).length, 1);
   assert.equal((await history.listRevisions({ text: "created" })).length, 1);
   assert.match(await history.diff(second!.id), /value/);

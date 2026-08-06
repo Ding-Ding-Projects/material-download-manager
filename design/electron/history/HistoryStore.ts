@@ -55,12 +55,12 @@ export class HistoryStore {
     this.initialized = true;
   }
 
-  async appendSnapshot(snapshot: string, action: HistoryAction, summary: string): Promise<HistoryRevision | null> {
+  async appendSnapshot(snapshot: string, action: HistoryAction, summary: string, force = false): Promise<HistoryRevision | null> {
     await this.ensureInitialized();
     const snapshotPath = path.join(this.repositoryPath, "snapshot.json");
     try {
       const previous = await fsp.readFile(snapshotPath, "utf8");
-      if (previous === snapshot) return null;
+      if (previous === snapshot && !force) return null;
     } catch {
       // first revision
     }
@@ -68,7 +68,7 @@ export class HistoryStore {
     const cleanSummary = summary.replace(/[\r\n]+/g, " ").trim() || "Changed application state";
     const subject = "history: " + action + " — " + cleanSummary;
     await this.git(["add", "--", "snapshot.json"]);
-    await this.git(["commit", "--quiet", "-m", subject]);
+    await this.git(["commit", "--quiet", ...(force ? ["--allow-empty"] : []), "-m", subject]);
     const id = await this.git(["rev-parse", "HEAD"]);
     const timestamp = await this.git(["show", "-s", "--format=%aI", id]);
     return { id, action, summary: cleanSummary, timestamp };
@@ -117,7 +117,7 @@ export class HistoryStore {
   async restore(revisionId: string): Promise<HistoryRevision | null> {
     const snapshot = await this.readSnapshot(revisionId);
     if (snapshot === null) return null;
-    return this.appendSnapshot(snapshot, "restored", "Restored revision " + revisionId.slice(0, 8));
+    return this.appendSnapshot(snapshot, "restored", "Restored revision " + revisionId.slice(0, 8), true);
   }
 
   async diff(revisionId: string): Promise<string> {
