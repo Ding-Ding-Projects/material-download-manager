@@ -4,7 +4,8 @@
 
 `design/package.json` targets `squirrel` for x64 Windows builds and enables
 the supported `squirrelWindows.msi`, `artifactName`, and public HTTPS
-`iconUrl` options. MSI is explicitly `false` for the current
+`iconUrl` options. It also sets `forceCodeSigning: true`, so a release build
+fails closed when the signing certificate is unavailable. MSI is explicitly `false` for the current
 electron-builder 24.13.3 package because its WiX generator uses the
 hyphenated npm package name as an invalid identifier; the required Squirrel
 installer path remains enabled. A successful Squirrel build produces
@@ -69,8 +70,11 @@ npm run dist:win
 ```
 
 The first three checks are local source/build checks. `npm run dist:win` is
-the required real packaging check and must be inspected for the Squirrel
-artifacts listed above; a compile-only run is not release evidence.
+the required signed packaging check and must be inspected for the Squirrel
+artifacts listed above; a compile-only run is not release evidence. When no
+certificate is available, a local artifact-shape check may temporarily set
+`forceCodeSigning` to `false`, restore the committed value immediately, and
+report the resulting files as unsigned shape evidence only—not as a release.
 
 ## Suggested articles
 

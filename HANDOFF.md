@@ -64,8 +64,8 @@ On 2026-08-05, the following checks passed on `codex/full-app`:
 | `npm run typecheck` | Passed renderer and Electron TypeScript checks. |
 | `npm run build` | Passed Vite renderer and Electron main-process compilation. |
 | `npm run test:engine` | 24/24 passed, including Range integrity, pause/resume, non-resumable fallback, custom-header persistence and origin stripping, global queue limits, schedule race handling, manager history hooks, filename sanitization, malformed Range rejection, categories, and throttling. |
-| `npm run test:electron` | 23/23 passed for export, local history, regex, tabs, command-palette foundations, compiled renderer-path resolution, updater states, and completion-notification preference handling. |
-| `npm run dist:win` | Passed local Squirrel.Windows packaging and produced `Setup.exe`, `RELEASES`, and a full `.nupkg`; Authenticode was `NotSigned`, MSI is disabled for the current WiX identifier bug, and no delta/feed release was claimed. |
+| `npm run test:electron` | 24/24 passed for export, local history, regex, tabs, command-palette foundations, compiled renderer-path resolution, updater states, native Squirrel download-overlap protection, and completion-notification preference handling. |
+| `npm run dist:win` | The committed config enforces signing and therefore fails closed without a certificate. A reversible local shape check produced `Setup.exe`, `RELEASES`, and a full `.nupkg`; Authenticode was `NotSigned`, MSI is disabled for the current WiX identifier bug, and no delta/feed release was claimed. |
 | Hidden-desktop smoke | Passed through the cheap hidden-desktop route: direct Electron `v31.7.7` launch opened `Material Download Manager` at 1150×720, rendered the empty state, opened Settings, and returned focus after Escape; the desktop and process were cleaned up. |
 | Remote GitHub Actions | No green verdict claimed: the previously observed Windows verification run remained queued, and GitHub Actions had earlier rejected manual dispatch with `Actions has been disabled for this user`. |
 
@@ -75,11 +75,14 @@ unpackaged production launches load the built renderer unless
 constrained to one safe Windows path segment, and ranged responses must agree
 with their `Content-Range` before bytes are written.
 
-A Windows packaging run (`npm run dist:win`) is still required before publishing
-an installer; a compile-only success is not packaging evidence. The package
-configuration now targets Squirrel.Windows x64 and the main process has a
-bounded, fail-closed updater coordinator, but this branch does not claim a
-signed installer, a published `RELEASES` feed, or a verified update.
+A signed Windows packaging run (`npm run dist:win`) is still required before
+publishing an installer; a compile-only success is not packaging evidence. The
+package configuration now targets Squirrel.Windows x64 with signing enforced,
+and the main process has a bounded, fail-closed updater coordinator, but this
+branch does not claim a signed installer, a published `RELEASES` feed, or a
+verified update. The unsigned local shape check is evidence only that the
+Squirrel layout can be produced when signing is deliberately disabled for the
+check and is not a shippable artifact.
 
 The repository now has a Windows push/dispatch workflow at
 [`.github/workflows/ci.yml`](.github/workflows/ci.yml) for the checks above. It

@@ -43,7 +43,25 @@ class FakeUpdater extends EventEmitter implements UpdaterAdapter {
   }
 }
 
-function service(adapter: FakeUpdater, options: Partial<ConstructorParameters<typeof UpdateService>[0]> = {}) {
+class NativeSquirrelUpdater extends EventEmitter implements UpdaterAdapter {
+  feedUrl: string | null = null;
+  checks = 0;
+
+  setFeedURL(options: { url: string }) {
+    this.feedUrl = options.url;
+  }
+
+  checkForUpdates() {
+    this.checks += 1;
+    // Electron's built-in Squirrel updater emits no update metadata here and
+    // downloads automatically; the completion event arrives later.
+    this.emit("update-available");
+  }
+
+  quitAndInstall() {}
+}
+
+function service(adapter: UpdaterAdapter, options: Partial<ConstructorParameters<typeof UpdateService>[0]> = {}) {
   return new UpdateService({
     adapter,
     currentVersion: "1.0.0",
@@ -139,5 +157,18 @@ test("startup and background scheduling are bounded and never overlap checks", a
   assert.equal(adapter.checks, 1);
   resolveCheck(null);
   await new Promise((resolve) => setImmediate(resolve));
+  updater.stop();
+});
+
+test("native Squirrel downloading state blocks a second background check", async () => {
+  const adapter = new NativeSquirrelUpdater();
+  const updater = service(adapter);
+  updater.start();
+
+  const downloading = await updater.checkForUpdates();
+  assert.equal(downloading.status, "downloading");
+  assert.equal(adapter.checks, 1);
+  assert.equal((await updater.checkForUpdates()).status, "downloading");
+  assert.equal(adapter.checks, 1);
   updater.stop();
 });

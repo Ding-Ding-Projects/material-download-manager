@@ -36,10 +36,11 @@ npm run test:electron
 ```
 
 The Windows packaging command is `npm run dist:win`. It now uses the
-Squirrel.Windows x64 target and locally produced `Setup.exe`, `RELEASES`, and a
-full `.nupkg`; the artifacts are not a release claim because this checkout has
-no signing certificate, published update feed, or verified GitHub Actions
-release.
+Squirrel.Windows x64 target with signing enforced, so it fails closed without
+a certificate. A reversible local shape check has produced `Setup.exe`,
+`RELEASES`, and a full `.nupkg`; those unsigned artifacts are not a release
+claim because this checkout has no signing certificate, published update feed,
+or verified GitHub Actions release.
 
 The Windows verification workflow runs the typecheck, build, downloader tests,
 and compiled Electron path tests on every push and on manual dispatch.

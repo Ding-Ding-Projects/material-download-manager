@@ -50,6 +50,7 @@
       "dist/**/*",
       "package.json"
     ],
+    "forceCodeSigning": true,
     "win": {
       "target": [
         { "target": "squirrel", "arch": ["x64"] }

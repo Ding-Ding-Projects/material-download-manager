@@ -277,7 +277,15 @@ export class UpdateService extends EventEmitter {
   async checkForUpdates(): Promise<UpdateState> {
     if (this.stopped || !this.started) return this.getState();
     if (!this.isPackaged || !this.supportedPlatform || !this.feedUrl) return this.getState();
-    if (this.checkInFlight || this.downloadInFlight || this.state.status === "ready") return this.getState();
+    if (
+      this.checkInFlight ||
+      this.downloadInFlight ||
+      this.state.status === "available" ||
+      this.state.status === "downloading" ||
+      this.state.status === "ready"
+    ) {
+      return this.getState();
+    }
 
     let operation: Promise<UpdateCheckResultLike | null | void>;
     try {
@@ -411,7 +419,13 @@ export class UpdateService extends EventEmitter {
 
   private async runScheduledCheck() {
     if (this.stopped) return;
-    if (this.checkInFlight || this.downloadInFlight || this.state.status === "ready") {
+    if (
+      this.checkInFlight ||
+      this.downloadInFlight ||
+      this.state.status === "available" ||
+      this.state.status === "downloading" ||
+      this.state.status === "ready"
+    ) {
       this.scheduleNext(this.backgroundIntervalMs);
       return;
     }
