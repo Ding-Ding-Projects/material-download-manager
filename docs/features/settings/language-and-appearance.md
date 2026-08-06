@@ -17,7 +17,11 @@ without spreading invalid values.
 The Settings dialog has its own local search field. Plain text is the default;
 the adjacent Regex button opens the shared bounded JavaScript RegExp builder.
 Matches name real setting sections and their result buttons return focus to the
-corresponding section anchor.
+corresponding actual control. Closed advanced settings are opened before the
+target control receives focus. The nested builder consumes Escape to close only
+itself and returns focus to the Regex button, leaving Settings open. Custom
+checkbox buttons expose their checked state through `role="checkbox"` and
+`aria-checked`.
 
 ## Configuration
 

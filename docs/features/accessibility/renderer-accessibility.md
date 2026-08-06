@@ -7,6 +7,13 @@ alert-dialog roles, modal labelling, focus containment and restoration, menu
 and menu-item semantics, keyboard navigation/typeahead, sidebar keyboard
 activation, and visible shortcut metadata when a menu item supplies a binding.
 The bridge keeps these behaviors centralized so individual dialogs do not drift.
+Authored `aria-labelledby` and `aria-describedby` values remain intact, including
+the exact warning description on the destructive-action gate. Shared dialog
+Escape handling also honours a nested surface that consumes Escape first.
+
+Download table sort headers are real keyboard targets: Enter and Space apply the
+same sort action as a click, `aria-sort` reports ascending/descending/none, and
+the shared `:focus-visible` outline makes the active header discoverable.
 
 ## Configuration
 

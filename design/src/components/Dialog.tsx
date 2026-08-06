@@ -15,7 +15,7 @@ interface DialogProps {
 export default function Dialog({ title, icon, onClose, width = 460, children, footer, className }: DialogProps) {
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
-      if (e.key === "Escape") onClose();
+      if (e.key === "Escape" && !e.defaultPrevented) onClose();
     }
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);

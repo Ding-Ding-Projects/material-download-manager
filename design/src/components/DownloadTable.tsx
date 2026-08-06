@@ -101,6 +101,8 @@ export default function DownloadTable() {
                 type="button"
                 className={`checkbox${allSelected ? " checked" : ""}`}
                 aria-label="Select all"
+                role="checkbox"
+                aria-checked={allSelected}
                 onClick={() =>
                   allSelected ? clearSelection() : selectMany(filteredItems.map((i) => i.id))
                 }
@@ -112,8 +114,21 @@ export default function DownloadTable() {
               <th
                 key={col.key}
                 className={col.className}
+                scope="col"
+                tabIndex={0}
+                aria-sort={
+                  sort.key === col.key
+                    ? sort.direction === "asc"
+                      ? "ascending"
+                      : "descending"
+                    : "none"
+                }
                 onClick={() => setSort(col.key)}
-                role="button"
+                onKeyDown={(event) => {
+                  if (event.key !== "Enter" && event.key !== " ") return;
+                  event.preventDefault();
+                  setSort(col.key);
+                }}
               >
                 <span className="th-inner">
                   <SortIcon
@@ -279,6 +294,8 @@ function Row({
           type="button"
           className={`checkbox${selected ? " checked" : ""}`}
           aria-label="Select row"
+          role="checkbox"
+          aria-checked={selected}
           onClick={(e) => {
             e.stopPropagation();
             onToggleCheckbox();
