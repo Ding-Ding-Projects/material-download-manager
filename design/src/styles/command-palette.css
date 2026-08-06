@@ -71,6 +71,12 @@
   text-align: left;
 }
 
+.command-palette-row > span {
+  min-width: 0;
+  flex: 1 1 auto;
+  overflow-wrap: anywhere;
+}
+
 .command-palette-row:hover,
 .command-palette-row.active {
   background: var(--bg-row-hover);
@@ -85,12 +91,16 @@
 .command-palette-row small {
   margin-top: 2px;
   color: var(--text-secondary);
+  overflow-wrap: anywhere;
 }
 
 .command-palette-row em {
+  flex: 0 0 auto;
+  max-width: 34%;
   color: var(--text-tertiary);
   font-size: 11px;
   font-style: normal;
+  overflow-wrap: anywhere;
 }
 
 .command-palette-empty {

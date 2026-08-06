@@ -369,7 +369,7 @@ textarea {
   color: var(--text-tertiary);
 }
 
-@media (max-width: 720px) {
+@media (max-width: 900px) {
   .menu-row {
     align-items: flex-start;
     gap: 8px;
@@ -384,7 +384,8 @@ textarea {
   .search-builder-popover {
     left: 0;
     right: auto;
-    width: min(670px, calc(100vw - 32px));
+    width: min(670px, calc(100% - 16px));
+    max-width: calc(100% - 16px);
   }
 }
 
@@ -1074,6 +1075,11 @@ textarea {
 .field-error {
   color: var(--danger);
   font-size: 11px;
+}
+.search-builder-error {
+  margin: 4px 0 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
 }
 
 :root[data-density="compact"] .input,

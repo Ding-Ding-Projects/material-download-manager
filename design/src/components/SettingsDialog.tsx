@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { AppSettings, SettingKey } from "@shared/types";
 import { createDefaultSettings, isHexColor } from "@shared/settings";
 import { createDefaultRegexBuilderState, evaluateRegex, type RegexBuilderState } from "@shared/regex";
@@ -51,6 +51,7 @@ export default function SettingsDialog() {
   const setSettings = useAppStore((s) => s.setSettings);
   const pickFolder = useAppStore((s) => s.pickFolder);
   const currentSettings = useAppStore((s) => s.settings);
+  const settingsFocus = useAppStore((s) => s.settingsFocus);
 
   const [form, setForm] = useState<AppSettings>(
     () => currentSettings ?? createDefaultSettings("")
@@ -81,8 +82,8 @@ export default function SettingsDialog() {
     [settingsSearch.flags, settingsSearch.mode, settingsSearch.pattern]
   );
   const matchingSettings = useMemo(() => {
-    const query = settingsSearch.pattern.trim();
-    if (!query) return [];
+    const query = settingsSearch.pattern;
+    if (query.length === 0) return [];
     if (settingsSearch.mode === "regex") {
       if (settingsSearchEvaluation?.error) return [];
       return SETTINGS_SEARCH_INDEX.filter((entry) => {
@@ -93,6 +94,19 @@ export default function SettingsDialog() {
     const normalizedQuery = query.toLocaleLowerCase();
     return SETTINGS_SEARCH_INDEX.filter((entry) => entry.label.toLocaleLowerCase().includes(normalizedQuery));
   }, [settingsSearch, settingsSearchEvaluation]);
+
+  useEffect(() => {
+    if (!settingsFocus) return;
+    const targetId = settingsFocus === "language" ? "settings-language-mode" : "settings-theme";
+    const frame = window.requestAnimationFrame(() => {
+      const target = document.getElementById(targetId);
+      if (!(target instanceof HTMLElement)) return;
+      const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      target.scrollIntoView({ behavior: reducedMotion ? "auto" : "smooth", block: "nearest" });
+      target.focus({ preventScroll: true });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [settingsFocus]);
 
   function update<K extends keyof AppSettings>(key: K, value: AppSettings[K]) {
     setForm((f) => ({ ...f, [key]: value }));
@@ -179,6 +193,8 @@ export default function SettingsDialog() {
             value={settingsSearch.pattern}
             placeholder="Search setting names and descriptions"
             aria-label="Search settings"
+            aria-invalid={settingsSearchEvaluation?.error ? true : undefined}
+            aria-describedby={settingsSearchEvaluation?.error ? "settings-search-error" : undefined}
             onChange={(event) => setSettingsSearch((current) => ({ ...current, pattern: event.target.value }))}
           />
           <button
@@ -199,8 +215,8 @@ export default function SettingsDialog() {
             />
           </div>
         )}
-        {settingsSearchEvaluation?.error && <p className="field-error" role="alert">{settingsSearchEvaluation.error}</p>}
-        {settingsSearch.pattern.trim() && !settingsSearchEvaluation?.error && (
+        {settingsSearchEvaluation?.error && <p id="settings-search-error" className="field-error" role="alert">{settingsSearchEvaluation.error}</p>}
+        {settingsSearch.pattern.length > 0 && !settingsSearchEvaluation?.error && (
           <div className="settings-search-results" aria-live="polite">
             <span className="setting-helper">
               {matchingSettings.length} matching setting{matchingSettings.length === 1 ? "" : "s"}
@@ -226,6 +242,7 @@ export default function SettingsDialog() {
         <label className="field">
           <span className="field-label">{copy.language}</span>
           <select
+            id="settings-language-mode"
             className="input select"
             value={form.languageMode}
             onChange={(e) => update("languageMode", e.target.value as AppSettings["languageMode"])}
@@ -285,6 +302,7 @@ export default function SettingsDialog() {
         <label className="field">
           <span className="field-label">Theme</span>
           <select
+            id="settings-theme"
             className="input select"
             value={form.theme}
             onChange={(e) => update("theme", e.target.value as AppSettings["theme"])}

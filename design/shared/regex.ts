@@ -51,10 +51,66 @@ export function normalizeRegexFlags(flags: string): string {
   return REGEX_FLAGS.filter((flag) => seen.has(flag)).join("");
 }
 
+function readQuantifierEnd(pattern: string, start: number): number | null {
+  const first = pattern[start];
+  if (first === "*" || first === "+" || first === "?") {
+    return pattern[start + 1] === "?" ? start + 1 : start;
+  }
+  if (first !== "{") return null;
+
+  const close = pattern.indexOf("}", start + 1);
+  if (close === -1) return null;
+  const body = pattern.slice(start + 1, close);
+  return /^\d+(?:,\d*)?$/.test(body) ? close : null;
+}
+
 function hasUnsafeNestedQuantifier(pattern: string): boolean {
-  // JavaScript has no portable regex timeout. Reject the common nested
-  // quantifier shape before it can monopolize the renderer event loop.
-  return /\((?:[^()\\]|\\.)*[+*](?:[^()\\]|\\.)*\)[+*?{]/.test(pattern);
+  // JavaScript has no portable regex timeout. Walk groups instead of relying
+  // on one shallow expression: `(a|a?)+`, `((a+)+)` and the same shapes with
+  // bounded or lazy quantifiers all need to be rejected before they can
+  // monopolize the renderer event loop. This is intentionally conservative;
+  // a group containing any quantifier may not itself be quantified.
+  const groups: Array<{ containsQuantifier: boolean }> = [{ containsQuantifier: false }];
+
+  for (let index = 0; index < pattern.length; index += 1) {
+    const character = pattern[index];
+    if (character === "\\") {
+      index += 1;
+      continue;
+    }
+    if (character === "[") {
+      for (index += 1; index < pattern.length; index += 1) {
+        if (pattern[index] === "\\") index += 1;
+        else if (pattern[index] === "]") break;
+      }
+      continue;
+    }
+    if (character === "(") {
+      groups.push({ containsQuantifier: false });
+      // `?` immediately after `(` starts a JavaScript group prefix such as
+      // `(?:`, `(?=`, `(?!`, or `(?<name>`, rather than quantifying an atom.
+      if (pattern[index + 1] === "?") index += 1;
+      continue;
+    }
+    if (character === ")" && groups.length > 1) {
+      const group = groups.pop()!;
+      const quantifierEnd = readQuantifierEnd(pattern, index + 1);
+      if (group.containsQuantifier && quantifierEnd !== null) return true;
+
+      const parent = groups[groups.length - 1];
+      parent.containsQuantifier ||= group.containsQuantifier || quantifierEnd !== null;
+      if (quantifierEnd !== null) index = quantifierEnd;
+      continue;
+    }
+
+    const quantifierEnd = readQuantifierEnd(pattern, index);
+    if (quantifierEnd !== null) {
+      groups[groups.length - 1].containsQuantifier = true;
+      index = quantifierEnd;
+    }
+  }
+
+  return false;
 }
 
 export function validateRegexPattern(pattern: string, flags: string): string | null {

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { DownloadCategory, DownloadItem } from "@shared/types";
+import { DEFAULT_QUEUE_ID, type DownloadCategory, type DownloadItem } from "@shared/types";
 import { useAppStore } from "./store/useAppStore";
 import { CATEGORY_LABELS, CATEGORY_ORDER } from "./utils/category";
 import TitleBar from "./components/TitleBar";
@@ -31,14 +31,21 @@ export default function App() {
   const dialogs = useAppStore((s) => s.dialogs);
   const items = useAppStore((s) => s.items);
   const queues = useAppStore((s) => s.queues);
+  const filter = useAppStore((s) => s.filter);
   const setFilter = useAppStore((s) => s.setFilter);
   const openAddDownload = useAppStore((s) => s.openAddDownload);
   const openSettings = useAppStore((s) => s.openSettings);
   const openQueues = useAppStore((s) => s.openQueues);
+  const startQueue = useAppStore((s) => s.startQueue);
+  const stopQueue = useAppStore((s) => s.stopQueue);
   const stopAllActive = useAppStore((s) => s.stopAllActive);
   const [destructiveRequest, setDestructiveRequest] = useState<DestructiveActionRequest | null>(null);
   const observedItems = useRef(false);
   const previousItems = useRef(new Map<string, Pick<DownloadItem, "status" | "error" | "fileName" | "url">>());
+
+  const activeQueueId = filter.kind === "queue" ? filter.queueId : DEFAULT_QUEUE_ID;
+  const activeQueue = queues.find((queue) => queue.id === activeQueueId);
+  const activeQueueName = activeQueue?.name ?? "Default Queue";
 
   const paletteCommands = useMemo<PaletteCommand[]>(() => {
     const commands: PaletteCommand[] = [
@@ -59,6 +66,22 @@ export default function App() {
         onSelect: stopAllActive,
       },
       {
+        id: "action.start-queue",
+        label: "Start Queue",
+        description: `Start ${activeQueueName}`,
+        keywords: ["queue", activeQueueName, "run", "resume"],
+        section: "Actions",
+        onSelect: () => void startQueue(activeQueueId),
+      },
+      {
+        id: "action.stop-queue",
+        label: "Stop Queue",
+        description: `Stop ${activeQueueName}`,
+        keywords: ["queue", activeQueueName, "pause", "stop"],
+        section: "Actions",
+        onSelect: () => void stopQueue(activeQueueId),
+      },
+      {
         id: "destination.queues",
         label: "Queues",
         description: "Open the queue manager",
@@ -72,7 +95,7 @@ export default function App() {
         description: "Open language, appearance, and download settings",
         keywords: ["preferences", "configuration", "language", "theme", "appearance"],
         section: "Settings",
-        onSelect: openSettings,
+        onSelect: () => openSettings(),
       },
       {
         id: "settings.language",
@@ -80,7 +103,7 @@ export default function App() {
         description: "Open Settings to adjust language mode and funny levels",
         keywords: ["english", "cantonese", "bilingual", "funny"],
         section: "Settings",
-        onSelect: openSettings,
+        onSelect: () => openSettings("language"),
       },
       {
         id: "settings.appearance",
@@ -88,7 +111,7 @@ export default function App() {
         description: "Open Settings to adjust theme, density, accent, and fonts",
         keywords: ["theme", "dark", "light", "density", "font", "accent"],
         section: "Settings",
-        onSelect: openSettings,
+        onSelect: () => openSettings("appearance"),
       },
       {
         id: "destination.all-downloads",
@@ -135,7 +158,7 @@ export default function App() {
     }));
 
     return [...commands, ...categoryCommands, ...queueCommands];
-  }, [openAddDownload, openQueues, openSettings, queues, setFilter, stopAllActive]);
+  }, [activeQueueId, activeQueueName, filter.kind, openAddDownload, openQueues, openSettings, queues, setFilter, startQueue, stopAllActive, stopQueue]);
 
   useEffect(() => {
     const unsubscribe = useAppStore.getState().init();

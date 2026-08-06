@@ -18,6 +18,11 @@ function matchesFilter(item: DownloadItem, filter: SidebarFilter): boolean {
   }
 }
 
+export function getSearchValidationError(searchText: string, searchMode: "text" | "regex", searchFlags: string): string | null {
+  if (searchMode !== "regex" || searchText.length === 0) return null;
+  return validateRegexPattern(searchText, searchFlags);
+}
+
 /** Applies the active sidebar filter, search text/regex, and sort to `items`. */
 export function useFilteredItems(): DownloadItem[] {
   const items = useAppStore((s) => s.items);
@@ -28,22 +33,21 @@ export function useFilteredItems(): DownloadItem[] {
   const sort = useAppStore((s) => s.sort);
 
   return useMemo(() => {
-    const query = searchText.trim();
     let result = items.filter((item) => matchesFilter(item, filter));
-    if (query) {
+    if (searchText.length > 0) {
       if (searchMode === "text") {
-        const normalizedQuery = query.toLocaleLowerCase();
+        const normalizedQuery = searchText.toLocaleLowerCase();
         result = result.filter((item) =>
           `${item.fileName}\n${item.url}`.toLocaleLowerCase().includes(normalizedQuery)
         );
       } else {
-        const validationError = validateRegexPattern(query, searchFlags);
+        const validationError = getSearchValidationError(searchText, searchMode, searchFlags);
         if (validationError) {
           result = [];
         } else {
           // Search uses the same JavaScript RegExp dialect and flags as the
           // builder, while removing only `g` so each item starts fresh.
-          const matcher = new RegExp(query, normalizeRegexFlags(searchFlags).replace("g", ""));
+          const matcher = new RegExp(searchText, normalizeRegexFlags(searchFlags).replace("g", ""));
           result = result.filter((item) => {
             matcher.lastIndex = 0;
             return matcher.test(`${item.fileName}\n${item.url}`);

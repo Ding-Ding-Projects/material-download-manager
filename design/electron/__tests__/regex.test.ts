@@ -25,6 +25,7 @@ test("rejects invalid, oversized, and unsafe patterns before evaluation", () => 
   assert.match(validateRegexPattern("(", "g") ?? "", /unterminated|Invalid/i);
   assert.match(validateRegexPattern("x".repeat(2049), "g") ?? "", /2048/);
   assert.match(validateRegexPattern("(a+)+", "g") ?? "", /nested quantifiers/i);
+  assert.match(validateRegexPattern("^(a|a?)+$", "g") ?? "", /nested quantifiers/i);
 });
 
 test("bounds sample and result sizes", () => {
@@ -34,7 +35,14 @@ test("bounds sample and result sizes", () => {
 });
 
 test("guided tokens produce valid composable fragments", () => {
-  assert.equal(guidedTokenToPattern({ kind: "characterClass", value: "a-z" }), "[a\\-z]");
-  assert.equal(guidedTokenToPattern({ kind: "alternation", left: "one", right: "two" }), "(?:one|two)");
-  assert.equal(guidedTokenToPattern({ kind: "quantifier", atom: "x", min: 1, max: 3, lazy: true }), "x{1,3}?");
+  const characterClass = guidedTokenToPattern({ kind: "characterClass", value: "a-z" });
+  const alternation = guidedTokenToPattern({ kind: "alternation", left: "one", right: "two" });
+  const quantifier = guidedTokenToPattern({ kind: "quantifier", atom: "x", min: 1, max: 3, lazy: true });
+  assert.equal(characterClass, "[a\\-z]");
+  assert.equal(alternation, "(?:one|two)");
+  assert.equal(quantifier, "x{1,3}?");
+  assert.equal(validateRegexPattern(characterClass, "g"), null);
+  assert.equal(validateRegexPattern(alternation, "g"), null);
+  assert.equal(validateRegexPattern(quantifier, "g"), null);
+  assert.equal(validateRegexPattern("(?:one|two)+", "g"), null);
 });

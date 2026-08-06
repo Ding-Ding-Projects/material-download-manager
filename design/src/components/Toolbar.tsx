@@ -11,6 +11,7 @@ import {
   GridIcon,
 } from "./icons";
 import RegexBuilder from "./RegexBuilder";
+import { getSearchValidationError } from "../hooks/useFilteredItems";
 
 const MENU_ITEMS = ["File", "Tasks", "Tools", "Help"];
 
@@ -43,6 +44,7 @@ export default function Toolbar() {
     flags: searchFlags,
     sample: sampleText,
   };
+  const searchError = getSearchValidationError(searchText, searchMode, searchFlags);
 
   useEffect(() => {
     if (!regexOpen) return;
@@ -91,6 +93,8 @@ export default function Toolbar() {
               value={searchText}
               onChange={(e) => setSearchText(e.target.value)}
               aria-label="Search downloads"
+              aria-invalid={searchError !== null}
+              aria-describedby={searchError ? "toolbar-search-error" : undefined}
             />
             <button
               ref={regexToggleRef}
@@ -104,6 +108,11 @@ export default function Toolbar() {
               Regex
             </button>
           </div>
+          {searchError && (
+            <p id="toolbar-search-error" className="field-error search-builder-error" role="alert">
+              {searchError}
+            </p>
+          )}
           {regexOpen && (
             <div
               id="toolbar-search-regex-panel"

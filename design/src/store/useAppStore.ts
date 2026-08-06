@@ -29,6 +29,8 @@ interface DialogsState {
   detailsItemId: string | null;
 }
 
+export type SettingsFocus = "language" | "appearance" | null;
+
 interface AppState {
   // live data, mirrored from the main process
   items: DownloadItem[];
@@ -44,6 +46,7 @@ interface AppState {
   selectedIds: Set<string>;
   sort: SortState;
   dialogs: DialogsState;
+  settingsFocus: SettingsFocus;
   addDownloadPrefillUrl: string;
 
   // lifecycle
@@ -61,7 +64,7 @@ interface AppState {
   clearSelection: () => void;
   openAddDownload: (prefillUrl?: string) => void;
   closeAddDownload: () => void;
-  openSettings: () => void;
+  openSettings: (focus?: Exclude<SettingsFocus, null>) => void;
   closeSettings: () => void;
   openQueues: () => void;
   closeQueues: () => void;
@@ -107,6 +110,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   selectedIds: new Set(),
   sort: { key: "dateAdded", direction: "desc" },
   dialogs: { addDownload: false, settings: false, queues: false, detailsItemId: null },
+  settingsFocus: null,
   addDownloadPrefillUrl: "",
 
   init: () => {
@@ -155,8 +159,11 @@ export const useAppStore = create<AppState>((set, get) => ({
     })),
   closeAddDownload: () =>
     set((state) => ({ dialogs: { ...state.dialogs, addDownload: false }, addDownloadPrefillUrl: "" })),
-  openSettings: () => set((state) => ({ dialogs: { ...state.dialogs, settings: true } })),
-  closeSettings: () => set((state) => ({ dialogs: { ...state.dialogs, settings: false } })),
+  openSettings: (focus) => set((state) => ({
+    dialogs: { ...state.dialogs, settings: true },
+    settingsFocus: focus ?? null,
+  })),
+  closeSettings: () => set((state) => ({ dialogs: { ...state.dialogs, settings: false }, settingsFocus: null })),
   openQueues: () => set((state) => ({ dialogs: { ...state.dialogs, queues: true } })),
   closeQueues: () => set((state) => ({ dialogs: { ...state.dialogs, queues: false } })),
   openDetails: (id) => set((state) => ({ dialogs: { ...state.dialogs, detailsItemId: id } })),
