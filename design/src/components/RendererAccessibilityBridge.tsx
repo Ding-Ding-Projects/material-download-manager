@@ -75,8 +75,8 @@ export default function RendererAccessibilityBridge() {
       dialog.setAttribute("role", dialog.getAttribute("role") || "dialog");
       dialog.setAttribute("aria-modal", "true");
       dialog.tabIndex = -1;
-      if (title) dialog.setAttribute("aria-labelledby", title.id);
-      if (body) dialog.setAttribute("aria-describedby", body.id);
+      if (title && !dialog.hasAttribute("aria-labelledby")) dialog.setAttribute("aria-labelledby", title.id);
+      if (body && !dialog.hasAttribute("aria-describedby")) dialog.setAttribute("aria-describedby", body.id);
 
       overlay.setAttribute("aria-hidden", "false");
       if (dialog.dataset.mdmInitialFocus !== "true") {

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { AppSettings, SettingKey } from "@shared/types";
 import { createDefaultSettings, isHexColor } from "@shared/settings";
 import { createDefaultRegexBuilderState, evaluateRegex, type RegexBuilderState } from "@shared/regex";
@@ -12,34 +12,42 @@ import RegexBuilder from "./RegexBuilder";
 const SETTINGS_SEARCH_INDEX = [
   {
     id: "settings-language-heading",
+    targetId: "settings-language-mode",
     label: "Language mode English Cantonese bilingual funny level",
   },
   {
     id: "settings-appearance-heading",
+    targetId: "settings-theme",
     label: "Appearance theme density accent seed color font family font size weight",
   },
   {
     id: "settings-default-save-folder",
+    targetId: "settings-default-save-folder-input",
     label: "Default save folder browse folder",
   },
   {
     id: "settings-performance",
+    targetId: "settings-max-connections-per-download",
     label: "Max connections per download max active downloads",
   },
   {
     id: "settings-speed",
+    targetId: "settings-global-speed-limit",
     label: "Global speed limit unlimited",
   },
   {
     id: "settings-startup",
+    targetId: "settings-startup-toggle",
     label: "Start on system startup",
   },
   {
     id: "settings-completion",
+    targetId: "settings-completion-toggle",
     label: "Show completion notification when a download completes",
   },
   {
     id: "settings-advanced",
+    targetId: "settings-min-splittable-part-size",
     label: "Advanced minimum splittable part size",
   },
 ] as const;
@@ -67,6 +75,7 @@ export default function SettingsDialog() {
     sample: SETTINGS_SEARCH_SAMPLE,
   }));
   const [settingsRegexOpen, setSettingsRegexOpen] = useState(false);
+  const settingsRegexButtonRef = useRef<HTMLButtonElement>(null);
 
   const copy = useMemo(() => getSettingsCopy(form.languageMode), [form.languageMode]);
   const compiledDefaults = useMemo(
@@ -129,7 +138,9 @@ export default function SettingsDialog() {
 
   function jumpToSetting(id: string) {
     const target = document.getElementById(id);
-    if (!target) return;
+    if (!(target instanceof HTMLElement)) return;
+    const details = target.closest("details");
+    if (details instanceof HTMLDetailsElement) details.open = true;
     const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     target.scrollIntoView({ behavior: reducedMotion ? "auto" : "smooth", block: "nearest" });
     target.focus({ preventScroll: true });
@@ -199,6 +210,7 @@ export default function SettingsDialog() {
           />
           <button
             type="button"
+            ref={settingsRegexButtonRef}
             className={`btn btn-ghost btn-sm${settingsRegexOpen ? " active" : ""}`}
             aria-expanded={settingsRegexOpen}
             onClick={() => setSettingsRegexOpen((open) => !open)}
@@ -207,7 +219,16 @@ export default function SettingsDialog() {
           </button>
         </div>
         {settingsRegexOpen && (
-          <div className="settings-search-builder">
+          <div
+            className="settings-search-builder"
+            onKeyDownCapture={(event) => {
+              if (event.key !== "Escape") return;
+              event.preventDefault();
+              event.stopPropagation();
+              setSettingsRegexOpen(false);
+              window.requestAnimationFrame(() => settingsRegexButtonRef.current?.focus());
+            }}
+          >
             <RegexBuilder
               title="Settings regex builder"
               value={settingsSearch}
@@ -225,7 +246,7 @@ export default function SettingsDialog() {
               <ul>
                 {matchingSettings.map((entry) => (
                   <li key={entry.id}>
-                    <button type="button" onClick={() => jumpToSetting(entry.id)}>{entry.label}</button>
+                    <button type="button" onClick={() => jumpToSetting(entry.targetId)}>{entry.label}</button>
                   </li>
                 ))}
               </ul>
@@ -425,6 +446,7 @@ export default function SettingsDialog() {
         <div className="field-row">
           <input
             className="input"
+            id="settings-default-save-folder-input"
             type="text"
             value={form.defaultSaveFolder}
             onChange={(e) => update("defaultSaveFolder", e.target.value)}
@@ -441,6 +463,7 @@ export default function SettingsDialog() {
           <span className="field-label">Max connections per download</span>
           <input
             className="input"
+            id="settings-max-connections-per-download"
             type="number"
             min={1}
             max={32}
@@ -456,6 +479,7 @@ export default function SettingsDialog() {
           <span className="field-label">Max active downloads</span>
           <input
             className="input"
+            id="settings-max-active-downloads"
             type="number"
             min={1}
             max={32}
@@ -474,6 +498,7 @@ export default function SettingsDialog() {
         <div className="field-row">
           <input
             className="input"
+            id="settings-global-speed-limit"
             type="number"
             min={0.1}
             step={0.1}
@@ -485,7 +510,10 @@ export default function SettingsDialog() {
           <label className="checkbox-row">
             <button
               type="button"
+              id="settings-unlimited-speed"
               className={`checkbox${unlimitedSpeed ? " checked" : ""}`}
+              role="checkbox"
+              aria-checked={unlimitedSpeed}
               onClick={() => setUnlimitedSpeed((v) => !v)}
               aria-label="Unlimited speed"
             />
@@ -509,7 +537,10 @@ export default function SettingsDialog() {
       <label className="checkbox-row field" id="settings-startup" tabIndex={-1}>
         <button
           type="button"
+          id="settings-startup-toggle"
           className={`checkbox${form.startOnSystemStartup ? " checked" : ""}`}
+          role="checkbox"
+          aria-checked={form.startOnSystemStartup}
           onClick={() => update("startOnSystemStartup", !form.startOnSystemStartup)}
           aria-label="Start on system startup"
         />
@@ -523,7 +554,10 @@ export default function SettingsDialog() {
       <label className="checkbox-row field" id="settings-completion" tabIndex={-1}>
         <button
           type="button"
+          id="settings-completion-toggle"
           className={`checkbox${form.showCompleteDialog ? " checked" : ""}`}
+          role="checkbox"
+          aria-checked={form.showCompleteDialog}
           onClick={() => update("showCompleteDialog", !form.showCompleteDialog)}
           aria-label="Show completion notification"
         />
@@ -540,6 +574,7 @@ export default function SettingsDialog() {
           <span className="field-label">Minimum splittable part size (KB)</span>
           <input
             className="input"
+            id="settings-min-splittable-part-size"
             type="number"
             min={1}
             value={Math.round(form.minConnectionPartSize / 1024)}
