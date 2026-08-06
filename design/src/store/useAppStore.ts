@@ -7,6 +7,7 @@ import type {
   DownloadQueue,
   NewDownloadInfo,
 } from "@shared/types";
+import { applyAppearanceSettings, withPersistedProvenance } from "./settingsAppearance";
 
 export type SidebarFilter =
   | { kind: "all" }
@@ -104,10 +105,16 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   init: () => {
     window.api.getState().then((s) =>
-      set({ items: s.items, queues: s.queues, settings: s.settings, ready: true })
+      set(() => {
+        applyAppearanceSettings(s.settings);
+        return { items: s.items, queues: s.queues, settings: s.settings, ready: true };
+      })
     );
     const unsubscribe = window.api.onStateChanged((s) => {
-      set({ items: s.items, queues: s.queues, settings: s.settings });
+      set(() => {
+        applyAppearanceSettings(s.settings);
+        return { items: s.items, queues: s.queues, settings: s.settings };
+      });
     });
     return unsubscribe;
   },
@@ -162,7 +169,10 @@ export const useAppStore = create<AppState>((set, get) => ({
   openFolder: (id) => window.api.openFolder(id),
   getSettings: () => window.api.getSettings(),
   setSettings: async (settings) => {
-    const updated = await window.api.setSettings(settings);
+    const updated = await window.api.setSettings(
+      withPersistedProvenance(get().settings, settings)
+    );
+    applyAppearanceSettings(updated);
     set({ settings: updated });
     return updated;
   },
