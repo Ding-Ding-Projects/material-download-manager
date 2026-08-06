@@ -728,5 +728,3 @@ try {
   console.error(`count-lines: ${error instanceof Error ? error.message : String(error)}`);
   process.exitCode = 1;
 }
-
-

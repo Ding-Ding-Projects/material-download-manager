@@ -314,5 +314,3 @@ async function main() {
 main().catch(() => {
   reportFailure('Metadata resolution failed unexpectedly.');
 });
-
-
