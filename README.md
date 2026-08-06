@@ -42,7 +42,9 @@ a certificate. The `Windows release` workflow performs the signed build,
 validates `Setup.exe`, `RELEASES`, and the full Squirrel packages, then creates
 one uniquely tagged release with the CI-produced line-count table and release
 metadata. The workflow is present, but no release has been published because
-the protected signing certificate and password are not configured yet.
+the protected signing certificate and password are not configured yet. An
+explicit manual-dispatch `skip_signing` input can create an `UNSIGNED`
+prerelease for testing only; it never becomes the stable updater feed.
 
 The updater has a stable default feed at
 `https://github.com/Ding-Ding-Projects/material-download-manager/releases/latest/download/`;

@@ -35,6 +35,12 @@ an overlapping native Squirrel operation or overwrite a ready state. Candidate
 versions must be strictly newer than the installed version before download or
 installation can proceed.
 
+The release workflow's normal path requires Authenticode signing. A manual
+`workflow_dispatch` may explicitly set `skip_signing` for a test-only run; the
+workflow restores the committed signing configuration, labels the release
+`UNSIGNED`, and publishes it as a prerelease so it cannot become the stable
+updater feed. This exception is not production signing evidence.
+
 ## Configuration
 
 The service uses the stable public feed URL
@@ -74,6 +80,9 @@ decision logic injectable for focused tests.
   line-count table, and release metadata before publishing. Until a signed run
   verifies those facts, this repository does not claim an installer or update
   release.
+- An unsigned prerelease is accepted only when a user explicitly dispatches
+  `skip_signing`; it is visibly labeled and excluded from stable update
+  discovery. It does not satisfy the signed production-release requirement.
 - Enabling MSI requires either a builder upgrade that fixes that WiX
   identifier generation or a deliberate package-name migration; this slice
   does not silently rename the application package to make an optional MSI

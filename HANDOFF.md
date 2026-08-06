@@ -35,6 +35,13 @@ handoff does not call the release published: the protected signing certificate
 and password have not been configured, so the workflow cannot produce a
 verified installer yet.
 
+The follow-up `codex/unsigned-release-20260806` branch adds an explicit,
+manual-dispatch-only `skip_signing` test route. It temporarily changes only the
+runner copy of `design/package.json`, restores that file after packaging,
+labels the result `UNSIGNED`, and forces a prerelease so it cannot become the
+stable updater feed. This route is not signed production evidence and does not
+replace the normal signing gate.
+
 ## Runnable application
 
 The application under `design/` includes:

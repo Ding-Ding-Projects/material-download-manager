@@ -2,9 +2,11 @@
 
 This category documents the production-honest Squirrel.Windows packaging,
 main-process update coordinator, secure preload bridge, renderer update banner,
-and the signed GitHub Actions release path. No release has been published yet:
-the workflow is fail-closed until its protected signing certificate and
-password are configured and a signed run verifies the assets.
+and the signed GitHub Actions release path. No stable release has been
+published yet: the normal workflow is fail-closed until its protected signing
+certificate and password are configured and a signed run verifies the assets.
+An explicit manual-dispatch `skip_signing` route can publish an `UNSIGNED`
+prerelease for testing only; it is excluded from the stable updater feed.
 
 ## Articles
 
