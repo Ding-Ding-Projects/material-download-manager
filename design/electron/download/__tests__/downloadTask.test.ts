@@ -11,7 +11,7 @@ import { probeUrl, redactErrorMessage, redactUrl, sanitizeFileName } from "../Ht
 import { DownloadTask } from "../DownloadTask";
 import { SpeedLimiter } from "../SpeedLimiter";
 import { detectCategory } from "../categories";
-import { splitStoredDownload, withStoredHeaders } from "../downloadMetadata";
+import { headersForTarget, splitStoredDownload, withStoredHeaders } from "../downloadMetadata";
 import { isQueueScheduleActive, QueueScheduleClock } from "../queueSchedule";
 import type { DownloadItem } from "../../../shared/types";
 
@@ -141,6 +141,18 @@ test("custom headers survive persistence and reach probe plus transfer requests"
   }
 });
 
+test("same-origin redirects retain custom headers", () => {
+  const headers = {
+    Authorization: "Bearer stays-on-origin",
+    "X-Api-Key": "api-key-stays-on-origin",
+    "X-Trace-Id": "trace-is-safe",
+  };
+  assert.deepEqual(
+    headersForTarget(headers, "https://downloads.example.test/start", "https://downloads.example.test/final"),
+    headers
+  );
+});
+
 test("cross-origin redirects strip credentials but preserve ordinary headers", async () => {
   const destination = await startTestServer(128 * 1024);
   const redirect = await startTestServer(128 * 1024, { redirectLocation: destination.url });
@@ -148,6 +160,14 @@ test("cross-origin redirects strip credentials but preserve ordinary headers", a
   const headers = {
     Authorization: "Bearer should-not-leave-origin",
     Cookie: "session=should-not-leave-origin",
+    "X-Api-Key": "api-key-should-not-leave-origin",
+    "Api-Key": "api-key-should-not-leave-origin",
+    "X-Bearer-Token": "bearer-should-not-leave-origin",
+    "Bearer-Token": "bearer-should-not-leave-origin",
+    "X-Access-Token": "access-token-should-not-leave-origin",
+    "X-Client-Secret": "client-secret-should-not-leave-origin",
+    "Proxy-Authorization": "Basic should-not-leave-origin",
+    "Set-Cookie": "session=should-not-leave-origin",
     "X-Trace-Id": "trace-is-safe",
   };
   try {
@@ -172,8 +192,20 @@ test("cross-origin redirects strip credentials but preserve ordinary headers", a
 
     assert.ok(destination.requestHeaders.length >= 2, "expected probe and transfer requests at the destination");
     for (const request of destination.requestHeaders) {
-      assert.equal(request.authorization, undefined);
-      assert.equal(request.cookie, undefined);
+      for (const name of [
+        "authorization",
+        "cookie",
+        "x-api-key",
+        "api-key",
+        "x-bearer-token",
+        "bearer-token",
+        "x-access-token",
+        "x-client-secret",
+        "proxy-authorization",
+        "set-cookie",
+      ]) {
+        assert.equal(request[name], undefined, `${name} must not cross an origin boundary`);
+      }
       assert.equal(request["x-trace-id"], "trace-is-safe");
     }
   } finally {
