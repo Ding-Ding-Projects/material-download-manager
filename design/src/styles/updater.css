@@ -1,0 +1,122 @@
+.updater-banner {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px 14px;
+  margin: 10px 12px 0;
+  padding: 10px 12px;
+  border: 1px solid var(--border-color-strong);
+  border-radius: var(--radius);
+  background: var(--bg-dialog);
+  box-shadow: var(--shadow-menu);
+  min-width: 0;
+}
+
+.updater-banner-ready {
+  border-color: var(--accent-purple);
+  background: color-mix(in srgb, var(--accent-purple) 12%, var(--bg-dialog));
+}
+
+.updater-banner-failed {
+  border-left: 3px solid var(--danger);
+}
+
+.updater-banner-progress {
+  border-left: 3px solid var(--accent-purple);
+}
+
+.updater-copy {
+  display: flex;
+  flex: 1 1 280px;
+  min-width: 0;
+  flex-direction: column;
+  gap: 3px;
+  line-height: 1.35;
+}
+
+.updater-copy strong,
+.updater-copy span {
+  overflow-wrap: anywhere;
+}
+
+.updater-copy span {
+  color: var(--text-secondary);
+}
+
+.updater-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin-left: auto;
+}
+
+.updater-release-notes {
+  color: var(--accent-purple);
+  font-size: 12px;
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  white-space: nowrap;
+}
+
+.updater-release-notes:hover {
+  color: var(--text-primary);
+}
+
+.updater-progress-wrap {
+  display: flex;
+  flex: 1 1 180px;
+  align-items: center;
+  gap: 8px;
+  min-width: min(220px, 100%);
+}
+
+.updater-progress {
+  height: 7px;
+  flex: 1;
+  overflow: hidden;
+  border-radius: 99px;
+  background: var(--bg-input);
+  border: 1px solid var(--border-color);
+}
+
+.updater-progress span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--accent-gradient-diag);
+  transition: width 160ms ease;
+}
+
+.updater-progress-value {
+  min-width: 36px;
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.updater-banner-deferred {
+  padding-top: 7px;
+  padding-bottom: 7px;
+  border-color: var(--border-color);
+}
+
+@media (max-width: 760px) {
+  .updater-banner {
+    align-items: flex-start;
+  }
+
+  .updater-actions,
+  .updater-banner > .btn,
+  .updater-release-notes {
+    margin-left: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .updater-progress span {
+    transition: none;
+  }
+}

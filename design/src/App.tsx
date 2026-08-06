@@ -17,6 +17,7 @@ import DestructiveActionGate, {
 import NotificationCenter, { notify } from "./components/NotificationCenter";
 import RendererAccessibilityBridge from "./components/RendererAccessibilityBridge";
 import CommandPalette, { type PaletteCommand } from "./components/CommandPalette";
+import UpdaterBanner from "./components/UpdaterBanner";
 
 const DESTRUCTIVE_REQUEST_EVENT = "mdm:request-destructive-action";
 const CLOSE_CONTEXT_MENU_EVENT = "mdm:close-context-menus";
@@ -42,6 +43,11 @@ export default function App() {
   const [destructiveRequest, setDestructiveRequest] = useState<DestructiveActionRequest | null>(null);
   const observedItems = useRef(false);
   const previousItems = useRef(new Map<string, Pick<DownloadItem, "status" | "error" | "fileName" | "url">>());
+  const activeItems = items.filter((item) => item.status === "added" || item.status === "queued" || item.status === "downloading");
+  const hasUnsavedWork = dialogs.addDownload || activeItems.length > 0;
+  const unsavedWorkReason = dialogs.addDownload
+    ? "The download form is still open; finish or close it before restarting."
+    : `${activeItems.length} download${activeItems.length === 1 ? " is" : "s are"} still active; pause or finish it before restarting.`;
 
   const activeQueueId = filter.kind === "queue" ? filter.queueId : DEFAULT_QUEUE_ID;
   const activeQueue = queues.find((queue) => queue.id === activeQueueId);
@@ -64,6 +70,14 @@ export default function App() {
         keywords: ["pause", "downloads", "stop"],
         section: "Actions",
         onSelect: stopAllActive,
+      },
+      {
+        id: "action.check-for-updates",
+        label: "Check for updates",
+        description: "Check the signed HTTPS update feed",
+        keywords: ["update", "version", "release", "restart"],
+        section: "Actions",
+        onSelect: () => void window.api.checkForUpdates(),
       },
       {
         id: "action.start-queue",
@@ -157,6 +171,8 @@ export default function App() {
       onSelect: () => setFilter({ kind: "queue", queueId: queue.id }),
     }));
 
+    // Item-scoped actions intentionally stay out of this registry: it has no
+    // focused/selected-item contract, so an action must never guess a download.
     return [...commands, ...categoryCommands, ...queueCommands];
   }, [activeQueueId, activeQueueName, filter.kind, openAddDownload, openQueues, openSettings, queues, setFilter, startQueue, stopAllActive, stopQueue]);
 
@@ -205,8 +221,10 @@ export default function App() {
       }
 
       const name = itemName(item);
+      // Completion is owned by the main-process native notification path. Do
+      // not emit a second renderer toast for the same completed item.
       if (item.status === "completed") {
-        notify({ title: "Download complete", message: `${name} is ready.`, tone: "success" });
+        return;
       } else if (item.status === "error") {
         notify({ title: "Download error", message: `${name}: ${item.error || "The manager reported an error."}`, tone: "error" });
       } else {
@@ -248,6 +266,7 @@ export default function App() {
       <RendererAccessibilityBridge />
       <CommandPalette commands={paletteCommands} />
       <TitleBar />
+      <UpdaterBanner hasUnsavedWork={hasUnsavedWork} unsavedWorkReason={unsavedWorkReason} />
       <div className="app-body">
         <Sidebar />
         <main className="main-pane">

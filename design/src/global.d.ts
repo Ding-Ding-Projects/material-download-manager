@@ -4,11 +4,20 @@ import type {
   DownloadQueue,
   NewDownloadInfo,
   StateSnapshot,
+  UpdateInstallResult,
+  UpdateState,
+  UpdateUnsavedWorkState,
 } from "@shared/types";
 
 export interface MaterialDownloadManagerAPI {
   getState(): Promise<StateSnapshot>;
   onStateChanged(cb: (state: StateSnapshot) => void): () => void;
+  getUpdateState(): Promise<UpdateState>;
+  onUpdateStateChanged(cb: (state: UpdateState) => void): () => void;
+  checkForUpdates(): Promise<UpdateState>;
+  installUpdate(): Promise<UpdateInstallResult>;
+  openUpdateReleaseNotes(): Promise<boolean>;
+  setUnsavedWorkState(state: UpdateUnsavedWorkState): Promise<void>;
   probeUrl(url: string): Promise<NewDownloadInfo>;
   addDownload(req: AddDownloadRequest): Promise<string>;
   pauseDownload(id: string): Promise<void>;
