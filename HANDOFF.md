@@ -22,6 +22,11 @@ This layout is intentionally reversible. It does not claim that the prototype
 is production code, and it does not discard the prototype's visual reference
 material.
 
+The runnable application is now integrated on `main` at `5c2d5d3`. The
+original handoff branch remains available as
+`origin/claude/submodule-design-folder-port-iyvesh`; it was preserved rather
+than rewritten.
+
 ## Runnable application
 
 The application under `design/` includes:
@@ -56,19 +61,17 @@ npm run test:engine
 npm run test:electron
 ```
 
-On 2026-08-05, the following checks passed on
-`codex/reconcile-updater-20260805`:
+On the final integrated tree (`main` at `5c2d5d3`), the following checks
+passed:
 
 | Check | Result |
 | --- | --- |
-| `npm ci` | Installed 396 packages from the lockfile; npm reported 11 audit findings and install-script approval warnings. |
 | `npm run typecheck` | Passed renderer and Electron TypeScript checks. |
 | `npm run build` | Passed Vite renderer and Electron main-process compilation. |
-| `npm run test:engine` | 27/27 passed, including Range integrity, pause/resume, non-resumable fallback, custom-header persistence and origin stripping, global queue limits, schedule race handling, manager history hooks, filename sanitization, malformed Range rejection, categories, and throttling. |
-| `npm run test:electron` | 29/29 passed for export, local history, regex, tabs, command-palette foundations, compiled renderer-path resolution, secure updater IPC, version monotonicity, timeout/stale-event recovery, native Squirrel download-overlap protection, and completion-notification preference handling. |
-| `npm run dist:win` | The committed config enforces signing and therefore fails closed without a certificate. A reversible unsigned shape attempt exited after the Squirrel target line without producing `Setup.exe`, `RELEASES`, or a `.nupkg` on this Node 26 host; no packaging or release artifact is claimed. |
-| Hidden-desktop smoke | Passed through the cheap hidden-desktop route: direct Electron `v31.7.7` launch opened `Material Download Manager` at 1150×720, rendered the empty state, opened Settings, and returned focus after Escape; the desktop and process were cleaned up. |
-| Remote GitHub Actions | No green verdict claimed: the previously observed Windows verification run remained queued, and GitHub Actions had earlier rejected manual dispatch with `Actions has been disabled for this user`. |
+| `npm run test:engine` | 29/29 passed, including Range integrity, pause/resume, non-resumable fallback, custom-header persistence and cross-origin header stripping, global queue limits, schedule race handling, manager history hooks, filename sanitization, malformed Range rejection, categories, throttling, and URL redaction. |
+| `npm run test:electron` | 31/31 passed for export, local history, regex, tabs, command-palette foundations, compiled renderer-path resolution, secure updater IPC, version monotonicity, timeout/stale-event recovery, native Squirrel download-overlap protection, queue payload validation, Settings Escape handling, and completion-notification preference handling. |
+| Hidden-desktop smoke | Passed through the cheap hidden-desktop route: direct Electron `v31.7.7` launch opened `Material Download Manager` at 1150×720, rendered the empty state and update state, opened Settings, filtered Settings with its anchored regex builder, and returned focus after Escape. The hidden desktop and process were cleaned up. |
+| Remote GitHub Actions | Passed for `5c2d5d3`: [Windows verification run 31072462082](https://github.com/Ding-Ding-Projects/material-download-manager/actions/runs/31072462082). |
 
 The hardening milestone corrected the compiled renderer path and made
 unpackaged production launches load the built renderer unless
@@ -88,11 +91,10 @@ claim a signed installer, a published `RELEASES` feed, or a verified update.
 The unsigned local shape attempt produced no artifacts on this host and is not
 release evidence.
 
-The repository now has a Windows push/dispatch workflow at
+The repository has a Windows push/dispatch workflow at
 [`.github/workflows/ci.yml`](.github/workflows/ci.yml) for the checks above. It
-does not claim installer or release verification. Remote execution still needs
-GitHub Actions to be enabled for the authenticated user, and the updater still
-needs a signed public HTTPS feed configured through `MDM_UPDATE_FEED_URL`.
+does not claim installer or release verification. The updater still needs a
+signed public HTTPS feed configured through `MDM_UPDATE_FEED_URL`.
 
 ## Known follow-up work
 
@@ -126,24 +128,29 @@ reconciliation:
    before calling local history complete.
 9. The renderer lane now supplies centralized accessibility semantics,
    non-blocking notification history, and the native destructive-action gate.
-   Its current evidence is typecheck/build, existing engine/Electron tests, and
-   a cheap headless Settings/Escape/focus smoke; a renderer DOM harness,
-   notification bulk actions, deletion history recording, and full-copy
-   localization remain open.
+   Its current evidence is typecheck/build, 31 Electron tests, and a cheap
+   headless Settings/Escape/focus smoke; a renderer DOM harness, notification
+   bulk actions, deletion history recording, and full-copy localization remain
+   open.
 10. The settings lane now supplies versioned language, funny-level, appearance,
-   and provenance state with persistence tests. The settings surface still needs
-   its own search/regex builder and browser-style tabs, full appearance-editor
-   depth, and copy wiring across every renderer message.
+    provenance state, a local Settings search, and an anchored regex builder
+    with persistence tests. The surface still needs browser-style settings tabs,
+    full appearance-editor depth, and copy wiring across every renderer message.
 11. Keep the landing page, changelog viewer, release line counter, and
     sanitized instruction mirror current as the product surfaces are
     implemented.
 
 ## Git state and ownership
 
-This reconciliation is on `codex/reconcile-updater-20260805`, based on
-`origin/codex/full-app` at `8f49f9d`; `main` and the other linked checkouts were
-not touched. The original handoff history is preserved as an ancestor. There
-are no open GitHub issues in either scanned repository at the time this handoff
-was refreshed. GitHub Discussions are disabled, the wiki setting is enabled
-but its wiki repository is not initialized, and GitHub Pages is not configured.
-No unverified wiki or site is claimed here.
+This reconciliation is on `main` at `5c2d5d3`, which matches
+`origin/main`. The original handoff history is preserved as an ancestor, and
+the original handoff branch remains untouched. There are no open GitHub issues
+in either scanned repository at the time this handoff was refreshed. GitHub
+Discussions are disabled, the wiki setting is enabled but its wiki repository
+is not initialized, and GitHub Pages is not configured. No unverified wiki or
+site is claimed here.
+
+Only the main checkout remains registered with Git. Five previously used,
+clean checkout directories could not be removed because Windows still held
+files open after their Git metadata was removed; they contain no uncommitted
+work and are not registered worktrees.
