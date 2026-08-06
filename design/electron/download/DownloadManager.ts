@@ -26,6 +26,56 @@ import {
 import { isQueueScheduleActive, QueueScheduleClock } from "./queueSchedule";
 import { HistoryStore, type HistoryAction } from "../history/HistoryStore";
 
+const MAX_QUEUE_NAME_LENGTH = 512;
+const MAX_QUEUE_ID_LENGTH = 256;
+const MAX_QUEUE_ITEM_IDS = 10_000;
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function assertBoundedString(value: unknown, field: string, maxLength: number): asserts value is string {
+  if (typeof value !== "string" || value.length === 0 || value.length > maxLength) {
+    throw new Error(`Invalid ${field}`);
+  }
+}
+
+function isQueueItemId(value: unknown): value is string {
+  return typeof value === "string" && value.length > 0 && value.length <= MAX_QUEUE_ID_LENGTH;
+}
+
+function assertQueueItemIds(value: unknown): asserts value is string[] {
+  if (!Array.isArray(value) || value.length > MAX_QUEUE_ITEM_IDS || value.some((id) => !isQueueItemId(id))) {
+    throw new Error("Invalid queue item IDs");
+  }
+}
+
+/** Validate the partial shape accepted by the queue:create IPC call. */
+export function assertQueueCreatePayload(value: unknown): asserts value is Partial<DownloadQueue> {
+  if (!isRecord(value)) throw new Error("Invalid queue");
+  if (value.id !== undefined) assertBoundedString(value.id, "queue identifier", MAX_QUEUE_ID_LENGTH);
+  if (value.name !== undefined) assertBoundedString(value.name, "queue name", MAX_QUEUE_NAME_LENGTH);
+  if (
+    value.maxConcurrent !== undefined &&
+    (typeof value.maxConcurrent !== "number" || !Number.isFinite(value.maxConcurrent))
+  ) {
+    throw new Error("Invalid queue concurrency");
+  }
+  if (value.isRunning !== undefined && typeof value.isRunning !== "boolean") {
+    throw new Error("Invalid queue running state");
+  }
+  if (value.itemIds !== undefined) assertQueueItemIds(value.itemIds);
+  if (value.scheduleEnabled !== undefined && typeof value.scheduleEnabled !== "boolean") {
+    throw new Error("Invalid queue schedule state");
+  }
+  if (value.startAt !== undefined && value.startAt !== null) {
+    assertBoundedString(value.startAt, "queue start time", 16);
+  }
+  if (value.endAt !== undefined && value.endAt !== null) {
+    assertBoundedString(value.endAt, "queue end time", 16);
+  }
+}
+
 export class DownloadManager extends EventEmitter {
   private store: StateStore;
   private history: HistoryStore;
@@ -350,7 +400,7 @@ export class DownloadManager extends EventEmitter {
 
   processQueue(queueId: string) {
     const queue = this.queues.get(queueId);
-    if (!queue || !queue.isRunning || !isQueueScheduleActive(queue)) return;
+    if (!queue || !queue.isRunning || !isQueueScheduleActive(queue) || !Array.isArray(queue.itemIds)) return;
     const activeCount = queue.itemIds.filter((id) => this.tasks.has(id)).length;
     const globalActiveCount = this.tasks.size;
     let freeSlots = Math.max(
@@ -360,6 +410,7 @@ export class DownloadManager extends EventEmitter {
     if (freeSlots <= 0) return;
     for (const id of queue.itemIds) {
       if (freeSlots <= 0) break;
+      if (!isQueueItemId(id)) continue;
       const item = this.items.get(id);
       if (!item) continue;
       if (item.status === "queued" || item.status === "added") {
@@ -481,6 +532,7 @@ export class DownloadManager extends EventEmitter {
   // ---- queues ---------------------------------------------------------------
 
   async createQueue(partial: Partial<DownloadQueue>): Promise<DownloadQueue> {
+    assertQueueCreatePayload(partial);
     const queue: DownloadQueue = {
       id: partial.id || crypto.randomUUID(),
       name: partial.name || "New Queue",

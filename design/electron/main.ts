@@ -3,7 +3,7 @@ import path from "node:path";
 import { IPC, isUpdateUnsavedWorkState, type UpdateInstallResult, type UpdateState } from "../shared/types";
 import type { AddDownloadRequest, AppSettings, DownloadItem, DownloadQueue } from "../shared/types";
 import { notifyDownloadComplete as showCompletionNotification, type CompletionNotificationPort } from "./completionNotification";
-import { DownloadManager } from "./download/DownloadManager";
+import { assertQueueCreatePayload, DownloadManager } from "./download/DownloadManager";
 import { isDevelopmentLaunch, resolveRendererPath } from "./runtimePaths";
 import {
   normalizeReleaseNotesUrl,
@@ -120,13 +120,16 @@ function assertPartialSettings(value: unknown): asserts value is Partial<AppSett
 }
 
 function assertDownloadQueue(value: unknown): asserts value is DownloadQueue {
-  assertRecord(value, "queue");
-  assertId(value.id);
-  assertString(value.name, "queue name", 512);
-  if (typeof value.maxConcurrent !== "number" || !Number.isFinite(value.maxConcurrent)) {
-    throw new Error("Invalid queue concurrency");
+  assertQueueCreatePayload(value);
+  if (
+    value.id === undefined ||
+    value.name === undefined ||
+    value.maxConcurrent === undefined ||
+    value.isRunning === undefined ||
+    value.itemIds === undefined
+  ) {
+    throw new Error("Invalid queue");
   }
-  if (typeof value.isRunning !== "boolean" || !Array.isArray(value.itemIds)) throw new Error("Invalid queue");
 }
 
 function broadcastState() {
@@ -232,7 +235,7 @@ function registerIpcHandlers() {
 
   ipcMain.handle(IPC.QUEUE_CREATE, (event, queue: unknown) => {
     assertTrustedSender(event);
-    assertRecord(queue, "queue");
+    assertQueueCreatePayload(queue);
     return manager.createQueue(queue);
   });
   ipcMain.handle(IPC.QUEUE_UPDATE, (event, queue: unknown) => {
