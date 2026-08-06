@@ -1,9 +1,11 @@
-import { app, BrowserWindow, ipcMain, shell, dialog, Notification } from "electron";
+import { app, autoUpdater, BrowserWindow, ipcMain, shell, dialog, Notification } from "electron";
 import path from "node:path";
 import { IPC } from "../shared/types";
 import type { AddDownloadRequest, AppSettings, DownloadItem, DownloadQueue } from "../shared/types";
+import { notifyDownloadComplete as showCompletionNotification, type CompletionNotificationPort } from "./completionNotification";
 import { DownloadManager } from "./download/DownloadManager";
 import { isDevelopmentLaunch, resolveRendererPath } from "./runtimePaths";
+import { readUpdateFeedUrl, UpdateService } from "./updater/UpdateService";
 
 const isDev = isDevelopmentLaunch(app.isPackaged);
 
@@ -17,6 +19,7 @@ if (!gotSingleInstanceLock) {
 
 let mainWindow: BrowserWindow | null = null;
 let manager: DownloadManager;
+let updater: UpdateService | null = null;
 
 const appIconPath = path.join(__dirname, "../../build/icon.ico");
 
@@ -100,13 +103,25 @@ function registerIpcHandlers() {
   ipcMain.on(IPC.WINDOW_CLOSE, () => mainWindow?.close());
 }
 
+const nativeCompletionNotifications: CompletionNotificationPort = {
+  isSupported: () => Notification.isSupported(),
+  show: (options) => new Notification(options).show(),
+};
+
 function notifyDownloadComplete(item: DownloadItem) {
-  if (!Notification.isSupported()) return;
-  new Notification({
-    title: "Download complete",
-    body: item.fileName,
-    icon: appIconPath,
-  }).show();
+  showCompletionNotification(item, manager.getSettings(), nativeCompletionNotifications, appIconPath);
+}
+
+function startUpdater() {
+  if (process.platform !== "win32") return;
+  updater = new UpdateService({
+    adapter: autoUpdater,
+    currentVersion: app.getVersion(),
+    isPackaged: app.isPackaged,
+    supportedPlatform: true,
+    feedUrl: readUpdateFeedUrl(),
+  });
+  updater.start();
 }
 
 app.on("second-instance", () => {
@@ -124,6 +139,7 @@ app.whenReady().then(async () => {
 
   registerIpcHandlers();
   createWindow();
+  startUpdater();
 
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
@@ -136,6 +152,7 @@ app.on("window-all-closed", async () => {
 });
 
 app.on("before-quit", async (e) => {
+  updater?.stop();
   if (manager && !manager.isShutDown) {
     e.preventDefault();
     await manager.shutdown();

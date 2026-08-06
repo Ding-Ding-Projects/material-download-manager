@@ -63,8 +63,9 @@ On 2026-08-05, the following checks passed on `codex/full-app`:
 | `npm ci` | Installed 396 packages from the lockfile; npm reported 11 audit findings and install-script approval warnings. |
 | `npm run typecheck` | Passed renderer and Electron TypeScript checks. |
 | `npm run build` | Passed Vite renderer and Electron main-process compilation. |
-| `npm run test:engine` | 23/23 passed, including Range integrity, pause/resume, non-resumable fallback, custom-header persistence and origin stripping, global queue limits, schedule race handling, filename sanitization, malformed Range rejection, categories, and throttling. |
-| `npm run test:electron` | 15/15 passed for export, local history, regex, tabs, command-palette foundations, and compiled renderer-path resolution. |
+| `npm run test:engine` | 24/24 passed, including Range integrity, pause/resume, non-resumable fallback, custom-header persistence and origin stripping, global queue limits, schedule race handling, manager history hooks, filename sanitization, malformed Range rejection, categories, and throttling. |
+| `npm run test:electron` | 24/24 passed for export, local history, regex, tabs, command-palette foundations, compiled renderer-path resolution, updater states, native Squirrel download-overlap protection, and completion-notification preference handling. |
+| `npm run dist:win` | The committed config enforces signing and therefore fails closed without a certificate. A reversible local shape check produced `Setup.exe`, `RELEASES`, and a full `.nupkg`; Authenticode was `NotSigned`, MSI is disabled for the current WiX identifier bug, and no delta/feed release was claimed. |
 | Hidden-desktop smoke | Passed through the cheap hidden-desktop route: direct Electron `v31.7.7` launch opened `Material Download Manager` at 1150×720, rendered the empty state, opened Settings, and returned focus after Escape; the desktop and process were cleaned up. |
 | Remote GitHub Actions | No green verdict claimed: the previously observed Windows verification run remained queued, and GitHub Actions had earlier rejected manual dispatch with `Actions has been disabled for this user`. |
 
@@ -74,23 +75,28 @@ unpackaged production launches load the built renderer unless
 constrained to one safe Windows path segment, and ranged responses must agree
 with their `Content-Range` before bytes are written.
 
-A Windows packaging run (`npm run dist:win`) is still required before publishing
-an installer; a compile-only success is not packaging evidence. The current
-package configuration still targets NSIS/portable output and does not yet claim
-the required Squirrel.Windows setup/update artifacts.
+A signed Windows packaging run (`npm run dist:win`) is still required before
+publishing an installer; a compile-only success is not packaging evidence. The
+package configuration now targets Squirrel.Windows x64 with signing enforced,
+and the main process has a bounded, fail-closed updater coordinator, but this
+branch does not claim a signed installer, a published `RELEASES` feed, or a
+verified update. The unsigned local shape check is evidence only that the
+Squirrel layout can be produced when signing is deliberately disabled for the
+check and is not a shippable artifact.
 
 The repository now has a Windows push/dispatch workflow at
 [`.github/workflows/ci.yml`](.github/workflows/ci.yml) for the checks above. It
-does not claim installer, updater, or release verification. Remote execution
-still needs GitHub Actions to be enabled for the authenticated user.
+does not claim installer or release verification. Remote execution still needs
+GitHub Actions to be enabled for the authenticated user, and the updater still
+needs a signed public HTTPS feed configured through `MDM_UPDATE_FEED_URL`.
 
 ## Known follow-up work
 
 These items remain open and are deliberately not hidden by the directory
 reconciliation:
 
-1. Validate the Windows installer and update artifacts on the supported build
-   path.
+1. Validate the Windows Squirrel installer and update artifacts on the
+   supported build path, including signing and the `RELEASES` feed.
 2. Compare the runnable renderer with the prototype and decide which Material 3
    visual and interaction changes should be implemented next.
 3. Add the remaining product features only after their scope and production
@@ -127,6 +133,9 @@ reconciliation:
 11. Keep the landing page, changelog viewer, release line counter, and
     sanitized instruction mirror current as the product surfaces are
     implemented.
+12. Connect `UpdateService` state to a localized, persistent non-blocking
+    renderer banner with explicit `Restart to install update` and `Later`
+    actions only after the signed feed is available.
 
 ## Git state and ownership
 

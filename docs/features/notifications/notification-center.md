@@ -14,6 +14,9 @@ blocking confirmation dialogs.
 The Settings option named `showCompleteDialog` is retained as a compatibility
 key, but its user-facing meaning is accurately shown as “Show a non-blocking
 notification when a download completes”; it does not open a blocking dialog.
+The main-process OS notification uses the same setting and fails closed when
+native notifications are unsupported, so turning it off suppresses both
+completion notification paths without changing download completion itself.
 
 ## Configuration
 
