@@ -60,7 +60,37 @@ export interface DownloadQueue {
   endAt: string | null; // "HH:mm"
 }
 
+export type LanguageMode = "english" | "cantonese" | "bilingual";
+export type FunnyLevel = 1 | 2 | 3 | 4 | 5;
+export type DensityMode = "compact" | "comfortable" | "spacious";
+export type UIFontFamily = "segoe-ui" | "inter" | "cascadia-code" | "system";
+export type UIFontWeight = 400 | 500 | 600 | 700;
+export type SettingSource = "persisted" | "compiled-in";
+
+export const SETTING_KEYS = [
+  "defaultSaveFolder",
+  "maxConnectionsPerDownload",
+  "maxActiveDownloads",
+  "globalSpeedLimitBytes",
+  "showCompleteDialog",
+  "startOnSystemStartup",
+  "theme",
+  "minConnectionPartSize",
+  "languageMode",
+  "funnyLevelEnglish",
+  "funnyLevelCantonese",
+  "density",
+  "accentSeedColor",
+  "uiFontFamily",
+  "uiFontSize",
+  "uiFontWeight",
+] as const;
+
+export type SettingKey = (typeof SETTING_KEYS)[number];
+export type SettingsProvenance = Record<SettingKey, SettingSource>;
+
 export interface AppSettings {
+  settingsVersion: number;
   defaultSaveFolder: string;
   maxConnectionsPerDownload: number;
   maxActiveDownloads: number;
@@ -69,6 +99,15 @@ export interface AppSettings {
   startOnSystemStartup: boolean;
   theme: "dark" | "light" | "system";
   minConnectionPartSize: number; // bytes, minimum size worth splitting further
+  languageMode: LanguageMode;
+  funnyLevelEnglish: FunnyLevel;
+  funnyLevelCantonese: FunnyLevel;
+  density: DensityMode;
+  accentSeedColor: string;
+  uiFontFamily: UIFontFamily;
+  uiFontSize: number;
+  uiFontWeight: UIFontWeight;
+  settingProvenance: SettingsProvenance;
 }
 
 export interface AddDownloadRequest {

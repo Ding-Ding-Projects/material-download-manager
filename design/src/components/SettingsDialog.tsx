@@ -1,36 +1,46 @@
-import { useState } from "react";
-import type { AppSettings } from "@shared/types";
+import { useMemo, useState } from "react";
+import type { AppSettings, SettingKey } from "@shared/types";
+import { createDefaultSettings, isHexColor } from "@shared/settings";
+import { getSettingsCopy } from "../i18n/settings";
 import { useAppStore } from "../store/useAppStore";
+import { settingSourceLabel } from "../store/settingsAppearance";
 import Dialog from "./Dialog";
 import { FolderIcon, SettingsIcon } from "./icons";
-
-const FALLBACK_SETTINGS: AppSettings = {
-  defaultSaveFolder: "",
-  maxConnectionsPerDownload: 8,
-  maxActiveDownloads: 3,
-  globalSpeedLimitBytes: 0,
-  showCompleteDialog: true,
-  startOnSystemStartup: false,
-  theme: "dark",
-  minConnectionPartSize: 1024 * 1024,
-};
 
 export default function SettingsDialog() {
   const closeSettings = useAppStore((s) => s.closeSettings);
   const setSettings = useAppStore((s) => s.setSettings);
   const pickFolder = useAppStore((s) => s.pickFolder);
+  const currentSettings = useAppStore((s) => s.settings);
 
   const [form, setForm] = useState<AppSettings>(
-    () => useAppStore.getState().settings ?? FALLBACK_SETTINGS
+    () => currentSettings ?? createDefaultSettings("")
   );
   const [unlimitedSpeed, setUnlimitedSpeed] = useState(form.globalSpeedLimitBytes === 0);
   const [speedMBs, setSpeedMBs] = useState(
     form.globalSpeedLimitBytes > 0 ? form.globalSpeedLimitBytes / (1024 * 1024) : 5
   );
   const [saving, setSaving] = useState(false);
+  const [accentError, setAccentError] = useState<string | null>(null);
+
+  const copy = useMemo(() => getSettingsCopy(form.languageMode), [form.languageMode]);
+  const compiledDefaults = useMemo(
+    () => createDefaultSettings(form.defaultSaveFolder),
+    [form.defaultSaveFolder]
+  );
 
   function update<K extends keyof AppSettings>(key: K, value: AppSettings[K]) {
     setForm((f) => ({ ...f, [key]: value }));
+  }
+
+  function resetSetting<K extends SettingKey>(key: K) {
+    update(key, compiledDefaults[key] as AppSettings[K]);
+  }
+
+  function source(key: SettingKey, compiledValue: string) {
+    return settingSourceLabel(form, key, compiledValue)
+      .replace("Source: persisted value", copy.sourcePersisted)
+      .replace(/^Source: compiled-in value \((.*)\)$/, (_, value: string) => copy.sourceCompiledIn(value));
   }
 
   async function handlePickFolder() {
@@ -38,7 +48,25 @@ export default function SettingsDialog() {
     if (picked) update("defaultSaveFolder", picked);
   }
 
+  function updateAccent(value: string) {
+    update("accentSeedColor", value);
+    setAccentError(isHexColor(value) ? null : copy.accentInvalid);
+  }
+
+  function resetAllSettings() {
+    const defaults = createDefaultSettings(form.defaultSaveFolder);
+    setForm({ ...defaults, defaultSaveFolder: form.defaultSaveFolder });
+    setUnlimitedSpeed(true);
+    setSpeedMBs(5);
+    setAccentError(null);
+  }
+
   async function handleSave() {
+    if (!isHexColor(form.accentSeedColor)) {
+      setAccentError(copy.accentInvalid);
+      return;
+    }
+
     setSaving(true);
     try {
       await setSettings({
@@ -56,7 +84,7 @@ export default function SettingsDialog() {
       title="Settings"
       icon={<SettingsIcon size={16} />}
       onClose={closeSettings}
-      width={480}
+      width={520}
       footer={
         <>
           <button type="button" className="btn btn-primary" onClick={() => void handleSave()} disabled={saving}>
@@ -69,6 +97,188 @@ export default function SettingsDialog() {
         </>
       }
     >
+      <section className="settings-section" aria-labelledby="settings-language-heading">
+        <div className="settings-section-heading" id="settings-language-heading">{copy.language}</div>
+        <p className="setting-helper">{copy.languageHelper}</p>
+        <label className="field">
+          <span className="field-label">{copy.language}</span>
+          <select
+            className="input select"
+            value={form.languageMode}
+            onChange={(e) => update("languageMode", e.target.value as AppSettings["languageMode"])}
+          >
+            <option value="english">{copy.english}</option>
+            <option value="cantonese">{copy.cantonese}</option>
+            <option value="bilingual">{copy.bilingual}</option>
+          </select>
+          <span className="setting-source">{source("languageMode", "English")}</span>
+          <button type="button" className="btn btn-ghost btn-sm setting-reset" onClick={() => resetSetting("languageMode")}>
+            {copy.reset}
+          </button>
+        </label>
+
+        <div className="settings-level-grid">
+          <label className="field">
+            <span className="field-label">{copy.funnyEnglish}</span>
+            <input
+              className="range-input"
+              type="range"
+              min={1}
+              max={5}
+              step={1}
+              value={form.funnyLevelEnglish}
+              onChange={(e) => update("funnyLevelEnglish", Number(e.target.value) as AppSettings["funnyLevelEnglish"])}
+            />
+            <output className="range-output">{form.funnyLevelEnglish} / 5</output>
+            <span className="setting-source">{source("funnyLevelEnglish", "1")}</span>
+            <button type="button" className="btn btn-ghost btn-sm setting-reset" onClick={() => resetSetting("funnyLevelEnglish")}>
+              {copy.reset}
+            </button>
+          </label>
+          <label className="field">
+            <span className="field-label">{copy.funnyCantonese}</span>
+            <input
+              className="range-input"
+              type="range"
+              min={1}
+              max={5}
+              step={1}
+              value={form.funnyLevelCantonese}
+              onChange={(e) => update("funnyLevelCantonese", Number(e.target.value) as AppSettings["funnyLevelCantonese"])}
+            />
+            <output className="range-output">{form.funnyLevelCantonese} / 5</output>
+            <span className="setting-source">{source("funnyLevelCantonese", "3")}</span>
+            <button type="button" className="btn btn-ghost btn-sm setting-reset" onClick={() => resetSetting("funnyLevelCantonese")}>
+              {copy.reset}
+            </button>
+          </label>
+        </div>
+        <p className="setting-disclosure" role="note">{copy.funnyDisclosure}</p>
+      </section>
+
+      <section className="settings-section" aria-labelledby="settings-appearance-heading">
+        <div className="settings-section-heading" id="settings-appearance-heading">{copy.appearance}</div>
+
+        <label className="field">
+          <span className="field-label">Theme</span>
+          <select
+            className="input select"
+            value={form.theme}
+            onChange={(e) => update("theme", e.target.value as AppSettings["theme"])}
+          >
+            <option value="dark">Dark</option>
+            <option value="light">Light</option>
+            <option value="system">System</option>
+          </select>
+          <span className="setting-source">{source("theme", "dark")}</span>
+          <button type="button" className="btn btn-ghost btn-sm setting-reset" onClick={() => resetSetting("theme")}>
+            {copy.reset}
+          </button>
+        </label>
+
+        <label className="field">
+          <span className="field-label">{copy.density}</span>
+          <select
+            className="input select"
+            value={form.density}
+            onChange={(e) => update("density", e.target.value as AppSettings["density"])}
+          >
+            <option value="compact">Compact</option>
+            <option value="comfortable">Comfortable</option>
+            <option value="spacious">Spacious</option>
+          </select>
+          <span className="setting-helper">{copy.densityHelper}</span>
+          <span className="setting-source">{source("density", "comfortable")}</span>
+          <button type="button" className="btn btn-ghost btn-sm setting-reset" onClick={() => resetSetting("density")}>
+            {copy.reset}
+          </button>
+        </label>
+
+        <label className="field">
+          <span className="field-label">{copy.accent}</span>
+          <div className="field-row">
+            <input
+              className="color-input"
+              type="color"
+              aria-label="Accent color picker"
+              value={form.accentSeedColor.slice(0, 7)}
+              onChange={(e) => updateAccent(e.target.value)}
+            />
+            <input
+              className="input"
+              type="text"
+              value={form.accentSeedColor}
+              aria-invalid={accentError !== null}
+              onChange={(e) => updateAccent(e.target.value)}
+            />
+          </div>
+          <span className="setting-helper">{copy.accentHelper}</span>
+          {accentError && <span className="field-error">{accentError}</span>}
+          <span className="setting-source">{source("accentSeedColor", "#7c5cff")}</span>
+          <button type="button" className="btn btn-ghost btn-sm setting-reset" onClick={() => resetSetting("accentSeedColor")}>
+            {copy.reset}
+          </button>
+        </label>
+
+        <label className="field">
+          <span className="field-label">{copy.fontFamily}</span>
+          <select
+            className="input select"
+            value={form.uiFontFamily}
+            onChange={(e) => update("uiFontFamily", e.target.value as AppSettings["uiFontFamily"])}
+          >
+            <option value="segoe-ui">Segoe UI · Windows bundled</option>
+            <option value="inter">Inter · installed/bundled fallback</option>
+            <option value="cascadia-code">Cascadia Code · Windows bundled</option>
+            <option value="system">System UI · platform fallback</option>
+          </select>
+          <span className="setting-helper">{copy.fontFamilyHelper}</span>
+          <span className="setting-source">{source("uiFontFamily", "Segoe UI")}</span>
+          <button type="button" className="btn btn-ghost btn-sm setting-reset" onClick={() => resetSetting("uiFontFamily")}>
+            {copy.reset}
+          </button>
+        </label>
+
+        <div className="field-pair">
+          <label className="field">
+            <span className="field-label">{copy.fontSize}</span>
+            <input
+              className="input"
+              type="number"
+              min={10}
+              max={32}
+              value={form.uiFontSize}
+              onChange={(e) => update("uiFontSize", Math.min(32, Math.max(10, Number(e.target.value) || 10)))}
+            />
+            <span className="setting-source">{source("uiFontSize", "13px")}</span>
+            <button type="button" className="btn btn-ghost btn-sm setting-reset" onClick={() => resetSetting("uiFontSize")}>
+              {copy.reset}
+            </button>
+          </label>
+          <label className="field">
+            <span className="field-label">{copy.fontWeight}</span>
+            <select
+              className="input select"
+              value={form.uiFontWeight}
+              onChange={(e) => update("uiFontWeight", Number(e.target.value) as AppSettings["uiFontWeight"])}
+            >
+              <option value={400}>400 · Regular</option>
+              <option value={500}>500 · Medium</option>
+              <option value={600}>600 · Semibold</option>
+              <option value={700}>700 · Bold</option>
+            </select>
+            <span className="setting-source">{source("uiFontWeight", "400")}</span>
+            <button type="button" className="btn btn-ghost btn-sm setting-reset" onClick={() => resetSetting("uiFontWeight")}>
+              {copy.reset}
+            </button>
+          </label>
+        </div>
+
+        <button type="button" className="btn btn-ghost" onClick={resetAllSettings} title={copy.resetAllConfirmation}>
+          {copy.resetAll} (save folder kept · 保留儲存資料夾)
+        </button>
+      </section>
+
       <label className="field">
         <span className="field-label">Default save folder</span>
         <div className="field-row">
@@ -82,6 +292,7 @@ export default function SettingsDialog() {
             <FolderIcon size={15} />
           </button>
         </div>
+        <span className="setting-source">{source("defaultSaveFolder", "the platform Downloads folder")}</span>
       </label>
 
       <div className="field-pair">
@@ -95,6 +306,10 @@ export default function SettingsDialog() {
             value={form.maxConnectionsPerDownload}
             onChange={(e) => update("maxConnectionsPerDownload", Number(e.target.value) || 1)}
           />
+          <span className="setting-source">{source("maxConnectionsPerDownload", "8")}</span>
+          <button type="button" className="btn btn-ghost btn-sm setting-reset" onClick={() => resetSetting("maxConnectionsPerDownload")}>
+            {copy.reset}
+          </button>
         </label>
         <label className="field">
           <span className="field-label">Max active downloads</span>
@@ -106,6 +321,10 @@ export default function SettingsDialog() {
             value={form.maxActiveDownloads}
             onChange={(e) => update("maxActiveDownloads", Number(e.target.value) || 1)}
           />
+          <span className="setting-source">{source("maxActiveDownloads", "3")}</span>
+          <button type="button" className="btn btn-ghost btn-sm setting-reset" onClick={() => resetSetting("maxActiveDownloads")}>
+            {copy.reset}
+          </button>
         </label>
       </div>
 
@@ -132,19 +351,18 @@ export default function SettingsDialog() {
             <span>Unlimited</span>
           </label>
         </div>
-      </label>
-
-      <label className="field">
-        <span className="field-label">Theme</span>
-        <select
-          className="input select"
-          value={form.theme}
-          onChange={(e) => update("theme", e.target.value as AppSettings["theme"])}
+        <span className="setting-source">{source("globalSpeedLimitBytes", "0 bytes/sec (unlimited)")}</span>
+        <button
+          type="button"
+          className="btn btn-ghost btn-sm setting-reset"
+          onClick={() => {
+            resetSetting("globalSpeedLimitBytes");
+            setUnlimitedSpeed(true);
+            setSpeedMBs(5);
+          }}
         >
-          <option value="dark">Dark</option>
-          <option value="light">Light</option>
-          <option value="system">System</option>
-        </select>
+          {copy.reset}
+        </button>
       </label>
 
       <label className="checkbox-row field">
@@ -155,6 +373,10 @@ export default function SettingsDialog() {
           aria-label="Start on system startup"
         />
         <span>Start on system startup</span>
+        <span className="setting-source">{source("startOnSystemStartup", "false")}</span>
+        <button type="button" className="btn btn-ghost btn-sm setting-reset" onClick={() => resetSetting("startOnSystemStartup")}>
+          {copy.reset}
+        </button>
       </label>
 
       <label className="checkbox-row field">
@@ -165,6 +387,10 @@ export default function SettingsDialog() {
           aria-label="Show complete dialog"
         />
         <span>Show a dialog when a download completes</span>
+        <span className="setting-source">{source("showCompleteDialog", "true")}</span>
+        <button type="button" className="btn btn-ghost btn-sm setting-reset" onClick={() => resetSetting("showCompleteDialog")}>
+          {copy.reset}
+        </button>
       </label>
 
       <details className="advanced-details">
@@ -178,6 +404,10 @@ export default function SettingsDialog() {
             value={Math.round(form.minConnectionPartSize / 1024)}
             onChange={(e) => update("minConnectionPartSize", Math.max(1, Number(e.target.value) || 1) * 1024)}
           />
+          <span className="setting-source">{source("minConnectionPartSize", "2048 KB")}</span>
+          <button type="button" className="btn btn-ghost btn-sm setting-reset" onClick={() => resetSetting("minConnectionPartSize")}>
+            {copy.reset}
+          </button>
         </label>
       </details>
     </Dialog>

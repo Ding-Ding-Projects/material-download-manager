@@ -12,8 +12,9 @@ body,
 body {
   background: var(--bg-app);
   color: var(--text-primary);
-  font-family: "Segoe UI", "Inter", system-ui, -apple-system, sans-serif;
-  font-size: 13px;
+  font-family: var(--ui-font-family, "Segoe UI", "Inter", system-ui, -apple-system, sans-serif);
+  font-size: var(--ui-font-size, 13px);
+  font-weight: var(--ui-font-weight, 400);
   overflow: hidden;
   -webkit-font-smoothing: antialiased;
 }
@@ -901,6 +902,76 @@ textarea {
 }
 .advanced-details[open] summary {
   color: var(--text-primary);
+}
+
+/* Persisted settings foundations. The renderer store stamps these variables
+   on <html>; the existing components consume them without a second theme. */
+.settings-section {
+  display: flex;
+  flex-direction: column;
+  gap: calc(10px * var(--density-scale, 1));
+  padding-bottom: calc(4px * var(--density-scale, 1));
+}
+.settings-section-heading {
+  color: var(--text-primary);
+  font-size: 13px;
+  font-weight: 600;
+}
+.settings-level-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: calc(12px * var(--density-scale, 1));
+}
+.setting-helper,
+.setting-disclosure,
+.setting-source {
+  margin: 0;
+  color: var(--text-tertiary);
+  font-size: 11px;
+  line-height: 1.4;
+}
+.setting-disclosure {
+  padding: calc(8px * var(--density-scale, 1)) calc(10px * var(--density-scale, 1));
+  border-left: 2px solid var(--accent-solid);
+  background: var(--bg-input);
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+}
+.setting-reset {
+  align-self: flex-start;
+}
+.range-input {
+  accent-color: var(--accent-solid);
+  width: 100%;
+}
+.range-output {
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+  font-size: 12px;
+}
+.color-input {
+  width: 36px;
+  height: 32px;
+  padding: 2px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius);
+  background: var(--bg-input);
+  flex: 0 0 auto;
+}
+.field-error {
+  color: var(--danger);
+  font-size: 11px;
+}
+
+:root[data-density="compact"] .input,
+:root[data-density="compact"] .btn {
+  padding-top: 6px;
+  padding-bottom: 6px;
+}
+:root[data-density="spacious"] .input,
+:root[data-density="spacious"] .btn {
+  padding-top: 10px;
+  padding-bottom: 10px;
 }
 
 /* buttons */
