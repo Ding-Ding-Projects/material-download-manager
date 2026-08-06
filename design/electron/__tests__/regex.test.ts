@@ -38,6 +38,17 @@ test("rejects ambiguous repeated alternatives before synchronous matching", () =
   assert.deepEqual(result.matches, []);
 });
 
+test("rejects long sequential optional quantifiers before synchronous matching", () => {
+  const repeatedOptional = "a?".repeat(16);
+  assert.match(validateRegexPattern(repeatedOptional, "g") ?? "", /optional|backtracking/i);
+
+  const result = evaluateRegex(repeatedOptional, "g", "a".repeat(100_001));
+  assert.match(result.error ?? "", /optional|backtracking/i);
+  assert.deepEqual(result.matches, []);
+  assert.equal(result.normalizedSample.length, 100_000);
+  assert.equal(result.truncated, true);
+});
+
 test("bounds sample and result sizes", () => {
   const result = evaluateRegex("a", "g", "a".repeat(205));
   assert.equal(result.matches.length, 200);
@@ -54,5 +65,6 @@ test("guided tokens produce valid composable fragments", () => {
   assert.equal(validateRegexPattern(characterClass, "g"), null);
   assert.equal(validateRegexPattern(alternation, "g"), null);
   assert.equal(validateRegexPattern(quantifier, "g"), null);
+  assert.equal(validateRegexPattern("a?a?a?", "g"), null);
   assert.equal(validateRegexPattern("(?:one|two)+", "g"), null);
 });
