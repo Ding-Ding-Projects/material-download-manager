@@ -39,8 +39,16 @@ The follow-up `codex/unsigned-release-20260806` branch adds an explicit,
 manual-dispatch-only `skip_signing` test route. It temporarily changes only the
 runner copy of `design/package.json`, restores that file after packaging,
 labels the result `UNSIGNED`, and forces a prerelease so it cannot become the
-stable updater feed. This route is not signed production evidence and does not
+stable updater feed. The route also clears empty or inherited Windows signing
+environment variables for the packaging child process and restores them in a
+`finally` block. This route is not signed production evidence and does not
 replace the normal signing gate.
+
+The release workflow also reserves the final version tag and the catalog
+code-name ref before packaging through the GitHub ref API. It retries only on a
+proven ref conflict and retains reservation tombstones after a failed build, so
+concurrent branch triggers cannot select duplicate repository-global release
+identities and no pending trigger is replaced by a global concurrency queue.
 
 ## Runnable application
 

@@ -12,10 +12,6 @@ on:
         type: boolean
         default: false
 
-concurrency:
-  group: windows-release-${{ github.ref }}
-  cancel-in-progress: false
-
 permissions:
   contents: write
   actions: read
@@ -121,39 +117,72 @@ jobs:
           }
           $metadataPath = Join-Path $env:RUNNER_TEMP 'release-metadata.json'
           $metadataErrorPath = Join-Path $env:RUNNER_TEMP 'release-metadata.stderr.txt'
-          & node scripts/resolve-release-metadata.mjs 1> $metadataPath 2> $metadataErrorPath
-          if ($LASTEXITCODE -ne 0) {
-            throw "scripts/resolve-release-metadata.mjs failed with exit code $LASTEXITCODE."
-          }
-          if (-not (Test-Path -LiteralPath $metadataPath -PathType Leaf)) {
-            throw 'scripts/resolve-release-metadata.mjs did not produce JSON output.'
-          }
-          if (Test-Path -LiteralPath $metadataErrorPath -PathType Leaf) {
-            $warnings = Get-Content -LiteralPath $metadataErrorPath -Raw
-            if (-not [string]::IsNullOrWhiteSpace($warnings)) { Write-Warning $warnings.Trim() }
-          }
-          $metadataRaw = Get-Content -LiteralPath $metadataPath -Raw
-          try {
-            $metadata = $metadataRaw | ConvertFrom-Json -Depth 50
-          } catch {
-            throw 'scripts/resolve-release-metadata.mjs returned malformed JSON.'
-          }
-          if ($null -eq $metadata -or $metadata -is [array] -or $null -eq $metadata.available) {
-            throw 'scripts/resolve-release-metadata.mjs must return one JSON object with available.'
-          }
-          if ([bool]$metadata.available) {
+          $excludedIds = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+          $reservationRef = ''
+          $metadata = $null
+
+          while ($true) {
+            if ($excludedIds.Count -gt 0) {
+              $env:RELEASE_METADATA_EXCLUDE_IDS = $excludedIds -join ','
+            } else {
+              Remove-Item -Path 'Env:RELEASE_METADATA_EXCLUDE_IDS' -ErrorAction SilentlyContinue
+            }
+            & node scripts/resolve-release-metadata.mjs 1> $metadataPath 2> $metadataErrorPath
+            if ($LASTEXITCODE -ne 0) {
+              throw "scripts/resolve-release-metadata.mjs failed with exit code $LASTEXITCODE."
+            }
+            if (-not (Test-Path -LiteralPath $metadataPath -PathType Leaf)) {
+              throw 'scripts/resolve-release-metadata.mjs did not produce JSON output.'
+            }
+            if (Test-Path -LiteralPath $metadataErrorPath -PathType Leaf) {
+              $warnings = Get-Content -LiteralPath $metadataErrorPath -Raw
+              if (-not [string]::IsNullOrWhiteSpace($warnings)) { Write-Warning $warnings.Trim() }
+            }
+            $metadataRaw = Get-Content -LiteralPath $metadataPath -Raw
+            try {
+              $metadata = $metadataRaw | ConvertFrom-Json -Depth 50
+            } catch {
+              throw 'scripts/resolve-release-metadata.mjs returned malformed JSON.'
+            }
+            if ($null -eq $metadata -or $metadata -is [array] -or $null -eq $metadata.available) {
+              throw 'scripts/resolve-release-metadata.mjs must return one JSON object with available.'
+            }
+            if (-not [bool]$metadata.available) {
+              break
+            }
             foreach ($field in @('id', 'en', 'zhHant', 'assetName', 'photoUrl', 'catalogReleaseTag')) {
               if ([string]::IsNullOrWhiteSpace([string]$metadata.$field)) {
                 throw "Available release metadata is missing $field."
               }
             }
-            $codeName = "$($metadata.en) · $($metadata.zhHant)"
-            $photoUrl = [string]$metadata.photoUrl
-            $catalogUrl = 'https://raw.githubusercontent.com/Ding-Ding-Projects/dim-sum-photos/main/catalog/index.json'
-          } else {
+            $candidateId = [string]$metadata.id
+            if ($candidateId -notmatch '^[A-Za-z0-9._-]+$') {
+              throw 'Available release metadata id is not safe for a Git ref reservation.'
+            }
+            $candidateReservationRef = "refs/tags/release-code-name/$candidateId"
+            $reservationErrorPath = Join-Path $env:RUNNER_TEMP "release-code-name-$candidateId.stderr.txt"
+            & gh api --method POST "repos/$env:GITHUB_REPOSITORY/git/refs" -f "ref=$candidateReservationRef" -f "sha=$env:GITHUB_SHA" 1> $null 2> $reservationErrorPath
+            if ($LASTEXITCODE -eq 0) {
+              $reservationRef = $candidateReservationRef
+              break
+            }
+            $existingReservationPath = Join-Path $env:RUNNER_TEMP "release-code-name-$candidateId-existing.json"
+            & gh api "repos/$env:GITHUB_REPOSITORY/git/ref/tags/release-code-name/$candidateId" 1> $existingReservationPath 2> $null
+            if ($LASTEXITCODE -eq 0) {
+              [void]$excludedIds.Add($candidateId)
+              continue
+            }
+            throw "Could not reserve release code name $candidateId; GitHub ref reservation failed."
+          }
+
+          if (-not [bool]$metadata.available) {
             $codeName = 'No public catalog code name was available for this release.'
             $photoUrl = ''
             $catalogUrl = ''
+          } else {
+            $codeName = "$($metadata.en) · $($metadata.zhHant)"
+            $photoUrl = [string]$metadata.photoUrl
+            $catalogUrl = 'https://raw.githubusercontent.com/Ding-Ding-Projects/dim-sum-photos/main/catalog/index.json'
           }
           if ($codeName -match '[\r\n]' -or $photoUrl -match '[\r\n]' -or $catalogUrl -match '[\r\n]') {
             throw 'Release metadata fields must be single-line values.'
@@ -166,6 +195,7 @@ jobs:
             "code_name=$codeName"
             "photo_url=$photoUrl"
             "catalog_url=$catalogUrl"
+            "reservation_ref=$reservationRef"
           ) | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
 
       - name: Resolve next unique release version
@@ -251,15 +281,35 @@ jobs:
             }
           }
 
-          while ($usedTags.Contains((Normalize-Tag $candidate))) {
-            $candidate = [pscustomobject]@{
-              Major = $candidate.Major
-              Minor = $candidate.Minor
-              Patch = $candidate.Patch + 1
+          while ($true) {
+            while ($usedTags.Contains((Normalize-Tag $candidate))) {
+              $candidate = [pscustomobject]@{
+                Major = $candidate.Major
+                Minor = $candidate.Minor
+                Patch = $candidate.Patch + 1
+              }
             }
+
+            $releaseTag = Normalize-Tag $candidate
+            $tagReservationErrorPath = Join-Path $env:RUNNER_TEMP "release-tag-$releaseTag.stderr.txt"
+            & gh api --method POST "repos/$env:GITHUB_REPOSITORY/git/refs" -f "ref=refs/tags/$releaseTag" -f "sha=$env:GITHUB_SHA" 1> $null 2> $tagReservationErrorPath
+            if ($LASTEXITCODE -eq 0) {
+              break
+            }
+            $existingTagPath = Join-Path $env:RUNNER_TEMP "release-tag-$releaseTag-existing.json"
+            & gh api "repos/$env:GITHUB_REPOSITORY/git/ref/tags/$releaseTag" 1> $existingTagPath 2> $null
+            if ($LASTEXITCODE -eq 0) {
+              [void]$usedTags.Add($releaseTag)
+              $candidate = [pscustomobject]@{
+                Major = $candidate.Major
+                Minor = $candidate.Minor
+                Patch = $candidate.Patch + 1
+              }
+              continue
+            }
+            throw "Could not reserve release tag $releaseTag; GitHub ref reservation failed."
           }
 
-          $releaseTag = Normalize-Tag $candidate
           $releaseVersion = "$($candidate.Major).$($candidate.Minor).$($candidate.Patch)"
           @(
             "release_tag=$releaseTag"
@@ -292,11 +342,27 @@ jobs:
             Remove-Item -LiteralPath $releaseRoot -Recurse -Force
           }
 
+          $signingEnvironmentNames = @(
+            'CSC_LINK'
+            'WIN_CSC_LINK'
+            'CSC_KEY_PASSWORD'
+            'WIN_CSC_KEY_PASSWORD'
+          )
+          $savedSigningEnvironment = @{}
+
           try {
             if ($skipSigning) {
+              foreach ($name in $signingEnvironmentNames) {
+                $existing = Get-Item -Path "Env:$name" -ErrorAction SilentlyContinue
+                $savedSigningEnvironment[$name] = @{
+                  Exists = $null -ne $existing
+                  Value = if ($null -ne $existing) { [string]$existing.Value } else { $null }
+                }
+                Remove-Item -Path "Env:$name" -ErrorAction SilentlyContinue
+              }
               $package.build.forceCodeSigning = $false
               $package | ConvertTo-Json -Depth 20 | Set-Content -LiteralPath $packagePath -Encoding utf8NoBOM
-              Write-Warning 'Building an explicitly requested unsigned prerelease; source configuration will be restored after packaging.'
+              Write-Warning 'Building an explicitly requested unsigned prerelease; signing environment variables and source configuration will be restored after packaging.'
             }
             npm exec -- electron-builder --win squirrel --x64 --publish never "-c.extraMetadata.version=$env:RELEASE_VERSION"
             if ($LASTEXITCODE -ne 0) {
@@ -304,6 +370,14 @@ jobs:
             }
           } finally {
             if ($skipSigning) {
+              foreach ($name in $signingEnvironmentNames) {
+                $saved = $savedSigningEnvironment[$name]
+                if ($saved.Exists) {
+                  Set-Item -Path "Env:$name" -Value $saved.Value
+                } else {
+                  Remove-Item -Path "Env:$name" -ErrorAction SilentlyContinue
+                }
+              }
               Set-Content -LiteralPath $packagePath -Value $originalPackageJson -NoNewline -Encoding utf8NoBOM
             }
           }
@@ -419,6 +493,7 @@ jobs:
           GH_TOKEN: ${{ secrets.RELEASE_TOKEN || secrets.ORG_TOKEN || secrets.GITHUB_TOKEN }}
           RELEASE_TAG: ${{ steps.version.outputs.release_tag }}
           CODE_NAME: ${{ steps.metadata.outputs.code_name }}
+          RESERVATION_REF: ${{ steps.metadata.outputs.reservation_ref }}
           ASSET_MANIFEST: ${{ steps.artifacts.outputs.asset_manifest }}
           SKIP_SIGNING: ${{ inputs.skip_signing || false }}
         run: |
@@ -445,11 +520,17 @@ jobs:
           } else {
             'Signing status: Authenticode-signed'
           }
+          $reservationNote = if ([string]::IsNullOrWhiteSpace($env:RESERVATION_REF)) {
+            'Code-name reservation ref: none (catalog code name unavailable)'
+          } else {
+            "Code-name reservation ref: $env:RESERVATION_REF"
+          }
           @"
           Draft release $env:RELEASE_TAG
 
           Source commit: $env:GITHUB_SHA
           $initialSigningNote
+          $reservationNote
           "@ | Set-Content -LiteralPath $initialNotesPath -Encoding utf8
 
           $title = if ($env:SKIP_SIGNING -eq 'true') {
@@ -492,6 +573,7 @@ jobs:
           GH_TOKEN: ${{ secrets.RELEASE_TOKEN || secrets.ORG_TOKEN || secrets.GITHUB_TOKEN }}
           RELEASE_TAG: ${{ steps.version.outputs.release_tag }}
           CODE_NAME: ${{ steps.metadata.outputs.code_name }}
+          RESERVATION_REF: ${{ steps.metadata.outputs.reservation_ref }}
           PHOTO_URL: ${{ steps.metadata.outputs.photo_url }}
           CATALOG_URL: ${{ steps.metadata.outputs.catalog_url }}
           METADATA_PATH: ${{ steps.metadata.outputs.metadata_path }}
@@ -608,6 +690,11 @@ jobs:
             $signingLine = '- Signing status: **Authenticode-signed**.'
             $channelLine = '- Distribution channel: stable release.'
           }
+          $reservationLine = if ([string]::IsNullOrWhiteSpace($env:RESERVATION_REF)) {
+            '- Code-name reservation ref: none; no public catalog code name was available.'
+          } else {
+            "- Code-name reservation ref: ``$env:RESERVATION_REF``"
+          }
           $notesPath = Join-Path $env:RUNNER_TEMP 'published-release-notes.md'
           @"
           # $env:RELEASE_TAG — $env:CODE_NAME
@@ -619,6 +706,7 @@ jobs:
           - Code name: **$env:CODE_NAME**
           $signingLine
           $channelLine
+          $reservationLine
           $photoLine
           $catalogLine
 
@@ -675,6 +763,9 @@ jobs:
             $requiredMarkers += 'UNSIGNED'
           } else {
             $requiredMarkers += 'Authenticode-signed'
+          }
+          if (-not [string]::IsNullOrWhiteSpace($env:RESERVATION_REF)) {
+            $requiredMarkers += $env:RESERVATION_REF
           }
           foreach ($marker in $requiredMarkers) {
             if ($finalBody.IndexOf($marker, [System.StringComparison]::Ordinal) -lt 0) {

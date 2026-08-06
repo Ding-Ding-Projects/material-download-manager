@@ -250,11 +250,27 @@ function priorReleaseBodies(releases) {
     .map((release) => (typeof release.body === 'string' ? release.body : ''));
 }
 
-function chooseCandidate(catalog, assetsByName, releaseBodies) {
+function excludedReleaseMetadataIds() {
+  const raw = process.env.RELEASE_METADATA_EXCLUDE_IDS;
+  if (typeof raw !== 'string' || !raw.trim()) {
+    return new Set();
+  }
+  return new Set(
+    raw
+      .split(',')
+      .map((id) => id.trim())
+      .filter(Boolean),
+  );
+}
+
+function chooseCandidate(catalog, assetsByName, releaseBodies, excludedIds = new Set()) {
   const records = catalogRecords(catalog);
   for (const record of records) {
     const candidate = candidateFromRecord(record, assetsByName);
     if (!candidate) {
+      continue;
+    }
+    if (excludedIds.has(candidate.id)) {
       continue;
     }
     if (releaseBodies.some((body) => bodyRecordsId(body, candidate.id))) {
@@ -307,7 +323,12 @@ async function main() {
 
   const assetsByName = publishedCatalogAssets(catalogReleases.value);
   const releaseBodies = priorReleaseBodies(projectReleases.value);
-  const candidate = chooseCandidate(catalog, assetsByName, releaseBodies);
+  const candidate = chooseCandidate(
+    catalog,
+    assetsByName,
+    releaseBodies,
+    excludedReleaseMetadataIds(),
+  );
   outputMetadata(candidate ?? unavailable());
 }
 

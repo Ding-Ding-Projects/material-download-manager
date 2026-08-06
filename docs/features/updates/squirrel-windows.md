@@ -39,7 +39,20 @@ The release workflow's normal path requires Authenticode signing. A manual
 `workflow_dispatch` may explicitly set `skip_signing` for a test-only run; the
 workflow restores the committed signing configuration, labels the release
 `UNSIGNED`, and publishes it as a prerelease so it cannot become the stable
-updater feed. This exception is not production signing evidence.
+updater feed. During that route it also removes `CSC_LINK`, `WIN_CSC_LINK`,
+and their password variables for the packaging child process, because an empty
+certificate variable is still interpreted by electron-builder as a certificate
+path. The original environment and package configuration are restored in a
+`finally` block. This exception is not production signing evidence.
+
+Every release run reserves its final version tag and, when a published catalog
+photo is available, a `refs/tags/release-code-name/<catalog-id>` ref before the
+long packaging step. Those refs are created through GitHub's ref API and a
+conflict retries the next candidate; other API failures stop the run. The
+reservations remain as auditable tombstones if a build fails, so a later run
+cannot recycle an identity selected by an earlier run. Release runs therefore
+do not rely on branch-scoped concurrency for repository-global tag or code-name
+uniqueness.
 
 ## Configuration
 
@@ -82,7 +95,13 @@ decision logic injectable for focused tests.
   release.
 - An unsigned prerelease is accepted only when a user explicitly dispatches
   `skip_signing`; it is visibly labeled and excluded from stable update
-  discovery. It does not satisfy the signed production-release requirement.
+  discovery. The workflow clears signing environment variables only for that
+  child packaging process and restores them afterward. It does not satisfy the
+  signed production-release requirement.
+- A concurrent release run cannot reuse a version or catalog code name reserved
+  by another run. Existing ref conflicts are the only retry path; permission,
+  authentication, or other GitHub API failures remain visible failures rather
+  than being mistaken for a collision.
 - Enabling MSI requires either a builder upgrade that fixes that WiX
   identifier generation or a deliberate package-name migration; this slice
   does not silently rename the application package to make an optional MSI
@@ -97,14 +116,16 @@ npm run typecheck
 npm run build
 npm run test:electron
 npm run dist:win
+node --check ../scripts/resolve-release-metadata.mjs
 ```
 
 The first three checks are local source/build checks. `npm run dist:win` is
 the required signed packaging check and must be inspected for the Squirrel
 artifacts listed above; a compile-only run is not release evidence. When no
 certificate is available, a local artifact-shape check may temporarily set
-`forceCodeSigning` to `false`, restore the committed value immediately, and
-report the resulting files as unsigned shape evidence only—not as a release.
+`forceCodeSigning` to `false`, remove empty `CSC_LINK`/`WIN_CSC_LINK` variables
+for the child process, restore the committed value immediately, and report the
+resulting files as unsigned shape evidence only—not as a release.
 
 ## Suggested articles
 

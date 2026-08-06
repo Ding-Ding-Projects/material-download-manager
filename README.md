@@ -41,7 +41,9 @@ Squirrel.Windows x64 target with signing enforced, so it fails closed without
 a certificate. The `Windows release` workflow performs the signed build,
 validates `Setup.exe`, `RELEASES`, and the full Squirrel packages, then creates
 one uniquely tagged release with the CI-produced line-count table and release
-metadata. The workflow is present, but no release has been published because
+metadata. Before packaging, it atomically reserves the version tag and the
+catalog code-name ref so concurrent branch runs cannot select duplicate global
+release identities. The workflow is present, but no release has been published because
 the protected signing certificate and password are not configured yet. An
 explicit manual-dispatch `skip_signing` input can create an `UNSIGNED`
 prerelease for testing only; it never becomes the stable updater feed.
