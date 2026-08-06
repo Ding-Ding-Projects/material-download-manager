@@ -384,9 +384,9 @@ export default function SettingsDialog() {
           type="button"
           className={`checkbox${form.showCompleteDialog ? " checked" : ""}`}
           onClick={() => update("showCompleteDialog", !form.showCompleteDialog)}
-          aria-label="Show complete dialog"
+          aria-label="Show completion notification"
         />
-        <span>Show a dialog when a download completes</span>
+        <span>Show a non-blocking notification when a download completes</span>
         <span className="setting-source">{source("showCompleteDialog", "true")}</span>
         <button type="button" className="btn btn-ghost btn-sm setting-reset" onClick={() => resetSetting("showCompleteDialog")}>
           {copy.reset}

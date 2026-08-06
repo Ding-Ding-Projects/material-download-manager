@@ -11,6 +11,10 @@ Download completion, status changes, errors, and rejected renderer operations
 use the same event path. The history surface is intentionally separate from
 blocking confirmation dialogs.
 
+The Settings option named `showCompleteDialog` is retained as a compatibility
+key, but its user-facing meaning is accurately shown as “Show a non-blocking
+notification when a download completes”; it does not open a blocking dialog.
+
 ## Configuration
 
 Call notify with a factual title, message, and tone. Use the optional timeout
