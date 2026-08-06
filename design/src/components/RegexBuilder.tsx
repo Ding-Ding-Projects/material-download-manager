@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useId, useMemo, useState } from "react";
 import {
   createDefaultRegexBuilderState,
   evaluateRegex,
@@ -30,6 +30,7 @@ const FLAG_LABELS: Record<string, string> = {
  */
 export default function RegexBuilder({ value, onChange, title = "Regex builder", className }: RegexBuilderProps) {
   const [local, setLocal] = useState<RegexBuilderState>(value ?? createDefaultRegexBuilderState());
+  const modeGroupId = useId();
   const state = value ?? local;
   const evaluation = useMemo(
     () => (state.mode === "regex" ? evaluateRegex(state.pattern, state.flags, state.sample) : null),
@@ -37,8 +38,13 @@ export default function RegexBuilder({ value, onChange, title = "Regex builder",
   );
 
   useEffect(() => {
-    if (value) setLocal(value);
-  }, [value]);
+    if (
+      value &&
+      (local.mode !== value.mode || local.pattern !== value.pattern || local.flags !== value.flags || local.sample !== value.sample)
+    ) {
+      setLocal(value);
+    }
+  }, [local.flags, local.mode, local.pattern, local.sample, value]);
 
   function update(patch: Partial<RegexBuilderState>) {
     const next = { ...state, ...patch };
@@ -91,11 +97,11 @@ export default function RegexBuilder({ value, onChange, title = "Regex builder",
 
       <div className="regex-mode" role="radiogroup" aria-label="Search mode">
         <label>
-          <input type="radio" name="regex-mode" checked={state.mode === "text"} onChange={() => update({ mode: "text" })} />
+          <input type="radio" name={`${modeGroupId}-regex-mode`} checked={state.mode === "text"} onChange={() => update({ mode: "text" })} />
           Plain text
         </label>
         <label>
-          <input type="radio" name="regex-mode" checked={state.mode === "regex"} onChange={() => update({ mode: "regex" })} />
+          <input type="radio" name={`${modeGroupId}-regex-mode`} checked={state.mode === "regex"} onChange={() => update({ mode: "regex" })} />
           Regular expression
         </label>
       </div>

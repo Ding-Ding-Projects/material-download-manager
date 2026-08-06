@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import RegexBuilder from "./RegexBuilder";
-import type { RegexBuilderState } from "@shared/regex";
+import { evaluateRegex, type RegexBuilderState } from "@shared/regex";
 import "../styles/command-palette.css";
 
 export interface PaletteCommand {
@@ -54,14 +54,11 @@ export default function CommandPalette({ commands, open: controlledOpen, onOpenC
     if (query.mode === "text") {
       return commands.filter((command) => `${command.label} ${command.description ?? ""} ${(command.keywords ?? []).join(" ")}`.toLocaleLowerCase().includes(text));
     }
-    // Command palettes should fail closed on invalid regex rather than hide
-    // every command behind an exception.
-    try {
-      const pattern = new RegExp(query.pattern, query.flags.replace("g", ""));
-      return commands.filter((command) => pattern.test(`${command.label} ${command.description ?? ""} ${(command.keywords ?? []).join(" ")}`));
-    } catch {
-      return [];
-    }
+    return commands.filter((command) => {
+      const text = `${command.label} ${command.description ?? ""} ${(command.keywords ?? []).join(" ")}`;
+      const result = evaluateRegex(query.pattern, query.flags, text);
+      return !result.error && result.matches.length > 0;
+    });
   }, [commands, query.mode, query.pattern, query.flags]);
 
   function handleKeyDown(event: React.KeyboardEvent<HTMLInputElement>) {
