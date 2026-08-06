@@ -91,8 +91,9 @@ decision logic injectable for focused tests.
   GitHub Actions release workflow are release dependencies. The workflow
   validates the signed Squirrel artifacts, immutable target commit, timing,
   line-count table, and release metadata before publishing. Until a signed run
-  verifies those facts, this repository does not claim an installer or update
-  release.
+  verifies those facts, this repository does not claim a signed production
+  installer or stable update release. The unsigned `v0.1.0` test prerelease is
+  separate evidence and is excluded from stable update discovery.
 - An unsigned prerelease is accepted only when a user explicitly dispatches
   `skip_signing`; it is visibly labeled and excluded from stable update
   discovery. The workflow clears signing environment variables only for that

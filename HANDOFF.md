@@ -22,18 +22,17 @@ This layout is intentionally reversible. It does not claim that the prototype
 is production code, and it does not discard the prototype's visual reference
 material.
 
-The runnable application is now integrated on `main` at `ad6f44c`. The
-original handoff branch remains available as
+The runnable application is now integrated on `main`. The original handoff
+branch remains available as
 `origin/claude/submodule-design-folder-port-iyvesh`; it was preserved rather
 than rewritten.
 
 The release handoff is staged on
 `codex/release-pipeline-20260806` at `d794d24`. It adds the stable updater feed,
 the reproducible line-count and dim-sum metadata helpers, and the signed
-Windows release workflow. The branch is pushed to the repository, but this
-handoff does not call the release published: the protected signing certificate
-and password have not been configured, so the workflow cannot produce a
-verified installer yet.
+Windows release workflow. Signed production publishing remains blocked by the
+missing protected signing certificate and password, so the handoff does not
+claim a verified production installer.
 
 The follow-up `codex/unsigned-release-20260806` branch adds an explicit,
 manual-dispatch-only `skip_signing` test route. It temporarily changes only the
@@ -60,8 +59,15 @@ intentionally exercise process-global Windows profile state and a blocked test
 must fail within a bounded interval. Both Windows jobs have a 30-minute timeout.
 Hosted run
 [31129129233](https://github.com/Ding-Ding-Projects/material-download-manager/actions/runs/31129129233)
-was canceled after recording the race; the next unsigned dispatch is required
-before any release result can be claimed.
+was canceled after recording the race. The fix was verified by unsigned
+dispatch run
+[31130475054](https://github.com/Ding-Ding-Projects/material-download-manager/actions/runs/31130475054),
+which published `v0.1.0` from the corrected commit with `Setup.exe`,
+`RELEASES`, and the full Squirrel package. Post-push verification run
+[31131193046](https://github.com/Ding-Ding-Projects/material-download-manager/actions/runs/31131193046)
+also passed. Signed post-push run
+[31131192930](https://github.com/Ding-Ding-Projects/material-download-manager/actions/runs/31131192930)
+stopped at the missing signing-secret gate before packaging.
 
 ## Runnable application
 
@@ -106,7 +112,7 @@ On the current verification tree, the following checks passed locally:
 | `npm run test:engine` | 31/31 passed locally, including concurrent and cross-instance StateStore saves, failed-write recovery, Range integrity, pause/resume, non-resumable fallback, custom-header persistence and cross-origin header stripping, global queue limits, schedule race handling, manager history hooks, filename sanitization, malformed Range rejection, categories, throttling, and URL redaction. |
 | `npm run test:electron` | 31/31 passed for export, local history, regex, tabs, command-palette foundations, compiled renderer-path resolution, secure updater IPC, version monotonicity, timeout/stale-event recovery, native Squirrel download-overlap protection, queue payload validation, Settings Escape handling, and completion-notification preference handling. |
 | Hidden-desktop smoke | Passed through the cheap hidden-desktop route: direct Electron `v31.7.7` launch opened `Material Download Manager` at 1150×720, rendered the empty state and update state, opened Settings, filtered Settings with its anchored regex builder, and returned focus after Escape. The hidden desktop and process were cleaned up. |
-| Remote GitHub Actions | The earlier Windows verification run [31072760389](https://github.com/Ding-Ding-Projects/material-download-manager/actions/runs/31072760389) passed. Unsigned release run [31129129233](https://github.com/Ding-Ding-Projects/material-download-manager/actions/runs/31129129233) was canceled after the StateStore `ENOENT` race; no release was attempted. |
+| Remote GitHub Actions | The earlier Windows verification run [31072760389](https://github.com/Ding-Ding-Projects/material-download-manager/actions/runs/31072760389) passed. Unsigned release run [31130475054](https://github.com/Ding-Ding-Projects/material-download-manager/actions/runs/31130475054) passed and published `v0.1.0` with the CI-built Squirrel assets. Post-push verification [31131193046](https://github.com/Ding-Ding-Projects/material-download-manager/actions/runs/31131193046) passed. Signed run [31131192930](https://github.com/Ding-Ding-Projects/material-download-manager/actions/runs/31131192930) failed before packaging because `CSC_LINK` and `CSC_KEY_PASSWORD` are not configured. |
 
 The hardening milestone corrected the compiled renderer path and made
 unpackaged production launches load the built renderer unless
@@ -121,18 +127,20 @@ and the main process has a bounded, fail-closed updater coordinator. The
 renderer now receives validated updater state through the secure preload bridge
 and shows explicit manual-check, `Later`, release-notes, and
 `Restart to install update` actions guarded by a fresh unsaved-work assertion.
-This branch does not claim a signed installer, a published `RELEASES` feed, or
-a verified update. The updater now has the stable default feed URL described
-above, while `MDM_UPDATE_FEED_URL` remains an optional override.
-The unsigned local shape attempt produced no artifacts on this host and is not
+This handoff does not claim a signed installer or verified stable update. The
+unsigned `v0.1.0` test prerelease does carry the CI-built `RELEASES` feed and
+Squirrel assets, while `MDM_UPDATE_FEED_URL` remains an optional override. The
+unsigned local shape attempt produced no artifacts on this host and is not
 release evidence.
 
 The repository has a Windows push/dispatch workflow at
 [`.github/workflows/ci.yml`](.github/workflows/ci.yml) for the checks above and
 a separate [Windows release workflow](.github/workflows/release.yml). The
 release workflow is fail-closed on missing signing inputs, validates the
-Squirrel artifacts, and publishes only after the signed build succeeds. It has
-not published a release yet because those protected inputs are absent.
+Squirrel artifacts, and publishes signed production only after the signed build
+succeeds. The explicit unsigned manual-dispatch route publishes only a labeled
+test prerelease; signed production remains unpublished while those protected
+inputs are absent.
 
 The release branch also passed local static checks for the workflow and helper
 contracts: `actionlint -shellcheck=` passed, all 8 PowerShell run blocks parsed,
@@ -148,8 +156,9 @@ reconciliation:
 
 1. Configure the protected signing certificate and password, then validate the
    Windows Squirrel installer and update artifacts on the supported build path,
-   including signing and the `RELEASES` feed. No release is published until
-   that workflow run is green and its immutable assets are verified.
+   including signing and the `RELEASES` feed. No signed production release is
+   published until that workflow run is green and its immutable assets are
+   verified; `v0.1.0` remains an unsigned test prerelease.
 2. Compare the runnable renderer with the prototype and decide which Material 3
    visual and interaction changes should be implemented next.
 3. Add the remaining product features only after their scope and production
@@ -189,17 +198,23 @@ reconciliation:
 
 ## Git state and ownership
 
-This reconciliation is on `main` at `ad6f44c`, which matches
-`origin/main`. The original handoff history is preserved as an ancestor, and
-the original handoff branch remains untouched. There are no open GitHub issues
-in either scanned repository at the time this handoff was refreshed. GitHub
+This reconciliation and the CI hardening are on `main`; the verified release
+source commit is `2bfbe2921c4c28941ca9b557e284c1d6917e9cb4`. The original
+handoff history is preserved as an ancestor, and the original handoff branch
+remains untouched. The application repository has no open GitHub issues at the
+time this handoff was refreshed. The separate `agent-global-memory` repository
+has open issue [#10](https://github.com/Ding-Ding-Projects/agent-global-memory/issues/10),
+which is owned by its Status Hub work and was left untouched here. GitHub
 Discussions are enabled and the rolling handoff thread is
 [`#3`](https://github.com/Ding-Ding-Projects/material-download-manager/discussions/3).
+The release announcement is [`#4`](https://github.com/Ding-Ding-Projects/material-download-manager/discussions/4).
 The wiki setting is enabled but its wiki repository is not initialized, and
-GitHub Pages is not configured. No unverified wiki, site, installer, or
-release is claimed here.
+GitHub Pages is not configured. The unsigned `v0.1.0` test release is verified;
+no signed production installer or stable update release is claimed here.
 
-Only the main checkout remains registered with Git. Five previously used,
-clean checkout directories could not be removed because Windows still held
-files open after their Git metadata was removed; they contain no uncommitted
-work and are not registered worktrees.
+The main checkout and two linked checkouts remain registered with Git. The
+release-helper checkout holds untracked `scripts/`, and the release-workflow
+checkout holds an untracked `.github/workflows/release.yml`; both are preserved
+because they contain uncommitted work. The merged CI-fix and unsigned-dispatch
+checkouts, plus the clean detached review checkout, were removed only after
+their ancestry and clean-state proofs. No stashes remain.

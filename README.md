@@ -43,16 +43,21 @@ validates `Setup.exe`, `RELEASES`, and the full Squirrel packages, then creates
 one uniquely tagged release with the CI-produced line-count table and release
 metadata. Before packaging, it atomically reserves the version tag and the
 catalog code-name ref so concurrent branch runs cannot select duplicate global
-release identities. The workflow is present, but no release has been published because
-the protected signing certificate and password are not configured yet. An
-explicit manual-dispatch `skip_signing` input can create an `UNSIGNED`
-prerelease for testing only; it never becomes the stable updater feed.
+release identities. The workflow is present, and manual dispatch produced the
+unsigned test prerelease [`v0.1.0`](https://github.com/Ding-Ding-Projects/material-download-manager/releases/tag/v0.1.0)
+from the verified commit. It contains the CI-built `Setup.exe`, `RELEASES`,
+and full Squirrel package. This is test evidence only: the protected signing
+certificate and password are still absent, so signed production release
+publishing remains fail-closed. An explicit manual-dispatch `skip_signing`
+input creates an `UNSIGNED` prerelease only; it never becomes the stable
+updater feed.
 
 The updater has a stable default feed at
 `https://github.com/Ding-Ding-Projects/material-download-manager/releases/latest/download/`;
-`MDM_UPDATE_FEED_URL` remains an optional main-process override. No installer,
-release, or verified update feed is claimed until a signed workflow run proves
-all three.
+`MDM_UPDATE_FEED_URL` remains an optional main-process override. The unsigned
+`v0.1.0` prerelease is excluded from the stable feed; no signed production
+installer or verified stable update feed is claimed until a signed workflow
+run proves both.
 
 The Windows verification workflow runs the typecheck, build, downloader tests,
 and compiled Electron path tests on every push and on manual dispatch.
