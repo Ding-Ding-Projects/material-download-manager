@@ -258,3 +258,23 @@ test("native Squirrel waits for a verified downloaded version and blocks a secon
   assert.equal(updater.getState().status, "ready");
   updater.stop();
 });
+
+test("native Squirrel download timeout recovers for a later check without overlap", async () => {
+  const adapter = new NativeSquirrelUpdater();
+  const states: string[] = [];
+  const updater = service(adapter, { downloadTimeoutMs: 1_000 });
+  updater.onStateChanged((state) => states.push(state.status));
+  updater.start();
+
+  assert.equal((await updater.checkForUpdates()).status, "downloading");
+  assert.equal(adapter.checks, 1);
+
+  await new Promise((resolve) => setTimeout(resolve, 1_050));
+  assert.equal(updater.getState().status, "offline");
+
+  const recovered = await updater.checkForUpdates();
+  assert.equal(recovered.status, "downloading");
+  assert.equal(adapter.checks, 2);
+  assert.deepEqual(states, ["available", "downloading", "offline", "available", "downloading"]);
+  updater.stop();
+});

@@ -80,6 +80,7 @@ interface DownloadLease {
   promise: Promise<unknown> | null;
   resolve?: () => void;
   reject?: (reason: unknown) => void;
+  timeoutTimer: TimerHandle | null;
   settled: boolean;
   timedOut: boolean;
 }
@@ -371,6 +372,17 @@ export class UpdateService extends EventEmitter {
     else this.fail("The update check failed.");
   };
 
+  private readonly handleNativeDownloadTimeout = (lease: DownloadLease) => {
+    if (this.downloadInFlight !== lease || lease.settled) return;
+
+    // Native Squirrel exposes no download promise to await. Publish the
+    // truthful failure while this lease is still held, then release it so a
+    // subsequent check cannot begin until the timeout boundary is complete.
+    lease.timedOut = true;
+    if (!this.isReady() && !this.isFailure()) this.offline();
+    this.settleDownload(lease);
+  };
+
   constructor(options: UpdateServiceOptions) {
     super();
     this.adapter = options.adapter;
@@ -457,7 +469,10 @@ export class UpdateService extends EventEmitter {
       this.timer = null;
     }
     if (this.checkInFlight) this.checkInFlight.timedOut = true;
-    if (this.downloadInFlight) this.downloadInFlight.timedOut = true;
+    if (this.downloadInFlight) {
+      this.downloadInFlight.timedOut = true;
+      if (this.downloadInFlight.timeoutTimer !== null) this.settleDownload(this.downloadInFlight);
+    }
     this.detachListeners();
   }
 
@@ -508,13 +523,16 @@ export class UpdateService extends EventEmitter {
         version,
         releaseNotesUrl,
         promise: null,
+        timeoutTimer: null,
         settled: false,
         timedOut: false,
       };
       this.downloadInFlight = lease;
-      this.setDownloading(version, releaseNotesUrl, 0);
       // Electron's native Squirrel updater owns the actual download. Its
-      // update-downloaded or error event closes this lease.
+      // update-downloaded or error event closes this lease, while this timer
+      // bounds the event-only path when neither event arrives.
+      lease.timeoutTimer = setTimeout(() => this.handleNativeDownloadTimeout(lease), this.downloadTimeoutMs);
+      this.setDownloading(version, releaseNotesUrl, 0);
       return false;
     }
 
@@ -536,6 +554,7 @@ export class UpdateService extends EventEmitter {
       version,
       releaseNotesUrl,
       promise: rawOperation,
+      timeoutTimer: null,
       settled: false,
       timedOut: false,
     };
@@ -639,6 +658,10 @@ export class UpdateService extends EventEmitter {
 
   private settleDownload(lease: DownloadLease) {
     if (lease.settled) return;
+    if (lease.timeoutTimer !== null) {
+      clearTimeout(lease.timeoutTimer);
+      lease.timeoutTimer = null;
+    }
     lease.settled = true;
     if (this.downloadInFlight === lease) this.downloadInFlight = null;
     lease.resolve?.();
