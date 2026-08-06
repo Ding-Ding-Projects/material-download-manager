@@ -10,6 +10,7 @@ AB Download Manager codebase.
 - Handoff: [`HANDOFF.md`](HANDOFF.md)
 - Shared project guidance mirror: [`AGENTS.md`](AGENTS.md)
 - CI workflow: [Windows verification](.github/workflows/ci.yml)
+- Search feature docs: [`docs/features/search/`](docs/features/search/)
 - Website: not published
 
 <details>

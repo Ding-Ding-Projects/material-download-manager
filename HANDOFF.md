@@ -94,6 +94,10 @@ reconciliation:
    policy before relying on authenticated or long-lived downloads.
 6. Add renderer, IPC, packaging, accessibility, error-notification, and
    destructive-action coverage before calling the application release-ready.
+7. The reusable local regex engine and builder foundation now live under
+   `design/shared/regex.ts` and `design/src/components/RegexBuilder.tsx`; wire a
+   separate anchored instance to every search surface before claiming the
+   search requirement complete.
 
 ## Git state and ownership
 
