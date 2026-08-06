@@ -17,6 +17,13 @@ import { detectCategory } from "./categories";
 import { probeUrl as httpProbeUrl, sanitizeFileName } from "./HttpProbe";
 import { DownloadTask } from "./DownloadTask";
 import { SpeedLimiter } from "./SpeedLimiter";
+import {
+  cloneRequestHeaders,
+  splitStoredDownload,
+  type StoredDownloadItem,
+  withStoredHeaders,
+} from "./downloadMetadata";
+import { isQueueScheduleActive, QueueScheduleClock } from "./queueSchedule";
 
 export class DownloadManager extends EventEmitter {
   private store: StateStore;
@@ -24,10 +31,13 @@ export class DownloadManager extends EventEmitter {
   private queues: Map<string, DownloadQueue> = new Map();
   private settings!: AppSettings;
   private tasks: Map<string, DownloadTask> = new Map();
+  private itemHeaders: Map<string, Record<string, string>> = new Map();
   private globalSpeedLimiter!: SpeedLimiter;
   private notifyScheduled = false;
   private shutDown = false;
   private itemOrder: string[] = [];
+  private scheduledPauses: Set<string> = new Set();
+  private scheduleClock = new QueueScheduleClock(() => this.processAllQueues());
 
   constructor(private userDataPath: string) {
     super();
@@ -60,12 +70,16 @@ export class DownloadManager extends EventEmitter {
         endAt: null,
       });
     }
-    for (const item of state.items) {
+    for (const storedItem of state.items as StoredDownloadItem[]) {
+      const { item, headers } = splitStoredDownload(storedItem);
+      if (headers) this.itemHeaders.set(item.id, headers);
       item.fileName = sanitizeFileName(item.fileName);
       this.items.set(item.id, item);
       this.itemOrder.push(item.id);
     }
     await fsp.mkdir(this.settings.defaultSaveFolder, { recursive: true }).catch(() => {});
+    this.scheduleClock.start();
+    this.processAllQueues();
   }
 
   // ---- state / persistence -------------------------------------------------
@@ -89,7 +103,9 @@ export class DownloadManager extends EventEmitter {
 
   private async persist() {
     await this.store.save({
-      items: Array.from(this.items.values()),
+      items: Array.from(this.items.values()).map((item) =>
+        withStoredHeaders(item, this.itemHeaders.get(item.id))
+      ),
       queues: Array.from(this.queues.values()),
       settings: this.settings,
     });
@@ -97,8 +113,8 @@ export class DownloadManager extends EventEmitter {
 
   // ---- probing / adding -----------------------------------------------------
 
-  async probeUrl(url: string): Promise<NewDownloadInfo> {
-    return httpProbeUrl(url);
+  async probeUrl(url: string, headers: Record<string, string> = {}): Promise<NewDownloadInfo> {
+    return httpProbeUrl(url, cloneRequestHeaders(headers) ?? {});
   }
 
   async addDownload(req: AddDownloadRequest): Promise<string> {
@@ -127,8 +143,11 @@ export class DownloadManager extends EventEmitter {
       connections: 1,
     };
 
+    const headers = cloneRequestHeaders(req.headers);
+    if (headers) this.itemHeaders.set(id, headers);
+
     try {
-      const info = await httpProbeUrl(req.url, req.headers ?? {});
+      const info = await httpProbeUrl(req.url, headers ?? {});
       item.totalSize = info.contentLength;
       item.resumeSupport = info.resumeSupport;
     } catch (e) {
@@ -174,6 +193,7 @@ export class DownloadManager extends EventEmitter {
     const task = new DownloadTask(item, {
       maxConnections: this.settings.maxConnectionsPerDownload,
       minPartSize: this.settings.minConnectionPartSize,
+      headers: this.itemHeaders.get(item.id),
       speedLimiters: [this.globalSpeedLimiter],
     });
     task.on("progress", () => this.scheduleNotify());
@@ -182,17 +202,19 @@ export class DownloadManager extends EventEmitter {
       await this.persist();
       this.scheduleNotify();
       this.emit("itemCompleted", item);
-      if (item.queueId) this.processQueue(item.queueId);
+      this.processAllQueues();
     });
     task.on("error", async () => {
       this.tasks.delete(item.id);
       await this.persist();
       this.scheduleNotify();
-      if (item.queueId) this.processQueue(item.queueId);
+      this.processAllQueues();
     });
     task.on("paused", async () => {
-      await this.persist();
-      this.scheduleNotify();
+      if (!this.scheduledPauses.has(item.id)) {
+        await this.persist();
+        this.scheduleNotify();
+      }
     });
     this.tasks.set(item.id, task);
     return task;
@@ -209,16 +231,51 @@ export class DownloadManager extends EventEmitter {
       this.tasks.delete(item.id);
       await this.persist();
       this.scheduleNotify();
+      this.processAllQueues();
     });
+  }
+
+  private pauseQueueForSchedule(queue: DownloadQueue) {
+    for (const itemId of queue.itemIds) {
+      const task = this.tasks.get(itemId);
+      const item = this.items.get(itemId);
+      if (!task || !item || this.scheduledPauses.has(itemId)) continue;
+      this.scheduledPauses.add(itemId);
+      task
+        .pause()
+        .then(async () => {
+          this.tasks.delete(itemId);
+          this.scheduledPauses.delete(itemId);
+          // Scheduled pauses are resumable when the next window opens, but a
+          // real shutdown must persist the paused state it just established.
+          if (!this.shutDown && item.status === "paused") item.status = "queued";
+          await this.persist();
+          this.scheduleNotify();
+          this.processAllQueues();
+        })
+        .catch(() => {
+          this.scheduledPauses.delete(itemId);
+        });
+    }
+  }
+
+  private processAllQueues() {
+    if (this.shutDown) return;
+    for (const queue of this.queues.values()) {
+      if (!queue.isRunning) continue;
+      if (isQueueScheduleActive(queue)) this.processQueue(queue.id);
+      else if (queue.scheduleEnabled) this.pauseQueueForSchedule(queue);
+    }
   }
 
   processQueue(queueId: string) {
     const queue = this.queues.get(queueId);
-    if (!queue || !queue.isRunning) return;
+    if (!queue || !queue.isRunning || !isQueueScheduleActive(queue)) return;
     const activeCount = queue.itemIds.filter((id) => this.tasks.has(id)).length;
+    const globalActiveCount = this.tasks.size;
     let freeSlots = Math.max(
       0,
-      Math.min(queue.maxConcurrent, this.settings.maxActiveDownloads) - activeCount
+      Math.min(queue.maxConcurrent - activeCount, this.settings.maxActiveDownloads - globalActiveCount)
     );
     if (freeSlots <= 0) return;
     for (const id of queue.itemIds) {
@@ -243,6 +300,7 @@ export class DownloadManager extends EventEmitter {
     }
     await this.persist();
     this.scheduleNotify();
+    this.processAllQueues();
   }
 
   async resume(id: string) {
@@ -252,7 +310,7 @@ export class DownloadManager extends EventEmitter {
     item.status = "queued";
     await this.persist();
     this.scheduleNotify();
-    this.processQueue(item.queueId ?? DEFAULT_QUEUE_ID);
+    this.processAllQueues();
   }
 
   async retry(id: string) {
@@ -274,6 +332,7 @@ export class DownloadManager extends EventEmitter {
     if (item) item.status = "cancelled";
     await this.persist();
     this.scheduleNotify();
+    this.processAllQueues();
   }
 
   async remove(id: string, deleteFile: boolean) {
@@ -286,12 +345,14 @@ export class DownloadManager extends EventEmitter {
       if (item) await fsp.rm(path.join(item.folder, item.fileName), { force: true });
     }
     this.items.delete(id);
+    this.itemHeaders.delete(id);
     this.itemOrder = this.itemOrder.filter((x) => x !== id);
     for (const queue of this.queues.values()) {
       queue.itemIds = queue.itemIds.filter((x) => x !== id);
     }
     await this.persist();
     this.scheduleNotify();
+    this.processAllQueues();
   }
 
   async openFile(id: string) {
@@ -320,6 +381,7 @@ export class DownloadManager extends EventEmitter {
     }
     await this.persist();
     this.scheduleNotify();
+    this.processAllQueues();
     return this.settings;
   }
 
@@ -339,6 +401,7 @@ export class DownloadManager extends EventEmitter {
     this.queues.set(queue.id, queue);
     await this.persist();
     this.scheduleNotify();
+    this.processAllQueues();
     return queue;
   }
 
@@ -346,7 +409,7 @@ export class DownloadManager extends EventEmitter {
     this.queues.set(queue.id, queue);
     await this.persist();
     this.scheduleNotify();
-    if (queue.isRunning) this.processQueue(queue.id);
+    this.processAllQueues();
   }
 
   async deleteQueue(id: string) {
@@ -363,6 +426,7 @@ export class DownloadManager extends EventEmitter {
     this.queues.delete(id);
     await this.persist();
     this.scheduleNotify();
+    this.processAllQueues();
   }
 
   async startQueue(id: string) {
@@ -371,7 +435,7 @@ export class DownloadManager extends EventEmitter {
     queue.isRunning = true;
     await this.persist();
     this.scheduleNotify();
-    this.processQueue(id);
+    this.processAllQueues();
   }
 
   async stopQueue(id: string) {
@@ -387,6 +451,7 @@ export class DownloadManager extends EventEmitter {
     }
     await this.persist();
     this.scheduleNotify();
+    this.processAllQueues();
   }
 
   // ---- lifecycle ---------------------------------------------------------------
@@ -394,6 +459,8 @@ export class DownloadManager extends EventEmitter {
   async shutdown() {
     if (this.shutDown) return;
     this.shutDown = true;
+    this.scheduleClock.stop();
+    this.scheduledPauses.clear();
     const pausePromises = Array.from(this.tasks.entries()).map(async ([id, task]) => {
       await task.pause();
       this.tasks.delete(id);

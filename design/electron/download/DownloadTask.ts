@@ -11,12 +11,22 @@ import { SpeedLimiter } from "./SpeedLimiter";
 
 const USER_AGENT = "Mozilla/5.0 (compatible; MaterialDownloadManager/0.1)";
 const MIN_PART_SIZE_FLOOR = 512 * 1024; // never split into pieces smaller than 512KB
+const DEFAULT_CONNECTION_TIMEOUT_MS = 15_000;
+const DEFAULT_IDLE_TIMEOUT_MS = 15_000;
+const DEFAULT_REQUEST_TIMEOUT_MS = 5 * 60_000;
+const DEFAULT_MAX_REDIRECTS = 10;
+const DEFAULT_RETRIES = 3;
 
 export interface DownloadTaskOptions {
   maxConnections: number;
   minPartSize: number;
   headers?: Record<string, string>;
   speedLimiters: SpeedLimiter[]; // e.g. [globalLimiter, perDownloadLimiter]
+  connectionTimeoutMs?: number;
+  idleTimeoutMs?: number;
+  requestTimeoutMs?: number;
+  maxRedirects?: number;
+  maxRetries?: number;
 }
 
 export interface DownloadTaskEvents {
@@ -177,6 +187,7 @@ export class DownloadTask extends EventEmitter {
       this.item.status = "error";
       this.item.error = this.fatalError;
       this.stopProgressTimer();
+      await this.closeFileHandle();
       this.emit("error", this.fatalError);
       return;
     }
@@ -190,26 +201,41 @@ export class DownloadTask extends EventEmitter {
     this.item.eta = 0;
     this.item.status = "completed";
     this.item.dateCompleted = Date.now();
-    await this.fileHandle?.close();
-    this.fileHandle = null;
+    await this.closeFileHandle();
     await fsp.rm(this.partsFilePath, { force: true });
     this.emit("completed");
   }
 
+  private async closeFileHandle() {
+    const handle = this.fileHandle;
+    this.fileHandle = null;
+    await handle?.close().catch(() => {});
+  }
+
   private downloadPart(part: PartInfo): Promise<void> {
     return new Promise((resolve) => {
-      const attempt = (retriesLeft: number) => {
+      let downloadResolved = false;
+      const finishDownload = () => {
+        if (downloadResolved) return;
+        downloadResolved = true;
+        resolve();
+      };
+      const failDownload = (message: string) => {
+        part.status = "error";
+        this.fatalError = message;
+        finishDownload();
+      };
+      const attempt = (retriesLeft: number, redirectsLeft: number, targetUrl: string) => {
         if (this.stopped || this.destroyed) {
-          resolve();
+          finishDownload();
           return;
         }
         part.status = "connecting";
         let target: URL;
         try {
-          target = new URL(this.item.url);
+          target = new URL(targetUrl);
         } catch {
-          this.fatalError = "Invalid URL";
-          resolve();
+          failDownload("Invalid URL");
           return;
         }
         const client = target.protocol === "http:" ? http : https;
@@ -222,29 +248,107 @@ export class DownloadTask extends EventEmitter {
           headers.Range = part.to !== null ? `bytes=${part.current}-${part.to}` : `bytes=${part.current}-`;
         }
 
-        const req = client.request(
-          target,
-          { method: "GET", headers },
-          (res) => this.handlePartResponse(res, part, req, resolve, retriesLeft, attempt)
-        );
-        this.activeRequests.add(req);
-        req.on("error", (err) => {
+        let attemptSettled = false;
+        let connectionTimer: NodeJS.Timeout | null = null;
+        let requestTimer: NodeJS.Timeout | null = null;
+        let req: ClientRequest;
+        const clearTimers = () => {
+          if (connectionTimer) clearTimeout(connectionTimer);
+          if (requestTimer) clearTimeout(requestTimer);
+          connectionTimer = null;
+          requestTimer = null;
+        };
+        const settleAttempt = () => {
+          if (attemptSettled) return false;
+          attemptSettled = true;
+          clearTimers();
           this.activeRequests.delete(req);
+          return true;
+        };
+        const retry = (message: string, delayMs = 1000) => {
+          if (!settleAttempt()) return;
           if (this.stopped || this.destroyed) {
-            resolve();
+            finishDownload();
             return;
           }
           if (retriesLeft > 0) {
-            setTimeout(() => attempt(retriesLeft - 1), 1500);
+            setTimeout(() => attempt(retriesLeft - 1, redirectsLeft, target.toString()), delayMs);
           } else {
-            part.status = "error";
-            this.fatalError = err.message;
-            resolve();
+            failDownload(message);
+          }
+        };
+
+        req = client.request(
+          target,
+          { method: "GET", headers },
+          (res) => {
+            if (connectionTimer) {
+              clearTimeout(connectionTimer);
+              connectionTimer = null;
+            }
+            const status = res.statusCode ?? 0;
+            if (status >= 300 && status < 400 && res.headers.location) {
+              res.resume();
+              if (redirectsLeft <= 0) {
+                settleAttempt();
+                failDownload("Too many redirects during download");
+                return;
+              }
+              let nextUrl: string;
+              try {
+                nextUrl = new URL(res.headers.location, target).toString();
+              } catch {
+                settleAttempt();
+                failDownload("Server returned an invalid redirect");
+                return;
+              }
+              if (settleAttempt()) attempt(retriesLeft, redirectsLeft - 1, nextUrl);
+              return;
+            }
+            this.handlePartResponse(
+              res,
+              part,
+              req,
+              resolve,
+              retriesLeft,
+              (nextRetries) => attempt(nextRetries, redirectsLeft, target.toString()),
+              retry,
+              settleAttempt
+            );
+          }
+        );
+        this.activeRequests.add(req);
+        req.on("error", (err) => {
+          if (!settleAttempt()) return;
+          if (this.stopped || this.destroyed) {
+            finishDownload();
+            return;
+          }
+          if (retriesLeft > 0) {
+            setTimeout(() => attempt(retriesLeft - 1, redirectsLeft, target.toString()), 1500);
+          } else {
+            failDownload(err.message);
           }
         });
+        const connectionTimeoutMs = this.options.connectionTimeoutMs ?? DEFAULT_CONNECTION_TIMEOUT_MS;
+        const requestTimeoutMs = this.options.requestTimeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS;
+        const idleTimeoutMs = this.options.idleTimeoutMs ?? DEFAULT_IDLE_TIMEOUT_MS;
+        connectionTimer = setTimeout(
+          () => req.destroy(new Error("Download connection timed out")),
+          connectionTimeoutMs
+        );
+        requestTimer = setTimeout(
+          () => req.destroy(new Error("Download request timed out")),
+          requestTimeoutMs
+        );
+        req.setTimeout(idleTimeoutMs, () => req.destroy(new Error("Download idle timeout")));
         req.end();
       };
-      attempt(3);
+      attempt(
+        this.options.maxRetries ?? DEFAULT_RETRIES,
+        this.options.maxRedirects ?? DEFAULT_MAX_REDIRECTS,
+        this.item.url
+      );
     });
   }
 
@@ -254,31 +358,15 @@ export class DownloadTask extends EventEmitter {
     req: ClientRequest,
     resolve: () => void,
     retriesLeft: number,
-    attempt: (retriesLeft: number) => void
+    attempt: (retriesLeft: number) => void,
+    retry: (message: string, delayMs?: number) => void,
+    settleAttempt: () => boolean
   ) {
     const status = res.statusCode ?? 0;
-    if (status >= 300 && status < 400 && res.headers.location) {
-      res.resume();
-      this.activeRequests.delete(req);
-      try {
-        this.item.url = new URL(res.headers.location, this.item.url).toString();
-      } catch {
-        /* ignore, keep old url */
-      }
-      attempt(retriesLeft);
-      return;
-    }
     const expectsRange = this.item.resumeSupport && (this.item.parts.length > 1 || part.to !== null);
     const retryResponse = (message: string) => {
       res.resume();
-      this.activeRequests.delete(req);
-      if (retriesLeft > 0) {
-        setTimeout(() => attempt(retriesLeft - 1), 1000);
-      } else {
-        part.status = "error";
-        this.fatalError = message;
-        resolve();
-      }
+      retry(message, 1000);
     };
 
     if ((expectsRange && status !== 206) || (!expectsRange && status !== 200 && status !== 206)) {
@@ -325,6 +413,7 @@ export class DownloadTask extends EventEmitter {
     let writeChain: Promise<void> = Promise.resolve();
     let responseBytes = 0;
     let responseInvalid = false;
+    let processingError: string | null = null;
 
     const limiters = this.options.speedLimiters;
 
@@ -359,14 +448,22 @@ export class DownloadTask extends EventEmitter {
           if (!this.stopped && !this.destroyed) res.resume();
         })
         .catch((err) => {
-          this.fatalError = err instanceof Error ? err.message : String(err);
+          processingError = err instanceof Error ? err.message : String(err);
+          res.resume();
         });
     });
 
     res.on("end", async () => {
-      if (responseInvalid) return;
+      if (responseInvalid) {
+        retryResponse("Server sent more bytes than its Content-Range");
+        return;
+      }
       await writeChain;
-      this.activeRequests.delete(req);
+      if (processingError) {
+        retryResponse(processingError);
+        return;
+      }
+      if (!settleAttempt()) return;
       if (this.stopped || this.destroyed) {
         resolve();
         return;
@@ -384,7 +481,7 @@ export class DownloadTask extends EventEmitter {
 
     res.on("error", async (err) => {
       await writeChain.catch(() => {});
-      this.activeRequests.delete(req);
+      if (!settleAttempt()) return;
       if (this.stopped || this.destroyed) {
         resolve();
         return;
@@ -408,8 +505,7 @@ export class DownloadTask extends EventEmitter {
     this.item.speed = 0;
     for (const part of this.item.parts) if (part.status !== "completed") part.status = "idle";
     await this.persistParts();
-    await this.fileHandle?.close();
-    this.fileHandle = null;
+    await this.closeFileHandle();
     this.emit("paused");
   }
 
@@ -418,8 +514,7 @@ export class DownloadTask extends EventEmitter {
     for (const req of this.activeRequests) req.destroy();
     this.activeRequests.clear();
     this.stopProgressTimer();
-    await this.fileHandle?.close();
-    this.fileHandle = null;
+    await this.closeFileHandle();
     await fsp.rm(this.partsFilePath, { force: true });
     if (deleteFile) {
       await fsp.rm(this.filePath, { force: true });
