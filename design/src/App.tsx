@@ -1,4 +1,5 @@
-import { useEffect } from "react";
+import { useEffect, useRef, useState } from "react";
+import type { DownloadItem } from "@shared/types";
 import { useAppStore } from "./store/useAppStore";
 import TitleBar from "./components/TitleBar";
 import Sidebar from "./components/Sidebar";
@@ -9,11 +10,27 @@ import AddDownloadDialog from "./components/AddDownloadDialog";
 import DownloadDetailsDialog from "./components/DownloadDetailsDialog";
 import SettingsDialog from "./components/SettingsDialog";
 import QueuesDialog from "./components/QueuesDialog";
+import DestructiveActionGate, {
+  type DestructiveActionRequest,
+} from "./components/DestructiveActionGate";
+import NotificationCenter, { notify } from "./components/NotificationCenter";
+import RendererAccessibilityBridge from "./components/RendererAccessibilityBridge";
+
+const DESTRUCTIVE_REQUEST_EVENT = "mdm:request-destructive-action";
+const CLOSE_CONTEXT_MENU_EVENT = "mdm:close-context-menus";
+
+function itemName(item: DownloadItem): string {
+  return item.fileName || item.url;
+}
 
 export default function App() {
   const ready = useAppStore((s) => s.ready);
   const theme = useAppStore((s) => s.settings?.theme ?? "system");
   const dialogs = useAppStore((s) => s.dialogs);
+  const items = useAppStore((s) => s.items);
+  const [destructiveRequest, setDestructiveRequest] = useState<DestructiveActionRequest | null>(null);
+  const observedItems = useRef(false);
+  const previousItems = useRef(new Map<string, Pick<DownloadItem, "status" | "error" | "fileName" | "url">>());
 
   useEffect(() => {
     const unsubscribe = useAppStore.getState().init();
@@ -29,8 +46,78 @@ export default function App() {
     }
   }, [theme]);
 
+  useEffect(() => {
+    function handleDestructiveRequest(event: Event) {
+      const detail = (event as CustomEvent<DestructiveActionRequest>).detail;
+      if (!detail?.itemIds?.length) return;
+      setDestructiveRequest({ itemIds: [...detail.itemIds], deleteFile: Boolean(detail.deleteFile) });
+    }
+    window.addEventListener(DESTRUCTIVE_REQUEST_EVENT, handleDestructiveRequest);
+    return () => window.removeEventListener(DESTRUCTIVE_REQUEST_EVENT, handleDestructiveRequest);
+  }, []);
+
+  useEffect(() => {
+    if (!ready) return;
+    const current = new Map(
+      items.map((item) => [item.id, { status: item.status, error: item.error, fileName: item.fileName, url: item.url }])
+    );
+    if (!observedItems.current) {
+      observedItems.current = true;
+      previousItems.current = current;
+      return;
+    }
+
+    items.forEach((item) => {
+      const previous = previousItems.current.get(item.id);
+      if (!previous || previous.status === item.status) {
+        if (item.error && item.error !== previous?.error) {
+          notify({ title: "Download error", message: `${itemName(item)}: ${item.error}`, tone: "error" });
+        }
+        return;
+      }
+
+      const name = itemName(item);
+      if (item.status === "completed") {
+        notify({ title: "Download complete", message: `${name} is ready.`, tone: "success" });
+      } else if (item.status === "error") {
+        notify({ title: "Download error", message: `${name}: ${item.error || "The manager reported an error."}`, tone: "error" });
+      } else {
+        const status = item.status.charAt(0).toUpperCase() + item.status.slice(1);
+        notify({ title: "Download status", message: `${name}: ${status}.`, tone: "info" });
+      }
+    });
+    previousItems.current = current;
+  }, [items, ready]);
+
+  function cancelDestructiveAction() {
+    window.dispatchEvent(new Event(CLOSE_CONTEXT_MENU_EVENT));
+    setDestructiveRequest(null);
+  }
+
+  function confirmDestructiveAction(request: DestructiveActionRequest) {
+    setDestructiveRequest(null);
+    const removeDownload = useAppStore.getState().removeDownload;
+    void Promise.allSettled(request.itemIds.map((id) => removeDownload(id, request.deleteFile))).then((results) => {
+      const failed = results.filter((result) => result.status === "rejected");
+      if (failed.length > 0) {
+        notify({
+          title: "Removal incomplete",
+          message: `${failed.length} of ${request.itemIds.length} item(s) could not be removed.`,
+          tone: "error",
+        });
+        return;
+      }
+      notify({
+        title: "Removal complete",
+        message: `${request.itemIds.length} item(s) removed${request.deleteFile ? " and their files deleted" : " from the list"}.`,
+        tone: "success",
+      });
+    });
+  }
+
   return (
     <div className="app">
+      <RendererAccessibilityBridge />
       <TitleBar />
       <div className="app-body">
         <Sidebar />
@@ -51,6 +138,14 @@ export default function App() {
       {dialogs.detailsItemId && <DownloadDetailsDialog itemId={dialogs.detailsItemId} />}
       {dialogs.settings && <SettingsDialog />}
       {dialogs.queues && <QueuesDialog />}
+      <NotificationCenter />
+      {destructiveRequest && (
+        <DestructiveActionGate
+          request={destructiveRequest}
+          onCancel={cancelDestructiveAction}
+          onConfirm={confirmDestructiveAction}
+        />
+      )}
     </div>
   );
 }
