@@ -14,6 +14,11 @@ shown with provenance indicating persisted or compiled-in values. Each listed
 setting has a reset control; the schema is versioned and legacy state migrates
 without spreading invalid values.
 
+The Settings dialog has its own local search field. Plain text is the default;
+the adjacent Regex button opens the shared bounded JavaScript RegExp builder.
+Matches name real setting sections and their result buttons return focus to the
+corresponding section anchor.
+
 ## Configuration
 
 The authoritative defaults and validators are in design/shared/settings.ts.
@@ -34,10 +39,9 @@ provenance, legacy migration, malformed input, and round-trip persistence.
 Run npm run test:engine, npm run build, and npm run test:electron from design/.
 
 The remaining product-level work is explicit: apply localized/funny copy to
-every renderer message, add a settings-local search bar with its own regex
-builder, make settings sections real browser-style tabs, and replace the
-current color input with the full continuous translator/editor required by the
-product policy.
+every renderer message, make settings sections real browser-style tabs, and
+replace the current color input with the full continuous translator/editor
+required by the product policy.
 
 ## Suggested articles
 

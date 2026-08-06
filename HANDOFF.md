@@ -112,9 +112,11 @@ reconciliation:
 7. The shared export serializer covers the required coding formats under
    design/shared/export.ts; connect it to filtered records, history, settings,
    and changelog surfaces with visible warning and format controls.
-8. The isolated Git-backed HistoryStore is available under
-   design/electron/history/HistoryStore.ts; connect it to every user-managed
-   record and settings mutation before calling local history complete.
+8. The isolated Git-backed HistoryStore is now wired to manager state changes,
+   including download creation/completion/error/pause/resume/retry/cancel,
+   deletion, queue changes, and settings changes. Connect its browse/restore
+   controls to the renderer and extend coverage to every user-managed record
+   before calling local history complete.
 9. The renderer lane now supplies centralized accessibility semantics,
    non-blocking notification history, and the native destructive-action gate.
    Its current evidence is typecheck/build, existing engine/Electron tests, and

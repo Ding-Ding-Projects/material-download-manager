@@ -114,8 +114,11 @@ export default function SettingsDialog() {
   }
 
   function jumpToSetting(id: string) {
-    document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "nearest" });
-    document.getElementById(id)?.focus({ preventScroll: true });
+    const target = document.getElementById(id);
+    if (!target) return;
+    const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    target.scrollIntoView({ behavior: reducedMotion ? "auto" : "smooth", block: "nearest" });
+    target.focus({ preventScroll: true });
   }
 
   function updateAccent(value: string) {

@@ -9,15 +9,22 @@ timestamp, and commit id. An unchanged snapshot records nothing. Restore reads
 an earlier snapshot and records restoration as a new revision, so undo remains
 possible.
 
+The download manager now records initial state, download creation, transfer
+completion/error, pause/resume/retry/cancel, deletion, queue changes, and
+settings changes through this store. Custom request-header values remain out of
+the renderer state and out of these snapshots.
+
 The store supports date range, action, plain-text, and bounded local regex
 filters, revision diff, and export through the shared serializer.
 
 ## Configuration
 
-The caller supplies a serialized snapshot. The application should pass the
-same encrypted representation used by live data when records are sensitive,
-and should record real actions such as created, updated, deleted, restored,
-undone, imported, and settings-changed.
+The caller supplies a serialized snapshot and records real actions such as
+created, updated, deleted, restored, undone, imported, and settings-changed.
+The current manager snapshot is local JSON metadata rather than encrypted
+ciphertext; it deliberately excludes custom header values. The app-data
+directory therefore still needs ordinary operating-system account and disk
+protection.
 
 ## Failure modes and security
 
@@ -25,7 +32,7 @@ The repository is initialized with local-only Git configuration and never
 contacts a remote. Git failures return an empty read result or a clear null
 restore result rather than claiming a revision exists. Revision subjects
 sanitize newlines. Snapshot encryption remains the caller's responsibility;
-the store does not downgrade ciphertext to plaintext.
+the manager currently records non-secret metadata as local JSON.
 
 ## Verification
 
