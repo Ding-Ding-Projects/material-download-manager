@@ -63,7 +63,7 @@ On 2026-08-05, the following checks passed on `codex/full-app`:
 | `npm ci` | Installed 396 packages from the lockfile; npm reported 11 audit findings and install-script approval warnings. |
 | `npm run typecheck` | Passed renderer and Electron TypeScript checks. |
 | `npm run build` | Passed Vite renderer and Electron main-process compilation. |
-| `npm run test:engine` | 23/23 passed, including Range integrity, pause/resume, non-resumable fallback, custom-header persistence and origin stripping, global queue limits, schedule race handling, filename sanitization, malformed Range rejection, categories, and throttling. |
+| `npm run test:engine` | 24/24 passed, including Range integrity, pause/resume, non-resumable fallback, custom-header persistence and origin stripping, global queue limits, schedule race handling, manager history hooks, filename sanitization, malformed Range rejection, categories, and throttling. |
 | `npm run test:electron` | 23/23 passed for export, local history, regex, tabs, command-palette foundations, compiled renderer-path resolution, updater states, and completion-notification preference handling. |
 | `npm run dist:win` | Passed local Squirrel.Windows packaging and produced `Setup.exe`, `RELEASES`, and a full `.nupkg`; Authenticode was `NotSigned`, MSI is disabled for the current WiX identifier bug, and no delta/feed release was claimed. |
 | Hidden-desktop smoke | Passed through the cheap hidden-desktop route: direct Electron `v31.7.7` launch opened `Material Download Manager` at 1150×720, rendered the empty state, opened Settings, and returned focus after Escape; the desktop and process were cleaned up. |
