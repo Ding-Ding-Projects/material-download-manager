@@ -82,6 +82,94 @@ function readRegexEscapeEnd(pattern: string, start: number): number {
   return Math.min(start + 1, pattern.length - 1);
 }
 
+const MAX_SEQUENTIAL_OPTIONAL_QUANTIFIERS = 16;
+
+function readQuantifierEndIncludingLazy(pattern: string, start: number): number | null {
+  const end = readQuantifierEnd(pattern, start);
+  if (end === null) return null;
+  return pattern[start] === "{" && pattern[end + 1] === "?" ? end + 1 : end;
+}
+
+function readOptionalQuantifierEnd(pattern: string, start: number): number | null {
+  const end = readQuantifierEndIncludingLazy(pattern, start);
+  if (end === null) return null;
+  if (pattern[start] === "?") return end;
+  if (pattern[start] !== "{") return null;
+
+  const bodyEnd = pattern[end] === "?" ? end - 1 : end;
+  const body = pattern.slice(start + 1, bodyEnd);
+  return body === "0" || body === "0,1" ? end : null;
+}
+
+function hasUnsafeSequentialOptionalQuantifier(pattern: string): boolean {
+  // A long flat run of optional atoms has exponentially many ways to divide a
+  // matching prefix between those atoms. Keep short optional patterns useful,
+  // but reject the unbounded backtracking case before synchronous execution.
+  const groups: Array<{ optionalRun: number }> = [{ optionalRun: 0 }];
+
+  for (let index = 0; index < pattern.length;) {
+    const character = pattern[index];
+    if (character === "(") {
+      const contentStart = readGroupContentStart(pattern, index);
+      groups.push({ optionalRun: 0 });
+      index = contentStart;
+      continue;
+    }
+    if (character === ")" && groups.length > 1) {
+      const group = groups.pop()!;
+      if (group.optionalRun >= MAX_SEQUENTIAL_OPTIONAL_QUANTIFIERS) return true;
+      const parent = groups[groups.length - 1];
+      const quantifierStart = index + 1;
+      const quantifierEnd = readQuantifierEndIncludingLazy(pattern, quantifierStart);
+      if (quantifierEnd !== null && readOptionalQuantifierEnd(pattern, quantifierStart) !== null) {
+        parent.optionalRun += 1;
+        if (parent.optionalRun >= MAX_SEQUENTIAL_OPTIONAL_QUANTIFIERS) return true;
+        index = quantifierEnd + 1;
+      } else if (quantifierEnd !== null) {
+        parent.optionalRun = 0;
+        index = quantifierEnd + 1;
+      } else {
+        parent.optionalRun = 0;
+        index += 1;
+      }
+      continue;
+    }
+
+    let atomEnd: number | null;
+    if (character === "\\") {
+      atomEnd = readRegexEscapeEnd(pattern, index);
+    } else if (character === "[") {
+      atomEnd = readCharacterClass(pattern, index)?.end ?? null;
+    } else if (character === ")" || character === "|" || character === "*" || character === "+" || character === "?" || character === "{") {
+      groups[groups.length - 1].optionalRun = 0;
+      index += 1;
+      continue;
+    } else {
+      atomEnd = index;
+    }
+
+    if (atomEnd === null) return false;
+    const quantifierStart = atomEnd + 1;
+    const quantifierEnd = readQuantifierEndIncludingLazy(pattern, quantifierStart);
+    if (quantifierEnd === null) {
+      groups[groups.length - 1].optionalRun = 0;
+      index = atomEnd + 1;
+      continue;
+    }
+
+    const currentGroup = groups[groups.length - 1];
+    if (readOptionalQuantifierEnd(pattern, quantifierStart) !== null) {
+      currentGroup.optionalRun += 1;
+      if (currentGroup.optionalRun >= MAX_SEQUENTIAL_OPTIONAL_QUANTIFIERS) return true;
+    } else {
+      currentGroup.optionalRun = 0;
+    }
+    index = quantifierEnd + 1;
+  }
+
+  return false;
+}
+
 function hasUnsafeNestedQuantifier(pattern: string): boolean {
   // JavaScript has no portable regex timeout. Walk groups instead of relying
   // on one shallow expression: `(a|a?)+`, `((a+)+)` and the same shapes with
@@ -429,6 +517,9 @@ export function validateRegexPattern(pattern: string, flags: string): string | n
   }
   if (hasUnsafeNestedQuantifier(pattern)) {
     return "This pattern contains nested quantifiers that may cause catastrophic backtracking.";
+  }
+  if (hasUnsafeSequentialOptionalQuantifier(pattern)) {
+    return "This pattern contains too many sequential optional quantifiers that may cause catastrophic backtracking.";
   }
   if (hasUnsafeQuantifiedAlternation(pattern, flags)) {
     return "This pattern contains ambiguous alternatives inside a repetition that may cause catastrophic backtracking.";
