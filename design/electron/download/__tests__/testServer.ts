@@ -23,6 +23,7 @@ export function startTestServer(
     ignoreRange?: boolean;
     requiredHeader?: { name: string; value: string };
     redirectHops?: number;
+    redirectLocation?: string;
     responseDelayMs?: number;
     bodyChunkDelayMs?: number;
   } = {}
@@ -40,7 +41,10 @@ export function startTestServer(
       const redirectMatch = /^\/redirect\/(\d+)$/.exec(path);
       if (redirectMatch) {
         const hopsLeft = Number(redirectMatch[1]);
-        res.writeHead(302, { Location: hopsLeft > 0 ? `/redirect/${hopsLeft - 1}` : "/file.bin" });
+        res.writeHead(302, {
+          Location:
+            opts.redirectLocation ?? (hopsLeft > 0 ? `/redirect/${hopsLeft - 1}` : "/file.bin"),
+        });
         res.end();
         return;
       }

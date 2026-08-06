@@ -8,6 +8,7 @@ import { EventEmitter } from "node:events";
 import type { ClientRequest, IncomingMessage } from "node:http";
 import type { DownloadItem, PartInfo } from "../../shared/types";
 import { SpeedLimiter } from "./SpeedLimiter";
+import { headersForTarget } from "./downloadMetadata";
 
 const USER_AGENT = "Mozilla/5.0 (compatible; MaterialDownloadManager/0.1)";
 const MIN_PART_SIZE_FLOOR = 512 * 1024; // never split into pieces smaller than 512KB
@@ -242,7 +243,7 @@ export class DownloadTask extends EventEmitter {
         const isRanged = this.item.parts.length > 1 || part.to !== null;
         const headers: Record<string, string> = {
           "User-Agent": USER_AGENT,
-          ...this.options.headers,
+          ...headersForTarget(this.options.headers, this.item.url, target.toString()),
         };
         if (isRanged && this.item.resumeSupport) {
           headers.Range = part.to !== null ? `bytes=${part.current}-${part.to}` : `bytes=${part.current}-`;

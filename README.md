@@ -19,6 +19,7 @@ AB Download Manager codebase.
 - Notification feature docs: docs/features/notifications/
 - Safety feature docs: docs/features/safety/
 - Settings feature docs: docs/features/settings/
+- Download engine docs: docs/features/download-engine/
 
 <details>
 <summary>Build and test</summary>
@@ -60,12 +61,12 @@ network-backed application or silently replace it.
 <summary>Current scope and next work</summary>
 
 The handoff reconciles the two previously conflicting trees without discarding
-either one. The core add, probe, segmented-download, pause/resume, persistence,
-queue, category, and settings loop is present in the Electron app.
-
-Packaging validation, queue clock scheduling, the remaining product features,
-and the future Material 3 reskin remain explicit follow-up work. See
-[`HANDOFF.md`](HANDOFF.md) for the evidence and boundaries.
+either one. The Electron app now has a real add/probe/segmented-download,
+pause/resume, persistence, queue, schedule-clock, header, timeout, settings,
+notification, accessibility, safety, search, navigation, export, and local
+history foundation. The remaining release and product gaps are explicit in
+[`HANDOFF.md`](HANDOFF.md); the prototype is never presented as the download
+path.
 
 </details>
 

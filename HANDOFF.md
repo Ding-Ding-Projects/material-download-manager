@@ -32,6 +32,14 @@ The application under `design/` includes:
   byte-integrity tests.
 - Persistence, categories, queues, speed limiting, add-download probing, and
   React dialogs for the core download loop.
+- Main-process-only custom headers, global active-download limits, schedule
+  polling, redirect limits, retry bounds, and connection/idle/request timeout
+  policy.
+- Versioned language and funny-level settings, appearance persistence,
+  non-blocking notification history, destructive-action gating, and renderer
+  accessibility semantics.
+- Tested foundations for the bounded regex builder, tab model and command
+  palette, coding-format exports, and isolated local Git history.
 
 The prototype under `prototype/` is not loaded by the Electron build. Its
 simulated network layer remains reference-only.
@@ -48,18 +56,17 @@ npm run test:engine
 npm run test:electron
 ```
 
-On 2026-08-05, the following checks passed on
-`codex/handoff-reconcile`:
+On 2026-08-05, the following checks passed on `codex/full-app`:
 
 | Check | Result |
 | --- | --- |
 | `npm ci` | Installed 396 packages from the lockfile; npm reported 11 audit findings and install-script approval warnings. |
 | `npm run typecheck` | Passed renderer and Electron TypeScript checks. |
 | `npm run build` | Passed Vite renderer and Electron main-process compilation. |
-| `npm run test:engine` | 8/8 passed, including Range integrity, pause/resume, non-resumable fallback, filename sanitization, malformed Range rejection, categories, and throttling. |
-| `npm run test:electron` | 2/2 passed for compiled renderer-path and launch-mode resolution. |
-| Hidden-desktop smoke | Passed: direct Electron `v31.7.7` launch opened `Material Download Manager` at 1150×720 and rendered the empty state; the process and headless desktop were then cleaned up. |
-| Remote GitHub Actions | Blocked: `gh workflow run "Windows verification" --ref main` returned HTTP 422, `Actions has been disabled for this user`; no remote run exists to verify. |
+| `npm run test:engine` | 23/23 passed, including Range integrity, pause/resume, non-resumable fallback, custom-header persistence and origin stripping, global queue limits, schedule race handling, filename sanitization, malformed Range rejection, categories, and throttling. |
+| `npm run test:electron` | 15/15 passed for export, local history, regex, tabs, command-palette foundations, and compiled renderer-path resolution. |
+| Hidden-desktop smoke | Passed through the cheap hidden-desktop route: direct Electron `v31.7.7` launch opened `Material Download Manager` at 1150×720, rendered the empty state, opened Settings, and returned focus after Escape; the desktop and process were cleaned up. |
+| Remote GitHub Actions | No green verdict claimed: the previously observed Windows verification run remained queued, and GitHub Actions had earlier rejected manual dispatch with `Actions has been disabled for this user`. |
 
 The hardening milestone corrected the compiled renderer path and made
 unpackaged production launches load the built renderer unless
@@ -68,7 +75,9 @@ constrained to one safe Windows path segment, and ranged responses must agree
 with their `Content-Range` before bytes are written.
 
 A Windows packaging run (`npm run dist:win`) is still required before publishing
-an installer; a compile-only success is not packaging evidence.
+an installer; a compile-only success is not packaging evidence. The current
+package configuration still targets NSIS/portable output and does not yet claim
+the required Squirrel.Windows setup/update artifacts.
 
 The repository now has a Windows push/dispatch workflow at
 [`.github/workflows/ci.yml`](.github/workflows/ci.yml) for the checks above. It
@@ -82,41 +91,40 @@ reconciliation:
 
 1. Validate the Windows installer and update artifacts on the supported build
    path.
-2. Finish clock-based queue scheduling; the current queue UI and data model are
-   present, but schedule execution needs a real trigger loop.
-3. Compare the runnable renderer with the prototype and decide which Material 3
+2. Compare the runnable renderer with the prototype and decide which Material 3
    visual and interaction changes should be implemented next.
-4. Add the remaining product features only after their scope and production
+3. Add the remaining product features only after their scope and production
    behavior are defined; do not wire the prototype's simulated engine into the
    app.
-5. Pass custom request headers through the real transfer path, enforce the
-   global active-download limit across queues, and add redirect/idle timeout
-   policy before relying on authenticated or long-lived downloads.
-6. Add renderer, IPC, packaging, accessibility, error-notification, and
+4. Add renderer, IPC, packaging, accessibility, error-notification, and
    destructive-action coverage before calling the application release-ready.
-7. The reusable local regex engine and builder foundation now live under
+5. The reusable local regex engine and builder foundation now live under
    `design/shared/regex.ts` and `design/src/components/RegexBuilder.tsx`; wire a
    separate anchored instance to every search surface before claiming the
    search requirement complete.
-8. The reusable tab state model, tab strip, and `Ctrl+Shift+F` command palette
+6. The reusable tab state model, tab strip, and `Ctrl+Shift+F` command palette
    now live under `design/shared/tabModel.ts` and `design/src/components/`;
    connect them to persisted app state and the real shell before calling the
    navigation requirements complete.
-9. The shared export serializer covers the required coding formats under
+7. The shared export serializer covers the required coding formats under
    design/shared/export.ts; connect it to filtered records, history, settings,
    and changelog surfaces with visible warning and format controls.
-10. The isolated Git-backed HistoryStore is available under
+8. The isolated Git-backed HistoryStore is available under
    design/electron/history/HistoryStore.ts; connect it to every user-managed
    record and settings mutation before calling local history complete.
-11. The renderer lane now supplies centralized accessibility semantics,
+9. The renderer lane now supplies centralized accessibility semantics,
    non-blocking notification history, and the native destructive-action gate.
    Its current evidence is typecheck/build, existing engine/Electron tests, and
    a cheap headless Settings/Escape/focus smoke; a renderer DOM harness,
-   notification bulk actions, and deletion history recording remain open.
-12. The settings lane now supplies versioned language, funny-level, appearance,
+   notification bulk actions, deletion history recording, and full-copy
+   localization remain open.
+10. The settings lane now supplies versioned language, funny-level, appearance,
    and provenance state with persistence tests. The settings surface still needs
    its own search/regex builder and browser-style tabs, full appearance-editor
    depth, and copy wiring across every renderer message.
+11. Keep the landing page, changelog viewer, release line counter, and
+    sanitized instruction mirror current as the product surfaces are
+    implemented.
 
 ## Git state and ownership
 

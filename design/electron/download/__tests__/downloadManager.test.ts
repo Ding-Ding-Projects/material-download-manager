@@ -109,3 +109,69 @@ test("manager reloads persisted custom headers without exposing them in state", 
     else process.env.USERPROFILE = previousUserProfile;
   }
 });
+
+test("manual resume waits for an in-flight schedule pause", async () => {
+  const root = await fsp.mkdtemp(path.join(os.tmpdir(), "mdm-schedule-race-test-"));
+  const server = await startTestServer(512 * 1024, { bodyChunkDelayMs: 500 });
+  const previousUserProfile = process.env.USERPROFILE;
+  process.env.USERPROFILE = root;
+  try {
+    const manager = new DownloadManager(root);
+    await manager.init();
+    await manager.setSettings({ maxConnectionsPerDownload: 1, maxActiveDownloads: 1 });
+    const queue = await manager.createQueue({ name: "Scheduled", maxConcurrent: 1 });
+    const id = await manager.addDownload({
+      url: server.url,
+      folder: path.join(root, "download"),
+      fileName: "file.bin",
+      queueId: queue.id,
+      startImmediately: false,
+    });
+    await manager.resume(id);
+    for (let i = 0; i < 100 && server.requestHeaders.length === 0; i++) {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+
+    const internals = manager as unknown as {
+      tasks: Map<string, { pause: () => Promise<void> }>;
+      scheduledPauses: Map<string, Promise<void>>;
+    };
+    const task = internals.tasks.get(id);
+    assert.ok(task, "the item should be active before the schedule closes");
+    const realPause = task.pause.bind(task);
+    let releasePause!: () => void;
+    const pauseGate = new Promise<void>((resolve) => {
+      releasePause = resolve;
+    });
+    task.pause = async () => {
+      await pauseGate;
+      await realPause();
+    };
+
+    await manager.updateQueue({
+      ...queue,
+      scheduleEnabled: true,
+      startAt: "not-a-time",
+      endAt: null,
+    });
+    assert.ok(internals.scheduledPauses.has(id), "the schedule should have started pausing the active task");
+
+    let resumeFinished = false;
+    const resumePromise = manager.resume(id).then(() => {
+      resumeFinished = true;
+    });
+    await new Promise((resolve) => setTimeout(resolve, 25));
+    assert.equal(resumeFinished, false, "resume must wait for the automatic pause to settle");
+
+    releasePause();
+    await resumePromise;
+    const status = manager.getState().items.find((item) => item.id === id)?.status;
+    assert.ok(status === "queued" || status === "downloading", `unexpected resumed status: ${status}`);
+    await manager.shutdown();
+  } finally {
+    await server.close();
+    await fsp.rm(root, { recursive: true, force: true });
+    if (previousUserProfile === undefined) delete process.env.USERPROFILE;
+    else process.env.USERPROFILE = previousUserProfile;
+  }
+});

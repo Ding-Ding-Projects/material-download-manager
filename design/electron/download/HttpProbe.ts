@@ -3,6 +3,7 @@ import https from "node:https";
 import { URL } from "node:url";
 import path from "node:path";
 import type { NewDownloadInfo } from "../../shared/types";
+import { headersForTarget } from "./downloadMetadata";
 
 const MAX_REDIRECTS = 10;
 const MAX_FILENAME_LENGTH = 255;
@@ -57,7 +58,8 @@ function filenameFromUrl(url: string): string {
 export function probeUrl(
   url: string,
   headers: Record<string, string> = {},
-  redirectsLeft = MAX_REDIRECTS
+  redirectsLeft = MAX_REDIRECTS,
+  initialUrl = url
 ): Promise<NewDownloadInfo> {
   return new Promise((resolve, reject) => {
     let target: URL;
@@ -74,7 +76,7 @@ export function probeUrl(
         method: "HEAD",
         headers: {
           "User-Agent": "Mozilla/5.0 (compatible; MaterialDownloadManager/0.1)",
-          ...headers,
+          ...headersForTarget(headers, initialUrl, target.toString()),
         },
       },
       (res) => {
@@ -86,7 +88,7 @@ export function probeUrl(
             return;
           }
           const nextUrl = new URL(res.headers.location, target).toString();
-          resolve(probeUrl(nextUrl, headers, redirectsLeft - 1));
+          resolve(probeUrl(nextUrl, headers, redirectsLeft - 1, initialUrl));
           return;
         }
         if (status >= 400) {

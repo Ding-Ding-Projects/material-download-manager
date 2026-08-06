@@ -97,6 +97,48 @@ test("custom headers survive persistence and reach probe plus transfer requests"
   }
 });
 
+test("cross-origin redirects strip credentials but preserve ordinary headers", async () => {
+  const destination = await startTestServer(128 * 1024);
+  const redirect = await startTestServer(128 * 1024, { redirectLocation: destination.url });
+  const folder = await tmpDir();
+  const headers = {
+    Authorization: "Bearer should-not-leave-origin",
+    Cookie: "session=should-not-leave-origin",
+    "X-Trace-Id": "trace-is-safe",
+  };
+  try {
+    const info = await probeUrl(redirect.redirectUrl, headers);
+    assert.equal(info.contentLength, destination.buffer.length);
+
+    const item = makeItem({
+      url: redirect.redirectUrl,
+      folder,
+      totalSize: destination.buffer.length,
+      resumeSupport: false,
+    });
+    const task = new DownloadTask(item, {
+      maxConnections: 1,
+      minPartSize: 256 * 1024,
+      headers,
+      maxRetries: 0,
+      speedLimiters: [new SpeedLimiter(0)],
+    });
+    await task.start();
+    assert.equal(item.status, "completed");
+
+    assert.ok(destination.requestHeaders.length >= 2, "expected probe and transfer requests at the destination");
+    for (const request of destination.requestHeaders) {
+      assert.equal(request.authorization, undefined);
+      assert.equal(request.cookie, undefined);
+      assert.equal(request["x-trace-id"], "trace-is-safe");
+    }
+  } finally {
+    await redirect.close();
+    await destination.close();
+    await fsp.rm(folder, { recursive: true, force: true });
+  }
+});
+
 test("filename suggestions cannot escape the selected folder", () => {
   const safe = sanitizeFileName("..\\..\\CON.txt");
   assert.equal(safe.includes("\\"), false);

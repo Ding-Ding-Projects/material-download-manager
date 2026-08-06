@@ -36,7 +36,7 @@ export class DownloadManager extends EventEmitter {
   private notifyScheduled = false;
   private shutDown = false;
   private itemOrder: string[] = [];
-  private scheduledPauses: Set<string> = new Set();
+  private scheduledPauses: Map<string, Promise<void>> = new Map();
   private scheduleClock = new QueueScheduleClock(() => this.processAllQueues());
 
   constructor(private userDataPath: string) {
@@ -240,12 +240,24 @@ export class DownloadManager extends EventEmitter {
       const task = this.tasks.get(itemId);
       const item = this.items.get(itemId);
       if (!task || !item || this.scheduledPauses.has(itemId)) continue;
-      this.scheduledPauses.add(itemId);
-      task
+
+      let pausePromise: Promise<void>;
+      pausePromise = task
         .pause()
         .then(async () => {
-          this.tasks.delete(itemId);
+          const stillScheduled = this.scheduledPauses.get(itemId) === pausePromise;
           this.scheduledPauses.delete(itemId);
+          this.tasks.delete(itemId);
+
+          if (!stillScheduled) {
+            // A user action invalidated this automatic pause. The task still
+            // needs to leave the active-task map, but its final status belongs
+            // to that user action (resume, cancel, or remove).
+            this.scheduleNotify();
+            this.processAllQueues();
+            return;
+          }
+
           // Scheduled pauses are resumable when the next window opens, but a
           // real shutdown must persist the paused state it just established.
           if (!this.shutDown && item.status === "paused") item.status = "queued";
@@ -254,9 +266,17 @@ export class DownloadManager extends EventEmitter {
           this.processAllQueues();
         })
         .catch(() => {
-          this.scheduledPauses.delete(itemId);
+          if (this.scheduledPauses.get(itemId) === pausePromise) this.scheduledPauses.delete(itemId);
         });
+      this.scheduledPauses.set(itemId, pausePromise);
     }
+  }
+
+  private async settleScheduledPause(itemId: string) {
+    const pending = this.scheduledPauses.get(itemId);
+    if (!pending) return;
+    this.scheduledPauses.delete(itemId);
+    await pending;
   }
 
   private processAllQueues() {
@@ -290,6 +310,7 @@ export class DownloadManager extends EventEmitter {
   }
 
   async pause(id: string) {
+    await this.settleScheduledPause(id);
     const task = this.tasks.get(id);
     const item = this.items.get(id);
     if (task) {
@@ -304,6 +325,7 @@ export class DownloadManager extends EventEmitter {
   }
 
   async resume(id: string) {
+    await this.settleScheduledPause(id);
     const item = this.items.get(id);
     if (!item) return;
     if (item.status === "completed") return;
@@ -323,6 +345,7 @@ export class DownloadManager extends EventEmitter {
   }
 
   async cancel(id: string) {
+    await this.settleScheduledPause(id);
     const task = this.tasks.get(id);
     const item = this.items.get(id);
     if (task) {
@@ -336,6 +359,7 @@ export class DownloadManager extends EventEmitter {
   }
 
   async remove(id: string, deleteFile: boolean) {
+    await this.settleScheduledPause(id);
     const task = this.tasks.get(id);
     if (task) {
       await task.cancel(deleteFile);
@@ -443,6 +467,7 @@ export class DownloadManager extends EventEmitter {
     if (!queue) return;
     queue.isRunning = false;
     for (const itemId of queue.itemIds) {
+      await this.settleScheduledPause(itemId);
       const task = this.tasks.get(itemId);
       if (task) {
         await task.pause();
