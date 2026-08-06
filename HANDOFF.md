@@ -102,6 +102,9 @@ reconciliation:
    now live under `design/shared/tabModel.ts` and `design/src/components/`;
    connect them to persisted app state and the real shell before calling the
    navigation requirements complete.
+9. The shared export serializer covers the required coding formats under
+   design/shared/export.ts; connect it to filtered records, history, settings,
+   and changelog surfaces with visible warning and format controls.
 
 ## Git state and ownership
 

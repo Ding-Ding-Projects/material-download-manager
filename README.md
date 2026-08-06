@@ -13,6 +13,7 @@ AB Download Manager codebase.
 - Search feature docs: [`docs/features/search/`](docs/features/search/)
 - Navigation feature docs: [`docs/features/navigation/`](docs/features/navigation/)
 - Website: not published
+- Export feature docs: docs/features/export/
 
 <details>
 <summary>Build and test</summary>
