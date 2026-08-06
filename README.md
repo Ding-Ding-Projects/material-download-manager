@@ -10,6 +10,7 @@ AB Download Manager codebase.
 - Handoff: [`HANDOFF.md`](HANDOFF.md)
 - Shared project guidance mirror: [`AGENTS.md`](AGENTS.md)
 - CI workflow: [Windows verification](.github/workflows/ci.yml)
+- Release workflow: [Windows release](.github/workflows/release.yml)
 - Search feature docs: [`docs/features/search/`](docs/features/search/)
 - Navigation feature docs: [`docs/features/navigation/`](docs/features/navigation/)
 - Website: not published
@@ -37,10 +38,17 @@ npm run test:electron
 
 The Windows packaging command is `npm run dist:win`. It uses the
 Squirrel.Windows x64 target with signing enforced, so it fails closed without
-a certificate. A reversible unsigned shape attempt exited after the Squirrel
-target line without producing artifacts on the current Node 26 host; no
-installer or release is claimed because this checkout has no signing
-certificate, published update feed, or verified GitHub Actions release.
+a certificate. The `Windows release` workflow performs the signed build,
+validates `Setup.exe`, `RELEASES`, and the full Squirrel packages, then creates
+one uniquely tagged release with the CI-produced line-count table and release
+metadata. The workflow is present, but no release has been published because
+the protected signing certificate and password are not configured yet.
+
+The updater has a stable default feed at
+`https://github.com/Ding-Ding-Projects/material-download-manager/releases/latest/download/`;
+`MDM_UPDATE_FEED_URL` remains an optional main-process override. No installer,
+release, or verified update feed is claimed until a signed workflow run proves
+all three.
 
 The Windows verification workflow runs the typecheck, build, downloader tests,
 and compiled Electron path tests on every push and on manual dispatch.

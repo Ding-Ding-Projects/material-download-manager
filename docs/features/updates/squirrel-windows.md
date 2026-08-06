@@ -37,12 +37,14 @@ installation can proceed.
 
 ## Configuration
 
-The service accepts the public feed URL from the main-process-only
-`MDM_UPDATE_FEED_URL` environment variable and an optional release-notes base
+The service uses the stable public feed URL
+`https://github.com/Ding-Ding-Projects/material-download-manager/releases/latest/download/`
+unless the main-process-only `MDM_UPDATE_FEED_URL` environment variable
+overrides it. It also accepts an optional release-notes base
 from `MDM_UPDATE_RELEASE_NOTES_BASE_URL`. Both accept only HTTPS URLs with no
 username, password, query, or fragment, and the main process never sends raw
 errors or credentials to the renderer. The current repository has no committed
-feed URL because no signed release feed has been published yet.
+release asset because no signed release feed has been published yet.
 
 Every updater IPC handler checks the sender window and frame. The preload
 bridge exposes only typed operations and validates returned state, install
@@ -67,9 +69,11 @@ decision logic injectable for focused tests.
 - The updater only stages an update. The app does not call `quitAndInstall()`
   during startup, active downloads, or background checks.
 - Squirrel signing, the public HTTPS feed, the `RELEASES` index, and the
-  GitHub Actions release workflow remain external dependencies. Until those
-  exist and are verified on a Windows build host, this repository does not
-  claim an installer or update release.
+  GitHub Actions release workflow are release dependencies. The workflow
+  validates the signed Squirrel artifacts, immutable target commit, timing,
+  line-count table, and release metadata before publishing. Until a signed run
+  verifies those facts, this repository does not claim an installer or update
+  release.
 - Enabling MSI requires either a builder upgrade that fixes that WiX
   identifier generation or a deliberate package-name migration; this slice
   does not silently rename the application package to make an optional MSI

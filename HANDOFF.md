@@ -22,10 +22,18 @@ This layout is intentionally reversible. It does not claim that the prototype
 is production code, and it does not discard the prototype's visual reference
 material.
 
-The runnable application is now integrated on `main` at `5c2d5d3`. The
+The runnable application is now integrated on `main` at `ad6f44c`. The
 original handoff branch remains available as
 `origin/claude/submodule-design-folder-port-iyvesh`; it was preserved rather
 than rewritten.
+
+The release handoff is staged on
+`codex/release-pipeline-20260806` at `d794d24`. It adds the stable updater feed,
+the reproducible line-count and dim-sum metadata helpers, and the signed
+Windows release workflow. The branch is pushed to the repository, but this
+handoff does not call the release published: the protected signing certificate
+and password have not been configured, so the workflow cannot produce a
+verified installer yet.
 
 ## Runnable application
 
@@ -61,7 +69,7 @@ npm run test:engine
 npm run test:electron
 ```
 
-On the final integrated tree (`main` at `5c2d5d3`), the following checks
+On the final integrated tree (`main` at `ad6f44c`), the following checks
 passed:
 
 | Check | Result |
@@ -71,7 +79,7 @@ passed:
 | `npm run test:engine` | 29/29 passed, including Range integrity, pause/resume, non-resumable fallback, custom-header persistence and cross-origin header stripping, global queue limits, schedule race handling, manager history hooks, filename sanitization, malformed Range rejection, categories, throttling, and URL redaction. |
 | `npm run test:electron` | 31/31 passed for export, local history, regex, tabs, command-palette foundations, compiled renderer-path resolution, secure updater IPC, version monotonicity, timeout/stale-event recovery, native Squirrel download-overlap protection, queue payload validation, Settings Escape handling, and completion-notification preference handling. |
 | Hidden-desktop smoke | Passed through the cheap hidden-desktop route: direct Electron `v31.7.7` launch opened `Material Download Manager` at 1150×720, rendered the empty state and update state, opened Settings, filtered Settings with its anchored regex builder, and returned focus after Escape. The hidden desktop and process were cleaned up. |
-| Remote GitHub Actions | Passed for `5c2d5d3`: [Windows verification run 31072462082](https://github.com/Ding-Ding-Projects/material-download-manager/actions/runs/31072462082). |
+| Remote GitHub Actions | Passed for `ad6f44c`: [Windows verification run 31072760389](https://github.com/Ding-Ding-Projects/material-download-manager/actions/runs/31072760389). |
 
 The hardening milestone corrected the compiled renderer path and made
 unpackaged production launches load the built renderer unless
@@ -86,23 +94,35 @@ and the main process has a bounded, fail-closed updater coordinator. The
 renderer now receives validated updater state through the secure preload bridge
 and shows explicit manual-check, `Later`, release-notes, and
 `Restart to install update` actions guarded by a fresh unsaved-work assertion.
-This branch does not
-claim a signed installer, a published `RELEASES` feed, or a verified update.
+This branch does not claim a signed installer, a published `RELEASES` feed, or
+a verified update. The updater now has the stable default feed URL described
+above, while `MDM_UPDATE_FEED_URL` remains an optional override.
 The unsigned local shape attempt produced no artifacts on this host and is not
 release evidence.
 
 The repository has a Windows push/dispatch workflow at
-[`.github/workflows/ci.yml`](.github/workflows/ci.yml) for the checks above. It
-does not claim installer or release verification. The updater still needs a
-signed public HTTPS feed configured through `MDM_UPDATE_FEED_URL`.
+[`.github/workflows/ci.yml`](.github/workflows/ci.yml) for the checks above and
+a separate [Windows release workflow](.github/workflows/release.yml). The
+release workflow is fail-closed on missing signing inputs, validates the
+Squirrel artifacts, and publishes only after the signed build succeeds. It has
+not published a release yet because those protected inputs are absent.
+
+The release branch also passed local static checks for the workflow and helper
+contracts: `actionlint -shellcheck=` passed, all 8 PowerShell run blocks parsed,
+the line-count table validated, the dim-sum metadata resolved to
+`Classic Har Gow · 蝦餃`, and `electron-builder --version` resolved to
+`24.13.3`. These checks do not substitute for the missing signed packaging
+run.
 
 ## Known follow-up work
 
 These items remain open and are deliberately not hidden by the directory
 reconciliation:
 
-1. Validate the Windows Squirrel installer and update artifacts on the
-   supported build path, including signing and the `RELEASES` feed.
+1. Configure the protected signing certificate and password, then validate the
+   Windows Squirrel installer and update artifacts on the supported build path,
+   including signing and the `RELEASES` feed. No release is published until
+   that workflow run is green and its immutable assets are verified.
 2. Compare the runnable renderer with the prototype and decide which Material 3
    visual and interaction changes should be implemented next.
 3. Add the remaining product features only after their scope and production
@@ -142,13 +162,15 @@ reconciliation:
 
 ## Git state and ownership
 
-This reconciliation is on `main` at `5c2d5d3`, which matches
+This reconciliation is on `main` at `ad6f44c`, which matches
 `origin/main`. The original handoff history is preserved as an ancestor, and
 the original handoff branch remains untouched. There are no open GitHub issues
 in either scanned repository at the time this handoff was refreshed. GitHub
-Discussions are disabled, the wiki setting is enabled but its wiki repository
-is not initialized, and GitHub Pages is not configured. No unverified wiki or
-site is claimed here.
+Discussions are enabled and the rolling handoff thread is
+[`#3`](https://github.com/Ding-Ding-Projects/material-download-manager/discussions/3).
+The wiki setting is enabled but its wiki repository is not initialized, and
+GitHub Pages is not configured. No unverified wiki, site, installer, or
+release is claimed here.
 
 Only the main checkout remains registered with Git. Five previously used,
 clean checkout directories could not be removed because Windows still held
