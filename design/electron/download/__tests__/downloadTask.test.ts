@@ -7,11 +7,11 @@ import path from "node:path";
 import crypto from "node:crypto";
 
 import { startTestServer } from "./testServer";
-import { probeUrl, sanitizeFileName } from "../HttpProbe";
+import { probeUrl, redactErrorMessage, redactUrl, sanitizeFileName } from "../HttpProbe";
 import { DownloadTask } from "../DownloadTask";
 import { SpeedLimiter } from "../SpeedLimiter";
 import { detectCategory } from "../categories";
-import { splitStoredDownload, withStoredHeaders } from "../downloadMetadata";
+import { headersForTarget, splitStoredDownload, withStoredHeaders } from "../downloadMetadata";
 import { isQueueScheduleActive, QueueScheduleClock } from "../queueSchedule";
 import type { DownloadItem } from "../../../shared/types";
 
@@ -58,6 +58,50 @@ test("probeUrl reports size + resume support + suggested filename", async () => 
   }
 });
 
+test("URL diagnostics retain safe context while redacting credentials, query values and fragments", async () => {
+  const unsafe =
+    "https://download-user:download-password@example.com/files/report.pdf?access_token=query-secret&name=report#session=fragment-secret";
+  const safe = redactUrl(unsafe);
+
+  assert.match(
+    safe,
+    /^https:\/\/\[REDACTED\]@example\.com\/files\/report\.pdf\?access_token=\[REDACTED\]&name=\[REDACTED\]#\[REDACTED\]$/
+  );
+  assert.match(safe, /example\.com\/files\/report\.pdf/);
+  for (const secret of ["download-user", "download-password", "query-secret", "fragment-secret"]) {
+    assert.equal(safe.includes(secret), false, `redacted URL must not include ${secret}`);
+  }
+  assert.equal(
+    redactErrorMessage(new Error(`Invalid URL: ${unsafe}`), unsafe),
+    `Invalid URL: ${safe}`,
+    "error diagnostics should keep the safe URL context"
+  );
+  assert.equal(redactErrorMessage(new Error("Server responded with 404")), "Server responded with 404");
+
+  const malformed =
+    "https://malformed-user:malformed-password@example.com:not-a-port/download?signature=malformed-token#malformed-fragment";
+  const malformedSafe = redactUrl(malformed);
+  assert.match(
+    malformedSafe,
+    /^https:\/\/\[REDACTED\]@example\.com:not-a-port\/download\?signature=\[REDACTED\]#\[REDACTED\]$/
+  );
+  for (const secret of ["malformed-user", "malformed-password", "malformed-token", "malformed-fragment"]) {
+    assert.equal(malformedSafe.includes(secret), false, `malformed URL must not include ${secret}`);
+  }
+  const networkPath = "//network-user:network-password@example.com/download?raw-query-secret#raw-fragment-secret";
+  const networkPathSafe = redactUrl(networkPath);
+  assert.equal(networkPathSafe.includes("network-password"), false);
+  assert.equal(networkPathSafe.includes("raw-query-secret"), false);
+  assert.equal(networkPathSafe.includes("raw-fragment-secret"), false);
+  await assert.rejects(probeUrl(malformed), (error: unknown) => {
+    assert.ok(error instanceof Error);
+    assert.match(error.message, /Invalid URL/);
+    assert.equal(error.message.includes("malformed-password"), false);
+    assert.match(error.message, /example\.com:not-a-port/);
+    return true;
+  });
+});
+
 test("custom headers survive persistence and reach probe plus transfer requests", async () => {
   const srv = await startTestServer(128 * 1024, {
     requiredHeader: { name: "x-download-token", value: "token-without-logging" },
@@ -93,6 +137,80 @@ test("custom headers survive persistence and reach probe plus transfer requests"
     );
   } finally {
     await srv.close();
+    await fsp.rm(folder, { recursive: true, force: true });
+  }
+});
+
+test("same-origin redirects retain custom headers", () => {
+  const headers = {
+    Authorization: "Bearer stays-on-origin",
+    "X-Api-Key": "api-key-stays-on-origin",
+    "X-Trace-Id": "trace-is-safe",
+  };
+  assert.deepEqual(
+    headersForTarget(headers, "https://downloads.example.test/start", "https://downloads.example.test/final"),
+    headers
+  );
+});
+
+test("cross-origin redirects strip credentials but preserve ordinary headers", async () => {
+  const destination = await startTestServer(128 * 1024);
+  const redirect = await startTestServer(128 * 1024, { redirectLocation: destination.url });
+  const folder = await tmpDir();
+  const headers = {
+    Authorization: "Bearer should-not-leave-origin",
+    Cookie: "session=should-not-leave-origin",
+    "X-Api-Key": "api-key-should-not-leave-origin",
+    "Api-Key": "api-key-should-not-leave-origin",
+    "X-Bearer-Token": "bearer-should-not-leave-origin",
+    "Bearer-Token": "bearer-should-not-leave-origin",
+    "X-Access-Token": "access-token-should-not-leave-origin",
+    "X-Client-Secret": "client-secret-should-not-leave-origin",
+    "Proxy-Authorization": "Basic should-not-leave-origin",
+    "Set-Cookie": "session=should-not-leave-origin",
+    "X-Trace-Id": "trace-is-safe",
+  };
+  try {
+    const info = await probeUrl(redirect.redirectUrl, headers);
+    assert.equal(info.contentLength, destination.buffer.length);
+
+    const item = makeItem({
+      url: redirect.redirectUrl,
+      folder,
+      totalSize: destination.buffer.length,
+      resumeSupport: false,
+    });
+    const task = new DownloadTask(item, {
+      maxConnections: 1,
+      minPartSize: 256 * 1024,
+      headers,
+      maxRetries: 0,
+      speedLimiters: [new SpeedLimiter(0)],
+    });
+    await task.start();
+    assert.equal(item.status, "completed");
+
+    assert.ok(destination.requestHeaders.length >= 2, "expected probe and transfer requests at the destination");
+    for (const request of destination.requestHeaders) {
+      for (const name of [
+        "authorization",
+        "cookie",
+        "x-api-key",
+        "api-key",
+        "x-bearer-token",
+        "bearer-token",
+        "x-access-token",
+        "x-client-secret",
+        "proxy-authorization",
+        "set-cookie",
+      ]) {
+        assert.equal(request[name], undefined, `${name} must not cross an origin boundary`);
+      }
+      assert.equal(request["x-trace-id"], "trace-is-safe");
+    }
+  } finally {
+    await redirect.close();
+    await destination.close();
     await fsp.rm(folder, { recursive: true, force: true });
   }
 });

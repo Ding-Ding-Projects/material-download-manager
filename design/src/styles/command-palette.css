@@ -1,0 +1,110 @@
+.palette-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 9vh 20px 20px;
+  background: var(--bg-scrim);
+}
+
+.command-palette {
+  width: min(720px, 100%);
+  max-height: 82vh;
+  overflow: auto;
+  padding: 14px;
+  background: var(--bg-dialog);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-dialog);
+}
+
+.command-palette-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.command-palette-header h2 {
+  margin: 0;
+  font-size: 15px;
+}
+
+.command-palette-header kbd {
+  padding: 3px 6px;
+  border: 1px solid var(--border-color-strong);
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  font-size: 11px;
+}
+
+.command-palette-regex {
+  margin: 10px 0;
+}
+
+.command-palette-regex .regex-builder {
+  padding: 10px;
+  border-radius: var(--radius);
+}
+
+.command-palette-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.command-palette-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  padding: 9px 10px;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--text-primary);
+  cursor: pointer;
+  text-align: left;
+}
+
+.command-palette-row > span {
+  min-width: 0;
+  flex: 1 1 auto;
+  overflow-wrap: anywhere;
+}
+
+.command-palette-row:hover,
+.command-palette-row.active {
+  background: var(--bg-row-hover);
+  border-color: var(--border-color);
+}
+
+.command-palette-row strong,
+.command-palette-row small {
+  display: block;
+}
+
+.command-palette-row small {
+  margin-top: 2px;
+  color: var(--text-secondary);
+  overflow-wrap: anywhere;
+}
+
+.command-palette-row em {
+  flex: 0 0 auto;
+  max-width: 34%;
+  color: var(--text-tertiary);
+  font-size: 11px;
+  font-style: normal;
+  overflow-wrap: anywhere;
+}
+
+.command-palette-empty {
+  padding: 22px 10px;
+  color: var(--text-tertiary);
+  text-align: center;
+}

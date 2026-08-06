@@ -15,7 +15,7 @@
     "start": "npm run build && electron .",
     "electron:dev": "concurrently -k \"vite\" \"tsc -p electron/tsconfig.json --watch\" \"wait-on tcp:5173 dist-electron/electron/main.js && cross-env NODE_ENV=development electron .\"",
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p electron/tsconfig.json --noEmit",
-    "dist:win": "npm run build && electron-builder --win --x64",
+    "dist:win": "npm run build && electron-builder --win squirrel --x64",
     "dist:win:dir": "npm run build && electron-builder --win --x64 --dir",
     "test:engine": "node --test dist-electron/electron/download/__tests__/*.test.js",
     "test:electron": "node --test dist-electron/electron/__tests__/*.test.js"
@@ -50,20 +50,17 @@
       "dist/**/*",
       "package.json"
     ],
+    "forceCodeSigning": true,
     "win": {
       "target": [
-        { "target": "nsis", "arch": ["x64"] },
-        { "target": "portable", "arch": ["x64"] }
+        { "target": "squirrel", "arch": ["x64"] }
       ],
-      "icon": "build/icon.ico",
-      "artifactName": "${productName}-Setup-${version}.${ext}"
+      "icon": "build/icon.ico"
     },
-    "nsis": {
-      "oneClick": false,
-      "allowToChangeInstallationDirectory": true,
-      "createDesktopShortcut": true,
-      "createStartMenuShortcut": true,
-      "shortcutName": "Material Download Manager"
+    "squirrelWindows": {
+      "msi": false,
+      "artifactName": "${productName}-Setup-${version}.${ext}",
+      "iconUrl": "https://raw.githubusercontent.com/Ding-Ding-Projects/material-download-manager/main/design/build/icon.ico"
     }
   }
 }

@@ -32,6 +32,14 @@ The application under `design/` includes:
   byte-integrity tests.
 - Persistence, categories, queues, speed limiting, add-download probing, and
   React dialogs for the core download loop.
+- Main-process-only custom headers, global active-download limits, schedule
+  polling, redirect limits, retry bounds, and connection/idle/request timeout
+  policy.
+- Versioned language and funny-level settings, appearance persistence,
+  non-blocking notification history, destructive-action gating, and renderer
+  accessibility semantics.
+- Tested foundations for the bounded regex builder, tab model and command
+  palette, coding-format exports, and isolated local Git history.
 
 The prototype under `prototype/` is not loaded by the Electron build. Its
 simulated network layer remains reference-only.
@@ -49,17 +57,18 @@ npm run test:electron
 ```
 
 On 2026-08-05, the following checks passed on
-`codex/handoff-reconcile`:
+`codex/reconcile-updater-20260805`:
 
 | Check | Result |
 | --- | --- |
 | `npm ci` | Installed 396 packages from the lockfile; npm reported 11 audit findings and install-script approval warnings. |
 | `npm run typecheck` | Passed renderer and Electron TypeScript checks. |
 | `npm run build` | Passed Vite renderer and Electron main-process compilation. |
-| `npm run test:engine` | 8/8 passed, including Range integrity, pause/resume, non-resumable fallback, filename sanitization, malformed Range rejection, categories, and throttling. |
-| `npm run test:electron` | 2/2 passed for compiled renderer-path and launch-mode resolution. |
-| Hidden-desktop smoke | Passed: direct Electron `v31.7.7` launch opened `Material Download Manager` at 1150×720 and rendered the empty state; the process and headless desktop were then cleaned up. |
-| Remote GitHub Actions | Blocked: `gh workflow run "Windows verification" --ref main` returned HTTP 422, `Actions has been disabled for this user`; no remote run exists to verify. |
+| `npm run test:engine` | 27/27 passed, including Range integrity, pause/resume, non-resumable fallback, custom-header persistence and origin stripping, global queue limits, schedule race handling, manager history hooks, filename sanitization, malformed Range rejection, categories, and throttling. |
+| `npm run test:electron` | 29/29 passed for export, local history, regex, tabs, command-palette foundations, compiled renderer-path resolution, secure updater IPC, version monotonicity, timeout/stale-event recovery, native Squirrel download-overlap protection, and completion-notification preference handling. |
+| `npm run dist:win` | The committed config enforces signing and therefore fails closed without a certificate. A reversible unsigned shape attempt exited after the Squirrel target line without producing `Setup.exe`, `RELEASES`, or a `.nupkg` on this Node 26 host; no packaging or release artifact is claimed. |
+| Hidden-desktop smoke | Passed through the cheap hidden-desktop route: direct Electron `v31.7.7` launch opened `Material Download Manager` at 1150×720, rendered the empty state, opened Settings, and returned focus after Escape; the desktop and process were cleaned up. |
+| Remote GitHub Actions | No green verdict claimed: the previously observed Windows verification run remained queued, and GitHub Actions had earlier rejected manual dispatch with `Actions has been disabled for this user`. |
 
 The hardening milestone corrected the compiled renderer path and made
 unpackaged production launches load the built renderer unless
@@ -67,40 +76,74 @@ unpackaged production launches load the built renderer unless
 constrained to one safe Windows path segment, and ranged responses must agree
 with their `Content-Range` before bytes are written.
 
-A Windows packaging run (`npm run dist:win`) is still required before publishing
-an installer; a compile-only success is not packaging evidence.
+A signed Windows packaging run (`npm run dist:win`) is still required before
+publishing an installer; a compile-only success is not packaging evidence. The
+package configuration now targets Squirrel.Windows x64 with signing enforced,
+and the main process has a bounded, fail-closed updater coordinator. The
+renderer now receives validated updater state through the secure preload bridge
+and shows explicit manual-check, `Later`, release-notes, and
+`Restart to install update` actions guarded by a fresh unsaved-work assertion.
+This branch does not
+claim a signed installer, a published `RELEASES` feed, or a verified update.
+The unsigned local shape attempt produced no artifacts on this host and is not
+release evidence.
 
 The repository now has a Windows push/dispatch workflow at
 [`.github/workflows/ci.yml`](.github/workflows/ci.yml) for the checks above. It
-does not claim installer, updater, or release verification. Remote execution
-still needs GitHub Actions to be enabled for the authenticated user.
+does not claim installer or release verification. Remote execution still needs
+GitHub Actions to be enabled for the authenticated user, and the updater still
+needs a signed public HTTPS feed configured through `MDM_UPDATE_FEED_URL`.
 
 ## Known follow-up work
 
 These items remain open and are deliberately not hidden by the directory
 reconciliation:
 
-1. Validate the Windows installer and update artifacts on the supported build
-   path.
-2. Finish clock-based queue scheduling; the current queue UI and data model are
-   present, but schedule execution needs a real trigger loop.
-3. Compare the runnable renderer with the prototype and decide which Material 3
+1. Validate the Windows Squirrel installer and update artifacts on the
+   supported build path, including signing and the `RELEASES` feed.
+2. Compare the runnable renderer with the prototype and decide which Material 3
    visual and interaction changes should be implemented next.
-4. Add the remaining product features only after their scope and production
+3. Add the remaining product features only after their scope and production
    behavior are defined; do not wire the prototype's simulated engine into the
    app.
-5. Pass custom request headers through the real transfer path, enforce the
-   global active-download limit across queues, and add redirect/idle timeout
-   policy before relying on authenticated or long-lived downloads.
-6. Add renderer, IPC, packaging, accessibility, error-notification, and
+4. Add renderer, IPC, packaging, accessibility, error-notification, and
    destructive-action coverage before calling the application release-ready.
+5. The reusable local regex engine and builder foundation now live under
+   `design/shared/regex.ts` and `design/src/components/RegexBuilder.tsx`; wire a
+   separate anchored instance to every search surface before claiming the
+   search requirement complete.
+6. The reusable tab state model, tab strip, and `Ctrl+Shift+F` command palette
+   now live under `design/shared/tabModel.ts` and `design/src/components/`;
+   connect them to persisted app state and the real shell before calling the
+   navigation requirements complete.
+7. The shared export serializer covers the required coding formats under
+   design/shared/export.ts; connect it to filtered records, history, settings,
+   and changelog surfaces with visible warning and format controls.
+8. The isolated Git-backed HistoryStore is now wired to manager state changes,
+   including download creation/completion/error/pause/resume/retry/cancel,
+   deletion, queue changes, and settings changes. Connect its browse/restore
+   controls to the renderer and extend coverage to every user-managed record
+   before calling local history complete.
+9. The renderer lane now supplies centralized accessibility semantics,
+   non-blocking notification history, and the native destructive-action gate.
+   Its current evidence is typecheck/build, existing engine/Electron tests, and
+   a cheap headless Settings/Escape/focus smoke; a renderer DOM harness,
+   notification bulk actions, deletion history recording, and full-copy
+   localization remain open.
+10. The settings lane now supplies versioned language, funny-level, appearance,
+   and provenance state with persistence tests. The settings surface still needs
+   its own search/regex builder and browser-style tabs, full appearance-editor
+   depth, and copy wiring across every renderer message.
+11. Keep the landing page, changelog viewer, release line counter, and
+    sanitized instruction mirror current as the product surfaces are
+    implemented.
 
 ## Git state and ownership
 
-The reconciliation is merged into `main`, and the original handoff history is
-preserved as a parent of the integration commit. The agent-created branch can
-be removed only after the pushed ancestry proof; the original handoff branch is
-retained unless its ownership is clear. There are no open GitHub issues at the
-time this handoff was refreshed. GitHub Discussions are disabled, the wiki
-setting is enabled but its wiki repository is not initialized, and GitHub Pages
-is not configured. No unverified wiki or site is claimed here.
+This reconciliation is on `codex/reconcile-updater-20260805`, based on
+`origin/codex/full-app` at `8f49f9d`; `main` and the other linked checkouts were
+not touched. The original handoff history is preserved as an ancestor. There
+are no open GitHub issues in either scanned repository at the time this handoff
+was refreshed. GitHub Discussions are disabled, the wiki setting is enabled
+but its wiki repository is not initialized, and GitHub Pages is not configured.
+No unverified wiki or site is claimed here.

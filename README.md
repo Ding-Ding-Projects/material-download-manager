@@ -10,7 +10,16 @@ AB Download Manager codebase.
 - Handoff: [`HANDOFF.md`](HANDOFF.md)
 - Shared project guidance mirror: [`AGENTS.md`](AGENTS.md)
 - CI workflow: [Windows verification](.github/workflows/ci.yml)
+- Search feature docs: [`docs/features/search/`](docs/features/search/)
+- Navigation feature docs: [`docs/features/navigation/`](docs/features/navigation/)
 - Website: not published
+- Export feature docs: docs/features/export/
+- History feature docs: docs/features/history/
+- Accessibility feature docs: docs/features/accessibility/
+- Notification feature docs: docs/features/notifications/
+- Safety feature docs: docs/features/safety/
+- Settings feature docs: docs/features/settings/
+- Download engine docs: docs/features/download-engine/
 
 <details>
 <summary>Build and test</summary>
@@ -26,9 +35,12 @@ npm run test:engine
 npm run test:electron
 ```
 
-The Windows packaging command is `npm run dist:win`. Its installer output still
-needs validation on a Windows build host before it is treated as a release
-artifact.
+The Windows packaging command is `npm run dist:win`. It uses the
+Squirrel.Windows x64 target with signing enforced, so it fails closed without
+a certificate. A reversible unsigned shape attempt exited after the Squirrel
+target line without producing artifacts on the current Node 26 host; no
+installer or release is claimed because this checkout has no signing
+certificate, published update feed, or verified GitHub Actions release.
 
 The Windows verification workflow runs the typecheck, build, downloader tests,
 and compiled Electron path tests on every push and on manual dispatch.
@@ -52,12 +64,12 @@ network-backed application or silently replace it.
 <summary>Current scope and next work</summary>
 
 The handoff reconciles the two previously conflicting trees without discarding
-either one. The core add, probe, segmented-download, pause/resume, persistence,
-queue, category, and settings loop is present in the Electron app.
-
-Packaging validation, queue clock scheduling, the remaining product features,
-and the future Material 3 reskin remain explicit follow-up work. See
-[`HANDOFF.md`](HANDOFF.md) for the evidence and boundaries.
+either one. The Electron app now has a real add/probe/segmented-download,
+pause/resume, persistence, queue, schedule-clock, header, timeout, settings,
+notification, accessibility, safety, search, navigation, export, and local
+history foundation. The remaining release and product gaps are explicit in
+[`HANDOFF.md`](HANDOFF.md); the prototype is never presented as the download
+path.
 
 </details>
 

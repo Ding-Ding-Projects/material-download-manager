@@ -135,6 +135,114 @@ export interface StateSnapshot {
   settings: AppSettings;
 }
 
+export type UpdateState =
+  | {
+      status: "current";
+      version: string;
+      releaseNotesUrl: string | null;
+      checkedAt: number;
+    }
+  | {
+      status: "available";
+      version: string | null;
+      releaseNotesUrl: string | null;
+      checkedAt: number;
+    }
+  | {
+      status: "downloading";
+      version: string | null;
+      releaseNotesUrl: string | null;
+      checkedAt: number;
+      percent: number;
+    }
+  | {
+      status: "ready";
+      version: string;
+      releaseNotesUrl: string;
+      checkedAt: number;
+    }
+  | {
+      status: "failed" | "offline";
+      version: string | null;
+      releaseNotesUrl: string | null;
+      checkedAt: number;
+      message: string;
+    };
+
+export interface UpdateUnsavedWorkState {
+  hasUnsavedWork: boolean;
+  reason: string;
+}
+
+export interface UpdateInstallResult {
+  started: boolean;
+  reason: string | null;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function isOptionalString(value: unknown, maxLength = 512): value is string | null {
+  return value === null || (typeof value === "string" && value.length <= maxLength);
+}
+
+function isSafeHttpsUrl(value: unknown): value is string {
+  if (typeof value !== "string" || value.length === 0 || value.length > 2_048) return false;
+  try {
+    const url = new URL(value);
+    return (
+      url.protocol === "https:" &&
+      Boolean(url.hostname) &&
+      !url.username &&
+      !url.password &&
+      !url.search &&
+      !url.hash
+    );
+  } catch {
+    return false;
+  }
+}
+
+export function isUpdateState(value: unknown): value is UpdateState {
+  if (!isRecord(value)) return false;
+  if (typeof value.status !== "string" || typeof value.checkedAt !== "number" || !Number.isFinite(value.checkedAt)) {
+    return false;
+  }
+  if (!isOptionalString(value.version, 128)) return false;
+  if (value.releaseNotesUrl !== null && !isSafeHttpsUrl(value.releaseNotesUrl)) return false;
+
+  switch (value.status) {
+    case "current":
+      return typeof value.version === "string";
+    case "available":
+      return true;
+    case "downloading":
+      return typeof value.percent === "number" && Number.isFinite(value.percent) && value.percent >= 0 && value.percent <= 100;
+    case "ready":
+      return typeof value.version === "string" && isSafeHttpsUrl(value.releaseNotesUrl);
+    case "failed":
+    case "offline":
+      return typeof value.message === "string" && value.message.length > 0 && value.message.length <= 512;
+    default:
+      return false;
+  }
+}
+
+export function isUpdateUnsavedWorkState(value: unknown): value is UpdateUnsavedWorkState {
+  return (
+    isRecord(value) &&
+    typeof value.hasUnsavedWork === "boolean" &&
+    typeof value.reason === "string" &&
+    value.reason.length > 0 &&
+    value.reason.length <= 512
+  );
+}
+
+export function isUpdateInstallResult(value: unknown): value is UpdateInstallResult {
+  return isRecord(value) && typeof value.started === "boolean" && isOptionalString(value.reason, 512);
+}
+
 // IPC channel names, centralized so main/preload/renderer never typo a string.
 export const IPC = {
   ADD_DOWNLOAD: "download:add",
@@ -159,4 +267,10 @@ export const IPC = {
   WINDOW_MINIMIZE: "window:minimize",
   WINDOW_MAXIMIZE: "window:maximize",
   WINDOW_CLOSE: "window:close",
+  UPDATE_GET_STATE: "update:getState",
+  UPDATE_STATE_CHANGED: "update:stateChanged",
+  UPDATE_CHECK: "update:check",
+  UPDATE_INSTALL: "update:install",
+  UPDATE_OPEN_RELEASE_NOTES: "update:openReleaseNotes",
+  UPDATE_SET_UNSAVED_WORK: "update:setUnsavedWork",
 } as const;

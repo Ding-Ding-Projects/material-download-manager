@@ -1,6 +1,7 @@
-import { useEffect, useRef, useState } from "react";
-import type { DownloadItem } from "@shared/types";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { DEFAULT_QUEUE_ID, type DownloadCategory, type DownloadItem } from "@shared/types";
 import { useAppStore } from "./store/useAppStore";
+import { CATEGORY_LABELS, CATEGORY_ORDER } from "./utils/category";
 import TitleBar from "./components/TitleBar";
 import Sidebar from "./components/Sidebar";
 import Toolbar from "./components/Toolbar";
@@ -15,6 +16,8 @@ import DestructiveActionGate, {
 } from "./components/DestructiveActionGate";
 import NotificationCenter, { notify } from "./components/NotificationCenter";
 import RendererAccessibilityBridge from "./components/RendererAccessibilityBridge";
+import CommandPalette, { type PaletteCommand } from "./components/CommandPalette";
+import UpdaterBanner from "./components/UpdaterBanner";
 
 const DESTRUCTIVE_REQUEST_EVENT = "mdm:request-destructive-action";
 const CLOSE_CONTEXT_MENU_EVENT = "mdm:close-context-menus";
@@ -28,9 +31,150 @@ export default function App() {
   const theme = useAppStore((s) => s.settings?.theme ?? "system");
   const dialogs = useAppStore((s) => s.dialogs);
   const items = useAppStore((s) => s.items);
+  const queues = useAppStore((s) => s.queues);
+  const filter = useAppStore((s) => s.filter);
+  const setFilter = useAppStore((s) => s.setFilter);
+  const openAddDownload = useAppStore((s) => s.openAddDownload);
+  const openSettings = useAppStore((s) => s.openSettings);
+  const openQueues = useAppStore((s) => s.openQueues);
+  const startQueue = useAppStore((s) => s.startQueue);
+  const stopQueue = useAppStore((s) => s.stopQueue);
+  const stopAllActive = useAppStore((s) => s.stopAllActive);
   const [destructiveRequest, setDestructiveRequest] = useState<DestructiveActionRequest | null>(null);
   const observedItems = useRef(false);
   const previousItems = useRef(new Map<string, Pick<DownloadItem, "status" | "error" | "fileName" | "url">>());
+  const activeItems = items.filter((item) => item.status === "added" || item.status === "queued" || item.status === "downloading");
+  const hasUnsavedWork = dialogs.addDownload || activeItems.length > 0;
+  const unsavedWorkReason = dialogs.addDownload
+    ? "The download form is still open; finish or close it before restarting."
+    : `${activeItems.length} download${activeItems.length === 1 ? " is" : "s are"} still active; pause or finish it before restarting.`;
+
+  const activeQueueId = filter.kind === "queue" ? filter.queueId : DEFAULT_QUEUE_ID;
+  const activeQueue = queues.find((queue) => queue.id === activeQueueId);
+  const activeQueueName = activeQueue?.name ?? "Default Queue";
+
+  const paletteCommands = useMemo<PaletteCommand[]>(() => {
+    const commands: PaletteCommand[] = [
+      {
+        id: "action.add-url",
+        label: "Add URL",
+        description: "Open the download form for a new URL",
+        keywords: ["download", "new", "create"],
+        section: "Actions",
+        onSelect: () => openAddDownload(),
+      },
+      {
+        id: "action.stop-all",
+        label: "Stop All",
+        description: "Pause every active or queued download",
+        keywords: ["pause", "downloads", "stop"],
+        section: "Actions",
+        onSelect: stopAllActive,
+      },
+      {
+        id: "action.check-for-updates",
+        label: "Check for updates",
+        description: "Check the signed HTTPS update feed",
+        keywords: ["update", "version", "release", "restart"],
+        section: "Actions",
+        onSelect: () => void window.api.checkForUpdates(),
+      },
+      {
+        id: "action.start-queue",
+        label: "Start Queue",
+        description: `Start ${activeQueueName}`,
+        keywords: ["queue", activeQueueName, "run", "resume"],
+        section: "Actions",
+        onSelect: () => void startQueue(activeQueueId),
+      },
+      {
+        id: "action.stop-queue",
+        label: "Stop Queue",
+        description: `Stop ${activeQueueName}`,
+        keywords: ["queue", activeQueueName, "pause", "stop"],
+        section: "Actions",
+        onSelect: () => void stopQueue(activeQueueId),
+      },
+      {
+        id: "destination.queues",
+        label: "Queues",
+        description: "Open the queue manager",
+        keywords: ["queue", "schedule", "concurrency"],
+        section: "Destinations",
+        onSelect: openQueues,
+      },
+      {
+        id: "destination.settings",
+        label: "Settings",
+        description: "Open language, appearance, and download settings",
+        keywords: ["preferences", "configuration", "language", "theme", "appearance"],
+        section: "Settings",
+        onSelect: () => openSettings(),
+      },
+      {
+        id: "settings.language",
+        label: "Settings · Language mode",
+        description: "Open Settings to adjust language mode and funny levels",
+        keywords: ["english", "cantonese", "bilingual", "funny"],
+        section: "Settings",
+        onSelect: () => openSettings("language"),
+      },
+      {
+        id: "settings.appearance",
+        label: "Settings · Appearance",
+        description: "Open Settings to adjust theme, density, accent, and fonts",
+        keywords: ["theme", "dark", "light", "density", "font", "accent"],
+        section: "Settings",
+        onSelect: () => openSettings("appearance"),
+      },
+      {
+        id: "destination.all-downloads",
+        label: "Downloads · All",
+        description: "Show every download in the list",
+        keywords: ["downloads", "all", "list"],
+        section: "Destinations",
+        onSelect: () => setFilter({ kind: "all" }),
+      },
+      {
+        id: "destination.finished",
+        label: "Downloads · Finished",
+        description: "Show completed downloads",
+        keywords: ["downloads", "finished", "completed"],
+        section: "Destinations",
+        onSelect: () => setFilter({ kind: "status", status: "finished" }),
+      },
+      {
+        id: "destination.unfinished",
+        label: "Downloads · Unfinished",
+        description: "Show downloads that are not completed",
+        keywords: ["downloads", "unfinished", "active", "error"],
+        section: "Destinations",
+        onSelect: () => setFilter({ kind: "status", status: "unfinished" }),
+      },
+    ];
+
+    const categoryCommands = CATEGORY_ORDER.map((category: DownloadCategory) => ({
+      id: `destination.category.${category}`,
+      label: `Downloads · ${CATEGORY_LABELS[category]}`,
+      description: `Show ${CATEGORY_LABELS[category].toLocaleLowerCase()} downloads`,
+      keywords: ["downloads", "category", category],
+      section: "Destinations",
+      onSelect: () => setFilter({ kind: "category", category }),
+    }));
+
+    const queueCommands = queues.map((queue) => ({
+      id: `destination.queue.${queue.id}`,
+      label: `Queues · ${queue.name}`,
+      description: `${queue.itemIds.length} download${queue.itemIds.length === 1 ? "" : "s"} in this queue`,
+      keywords: ["queue", queue.name, queue.isRunning ? "running" : "stopped"],
+      section: "Destinations",
+      onSelect: () => setFilter({ kind: "queue", queueId: queue.id }),
+    }));
+
+    // Item-scoped actions intentionally stay out of this registry: it has no
+    // focused/selected-item contract, so an action must never guess a download.
+    return [...commands, ...categoryCommands, ...queueCommands];
+  }, [activeQueueId, activeQueueName, filter.kind, openAddDownload, openQueues, openSettings, queues, setFilter, startQueue, stopAllActive, stopQueue]);
 
   useEffect(() => {
     const unsubscribe = useAppStore.getState().init();
@@ -77,8 +221,10 @@ export default function App() {
       }
 
       const name = itemName(item);
+      // Completion is owned by the main-process native notification path. Do
+      // not emit a second renderer toast for the same completed item.
       if (item.status === "completed") {
-        notify({ title: "Download complete", message: `${name} is ready.`, tone: "success" });
+        return;
       } else if (item.status === "error") {
         notify({ title: "Download error", message: `${name}: ${item.error || "The manager reported an error."}`, tone: "error" });
       } else {
@@ -118,7 +264,9 @@ export default function App() {
   return (
     <div className="app">
       <RendererAccessibilityBridge />
+      <CommandPalette commands={paletteCommands} />
       <TitleBar />
+      <UpdaterBanner hasUnsavedWork={hasUnsavedWork} unsavedWorkReason={unsavedWorkReason} />
       <div className="app-body">
         <Sidebar />
         <main className="main-pane">
