@@ -316,6 +316,42 @@ textarea {
   padding: 6px 10px;
   width: 260px;
 }
+.search-builder-anchor {
+  position: relative;
+  z-index: 30;
+}
+.search-builder-toggle {
+  flex-shrink: 0;
+  padding: 3px 6px;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--text-tertiary);
+  cursor: pointer;
+  font-size: 10.5px;
+}
+.search-builder-toggle:hover,
+.search-builder-toggle.active {
+  border-color: var(--border-color-strong);
+  background: var(--bg-row-hover);
+  color: var(--text-primary);
+}
+.search-builder-popover {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  width: min(670px, calc(100vw - 32px));
+  max-height: min(72vh, 680px);
+  overflow: auto;
+  padding: 8px;
+  border: 1px solid var(--border-color-strong);
+  border-radius: var(--radius-lg);
+  background: var(--bg-dialog);
+  box-shadow: var(--shadow-dialog);
+}
+.search-builder-popover .regex-builder {
+  min-width: 0;
+}
 .search-icon {
   color: var(--text-tertiary);
   flex-shrink: 0;
@@ -326,10 +362,31 @@ textarea {
   outline: none;
   color: var(--text-primary);
   width: 100%;
+  min-width: 0;
   font-size: 13px;
 }
 .search-input::placeholder {
   color: var(--text-tertiary);
+}
+
+@media (max-width: 900px) {
+  .menu-row {
+    align-items: flex-start;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+
+  .search-builder-anchor,
+  .search-box {
+    width: 100%;
+  }
+
+  .search-builder-popover {
+    left: 0;
+    right: auto;
+    width: min(670px, calc(100% - 16px));
+    max-width: calc(100% - 16px);
+  }
 }
 
 .toolbar {
@@ -1018,6 +1075,11 @@ textarea {
 .field-error {
   color: var(--danger);
   font-size: 11px;
+}
+.search-builder-error {
+  margin: 4px 0 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
 }
 
 :root[data-density="compact"] .input,

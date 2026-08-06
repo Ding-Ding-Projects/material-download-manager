@@ -1,5 +1,6 @@
 import { useMemo } from "react";
 import type { DownloadItem } from "@shared/types";
+import { normalizeRegexFlags, validateRegexPattern } from "@shared/regex";
 import { useAppStore, type SidebarFilter } from "../store/useAppStore";
 
 function matchesFilter(item: DownloadItem, filter: SidebarFilter): boolean {
@@ -17,18 +18,42 @@ function matchesFilter(item: DownloadItem, filter: SidebarFilter): boolean {
   }
 }
 
-/** Applies the active sidebar filter, search text, and sort to `items`. */
+export function getSearchValidationError(searchText: string, searchMode: "text" | "regex", searchFlags: string): string | null {
+  if (searchMode !== "regex" || searchText.length === 0) return null;
+  return validateRegexPattern(searchText, searchFlags);
+}
+
+/** Applies the active sidebar filter, search text/regex, and sort to `items`. */
 export function useFilteredItems(): DownloadItem[] {
   const items = useAppStore((s) => s.items);
   const filter = useAppStore((s) => s.filter);
   const searchText = useAppStore((s) => s.searchText);
+  const searchMode = useAppStore((s) => s.searchMode);
+  const searchFlags = useAppStore((s) => s.searchFlags);
   const sort = useAppStore((s) => s.sort);
 
   return useMemo(() => {
-    const query = searchText.trim().toLowerCase();
     let result = items.filter((item) => matchesFilter(item, filter));
-    if (query) {
-      result = result.filter((item) => item.fileName.toLowerCase().includes(query));
+    if (searchText.length > 0) {
+      if (searchMode === "text") {
+        const normalizedQuery = searchText.toLocaleLowerCase();
+        result = result.filter((item) =>
+          `${item.fileName}\n${item.url}`.toLocaleLowerCase().includes(normalizedQuery)
+        );
+      } else {
+        const validationError = getSearchValidationError(searchText, searchMode, searchFlags);
+        if (validationError) {
+          result = [];
+        } else {
+          // Search uses the same JavaScript RegExp dialect and flags as the
+          // builder, while removing only `g` so each item starts fresh.
+          const matcher = new RegExp(searchText, normalizeRegexFlags(searchFlags).replace("g", ""));
+          result = result.filter((item) => {
+            matcher.lastIndex = 0;
+            return matcher.test(`${item.fileName}\n${item.url}`);
+          });
+        }
+      }
     }
 
     const dir = sort.direction === "asc" ? 1 : -1;
@@ -52,5 +77,5 @@ export function useFilteredItems(): DownloadItem[] {
     });
 
     return result;
-  }, [items, filter, searchText, sort]);
+  }, [items, filter, searchText, searchMode, searchFlags, sort]);
 }

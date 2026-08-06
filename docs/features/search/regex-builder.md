@@ -12,8 +12,13 @@ export.
 Evaluation stays local. Patterns are limited to 2,048 characters, samples to
 100,000 characters, and the displayed result set to 200 matches. Zero-width
 matches advance safely so a pattern cannot loop forever in the renderer. The
-builder rejects the common nested-quantifier shape that can cause catastrophic
-backtracking because JavaScript has no portable regular-expression timeout.
+builder rejects nested quantifiers inside a repeated group, including
+`^(a|a?)+$`, before synchronous JavaScript evaluation because the engine has no
+portable regular-expression timeout.
+
+The toolbar keeps the raw query exactly as typed, including leading, trailing,
+or whitespace-only patterns. Invalid regex searches fail closed and expose the
+engine error beside the field with an accessible error description.
 
 ## Configuration
 
@@ -36,8 +41,8 @@ silently run an unbounded expression in the UI thread.
 ## Verification
 
 `design/electron/__tests__/regex.test.ts` covers literal escaping, captures,
-zero-width matches, invalid and unsafe patterns, result bounds, and guided
-fragments. Run:
+zero-width matches, invalid and adversarial patterns, result bounds, and valid
+guided fragments. Run:
 
 ```powershell
 cd design

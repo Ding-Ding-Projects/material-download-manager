@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import RegexBuilder from "./RegexBuilder";
-import { evaluateRegex, type RegexBuilderState } from "@shared/regex";
+import { evaluateRegex, validateRegexPattern, type RegexBuilderState } from "@shared/regex";
 import "../styles/command-palette.css";
 
 export interface PaletteCommand {
@@ -23,11 +23,29 @@ export default function CommandPalette({ commands, open: controlledOpen, onOpenC
   const [query, setQuery] = useState<RegexBuilderState>({ mode: "text", pattern: "", flags: "g", sample: "" });
   const [activeIndex, setActiveIndex] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
+  const openerRef = useRef<HTMLElement | null>(null);
+  const paletteId = useId();
+  const titleId = `${paletteId}-title`;
+  const listboxId = `${paletteId}-listbox`;
+  const errorId = `${paletteId}-error`;
   const open = controlledOpen ?? localOpen;
 
+  function restoreOpener() {
+    const opener = openerRef.current;
+    openerRef.current = null;
+    if (!opener || !opener.isConnected || opener === document.body) return;
+    window.requestAnimationFrame(() => {
+      if (opener.isConnected) opener.focus();
+    });
+  }
+
   function setOpen(next: boolean) {
+    if (next && !open && document.activeElement instanceof HTMLElement && document.activeElement !== document.body) {
+      openerRef.current = document.activeElement;
+    }
     if (controlledOpen === undefined) setLocalOpen(next);
     onOpenChange?.(next);
+    if (!next && open) restoreOpener();
   }
 
   useEffect(() => {
@@ -42,48 +60,93 @@ export default function CommandPalette({ commands, open: controlledOpen, onOpenC
   });
 
   useEffect(() => {
-    if (open) {
-      setActiveIndex(0);
-      requestAnimationFrame(() => inputRef.current?.focus());
+    if (!open) return;
+    if (!openerRef.current && document.activeElement instanceof HTMLElement && document.activeElement !== document.body) {
+      openerRef.current = document.activeElement;
     }
+    setActiveIndex(0);
+    requestAnimationFrame(() => inputRef.current?.focus());
   }, [open]);
 
+  const queryError = useMemo(
+    () => (query.mode === "regex" && query.pattern.length > 0 ? validateRegexPattern(query.pattern, query.flags) : null),
+    [query.flags, query.mode, query.pattern]
+  );
+
   const filtered = useMemo(() => {
-    const text = query.pattern.trim().toLocaleLowerCase();
-    if (!text) return commands;
+    const text = query.pattern.toLocaleLowerCase();
+    if (query.pattern.length === 0) return commands;
     if (query.mode === "text") {
-      return commands.filter((command) => `${command.label} ${command.description ?? ""} ${(command.keywords ?? []).join(" ")}`.toLocaleLowerCase().includes(text));
+      return commands.filter((command) =>
+        `${command.label} ${command.description ?? ""} ${(command.keywords ?? []).join(" ")}`
+          .toLocaleLowerCase()
+          .includes(text)
+      );
     }
+    if (queryError) return [];
     return commands.filter((command) => {
-      const text = `${command.label} ${command.description ?? ""} ${(command.keywords ?? []).join(" ")}`;
-      const result = evaluateRegex(query.pattern, query.flags, text);
+      const searchable = `${command.label} ${command.description ?? ""} ${(command.keywords ?? []).join(" ")}`;
+      const result = evaluateRegex(query.pattern, query.flags, searchable);
       return !result.error && result.matches.length > 0;
     });
-  }, [commands, query.mode, query.pattern, query.flags]);
+  }, [commands, query.flags, query.mode, query.pattern, queryError]);
+
+  useEffect(() => {
+    setActiveIndex((index) => (filtered.length === 0 ? 0 : Math.min(index, filtered.length - 1)));
+  }, [filtered.length]);
+
+  function closePalette() {
+    setOpen(false);
+  }
+
+  function selectCommand(command: PaletteCommand | undefined) {
+    if (!command) return;
+    command.onSelect();
+    closePalette();
+  }
 
   function handleKeyDown(event: React.KeyboardEvent<HTMLInputElement>) {
-    if (event.key === "Escape") {
+    if (event.key === "ArrowDown") {
       event.preventDefault();
-      setOpen(false);
-    } else if (event.key === "ArrowDown") {
-      event.preventDefault();
-      setActiveIndex((index) => Math.min(filtered.length - 1, index + 1));
+      setActiveIndex((index) => (filtered.length === 0 ? 0 : Math.min(filtered.length - 1, index + 1)));
     } else if (event.key === "ArrowUp") {
       event.preventDefault();
-      setActiveIndex((index) => Math.max(0, index - 1));
+      setActiveIndex((index) => (filtered.length === 0 ? 0 : Math.max(0, index - 1)));
+    } else if (event.key === "Home" && filtered.length > 0) {
+      event.preventDefault();
+      setActiveIndex(0);
+    } else if (event.key === "End" && filtered.length > 0) {
+      event.preventDefault();
+      setActiveIndex(filtered.length - 1);
     } else if (event.key === "Enter") {
       event.preventDefault();
-      filtered[activeIndex]?.onSelect();
-      setOpen(false);
+      selectCommand(filtered[activeIndex] ?? filtered[0]);
+    }
+  }
+
+  function handlePaletteKeyDown(event: React.KeyboardEvent<HTMLElement>) {
+    // This is attached to the palette root so Escape works while focus is in
+    // the nested RegexBuilder, not only while the search input is focused.
+    if (event.key === "Escape") {
+      event.preventDefault();
+      event.stopPropagation();
+      closePalette();
     }
   }
 
   if (!open) return null;
+  const activeOptionId = filtered[activeIndex] ? `${paletteId}-option-${activeIndex}` : undefined;
+
   return (
-    <div className="palette-overlay" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && setOpen(false)}>
-      <section className="command-palette" role="dialog" aria-modal="true" aria-labelledby="command-palette-title">
+    <div
+      className="palette-overlay"
+      role="presentation"
+      onKeyDown={handlePaletteKeyDown}
+      onMouseDown={(event) => event.target === event.currentTarget && closePalette()}
+    >
+      <section className="command-palette" role="dialog" aria-modal="true" aria-labelledby={titleId}>
         <div className="command-palette-header">
-          <h2 id="command-palette-title">Command palette</h2>
+          <h2 id={titleId}>Command palette</h2>
           <kbd>Ctrl+Shift+F</kbd>
         </div>
         <input
@@ -94,30 +157,36 @@ export default function CommandPalette({ commands, open: controlledOpen, onOpenC
           onChange={(event) => setQuery((current) => ({ ...current, pattern: event.target.value }))}
           onKeyDown={handleKeyDown}
           aria-label="Command palette search"
+          role="combobox"
+          aria-controls={listboxId}
+          aria-expanded="true"
+          aria-autocomplete="list"
+          aria-activedescendant={activeOptionId}
+          aria-invalid={queryError !== null}
+          aria-describedby={queryError ? errorId : undefined}
         />
+        {queryError && (
+          <p id={errorId} className="field-error" role="alert">
+            {queryError}
+          </p>
+        )}
         <div className="command-palette-regex">
-          <RegexBuilder
-            value={query}
-            onChange={setQuery}
-            title="Command palette search builder"
-          />
+          <RegexBuilder value={query} onChange={setQuery} title="Command palette search builder" />
         </div>
-        <div className="command-palette-list" role="listbox" aria-label="Commands">
+        <div className="command-palette-list" id={listboxId} role="listbox" aria-label="Commands">
           {filtered.length === 0 ? (
-            <div className="command-palette-empty">No matching commands.</div>
+            <div className="command-palette-empty">{queryError ? "Fix the pattern to see commands." : "No matching commands."}</div>
           ) : (
             filtered.map((command, index) => (
               <button
                 type="button"
                 role="option"
+                id={`${paletteId}-option-${index}`}
                 aria-selected={index === activeIndex}
                 className={`command-palette-row${index === activeIndex ? " active" : ""}`}
                 key={command.id}
                 onMouseEnter={() => setActiveIndex(index)}
-                onClick={() => {
-                  command.onSelect();
-                  setOpen(false);
-                }}
+                onClick={() => selectCommand(command)}
               >
                 <span>
                   <strong>{command.label}</strong>

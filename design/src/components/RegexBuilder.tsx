@@ -31,6 +31,7 @@ const FLAG_LABELS: Record<string, string> = {
 export default function RegexBuilder({ value, onChange, title = "Regex builder", className }: RegexBuilderProps) {
   const [local, setLocal] = useState<RegexBuilderState>(value ?? createDefaultRegexBuilderState());
   const modeGroupId = useId();
+  const dialectId = useId();
   const state = value ?? local;
   const evaluation = useMemo(
     () => (state.mode === "regex" ? evaluateRegex(state.pattern, state.flags, state.sample) : null),
@@ -114,7 +115,7 @@ export default function RegexBuilder({ value, onChange, title = "Regex builder",
           onChange={(event) => update({ pattern: event.target.value, mode: "regex" })}
           maxLength={2048}
           spellCheck={false}
-          aria-describedby="regex-dialect"
+          aria-describedby={dialectId}
         />
       </label>
 
@@ -165,7 +166,7 @@ export default function RegexBuilder({ value, onChange, title = "Regex builder",
         />
       </label>
 
-      <div id="regex-dialect" className="regex-dialect-note">
+      <div id={dialectId} className="regex-dialect-note">
         {evaluation?.error ? <span className="text-danger">{evaluation.error}</span> : "The pattern runs locally in the JavaScript RegExp engine."}
       </div>
 

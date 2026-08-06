@@ -38,6 +38,7 @@ function menuItems(menu: HTMLElement): HTMLButtonElement[] {
 export default function RendererAccessibilityBridge() {
   useEffect(() => {
     const trackedDialogs = new Map<Element, HTMLElement | null>();
+    const trackedPalettes = new Map<Element, HTMLElement | null>();
     const trackedMenus = new Map<Element, HTMLElement | null>();
     let typeahead = "";
     let typeaheadTimer: number | undefined;
@@ -45,6 +46,11 @@ export default function RendererAccessibilityBridge() {
     function activeDialog(): HTMLElement | null {
       const overlays = Array.from(document.querySelectorAll<HTMLElement>(".dialog-overlay")).filter(isVisible);
       return overlays.at(-1)?.querySelector<HTMLElement>(".dialog") ?? null;
+    }
+
+    function activePalette(): HTMLElement | null {
+      const overlays = Array.from(document.querySelectorAll<HTMLElement>(".palette-overlay")).filter(isVisible);
+      return overlays.at(-1)?.querySelector<HTMLElement>(".command-palette") ?? null;
     }
 
     function activeMenu(): HTMLElement | null {
@@ -79,6 +85,32 @@ export default function RendererAccessibilityBridge() {
           if (!dialog.isConnected || !isVisible(dialog)) return;
           const first = focusableElements(dialog)[0] ?? dialog;
           if (!dialog.contains(document.activeElement)) first.focus();
+        });
+      }
+    }
+
+    function decoratePalette(overlay: HTMLElement) {
+      const palette = overlay.querySelector<HTMLElement>(".command-palette");
+      if (!palette) return;
+
+      if (!trackedPalettes.has(overlay)) {
+        const restore = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+        trackedPalettes.set(overlay, restore);
+      }
+
+      const title = palette.querySelector<HTMLElement>("h2");
+      if (title && !title.id) title.id = `mdm-palette-title-${++generatedId}`;
+      palette.setAttribute("role", palette.getAttribute("role") || "dialog");
+      palette.setAttribute("aria-modal", "true");
+      palette.tabIndex = -1;
+      if (title) palette.setAttribute("aria-labelledby", title.id);
+      overlay.setAttribute("aria-hidden", "false");
+
+      if (palette.dataset.mdmInitialFocus !== "true") {
+        palette.dataset.mdmInitialFocus = "true";
+        window.requestAnimationFrame(() => {
+          if (!palette.isConnected || !isVisible(palette)) return;
+          if (!palette.contains(document.activeElement)) (focusableElements(palette)[0] ?? palette).focus();
         });
       }
     }
@@ -152,12 +184,18 @@ export default function RendererAccessibilityBridge() {
 
     function scan() {
       document.querySelectorAll<HTMLElement>(".dialog-overlay").forEach(decorateDialog);
+      document.querySelectorAll<HTMLElement>(".palette-overlay").forEach(decoratePalette);
       document.querySelectorAll<HTMLElement>(".context-menu").forEach(decorateMenu);
       decorateSidebar();
 
       for (const [overlay, restore] of trackedDialogs) {
         if (overlay.isConnected) continue;
         trackedDialogs.delete(overlay);
+        if (restore?.isConnected && restore !== document.body) restore.focus();
+      }
+      for (const [overlay, restore] of trackedPalettes) {
+        if (overlay.isConnected) continue;
+        trackedPalettes.delete(overlay);
         if (restore?.isConnected && restore !== document.body) restore.focus();
       }
       for (const [menu, restore] of trackedMenus) {
@@ -201,6 +239,28 @@ export default function RendererAccessibilityBridge() {
     function handleKeyDown(event: KeyboardEvent) {
       const target = event.target instanceof HTMLElement ? event.target : null;
       const menu = target?.closest<HTMLElement>(".context-menu") ?? activeMenu();
+
+      const palette = activePalette();
+      if (palette && (target === palette || target?.closest(".command-palette") === palette)) {
+        if (event.key === "Tab") {
+          const focusables = focusableElements(palette);
+          if (focusables.length === 0) {
+            event.preventDefault();
+            palette.focus();
+            return;
+          }
+          const first = focusables[0];
+          const last = focusables.at(-1)!;
+          if (event.shiftKey && document.activeElement === first) {
+            event.preventDefault();
+            last.focus();
+          } else if (!event.shiftKey && document.activeElement === last) {
+            event.preventDefault();
+            first.focus();
+          }
+        }
+        return;
+      }
 
       if (menu && isVisible(menu) && (target === menu || menu.contains(target))) {
         const items = menuItems(menu);
@@ -270,11 +330,11 @@ export default function RendererAccessibilityBridge() {
       }
     }
 
-    function containDialogFocus(event: FocusEvent) {
-      const dialog = activeDialog();
+    function containModalFocus(event: FocusEvent) {
+      const modal = activePalette() ?? activeDialog();
       const target = event.target instanceof Node ? event.target : null;
-      if (dialog && target && !dialog.contains(target)) {
-        (focusableElements(dialog)[0] ?? dialog).focus();
+      if (modal && target && !modal.contains(target)) {
+        (focusableElements(modal)[0] ?? modal).focus();
       }
     }
 
@@ -282,7 +342,7 @@ export default function RendererAccessibilityBridge() {
     observer.observe(document.body, { childList: true, subtree: true });
     document.addEventListener("click", requestDestructiveAction, true);
     document.addEventListener("keydown", handleKeyDown, true);
-    document.addEventListener("focusin", containDialogFocus, true);
+    document.addEventListener("focusin", containModalFocus, true);
     window.addEventListener(CLOSE_CONTEXT_MENU_EVENT, closeContextMenus);
     scan();
 
@@ -290,7 +350,7 @@ export default function RendererAccessibilityBridge() {
       observer.disconnect();
       document.removeEventListener("click", requestDestructiveAction, true);
       document.removeEventListener("keydown", handleKeyDown, true);
-      document.removeEventListener("focusin", containDialogFocus, true);
+      document.removeEventListener("focusin", containModalFocus, true);
       window.removeEventListener(CLOSE_CONTEXT_MENU_EVENT, closeContextMenus);
       window.clearTimeout(typeaheadTimer);
     };
