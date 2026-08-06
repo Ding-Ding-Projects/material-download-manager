@@ -28,6 +28,16 @@ test("rejects invalid, oversized, and unsafe patterns before evaluation", () => 
   assert.match(validateRegexPattern("^(a|a?)+$", "g") ?? "", /nested quantifiers/i);
 });
 
+test("rejects ambiguous repeated alternatives before synchronous matching", () => {
+  assert.match(validateRegexPattern("(a|aa)+$", "g") ?? "", /ambiguous|backtracking/i);
+  assert.match(validateRegexPattern("(?:a|ab){2,}", "g") ?? "", /ambiguous|backtracking/i);
+  assert.equal(validateRegexPattern("(?:a|b)+", "g"), null);
+
+  const result = evaluateRegex("(a|aa)+$", "g", "a".repeat(10_000));
+  assert.match(result.error ?? "", /ambiguous|backtracking/i);
+  assert.deepEqual(result.matches, []);
+});
+
 test("bounds sample and result sizes", () => {
   const result = evaluateRegex("a", "g", "a".repeat(205));
   assert.equal(result.matches.length, 200);
