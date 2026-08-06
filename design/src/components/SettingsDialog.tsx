@@ -1,11 +1,50 @@
 import { useMemo, useState } from "react";
 import type { AppSettings, SettingKey } from "@shared/types";
 import { createDefaultSettings, isHexColor } from "@shared/settings";
+import { createDefaultRegexBuilderState, evaluateRegex, type RegexBuilderState } from "@shared/regex";
 import { getSettingsCopy } from "../i18n/settings";
 import { useAppStore } from "../store/useAppStore";
 import { settingSourceLabel } from "../store/settingsAppearance";
 import Dialog from "./Dialog";
 import { FolderIcon, SettingsIcon } from "./icons";
+import RegexBuilder from "./RegexBuilder";
+
+const SETTINGS_SEARCH_INDEX = [
+  {
+    id: "settings-language-heading",
+    label: "Language mode English Cantonese bilingual funny level",
+  },
+  {
+    id: "settings-appearance-heading",
+    label: "Appearance theme density accent seed color font family font size weight",
+  },
+  {
+    id: "settings-default-save-folder",
+    label: "Default save folder browse folder",
+  },
+  {
+    id: "settings-performance",
+    label: "Max connections per download max active downloads",
+  },
+  {
+    id: "settings-speed",
+    label: "Global speed limit unlimited",
+  },
+  {
+    id: "settings-startup",
+    label: "Start on system startup",
+  },
+  {
+    id: "settings-completion",
+    label: "Show completion notification when a download completes",
+  },
+  {
+    id: "settings-advanced",
+    label: "Advanced minimum splittable part size",
+  },
+] as const;
+
+const SETTINGS_SEARCH_SAMPLE = SETTINGS_SEARCH_INDEX.map((entry) => entry.label).join("\n");
 
 export default function SettingsDialog() {
   const closeSettings = useAppStore((s) => s.closeSettings);
@@ -22,12 +61,38 @@ export default function SettingsDialog() {
   );
   const [saving, setSaving] = useState(false);
   const [accentError, setAccentError] = useState<string | null>(null);
+  const [settingsSearch, setSettingsSearch] = useState<RegexBuilderState>(() => ({
+    ...createDefaultRegexBuilderState(),
+    sample: SETTINGS_SEARCH_SAMPLE,
+  }));
+  const [settingsRegexOpen, setSettingsRegexOpen] = useState(false);
 
   const copy = useMemo(() => getSettingsCopy(form.languageMode), [form.languageMode]);
   const compiledDefaults = useMemo(
     () => createDefaultSettings(form.defaultSaveFolder),
     [form.defaultSaveFolder]
   );
+
+  const settingsSearchEvaluation = useMemo(
+    () =>
+      settingsSearch.mode === "regex"
+        ? evaluateRegex(settingsSearch.pattern, settingsSearch.flags, SETTINGS_SEARCH_SAMPLE)
+        : null,
+    [settingsSearch.flags, settingsSearch.mode, settingsSearch.pattern]
+  );
+  const matchingSettings = useMemo(() => {
+    const query = settingsSearch.pattern.trim();
+    if (!query) return [];
+    if (settingsSearch.mode === "regex") {
+      if (settingsSearchEvaluation?.error) return [];
+      return SETTINGS_SEARCH_INDEX.filter((entry) => {
+        const evaluation = evaluateRegex(settingsSearch.pattern, settingsSearch.flags, entry.label);
+        return !evaluation.error && evaluation.matches.length > 0;
+      });
+    }
+    const normalizedQuery = query.toLocaleLowerCase();
+    return SETTINGS_SEARCH_INDEX.filter((entry) => entry.label.toLocaleLowerCase().includes(normalizedQuery));
+  }, [settingsSearch, settingsSearchEvaluation]);
 
   function update<K extends keyof AppSettings>(key: K, value: AppSettings[K]) {
     setForm((f) => ({ ...f, [key]: value }));
@@ -46,6 +111,11 @@ export default function SettingsDialog() {
   async function handlePickFolder() {
     const picked = await pickFolder();
     if (picked) update("defaultSaveFolder", picked);
+  }
+
+  function jumpToSetting(id: string) {
+    document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    document.getElementById(id)?.focus({ preventScroll: true });
   }
 
   function updateAccent(value: string) {
@@ -97,6 +167,56 @@ export default function SettingsDialog() {
         </>
       }
     >
+      <section className="settings-search" aria-labelledby="settings-search-heading">
+        <div className="settings-section-heading" id="settings-search-heading">Search settings</div>
+        <div className="settings-search-row">
+          <input
+            className="input"
+            type="search"
+            value={settingsSearch.pattern}
+            placeholder="Search setting names and descriptions"
+            aria-label="Search settings"
+            onChange={(event) => setSettingsSearch((current) => ({ ...current, pattern: event.target.value }))}
+          />
+          <button
+            type="button"
+            className={`btn btn-ghost btn-sm${settingsRegexOpen ? " active" : ""}`}
+            aria-expanded={settingsRegexOpen}
+            onClick={() => setSettingsRegexOpen((open) => !open)}
+          >
+            Regex
+          </button>
+        </div>
+        {settingsRegexOpen && (
+          <div className="settings-search-builder">
+            <RegexBuilder
+              title="Settings regex builder"
+              value={settingsSearch}
+              onChange={setSettingsSearch}
+            />
+          </div>
+        )}
+        {settingsSearchEvaluation?.error && <p className="field-error" role="alert">{settingsSearchEvaluation.error}</p>}
+        {settingsSearch.pattern.trim() && !settingsSearchEvaluation?.error && (
+          <div className="settings-search-results" aria-live="polite">
+            <span className="setting-helper">
+              {matchingSettings.length} matching setting{matchingSettings.length === 1 ? "" : "s"}
+            </span>
+            {matchingSettings.length > 0 ? (
+              <ul>
+                {matchingSettings.map((entry) => (
+                  <li key={entry.id}>
+                    <button type="button" onClick={() => jumpToSetting(entry.id)}>{entry.label}</button>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <span className="setting-helper">No settings match this search.</span>
+            )}
+          </div>
+        )}
+      </section>
+
       <section className="settings-section" aria-labelledby="settings-language-heading">
         <div className="settings-section-heading" id="settings-language-heading">{copy.language}</div>
         <p className="setting-helper">{copy.languageHelper}</p>
@@ -279,7 +399,7 @@ export default function SettingsDialog() {
         </button>
       </section>
 
-      <label className="field">
+      <label className="field" id="settings-default-save-folder" tabIndex={-1}>
         <span className="field-label">Default save folder</span>
         <div className="field-row">
           <input
@@ -295,7 +415,7 @@ export default function SettingsDialog() {
         <span className="setting-source">{source("defaultSaveFolder", "the platform Downloads folder")}</span>
       </label>
 
-      <div className="field-pair">
+      <div className="field-pair" id="settings-performance" tabIndex={-1}>
         <label className="field">
           <span className="field-label">Max connections per download</span>
           <input
@@ -328,7 +448,7 @@ export default function SettingsDialog() {
         </label>
       </div>
 
-      <label className="field">
+      <label className="field" id="settings-speed" tabIndex={-1}>
         <span className="field-label">Global speed limit</span>
         <div className="field-row">
           <input
@@ -365,7 +485,7 @@ export default function SettingsDialog() {
         </button>
       </label>
 
-      <label className="checkbox-row field">
+      <label className="checkbox-row field" id="settings-startup" tabIndex={-1}>
         <button
           type="button"
           className={`checkbox${form.startOnSystemStartup ? " checked" : ""}`}
@@ -379,7 +499,7 @@ export default function SettingsDialog() {
         </button>
       </label>
 
-      <label className="checkbox-row field">
+      <label className="checkbox-row field" id="settings-completion" tabIndex={-1}>
         <button
           type="button"
           className={`checkbox${form.showCompleteDialog ? " checked" : ""}`}
@@ -393,7 +513,7 @@ export default function SettingsDialog() {
         </button>
       </label>
 
-      <details className="advanced-details">
+      <details className="advanced-details" id="settings-advanced" tabIndex={-1}>
         <summary>Advanced</summary>
         <label className="field">
           <span className="field-label">Minimum splittable part size (KB)</span>
