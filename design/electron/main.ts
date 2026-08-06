@@ -1,13 +1,19 @@
 import { app, autoUpdater, BrowserWindow, ipcMain, shell, dialog, Notification } from "electron";
 import path from "node:path";
-import { IPC } from "../shared/types";
+import { IPC, isUpdateUnsavedWorkState, type UpdateInstallResult, type UpdateState } from "../shared/types";
 import type { AddDownloadRequest, AppSettings, DownloadItem, DownloadQueue } from "../shared/types";
 import { notifyDownloadComplete as showCompletionNotification, type CompletionNotificationPort } from "./completionNotification";
 import { DownloadManager } from "./download/DownloadManager";
 import { isDevelopmentLaunch, resolveRendererPath } from "./runtimePaths";
-import { readUpdateFeedUrl, UpdateService } from "./updater/UpdateService";
+import {
+  normalizeReleaseNotesUrl,
+  readUpdateFeedUrl,
+  readUpdateReleaseNotesBaseUrl,
+  UpdateService,
+} from "./updater/UpdateService";
 
 const isDev = isDevelopmentLaunch(app.isPackaged);
+const UPDATE_WORK_STATE_MAX_AGE_MS = 10_000;
 
 // Windows/Linux: only one instance of a download manager should ever run at
 // once (a second launch — e.g. from a browser's "open with" — should just
@@ -20,6 +26,7 @@ if (!gotSingleInstanceLock) {
 let mainWindow: BrowserWindow | null = null;
 let manager: DownloadManager;
 let updater: UpdateService | null = null;
+let rendererWorkState: { hasUnsavedWork: boolean; reason: string; receivedAt: number } | null = null;
 
 const appIconPath = path.join(__dirname, "../../build/icon.ico");
 
@@ -51,41 +58,206 @@ function createWindow() {
   }
 
   mainWindow.on("closed", () => {
+    rendererWorkState = null;
     mainWindow = null;
   });
 }
 
+function assertTrustedSender(event: { sender: Electron.WebContents; senderFrame?: Electron.WebFrameMain | null }) {
+  if (!mainWindow || mainWindow.isDestroyed() || event.sender !== mainWindow.webContents) {
+    throw new Error("Untrusted renderer IPC sender");
+  }
+  if (event.senderFrame && event.senderFrame !== mainWindow.webContents.mainFrame) {
+    throw new Error("Untrusted renderer IPC frame");
+  }
+}
+
+function assertString(value: unknown, field: string, maxLength = 4_096): asserts value is string {
+  if (typeof value !== "string" || value.length === 0 || value.length > maxLength) {
+    throw new Error(`Invalid ${field}`);
+  }
+}
+
+function assertId(value: unknown): asserts value is string {
+  assertString(value, "identifier", 256);
+}
+
+function assertHttpUrl(value: unknown): asserts value is string {
+  assertString(value, "URL", 8_192);
+  let url: URL;
+  try {
+    url = new URL(value);
+  } catch {
+    throw new Error("Invalid URL");
+  }
+  if ((url.protocol !== "http:" && url.protocol !== "https:") || url.username || url.password) {
+    throw new Error("Invalid download URL");
+  }
+}
+
+function assertRecord(value: unknown, field: string): asserts value is Record<string, unknown> {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) throw new Error(`Invalid ${field}`);
+}
+
+function assertAddDownloadRequest(value: unknown): asserts value is AddDownloadRequest {
+  assertRecord(value, "download request");
+  assertHttpUrl(value.url);
+  assertString(value.folder, "download folder", 32_768);
+  assertString(value.fileName, "download file name", 512);
+  if (value.queueId !== undefined && value.queueId !== null) assertId(value.queueId);
+  if (typeof value.startImmediately !== "boolean") throw new Error("Invalid startImmediately");
+  if (value.headers !== undefined) {
+    assertRecord(value.headers, "download headers");
+    for (const [key, headerValue] of Object.entries(value.headers)) {
+      assertString(key, "header name", 256);
+      assertString(headerValue, "header value", 8_192);
+    }
+  }
+}
+
+function assertPartialSettings(value: unknown): asserts value is Partial<AppSettings> {
+  assertRecord(value, "settings");
+}
+
+function assertDownloadQueue(value: unknown): asserts value is DownloadQueue {
+  assertRecord(value, "queue");
+  assertId(value.id);
+  assertString(value.name, "queue name", 512);
+  if (typeof value.maxConcurrent !== "number" || !Number.isFinite(value.maxConcurrent)) {
+    throw new Error("Invalid queue concurrency");
+  }
+  if (typeof value.isRunning !== "boolean" || !Array.isArray(value.itemIds)) throw new Error("Invalid queue");
+}
+
 function broadcastState() {
-  if (!mainWindow) return;
+  if (!mainWindow || mainWindow.isDestroyed()) return;
   mainWindow.webContents.send(IPC.STATE_CHANGED, manager.getState());
 }
 
+function updateFallbackState(): UpdateState {
+  return {
+    status: "failed",
+    version: app.getVersion(),
+    releaseNotesUrl: null,
+    checkedAt: Date.now(),
+    message: "Updates are not available until a signed HTTPS feed is configured.",
+  };
+}
+
+function getUpdateState(): UpdateState {
+  return updater?.getState() ?? updateFallbackState();
+}
+
+function broadcastUpdateState() {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  mainWindow.webContents.send(IPC.UPDATE_STATE_CHANGED, getUpdateState());
+}
+
+function installGuardFailure(): string | null {
+  if (!rendererWorkState) {
+    return "Restart is blocked until the renderer confirms that no work is unsaved.";
+  }
+  if (rendererWorkState.receivedAt + UPDATE_WORK_STATE_MAX_AGE_MS < Date.now()) {
+    return "Restart is blocked because the unsaved-work check is stale.";
+  }
+  if (rendererWorkState.hasUnsavedWork) return rendererWorkState.reason;
+  return null;
+}
+
 function registerIpcHandlers() {
-  ipcMain.handle(IPC.GET_STATE, () => manager.getState());
+  ipcMain.handle(IPC.GET_STATE, (event) => {
+    assertTrustedSender(event);
+    return manager.getState();
+  });
 
-  ipcMain.handle(IPC.PROBE_URL, (_e, url: string) => manager.probeUrl(url));
+  ipcMain.handle(IPC.PROBE_URL, (event, url: unknown) => {
+    assertTrustedSender(event);
+    assertHttpUrl(url);
+    return manager.probeUrl(url);
+  });
 
-  ipcMain.handle(IPC.ADD_DOWNLOAD, (_e, req: AddDownloadRequest) => manager.addDownload(req));
+  ipcMain.handle(IPC.ADD_DOWNLOAD, (event, req: unknown) => {
+    assertTrustedSender(event);
+    assertAddDownloadRequest(req);
+    return manager.addDownload(req);
+  });
 
-  ipcMain.handle(IPC.PAUSE, (_e, id: string) => manager.pause(id));
-  ipcMain.handle(IPC.RESUME, (_e, id: string) => manager.resume(id));
-  ipcMain.handle(IPC.CANCEL, (_e, id: string) => manager.cancel(id));
-  ipcMain.handle(IPC.REMOVE, (_e, id: string, deleteFile: boolean) => manager.remove(id, deleteFile));
-  ipcMain.handle(IPC.RETRY, (_e, id: string) => manager.retry(id));
+  ipcMain.handle(IPC.PAUSE, (event, id: unknown) => {
+    assertTrustedSender(event);
+    assertId(id);
+    return manager.pause(id);
+  });
+  ipcMain.handle(IPC.RESUME, (event, id: unknown) => {
+    assertTrustedSender(event);
+    assertId(id);
+    return manager.resume(id);
+  });
+  ipcMain.handle(IPC.CANCEL, (event, id: unknown) => {
+    assertTrustedSender(event);
+    assertId(id);
+    return manager.cancel(id);
+  });
+  ipcMain.handle(IPC.REMOVE, (event, id: unknown, deleteFile: unknown) => {
+    assertTrustedSender(event);
+    assertId(id);
+    if (typeof deleteFile !== "boolean") throw new Error("Invalid deleteFile");
+    return manager.remove(id, deleteFile);
+  });
+  ipcMain.handle(IPC.RETRY, (event, id: unknown) => {
+    assertTrustedSender(event);
+    assertId(id);
+    return manager.retry(id);
+  });
 
-  ipcMain.handle(IPC.OPEN_FILE, (_e, id: string) => manager.openFile(id));
-  ipcMain.handle(IPC.OPEN_FOLDER, (_e, id: string) => manager.openFolder(id));
+  ipcMain.handle(IPC.OPEN_FILE, (event, id: unknown) => {
+    assertTrustedSender(event);
+    assertId(id);
+    return manager.openFile(id);
+  });
+  ipcMain.handle(IPC.OPEN_FOLDER, (event, id: unknown) => {
+    assertTrustedSender(event);
+    assertId(id);
+    return manager.openFolder(id);
+  });
 
-  ipcMain.handle(IPC.SETTINGS_GET, () => manager.getSettings());
-  ipcMain.handle(IPC.SETTINGS_SET, (_e, settings: Partial<AppSettings>) => manager.setSettings(settings));
+  ipcMain.handle(IPC.SETTINGS_GET, (event) => {
+    assertTrustedSender(event);
+    return manager.getSettings();
+  });
+  ipcMain.handle(IPC.SETTINGS_SET, (event, settings: unknown) => {
+    assertTrustedSender(event);
+    assertPartialSettings(settings);
+    return manager.setSettings(settings);
+  });
 
-  ipcMain.handle(IPC.QUEUE_CREATE, (_e, queue: Partial<DownloadQueue>) => manager.createQueue(queue));
-  ipcMain.handle(IPC.QUEUE_UPDATE, (_e, queue: DownloadQueue) => manager.updateQueue(queue));
-  ipcMain.handle(IPC.QUEUE_DELETE, (_e, id: string) => manager.deleteQueue(id));
-  ipcMain.handle(IPC.QUEUE_START, (_e, id: string) => manager.startQueue(id));
-  ipcMain.handle(IPC.QUEUE_STOP, (_e, id: string) => manager.stopQueue(id));
+  ipcMain.handle(IPC.QUEUE_CREATE, (event, queue: unknown) => {
+    assertTrustedSender(event);
+    assertRecord(queue, "queue");
+    return manager.createQueue(queue);
+  });
+  ipcMain.handle(IPC.QUEUE_UPDATE, (event, queue: unknown) => {
+    assertTrustedSender(event);
+    assertDownloadQueue(queue);
+    return manager.updateQueue(queue);
+  });
+  ipcMain.handle(IPC.QUEUE_DELETE, (event, id: unknown) => {
+    assertTrustedSender(event);
+    assertId(id);
+    return manager.deleteQueue(id);
+  });
+  ipcMain.handle(IPC.QUEUE_START, (event, id: unknown) => {
+    assertTrustedSender(event);
+    assertId(id);
+    return manager.startQueue(id);
+  });
+  ipcMain.handle(IPC.QUEUE_STOP, (event, id: unknown) => {
+    assertTrustedSender(event);
+    assertId(id);
+    return manager.stopQueue(id);
+  });
 
-  ipcMain.handle(IPC.PICK_FOLDER, async () => {
+  ipcMain.handle(IPC.PICK_FOLDER, async (event) => {
+    assertTrustedSender(event);
     if (!mainWindow) return null;
     const result = await dialog.showOpenDialog(mainWindow, {
       properties: ["openDirectory", "createDirectory"],
@@ -94,13 +266,56 @@ function registerIpcHandlers() {
     return result.filePaths[0];
   });
 
-  ipcMain.on(IPC.WINDOW_MINIMIZE, () => mainWindow?.minimize());
-  ipcMain.on(IPC.WINDOW_MAXIMIZE, () => {
+  ipcMain.on(IPC.WINDOW_MINIMIZE, (event) => {
+    assertTrustedSender(event);
+    mainWindow?.minimize();
+  });
+  ipcMain.on(IPC.WINDOW_MAXIMIZE, (event) => {
+    assertTrustedSender(event);
     if (!mainWindow) return;
     if (mainWindow.isMaximized()) mainWindow.unmaximize();
     else mainWindow.maximize();
   });
-  ipcMain.on(IPC.WINDOW_CLOSE, () => mainWindow?.close());
+  ipcMain.on(IPC.WINDOW_CLOSE, (event) => {
+    assertTrustedSender(event);
+    mainWindow?.close();
+  });
+
+  ipcMain.handle(IPC.UPDATE_GET_STATE, (event) => {
+    assertTrustedSender(event);
+    return getUpdateState();
+  });
+  ipcMain.handle(IPC.UPDATE_CHECK, async (event) => {
+    assertTrustedSender(event);
+    return updater ? updater.checkForUpdates() : getUpdateState();
+  });
+  ipcMain.handle(IPC.UPDATE_SET_UNSAVED_WORK, (event, state: unknown) => {
+    assertTrustedSender(event);
+    if (!isUpdateUnsavedWorkState(state)) throw new Error("Invalid unsaved-work state");
+    rendererWorkState = { ...state, receivedAt: Date.now() };
+  });
+  ipcMain.handle(IPC.UPDATE_INSTALL, (event): UpdateInstallResult => {
+    assertTrustedSender(event);
+    const guardFailure = installGuardFailure();
+    if (guardFailure) return { started: false, reason: guardFailure };
+    if (!updater) return { started: false, reason: "The updater is not available." };
+    const started = updater.quitAndInstall();
+    return {
+      started,
+      reason: started ? null : "The staged update is no longer ready or could not be installed.",
+    };
+  });
+  ipcMain.handle(IPC.UPDATE_OPEN_RELEASE_NOTES, async (event) => {
+    assertTrustedSender(event);
+    const releaseNotesUrl = normalizeReleaseNotesUrl(updater?.getReleaseNotesUrl());
+    if (!releaseNotesUrl) return false;
+    try {
+      await shell.openExternal(releaseNotesUrl);
+      return true;
+    } catch {
+      return false;
+    }
+  });
 }
 
 const nativeCompletionNotifications: CompletionNotificationPort = {
@@ -113,14 +328,16 @@ function notifyDownloadComplete(item: DownloadItem) {
 }
 
 function startUpdater() {
-  if (process.platform !== "win32") return;
   updater = new UpdateService({
     adapter: autoUpdater,
     currentVersion: app.getVersion(),
     isPackaged: app.isPackaged,
-    supportedPlatform: true,
+    supportedPlatform: process.platform === "win32",
     feedUrl: readUpdateFeedUrl(),
+    releaseNotesBaseUrl: readUpdateReleaseNotesBaseUrl(),
+    canInstall: () => installGuardFailure() === null,
   });
+  updater.onStateChanged(broadcastUpdateState);
   updater.start();
 }
 

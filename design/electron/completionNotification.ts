@@ -16,8 +16,12 @@ export interface CompletionNotificationPort {
 }
 
 /**
- * `showCompleteDialog` is an old persisted key. Its current user-facing
- * meaning is whether a non-blocking completion notification is shown.
+ * Completion has one owner: the main-process native notification. The
+ * renderer still reports other download states, but it must not duplicate
+ * this event. The persisted compatibility key therefore gates this single
+ * path and fails closed when the platform cannot show a native notification.
+ * `showCompleteDialog` is an old persisted key whose current meaning is
+ * whether this non-blocking completion notification is shown.
  */
 export function notifyDownloadComplete(
   item: Pick<DownloadItem, "fileName">,

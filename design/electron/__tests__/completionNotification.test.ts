@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { notifyDownloadComplete, type CompletionNotificationOptions, type CompletionNotificationPort } from "../completionNotification";
+import {
+  notifyDownloadComplete,
+  type CompletionNotificationOptions,
+  type CompletionNotificationPort,
+} from "../completionNotification";
 
 function fakePort(supported: boolean) {
   const shown: CompletionNotificationOptions[] = [];
@@ -11,17 +15,14 @@ function fakePort(supported: boolean) {
   return { port, shown };
 }
 
-test("the compatibility setting suppresses the main-process completion notification", () => {
+test("disabled completion preference suppresses the native notification path", () => {
   const { port, shown } = fakePort(true);
 
-  assert.equal(
-    notifyDownloadComplete({ fileName: "report.pdf" }, { showCompleteDialog: false }, port),
-    false
-  );
+  assert.equal(notifyDownloadComplete({ fileName: "report.pdf" }, { showCompleteDialog: false }, port), false);
   assert.deepEqual(shown, []);
 });
 
-test("enabled completion notification is non-blocking and carries the file name", () => {
+test("enabled completion preference emits one non-blocking notification with the file name", () => {
   const { port, shown } = fakePort(true);
 
   assert.equal(
@@ -34,9 +35,6 @@ test("enabled completion notification is non-blocking and carries the file name"
 test("unsupported native notifications fail closed", () => {
   const { port, shown } = fakePort(false);
 
-  assert.equal(
-    notifyDownloadComplete({ fileName: "report.pdf" }, { showCompleteDialog: true }, port),
-    false
-  );
+  assert.equal(notifyDownloadComplete({ fileName: "report.pdf" }, { showCompleteDialog: true }, port), false);
   assert.deepEqual(shown, []);
 });

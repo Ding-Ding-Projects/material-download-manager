@@ -6,7 +6,11 @@ import type {
   DownloadQueue,
   StateSnapshot,
   NewDownloadInfo,
+  UpdateInstallResult,
+  UpdateState,
+  UpdateUnsavedWorkState,
 } from "../shared/types";
+import { isUpdateInstallResult, isUpdateState, isUpdateUnsavedWorkState } from "../shared/types";
 
 // Everything exposed to the renderer goes through this bridge. No direct
 // Node/ipcRenderer access is ever given to renderer code.
@@ -17,6 +21,43 @@ const api = {
     const listener = (_: unknown, state: StateSnapshot) => cb(state);
     ipcRenderer.on(IPC.STATE_CHANGED, listener);
     return () => ipcRenderer.removeListener(IPC.STATE_CHANGED, listener);
+  },
+
+  getUpdateState: async (): Promise<UpdateState> => {
+    const state: unknown = await ipcRenderer.invoke(IPC.UPDATE_GET_STATE);
+    if (!isUpdateState(state)) throw new Error("Invalid update state from main process");
+    return state;
+  },
+
+  onUpdateStateChanged: (cb: (state: UpdateState) => void) => {
+    const listener = (_: unknown, state: unknown) => {
+      if (isUpdateState(state)) cb(state);
+    };
+    ipcRenderer.on(IPC.UPDATE_STATE_CHANGED, listener);
+    return () => ipcRenderer.removeListener(IPC.UPDATE_STATE_CHANGED, listener);
+  },
+
+  checkForUpdates: async (): Promise<UpdateState> => {
+    const state: unknown = await ipcRenderer.invoke(IPC.UPDATE_CHECK);
+    if (!isUpdateState(state)) throw new Error("Invalid update check result from main process");
+    return state;
+  },
+
+  installUpdate: async (): Promise<UpdateInstallResult> => {
+    const result: unknown = await ipcRenderer.invoke(IPC.UPDATE_INSTALL);
+    if (!isUpdateInstallResult(result)) throw new Error("Invalid update install result from main process");
+    return result;
+  },
+
+  openUpdateReleaseNotes: async (): Promise<boolean> => {
+    const result: unknown = await ipcRenderer.invoke(IPC.UPDATE_OPEN_RELEASE_NOTES);
+    if (typeof result !== "boolean") throw new Error("Invalid update release-notes result from main process");
+    return result;
+  },
+
+  setUnsavedWorkState: (state: UpdateUnsavedWorkState): Promise<void> => {
+    if (!isUpdateUnsavedWorkState(state)) return Promise.reject(new Error("Invalid unsaved-work state"));
+    return ipcRenderer.invoke(IPC.UPDATE_SET_UNSAVED_WORK, state);
   },
 
   probeUrl: (url: string): Promise<NewDownloadInfo> =>

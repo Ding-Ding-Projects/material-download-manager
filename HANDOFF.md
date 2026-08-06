@@ -56,16 +56,17 @@ npm run test:engine
 npm run test:electron
 ```
 
-On 2026-08-05, the following checks passed on `codex/full-app`:
+On 2026-08-05, the following checks passed on
+`codex/reconcile-updater-20260805`:
 
 | Check | Result |
 | --- | --- |
 | `npm ci` | Installed 396 packages from the lockfile; npm reported 11 audit findings and install-script approval warnings. |
 | `npm run typecheck` | Passed renderer and Electron TypeScript checks. |
 | `npm run build` | Passed Vite renderer and Electron main-process compilation. |
-| `npm run test:engine` | 24/24 passed, including Range integrity, pause/resume, non-resumable fallback, custom-header persistence and origin stripping, global queue limits, schedule race handling, manager history hooks, filename sanitization, malformed Range rejection, categories, and throttling. |
-| `npm run test:electron` | 24/24 passed for export, local history, regex, tabs, command-palette foundations, compiled renderer-path resolution, updater states, native Squirrel download-overlap protection, and completion-notification preference handling. |
-| `npm run dist:win` | The committed config enforces signing and therefore fails closed without a certificate. A reversible local shape check produced `Setup.exe`, `RELEASES`, and a full `.nupkg`; Authenticode was `NotSigned`, MSI is disabled for the current WiX identifier bug, and no delta/feed release was claimed. |
+| `npm run test:engine` | 27/27 passed, including Range integrity, pause/resume, non-resumable fallback, custom-header persistence and origin stripping, global queue limits, schedule race handling, manager history hooks, filename sanitization, malformed Range rejection, categories, and throttling. |
+| `npm run test:electron` | 29/29 passed for export, local history, regex, tabs, command-palette foundations, compiled renderer-path resolution, secure updater IPC, version monotonicity, timeout/stale-event recovery, native Squirrel download-overlap protection, and completion-notification preference handling. |
+| `npm run dist:win` | The committed config enforces signing and therefore fails closed without a certificate. A reversible unsigned shape attempt exited after the Squirrel target line without producing `Setup.exe`, `RELEASES`, or a `.nupkg` on this Node 26 host; no packaging or release artifact is claimed. |
 | Hidden-desktop smoke | Passed through the cheap hidden-desktop route: direct Electron `v31.7.7` launch opened `Material Download Manager` at 1150×720, rendered the empty state, opened Settings, and returned focus after Escape; the desktop and process were cleaned up. |
 | Remote GitHub Actions | No green verdict claimed: the previously observed Windows verification run remained queued, and GitHub Actions had earlier rejected manual dispatch with `Actions has been disabled for this user`. |
 
@@ -78,11 +79,14 @@ with their `Content-Range` before bytes are written.
 A signed Windows packaging run (`npm run dist:win`) is still required before
 publishing an installer; a compile-only success is not packaging evidence. The
 package configuration now targets Squirrel.Windows x64 with signing enforced,
-and the main process has a bounded, fail-closed updater coordinator, but this
-branch does not claim a signed installer, a published `RELEASES` feed, or a
-verified update. The unsigned local shape check is evidence only that the
-Squirrel layout can be produced when signing is deliberately disabled for the
-check and is not a shippable artifact.
+and the main process has a bounded, fail-closed updater coordinator. The
+renderer now receives validated updater state through the secure preload bridge
+and shows explicit manual-check, `Later`, release-notes, and
+`Restart to install update` actions guarded by a fresh unsaved-work assertion.
+This branch does not
+claim a signed installer, a published `RELEASES` feed, or a verified update.
+The unsigned local shape attempt produced no artifacts on this host and is not
+release evidence.
 
 The repository now has a Windows push/dispatch workflow at
 [`.github/workflows/ci.yml`](.github/workflows/ci.yml) for the checks above. It
@@ -133,16 +137,13 @@ reconciliation:
 11. Keep the landing page, changelog viewer, release line counter, and
     sanitized instruction mirror current as the product surfaces are
     implemented.
-12. Connect `UpdateService` state to a localized, persistent non-blocking
-    renderer banner with explicit `Restart to install update` and `Later`
-    actions only after the signed feed is available.
 
 ## Git state and ownership
 
-The reconciliation is merged into `main`, and the original handoff history is
-preserved as a parent of the integration commit. The agent-created branch can
-be removed only after the pushed ancestry proof; the original handoff branch is
-retained unless its ownership is clear. There are no open GitHub issues at the
-time this handoff was refreshed. GitHub Discussions are disabled, the wiki
-setting is enabled but its wiki repository is not initialized, and GitHub Pages
-is not configured. No unverified wiki or site is claimed here.
+This reconciliation is on `codex/reconcile-updater-20260805`, based on
+`origin/codex/full-app` at `8f49f9d`; `main` and the other linked checkouts were
+not touched. The original handoff history is preserved as an ancestor. There
+are no open GitHub issues in either scanned repository at the time this handoff
+was refreshed. GitHub Discussions are disabled, the wiki setting is enabled
+but its wiki repository is not initialized, and GitHub Pages is not configured.
+No unverified wiki or site is claimed here.
