@@ -98,6 +98,10 @@ reconciliation:
    `design/shared/regex.ts` and `design/src/components/RegexBuilder.tsx`; wire a
    separate anchored instance to every search surface before claiming the
    search requirement complete.
+8. The reusable tab state model, tab strip, and `Ctrl+Shift+F` command palette
+   now live under `design/shared/tabModel.ts` and `design/src/components/`;
+   connect them to persisted app state and the real shell before calling the
+   navigation requirements complete.
 
 ## Git state and ownership
 

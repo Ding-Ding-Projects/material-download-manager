@@ -11,6 +11,7 @@ AB Download Manager codebase.
 - Shared project guidance mirror: [`AGENTS.md`](AGENTS.md)
 - CI workflow: [Windows verification](.github/workflows/ci.yml)
 - Search feature docs: [`docs/features/search/`](docs/features/search/)
+- Navigation feature docs: [`docs/features/navigation/`](docs/features/navigation/)
 - Website: not published
 
 <details>
