@@ -14,6 +14,7 @@ AB Download Manager codebase.
 - Navigation feature docs: [`docs/features/navigation/`](docs/features/navigation/)
 - Website: not published
 - Export feature docs: docs/features/export/
+- History feature docs: docs/features/history/
 
 <details>
 <summary>Build and test</summary>

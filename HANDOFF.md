@@ -105,6 +105,9 @@ reconciliation:
 9. The shared export serializer covers the required coding formats under
    design/shared/export.ts; connect it to filtered records, history, settings,
    and changelog surfaces with visible warning and format controls.
+10. The isolated Git-backed HistoryStore is available under
+   design/electron/history/HistoryStore.ts; connect it to every user-managed
+   record and settings mutation before calling local history complete.
 
 ## Git state and ownership
 
