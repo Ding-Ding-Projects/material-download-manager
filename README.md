@@ -18,6 +18,7 @@ AB Download Manager codebase.
 - Accessibility feature docs: docs/features/accessibility/
 - Notification feature docs: docs/features/notifications/
 - Safety feature docs: docs/features/safety/
+- Settings feature docs: docs/features/settings/
 
 <details>
 <summary>Build and test</summary>

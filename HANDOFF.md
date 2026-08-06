@@ -113,6 +113,10 @@ reconciliation:
    Its current evidence is typecheck/build, existing engine/Electron tests, and
    a cheap headless Settings/Escape/focus smoke; a renderer DOM harness,
    notification bulk actions, and deletion history recording remain open.
+12. The settings lane now supplies versioned language, funny-level, appearance,
+   and provenance state with persistence tests. The settings surface still needs
+   its own search/regex builder and browser-style tabs, full appearance-editor
+   depth, and copy wiring across every renderer message.
 
 ## Git state and ownership
 
