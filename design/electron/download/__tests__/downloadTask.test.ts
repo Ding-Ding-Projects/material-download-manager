@@ -11,6 +11,8 @@ import { probeUrl, sanitizeFileName } from "../HttpProbe";
 import { DownloadTask } from "../DownloadTask";
 import { SpeedLimiter } from "../SpeedLimiter";
 import { detectCategory } from "../categories";
+import { splitStoredDownload, withStoredHeaders } from "../downloadMetadata";
+import { isQueueScheduleActive, QueueScheduleClock } from "../queueSchedule";
 import type { DownloadItem } from "../../../shared/types";
 
 function tmpDir() {
@@ -53,6 +55,45 @@ test("probeUrl reports size + resume support + suggested filename", async () => 
     assert.equal(info.suggestedFileName, "file.bin");
   } finally {
     await srv.close();
+  }
+});
+
+test("custom headers survive persistence and reach probe plus transfer requests", async () => {
+  const srv = await startTestServer(128 * 1024, {
+    requiredHeader: { name: "x-download-token", value: "token-without-logging" },
+  });
+  const folder = await tmpDir();
+  try {
+    const headers = { "X-Download-Token": "token-without-logging" };
+    const item = makeItem({
+      url: srv.url,
+      folder,
+      totalSize: srv.buffer.length,
+      resumeSupport: false,
+    });
+    const persisted = withStoredHeaders(item, headers);
+    const restored = splitStoredDownload(persisted);
+    assert.deepEqual(restored.headers, headers);
+    assert.equal("headers" in restored.item, false);
+
+    const info = await probeUrl(srv.url, headers);
+    assert.equal(info.contentLength, srv.buffer.length);
+    const task = new DownloadTask(item, {
+      maxConnections: 1,
+      minPartSize: 256 * 1024,
+      headers: restored.headers,
+      speedLimiters: [new SpeedLimiter(0)],
+    });
+    await task.start();
+    assert.equal(item.status, "completed");
+    assert.ok(srv.requestHeaders.length >= 2, "expected HEAD and GET requests");
+    assert.ok(
+      srv.requestHeaders.every((request) => request["x-download-token"] === "token-without-logging"),
+      "custom header must reach every request without being printed"
+    );
+  } finally {
+    await srv.close();
+    await fsp.rm(folder, { recursive: true, force: true });
   }
 });
 
@@ -202,6 +243,139 @@ test("ranged downloads reject a server that ignores the Range header", async () 
     await srv.close();
     await fsp.rm(folder, { recursive: true, force: true });
   }
+});
+
+test("transfer follows redirects and fails honestly at the redirect limit", async () => {
+  const srv = await startTestServer(128 * 1024, { redirectHops: 2 });
+  const folder = await tmpDir();
+  try {
+    const item = makeItem({
+      url: srv.redirectUrl,
+      folder,
+      totalSize: srv.buffer.length,
+      resumeSupport: false,
+    });
+    const task = new DownloadTask(item, {
+      maxConnections: 1,
+      minPartSize: 256 * 1024,
+      maxRedirects: 1,
+      maxRetries: 0,
+      speedLimiters: [new SpeedLimiter(0)],
+    });
+    let errorMsg: string | null = null;
+    task.on("error", (message) => (errorMsg = message));
+    await task.start();
+    assert.equal(item.status, "error");
+    assert.equal(errorMsg, "Too many redirects during download");
+  } finally {
+    await srv.close();
+    await fsp.rm(folder, { recursive: true, force: true });
+  }
+});
+
+test("connection timeout stops a server that never sends response headers", async () => {
+  const srv = await startTestServer(16 * 1024, { responseDelayMs: 80 });
+  const folder = await tmpDir();
+  try {
+    const item = makeItem({ url: srv.url, folder, totalSize: srv.buffer.length });
+    const task = new DownloadTask(item, {
+      maxConnections: 1,
+      minPartSize: 256 * 1024,
+      connectionTimeoutMs: 20,
+      requestTimeoutMs: 200,
+      idleTimeoutMs: 200,
+      maxRetries: 0,
+      speedLimiters: [new SpeedLimiter(0)],
+    });
+    let errorMsg: string | null = null;
+    task.on("error", (message) => (errorMsg = message));
+    await task.start();
+    assert.equal(item.status, "error");
+    assert.equal(errorMsg, "Download connection timed out");
+  } finally {
+    await srv.close();
+    await fsp.rm(folder, { recursive: true, force: true });
+  }
+});
+
+test("idle timeout stops a transfer that pauses between body chunks", async () => {
+  const srv = await startTestServer(16 * 1024, { bodyChunkDelayMs: 80 });
+  const folder = await tmpDir();
+  try {
+    const item = makeItem({ url: srv.url, folder, totalSize: srv.buffer.length });
+    const task = new DownloadTask(item, {
+      maxConnections: 1,
+      minPartSize: 256 * 1024,
+      connectionTimeoutMs: 200,
+      requestTimeoutMs: 500,
+      idleTimeoutMs: 20,
+      maxRetries: 0,
+      speedLimiters: [new SpeedLimiter(0)],
+    });
+    let errorMsg: string | null = null;
+    task.on("error", (message) => (errorMsg = message));
+    await task.start();
+    assert.equal(item.status, "error");
+    assert.equal(errorMsg, "Download idle timeout");
+  } finally {
+    await srv.close();
+    await fsp.rm(folder, { recursive: true, force: true });
+  }
+});
+
+test("request timeout bounds a slow body even when the socket is otherwise active", async () => {
+  const srv = await startTestServer(16 * 1024, { bodyChunkDelayMs: 80 });
+  const folder = await tmpDir();
+  try {
+    const item = makeItem({ url: srv.url, folder, totalSize: srv.buffer.length });
+    const task = new DownloadTask(item, {
+      maxConnections: 1,
+      minPartSize: 256 * 1024,
+      connectionTimeoutMs: 200,
+      requestTimeoutMs: 20,
+      idleTimeoutMs: 200,
+      maxRetries: 0,
+      speedLimiters: [new SpeedLimiter(0)],
+    });
+    let errorMsg: string | null = null;
+    task.on("error", (message) => (errorMsg = message));
+    await task.start();
+    assert.equal(item.status, "error");
+    assert.equal(errorMsg, "Download request timed out");
+  } finally {
+    await srv.close();
+    await fsp.rm(folder, { recursive: true, force: true });
+  }
+});
+
+test("queue schedules handle ordinary and overnight windows", () => {
+  const queue = {
+    id: "q",
+    name: "Scheduled",
+    maxConcurrent: 1,
+    isRunning: true,
+    itemIds: [] as string[],
+    scheduleEnabled: true,
+    startAt: "22:00",
+    endAt: "02:00",
+  };
+  assert.equal(isQueueScheduleActive(queue, new Date(2026, 0, 1, 23, 0)), true);
+  assert.equal(isQueueScheduleActive(queue, new Date(2026, 0, 1, 1, 0)), true);
+  assert.equal(isQueueScheduleActive(queue, new Date(2026, 0, 1, 12, 0)), false);
+});
+
+test("queue schedule clock stops cleanly and does not tick after shutdown", async () => {
+  let ticks = 0;
+  const clock = new QueueScheduleClock(() => ticks++, 5);
+  clock.start();
+  assert.equal(clock.isRunning, true);
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  clock.tickNow();
+  clock.stop();
+  const ticksAtStop = ticks;
+  assert.equal(clock.isRunning, false);
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  assert.equal(ticks, ticksAtStop);
 });
 
 test("category detection maps common extensions", () => {
