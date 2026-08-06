@@ -4,9 +4,55 @@ import fsp from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
-import { DownloadManager } from "../DownloadManager";
+import { assertQueueCreatePayload, DownloadManager } from "../DownloadManager";
+import type { DownloadQueue } from "../../../shared/types";
 import { startTestServer } from "./testServer";
 import { HistoryStore } from "../../history/HistoryStore";
+
+test("queue creation rejects malformed item IDs before persistence and processQueue fails closed", async () => {
+  const root = await fsp.mkdtemp(path.join(os.tmpdir(), "mdm-queue-validation-test-"));
+  const previousUserProfile = process.env.USERPROFILE;
+  process.env.USERPROFILE = root;
+  const manager = new DownloadManager(root);
+  try {
+    await manager.init();
+    const initialQueueIds = manager.getState().queues.map((queue) => queue.id);
+
+    await assert.rejects(
+      manager.createQueue({ name: "String item IDs", itemIds: "not-an-array" as unknown as string[] }),
+      /queue item IDs/i
+    );
+    await assert.rejects(
+      manager.createQueue({ name: "Invalid item ID", itemIds: [123 as unknown as string] }),
+      /queue item IDs/i
+    );
+    assert.deepEqual(manager.getState().queues.map((queue) => queue.id), initialQueueIds);
+
+    const internals = manager as unknown as { queues: Map<string, DownloadQueue> };
+    internals.queues.set("legacy-malformed", {
+      id: "legacy-malformed",
+      name: "Legacy malformed",
+      maxConcurrent: 1,
+      isRunning: true,
+      itemIds: "not-an-array" as unknown as string[],
+      scheduleEnabled: false,
+      startAt: null,
+      endAt: null,
+    });
+    assert.doesNotThrow(() => manager.processQueue("legacy-malformed"));
+    internals.queues.delete("legacy-malformed");
+
+    assert.doesNotThrow(() => assertQueueCreatePayload({ name: "Valid queue", itemIds: [] }));
+    const validQueue = await manager.createQueue({ name: "Valid queue", itemIds: [] });
+    assert.equal(validQueue.name, "Valid queue");
+    assert.deepEqual(validQueue.itemIds, []);
+  } finally {
+    await manager.shutdown();
+    await fsp.rm(root, { recursive: true, force: true });
+    if (previousUserProfile === undefined) delete process.env.USERPROFILE;
+    else process.env.USERPROFILE = previousUserProfile;
+  }
+});
 
 test("one global active-download cap is shared across multiple queues", async () => {
   const root = await fsp.mkdtemp(path.join(os.tmpdir(), "mdm-manager-test-"));
