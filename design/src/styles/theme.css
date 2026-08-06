@@ -7,6 +7,9 @@
 :root[data-theme="dark"] {
   color-scheme: dark;
 
+  --accent-seed: #7c5cff;
+  --density-scale: 1;
+
   --bg-app: #16171d;
   --bg-titlebar: #1a1b22;
   --bg-sidebar: #1a1b22;
@@ -34,10 +37,10 @@
   --text-on-accent: #ffffff;
 
   --accent-blue: #4f8cff;
-  --accent-purple: #a855f7;
+  --accent-purple: var(--accent-seed, #a855f7);
   --accent-gradient: linear-gradient(90deg, var(--accent-blue), var(--accent-purple));
   --accent-gradient-diag: linear-gradient(135deg, var(--accent-blue), var(--accent-purple));
-  --accent-solid: #7c5cff;
+  --accent-solid: var(--accent-seed, #7c5cff);
 
   --status-downloading: #6fa8ff;
   --status-paused: #f5a623;
@@ -86,10 +89,10 @@
   --text-on-accent: #ffffff;
 
   --accent-blue: #3f7ae0;
-  --accent-purple: #9333ea;
+  --accent-purple: var(--accent-seed, #9333ea);
   --accent-gradient: linear-gradient(90deg, var(--accent-blue), var(--accent-purple));
   --accent-gradient-diag: linear-gradient(135deg, var(--accent-blue), var(--accent-purple));
-  --accent-solid: #7c5cff;
+  --accent-solid: var(--accent-seed, #7c5cff);
 
   --status-downloading: #3f7ae0;
   --status-paused: #b9760f;
@@ -106,6 +109,18 @@
 
   --shadow-dialog: 0 24px 60px rgba(20, 20, 40, 0.18);
   --shadow-menu: 0 12px 28px rgba(20, 20, 40, 0.16);
+}
+
+:root[data-density="compact"] {
+  --density-scale: 0.85;
+}
+
+:root[data-density="comfortable"] {
+  --density-scale: 1;
+}
+
+:root[data-density="spacious"] {
+  --density-scale: 1.15;
 }
 
 /* Fallback: when no explicit data-theme is stamped yet, respect the OS. */
