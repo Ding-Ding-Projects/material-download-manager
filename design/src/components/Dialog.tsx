@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import type { KeyboardEvent as ReactKeyboardEvent, ReactNode } from "react";
 import { useEffect } from "react";
 import { CloseIcon } from "./icons";
 
@@ -10,9 +10,11 @@ interface DialogProps {
   children: ReactNode;
   footer?: ReactNode;
   className?: string;
+  /** Return true when a nested surface owns this Escape press. */
+  onEscape?: (event: ReactKeyboardEvent<HTMLDivElement>) => boolean;
 }
 
-export default function Dialog({ title, icon, onClose, width = 460, children, footer, className }: DialogProps) {
+export default function Dialog({ title, icon, onClose, width = 460, children, footer, className, onEscape }: DialogProps) {
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
       if (e.key === "Escape" && !e.defaultPrevented) onClose();
@@ -21,9 +23,19 @@ export default function Dialog({ title, icon, onClose, width = 460, children, fo
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [onClose]);
 
+  function handleDialogKeyDown(event: ReactKeyboardEvent<HTMLDivElement>) {
+    if (event.key !== "Escape" || event.defaultPrevented || !onEscape?.(event)) return;
+    event.preventDefault();
+    event.stopPropagation();
+  }
+
   return (
     <div className="dialog-overlay" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
-      <div className={`dialog${className ? ` ${className}` : ""}`} style={{ width }}>
+      <div
+        className={`dialog${className ? ` ${className}` : ""}`}
+        style={{ width }}
+        onKeyDownCapture={handleDialogKeyDown}
+      >
         <div className="dialog-header">
           <div className="dialog-header-title">
             {icon}

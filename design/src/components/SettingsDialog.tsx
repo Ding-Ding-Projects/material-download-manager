@@ -159,6 +159,17 @@ export default function SettingsDialog() {
     setAccentError(null);
   }
 
+  function closeSettingsRegexBuilder() {
+    setSettingsRegexOpen(false);
+    window.requestAnimationFrame(() => settingsRegexButtonRef.current?.focus());
+  }
+
+  function handleSettingsEscape() {
+    if (!settingsRegexOpen) return false;
+    closeSettingsRegexBuilder();
+    return true;
+  }
+
   async function handleSave() {
     if (!isHexColor(form.accentSeedColor)) {
       setAccentError(copy.accentInvalid);
@@ -183,6 +194,7 @@ export default function SettingsDialog() {
       icon={<SettingsIcon size={16} />}
       onClose={closeSettings}
       width={520}
+      onEscape={handleSettingsEscape}
       footer={
         <>
           <button type="button" className="btn btn-primary" onClick={() => void handleSave()} disabled={saving}>
@@ -219,16 +231,7 @@ export default function SettingsDialog() {
           </button>
         </div>
         {settingsRegexOpen && (
-          <div
-            className="settings-search-builder"
-            onKeyDownCapture={(event) => {
-              if (event.key !== "Escape") return;
-              event.preventDefault();
-              event.stopPropagation();
-              setSettingsRegexOpen(false);
-              window.requestAnimationFrame(() => settingsRegexButtonRef.current?.focus());
-            }}
-          >
+          <div className="settings-search-builder">
             <RegexBuilder
               title="Settings regex builder"
               value={settingsSearch}
