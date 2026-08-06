@@ -39,6 +39,8 @@ interface AppState {
   // local UI state
   filter: SidebarFilter;
   searchText: string;
+  searchMode: "text" | "regex";
+  searchFlags: string;
   selectedIds: Set<string>;
   sort: SortState;
   dialogs: DialogsState;
@@ -50,6 +52,8 @@ interface AppState {
   // UI actions
   setFilter: (filter: SidebarFilter) => void;
   setSearchText: (text: string) => void;
+  setSearchMode: (mode: "text" | "regex") => void;
+  setSearchFlags: (flags: string) => void;
   setSort: (key: SortKey) => void;
   toggleSelect: (id: string) => void;
   selectOnly: (id: string) => void;
@@ -98,6 +102,8 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   filter: { kind: "all" },
   searchText: "",
+  searchMode: "text",
+  searchFlags: "g",
   selectedIds: new Set(),
   sort: { key: "dateAdded", direction: "desc" },
   dialogs: { addDownload: false, settings: false, queues: false, detailsItemId: null },
@@ -121,6 +127,8 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   setFilter: (filter) => set({ filter, selectedIds: new Set() }),
   setSearchText: (searchText) => set({ searchText }),
+  setSearchMode: (searchMode) => set({ searchMode }),
+  setSearchFlags: (searchFlags) => set({ searchFlags }),
   setSort: (key) =>
     set((state) => ({
       sort:
