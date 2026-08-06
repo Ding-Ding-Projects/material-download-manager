@@ -6,6 +6,7 @@ import path from "node:path";
 
 import { DownloadManager } from "../DownloadManager";
 import { startTestServer } from "./testServer";
+import { HistoryStore } from "../../history/HistoryStore";
 
 test("one global active-download cap is shared across multiple queues", async () => {
   const root = await fsp.mkdtemp(path.join(os.tmpdir(), "mdm-manager-test-"));
@@ -168,6 +169,34 @@ test("manual resume waits for an in-flight schedule pause", async () => {
     const status = manager.getState().items.find((item) => item.id === id)?.status;
     assert.ok(status === "queued" || status === "downloading", `unexpected resumed status: ${status}`);
     await manager.shutdown();
+  } finally {
+    await server.close();
+    await fsp.rm(root, { recursive: true, force: true });
+    if (previousUserProfile === undefined) delete process.env.USERPROFILE;
+    else process.env.USERPROFILE = previousUserProfile;
+  }
+});
+
+test("manager records download creation and deletion in local history", async () => {
+  const root = await fsp.mkdtemp(path.join(os.tmpdir(), "mdm-manager-history-test-"));
+  const server = await startTestServer(8 * 1024);
+  const previousUserProfile = process.env.USERPROFILE;
+  process.env.USERPROFILE = root;
+  try {
+    const manager = new DownloadManager(root);
+    await manager.init();
+    const id = await manager.addDownload({
+      url: server.url,
+      folder: path.join(root, "download"),
+      fileName: "history.bin",
+      startImmediately: false,
+    });
+    await manager.remove(id, false);
+    await manager.shutdown();
+
+    const revisions = await new HistoryStore(root).listRevisions();
+    assert.ok(revisions.some((revision) => revision.action === "created" && /history\.bin/.test(revision.summary)));
+    assert.ok(revisions.some((revision) => revision.action === "deleted" && /history\.bin/.test(revision.summary)));
   } finally {
     await server.close();
     await fsp.rm(root, { recursive: true, force: true });

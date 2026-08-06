@@ -24,9 +24,11 @@ import {
   withStoredHeaders,
 } from "./downloadMetadata";
 import { isQueueScheduleActive, QueueScheduleClock } from "./queueSchedule";
+import { HistoryStore, type HistoryAction } from "../history/HistoryStore";
 
 export class DownloadManager extends EventEmitter {
   private store: StateStore;
+  private history: HistoryStore;
   private items: Map<string, DownloadItem> = new Map();
   private queues: Map<string, DownloadQueue> = new Map();
   private settings!: AppSettings;
@@ -42,6 +44,7 @@ export class DownloadManager extends EventEmitter {
   constructor(private userDataPath: string) {
     super();
     this.store = new StateStore(userDataPath);
+    this.history = new HistoryStore(userDataPath);
   }
 
   get isShutDown() {
@@ -78,6 +81,7 @@ export class DownloadManager extends EventEmitter {
       this.itemOrder.push(item.id);
     }
     await fsp.mkdir(this.settings.defaultSaveFolder, { recursive: true }).catch(() => {});
+    await this.recordHistory("created", "Created the initial application state");
     this.scheduleClock.start();
     this.processAllQueues();
   }
@@ -101,7 +105,15 @@ export class DownloadManager extends EventEmitter {
     }, 200);
   }
 
-  private async persist() {
+  private async recordHistory(action: HistoryAction, summary: string) {
+    try {
+      await this.history.appendSnapshot(JSON.stringify(this.getState()), action, summary);
+    } catch {
+      // History is best effort and must never make the requested operation fail.
+    }
+  }
+
+  private async persist(action?: HistoryAction, summary?: string) {
     await this.store.save({
       items: Array.from(this.items.values()).map((item) =>
         withStoredHeaders(item, this.itemHeaders.get(item.id))
@@ -109,6 +121,7 @@ export class DownloadManager extends EventEmitter {
       queues: Array.from(this.queues.values()),
       settings: this.settings,
     });
+    if (action && summary) await this.recordHistory(action, summary);
   }
 
   // ---- probing / adding -----------------------------------------------------
@@ -164,7 +177,7 @@ export class DownloadManager extends EventEmitter {
       this.processQueue(queue.id);
     }
 
-    await this.persist();
+    await this.persist("created", `Created download ${fileName}`);
     this.scheduleNotify();
     return id;
   }
@@ -199,14 +212,14 @@ export class DownloadManager extends EventEmitter {
     task.on("progress", () => this.scheduleNotify());
     task.on("completed", async () => {
       this.tasks.delete(item.id);
-      await this.persist();
+      await this.persist("updated", `Completed download ${item.fileName}`);
       this.scheduleNotify();
       this.emit("itemCompleted", item);
       this.processAllQueues();
     });
     task.on("error", async () => {
       this.tasks.delete(item.id);
-      await this.persist();
+      await this.persist("updated", `Recorded download error for ${item.fileName}`);
       this.scheduleNotify();
       this.processAllQueues();
     });
@@ -229,7 +242,7 @@ export class DownloadManager extends EventEmitter {
       item.status = "error";
       item.error = e instanceof Error ? e.message : String(e);
       this.tasks.delete(item.id);
-      await this.persist();
+           await this.persist();
       this.scheduleNotify();
       this.processAllQueues();
     });
@@ -319,18 +332,19 @@ export class DownloadManager extends EventEmitter {
     } else if (item && (item.status === "queued" || item.status === "added")) {
       item.status = "paused";
     }
-    await this.persist();
+    if (item) await this.persist("updated", `Paused download ${item.fileName}`);
+    else await this.persist();
     this.scheduleNotify();
     this.processAllQueues();
   }
 
-  async resume(id: string) {
+  async resume(id: string, historySummary?: string) {
     await this.settleScheduledPause(id);
     const item = this.items.get(id);
     if (!item) return;
     if (item.status === "completed") return;
     item.status = "queued";
-    await this.persist();
+    await this.persist("updated", historySummary ?? `Resumed download ${item.fileName}`);
     this.scheduleNotify();
     this.processAllQueues();
   }
@@ -341,7 +355,7 @@ export class DownloadManager extends EventEmitter {
     item.error = null;
     item.parts = [];
     item.downloadedSize = 0;
-    await this.resume(id);
+    await this.resume(id, `Retried download ${item.fileName}`);
   }
 
   async cancel(id: string) {
@@ -353,13 +367,15 @@ export class DownloadManager extends EventEmitter {
       this.tasks.delete(id);
     }
     if (item) item.status = "cancelled";
-    await this.persist();
+    if (item) await this.persist("updated", `Cancelled download ${item.fileName}`);
+    else await this.persist();
     this.scheduleNotify();
     this.processAllQueues();
   }
 
   async remove(id: string, deleteFile: boolean) {
     await this.settleScheduledPause(id);
+    const removedItem = this.items.get(id);
     const task = this.tasks.get(id);
     if (task) {
       await task.cancel(deleteFile);
@@ -374,7 +390,12 @@ export class DownloadManager extends EventEmitter {
     for (const queue of this.queues.values()) {
       queue.itemIds = queue.itemIds.filter((x) => x !== id);
     }
-    await this.persist();
+    await this.persist(
+      "deleted",
+      removedItem
+        ? `Deleted download ${removedItem.fileName}${deleteFile ? " and its file" : " from the list"}`
+        : "Deleted a download record"
+    );
     this.scheduleNotify();
     this.processAllQueues();
   }
@@ -403,7 +424,7 @@ export class DownloadManager extends EventEmitter {
     if (partial.startOnSystemStartup !== undefined && process.platform !== "linux") {
       app.setLoginItemSettings({ openAtLogin: partial.startOnSystemStartup });
     }
-    await this.persist();
+    await this.persist("settings-changed", "Changed application settings");
     this.scheduleNotify();
     this.processAllQueues();
     return this.settings;
@@ -423,7 +444,7 @@ export class DownloadManager extends EventEmitter {
       endAt: partial.endAt ?? null,
     };
     this.queues.set(queue.id, queue);
-    await this.persist();
+    await this.persist("created", `Created queue ${queue.name}`);
     this.scheduleNotify();
     this.processAllQueues();
     return queue;
@@ -431,7 +452,7 @@ export class DownloadManager extends EventEmitter {
 
   async updateQueue(queue: DownloadQueue) {
     this.queues.set(queue.id, queue);
-    await this.persist();
+    await this.persist("updated", `Updated queue ${queue.name}`);
     this.scheduleNotify();
     this.processAllQueues();
   }
@@ -448,7 +469,7 @@ export class DownloadManager extends EventEmitter {
       }
     }
     this.queues.delete(id);
-    await this.persist();
+    await this.persist("deleted", `Deleted queue ${queue?.name ?? id}`);
     this.scheduleNotify();
     this.processAllQueues();
   }
@@ -457,7 +478,7 @@ export class DownloadManager extends EventEmitter {
     const queue = this.queues.get(id);
     if (!queue) return;
     queue.isRunning = true;
-    await this.persist();
+    await this.persist("updated", `Started queue ${queue.name}`);
     this.scheduleNotify();
     this.processAllQueues();
   }
@@ -474,7 +495,7 @@ export class DownloadManager extends EventEmitter {
         this.tasks.delete(itemId);
       }
     }
-    await this.persist();
+    await this.persist("updated", `Stopped queue ${queue.name}`);
     this.scheduleNotify();
     this.processAllQueues();
   }
