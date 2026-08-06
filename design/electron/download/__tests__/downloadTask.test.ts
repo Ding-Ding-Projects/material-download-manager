@@ -7,7 +7,7 @@ import path from "node:path";
 import crypto from "node:crypto";
 
 import { startTestServer } from "./testServer";
-import { probeUrl, sanitizeFileName } from "../HttpProbe";
+import { probeUrl, redactErrorMessage, redactUrl, sanitizeFileName } from "../HttpProbe";
 import { DownloadTask } from "../DownloadTask";
 import { SpeedLimiter } from "../SpeedLimiter";
 import { detectCategory } from "../categories";
@@ -56,6 +56,50 @@ test("probeUrl reports size + resume support + suggested filename", async () => 
   } finally {
     await srv.close();
   }
+});
+
+test("URL diagnostics retain safe context while redacting credentials, query values and fragments", async () => {
+  const unsafe =
+    "https://download-user:download-password@example.com/files/report.pdf?access_token=query-secret&name=report#session=fragment-secret";
+  const safe = redactUrl(unsafe);
+
+  assert.match(
+    safe,
+    /^https:\/\/\[REDACTED\]@example\.com\/files\/report\.pdf\?access_token=\[REDACTED\]&name=\[REDACTED\]#\[REDACTED\]$/
+  );
+  assert.match(safe, /example\.com\/files\/report\.pdf/);
+  for (const secret of ["download-user", "download-password", "query-secret", "fragment-secret"]) {
+    assert.equal(safe.includes(secret), false, `redacted URL must not include ${secret}`);
+  }
+  assert.equal(
+    redactErrorMessage(new Error(`Invalid URL: ${unsafe}`), unsafe),
+    `Invalid URL: ${safe}`,
+    "error diagnostics should keep the safe URL context"
+  );
+  assert.equal(redactErrorMessage(new Error("Server responded with 404")), "Server responded with 404");
+
+  const malformed =
+    "https://malformed-user:malformed-password@example.com:not-a-port/download?signature=malformed-token#malformed-fragment";
+  const malformedSafe = redactUrl(malformed);
+  assert.match(
+    malformedSafe,
+    /^https:\/\/\[REDACTED\]@example\.com:not-a-port\/download\?signature=\[REDACTED\]#\[REDACTED\]$/
+  );
+  for (const secret of ["malformed-user", "malformed-password", "malformed-token", "malformed-fragment"]) {
+    assert.equal(malformedSafe.includes(secret), false, `malformed URL must not include ${secret}`);
+  }
+  const networkPath = "//network-user:network-password@example.com/download?raw-query-secret#raw-fragment-secret";
+  const networkPathSafe = redactUrl(networkPath);
+  assert.equal(networkPathSafe.includes("network-password"), false);
+  assert.equal(networkPathSafe.includes("raw-query-secret"), false);
+  assert.equal(networkPathSafe.includes("raw-fragment-secret"), false);
+  await assert.rejects(probeUrl(malformed), (error: unknown) => {
+    assert.ok(error instanceof Error);
+    assert.match(error.message, /Invalid URL/);
+    assert.equal(error.message.includes("malformed-password"), false);
+    assert.match(error.message, /example\.com:not-a-port/);
+    return true;
+  });
 });
 
 test("custom headers survive persistence and reach probe plus transfer requests", async () => {

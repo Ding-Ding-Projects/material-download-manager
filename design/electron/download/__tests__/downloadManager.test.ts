@@ -111,6 +111,104 @@ test("manager reloads persisted custom headers without exposing them in state", 
   }
 });
 
+test("credentialed source URLs remain usable while state and history keep only redacted diagnostics", async () => {
+  const root = await fsp.mkdtemp(path.join(os.tmpdir(), "mdm-manager-url-redaction-test-"));
+  const server = await startTestServer(32 * 1024);
+  const previousUserProfile = process.env.USERPROFILE;
+  process.env.USERPROFILE = root;
+  const manager = new DownloadManager(root);
+  let initialized = false;
+  try {
+    await manager.init();
+    initialized = true;
+    const sourceUrl =
+      server.url.replace("://", "://download-user:download-password@") +
+      "?access_token=query-secret#fragment-secret";
+    const id = await manager.addDownload({
+      url: sourceUrl,
+      folder: path.join(root, "download"),
+      fileName: "credentialed.bin",
+      startImmediately: false,
+    });
+    const added = manager.getState().items.find((item) => item.id === id);
+    assert.ok(added);
+    assert.equal(added.url.includes("download-password"), false);
+    assert.match(added.url, /\[REDACTED\]@127\.0\.0\.1/);
+    assert.match(added.url, /access_token=\[REDACTED\]#\[REDACTED\]/);
+
+    const completed = new Promise<void>((resolve) => {
+      manager.once("itemCompleted", (item) => {
+        if (item.id === id) resolve();
+      });
+    });
+    await manager.resume(id);
+    await completed;
+    assert.equal(manager.getState().items.find((item) => item.id === id)?.status, "completed");
+    assert.ok(server.requestHeaders.length >= 2, "the private source URL should still drive probe and transfer requests");
+
+    await manager.shutdown();
+    initialized = false;
+    const stateJson = await fsp.readFile(path.join(root, "state.json"), "utf8");
+    const historySnapshot = await new HistoryStore(root).readSnapshot();
+    for (const secret of ["download-user", "download-password", "query-secret", "fragment-secret"]) {
+      assert.equal(stateJson.includes(secret), false, `state must not include ${secret}`);
+      assert.equal(historySnapshot?.includes(secret), false, `history must not include ${secret}`);
+    }
+    assert.match(stateJson, /\[REDACTED\]@127\.0\.0\.1/);
+    assert.match(historySnapshot ?? "", /access_token=\[REDACTED\]#\[REDACTED\]/);
+  } finally {
+    if (initialized) await manager.shutdown();
+    await server.close();
+    await fsp.rm(root, { recursive: true, force: true });
+    if (previousUserProfile === undefined) delete process.env.USERPROFILE;
+    else process.env.USERPROFILE = previousUserProfile;
+  }
+});
+
+test("malformed credential URLs stay redacted in item errors, persisted state and history", async () => {
+  const root = await fsp.mkdtemp(path.join(os.tmpdir(), "mdm-manager-malformed-url-test-"));
+  const previousUserProfile = process.env.USERPROFILE;
+  process.env.USERPROFILE = root;
+  const manager = new DownloadManager(root);
+  let initialized = false;
+  try {
+    await manager.init();
+    initialized = true;
+    const malformedUrl =
+      "https://malformed-user:malformed-password@example.com:not-a-port/download?signature=malformed-token#malformed-fragment";
+    const id = await manager.addDownload({
+      url: malformedUrl,
+      folder: path.join(root, "download"),
+      fileName: "malformed.bin",
+      startImmediately: false,
+    });
+    const item = manager.getState().items.find((candidate) => candidate.id === id);
+    assert.ok(item);
+    assert.match(item.url, /\[REDACTED\]@example\.com:not-a-port/);
+    assert.match(item.error ?? "", /Invalid URL/);
+    for (const secret of ["malformed-user", "malformed-password", "malformed-token", "malformed-fragment"]) {
+      assert.equal(item.url.includes(secret), false, `item URL must not include ${secret}`);
+      assert.equal(item.error?.includes(secret), false, `item error must not include ${secret}`);
+    }
+
+    await manager.shutdown();
+    initialized = false;
+    const stateJson = await fsp.readFile(path.join(root, "state.json"), "utf8");
+    const historySnapshot = await new HistoryStore(root).readSnapshot();
+    for (const secret of ["malformed-user", "malformed-password", "malformed-token", "malformed-fragment"]) {
+      assert.equal(stateJson.includes(secret), false, `state must not include ${secret}`);
+      assert.equal(historySnapshot?.includes(secret), false, `history must not include ${secret}`);
+    }
+    assert.match(stateJson, /Invalid URL/);
+    assert.match(historySnapshot ?? "", /example\.com:not-a-port/);
+  } finally {
+    if (initialized) await manager.shutdown();
+    await fsp.rm(root, { recursive: true, force: true });
+    if (previousUserProfile === undefined) delete process.env.USERPROFILE;
+    else process.env.USERPROFILE = previousUserProfile;
+  }
+});
+
 test("manual resume waits for an in-flight schedule pause", async () => {
   const root = await fsp.mkdtemp(path.join(os.tmpdir(), "mdm-schedule-race-test-"));
   const server = await startTestServer(512 * 1024, { bodyChunkDelayMs: 500 });

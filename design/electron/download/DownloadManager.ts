@@ -14,7 +14,7 @@ import type {
 import { DEFAULT_QUEUE_ID } from "../../shared/types";
 import { StateStore } from "./persistence";
 import { detectCategory } from "./categories";
-import { probeUrl as httpProbeUrl, sanitizeFileName } from "./HttpProbe";
+import { probeUrl as httpProbeUrl, redactErrorMessage, redactUrl, sanitizeFileName } from "./HttpProbe";
 import { DownloadTask } from "./DownloadTask";
 import { SpeedLimiter } from "./SpeedLimiter";
 import {
@@ -34,6 +34,8 @@ export class DownloadManager extends EventEmitter {
   private settings!: AppSettings;
   private tasks: Map<string, DownloadTask> = new Map();
   private itemHeaders: Map<string, Record<string, string>> = new Map();
+  /** Raw source URLs stay in memory only so active credentialed transfers work. */
+  private itemSourceUrls: Map<string, string> = new Map();
   private globalSpeedLimiter!: SpeedLimiter;
   private notifyScheduled = false;
   private shutDown = false;
@@ -49,6 +51,34 @@ export class DownloadManager extends EventEmitter {
 
   get isShutDown() {
     return this.shutDown;
+  }
+
+  private sourceUrl(item: DownloadItem): string {
+    return this.itemSourceUrls.get(item.id) ?? item.url;
+  }
+
+  private sanitizeItem(item: DownloadItem) {
+    item.url = redactUrl(item.url);
+    if (item.error !== null) item.error = redactErrorMessage(item.error, this.sourceUrl(item), item.url);
+  }
+
+  private sanitizeItems() {
+    for (const item of this.items.values()) this.sanitizeItem(item);
+  }
+
+  /**
+   * Give DownloadTask the private source URL without changing the public item
+   * object that is persisted, snapshotted or sent to the renderer.
+   */
+  private taskItem(item: DownloadItem): DownloadItem {
+    const sourceUrl = this.itemSourceUrls.get(item.id);
+    if (!sourceUrl || sourceUrl === item.url) return item;
+    return new Proxy(item, {
+      get(target, property, receiver) {
+        if (property === "url") return sourceUrl;
+        return Reflect.get(target, property, receiver);
+      },
+    });
   }
 
   async init() {
@@ -73,14 +103,23 @@ export class DownloadManager extends EventEmitter {
         endAt: null,
       });
     }
+    let stateNeedsUrlMigration = false;
     for (const storedItem of state.items as StoredDownloadItem[]) {
       const { item, headers } = splitStoredDownload(storedItem);
       if (headers) this.itemHeaders.set(item.id, headers);
+      const sourceUrl = item.url;
+      item.url = redactUrl(sourceUrl);
+      if (sourceUrl !== item.url) {
+        this.itemSourceUrls.set(item.id, sourceUrl);
+        stateNeedsUrlMigration = true;
+      }
+      this.sanitizeItem(item);
       item.fileName = sanitizeFileName(item.fileName);
       this.items.set(item.id, item);
       this.itemOrder.push(item.id);
     }
     await fsp.mkdir(this.settings.defaultSaveFolder, { recursive: true }).catch(() => {});
+    if (stateNeedsUrlMigration) await this.persist();
     await this.recordHistory("created", "Created the initial application state");
     this.scheduleClock.start();
     this.processAllQueues();
@@ -89,6 +128,7 @@ export class DownloadManager extends EventEmitter {
   // ---- state / persistence -------------------------------------------------
 
   getState(): StateSnapshot {
+    this.sanitizeItems();
     return {
       items: this.itemOrder.map((id) => this.items.get(id)!).filter(Boolean),
       queues: Array.from(this.queues.values()),
@@ -107,13 +147,14 @@ export class DownloadManager extends EventEmitter {
 
   private async recordHistory(action: HistoryAction, summary: string) {
     try {
-      await this.history.appendSnapshot(JSON.stringify(this.getState()), action, summary);
+      await this.history.appendSnapshot(JSON.stringify(this.getState()), action, redactErrorMessage(summary));
     } catch {
       // History is best effort and must never make the requested operation fail.
     }
   }
 
   private async persist(action?: HistoryAction, summary?: string) {
+    this.sanitizeItems();
     await this.store.save({
       items: Array.from(this.items.values()).map((item) =>
         withStoredHeaders(item, this.itemHeaders.get(item.id))
@@ -127,7 +168,11 @@ export class DownloadManager extends EventEmitter {
   // ---- probing / adding -----------------------------------------------------
 
   async probeUrl(url: string, headers: Record<string, string> = {}): Promise<NewDownloadInfo> {
-    return httpProbeUrl(url, cloneRequestHeaders(headers) ?? {});
+    try {
+      return await httpProbeUrl(url, cloneRequestHeaders(headers) ?? {});
+    } catch (error) {
+      throw new Error(redactErrorMessage(error, url));
+    }
   }
 
   async addDownload(req: AddDownloadRequest): Promise<string> {
@@ -138,7 +183,7 @@ export class DownloadManager extends EventEmitter {
 
     const item: DownloadItem = {
       id,
-      url: req.url,
+      url: redactUrl(req.url),
       fileName,
       folder,
       category: detectCategory(fileName),
@@ -156,6 +201,7 @@ export class DownloadManager extends EventEmitter {
       connections: 1,
     };
 
+    this.itemSourceUrls.set(id, req.url);
     const headers = cloneRequestHeaders(req.headers);
     if (headers) this.itemHeaders.set(id, headers);
 
@@ -164,7 +210,7 @@ export class DownloadManager extends EventEmitter {
       item.totalSize = info.contentLength;
       item.resumeSupport = info.resumeSupport;
     } catch (e) {
-      item.error = e instanceof Error ? e.message : String(e);
+      item.error = redactErrorMessage(e, req.url);
     }
 
     this.items.set(id, item);
@@ -203,7 +249,7 @@ export class DownloadManager extends EventEmitter {
   // ---- task lifecycle --------------------------------------------------------
 
   private createTask(item: DownloadItem): DownloadTask {
-    const task = new DownloadTask(item, {
+    const task = new DownloadTask(this.taskItem(item), {
       maxConnections: this.settings.maxConnectionsPerDownload,
       minPartSize: this.settings.minConnectionPartSize,
       headers: this.itemHeaders.get(item.id),
@@ -219,6 +265,7 @@ export class DownloadManager extends EventEmitter {
     });
     task.on("error", async () => {
       this.tasks.delete(item.id);
+      if (item.error !== null) item.error = redactErrorMessage(item.error, this.sourceUrl(item));
       await this.persist("updated", `Recorded download error for ${item.fileName}`);
       this.scheduleNotify();
       this.processAllQueues();
@@ -240,7 +287,7 @@ export class DownloadManager extends EventEmitter {
     const task = this.createTask(item);
     task.start().catch(async (e) => {
       item.status = "error";
-      item.error = e instanceof Error ? e.message : String(e);
+      item.error = redactErrorMessage(e, this.sourceUrl(item));
       this.tasks.delete(item.id);
            await this.persist();
       this.scheduleNotify();
@@ -386,6 +433,7 @@ export class DownloadManager extends EventEmitter {
     }
     this.items.delete(id);
     this.itemHeaders.delete(id);
+    this.itemSourceUrls.delete(id);
     this.itemOrder = this.itemOrder.filter((x) => x !== id);
     for (const queue of this.queues.values()) {
       queue.itemIds = queue.itemIds.filter((x) => x !== id);
@@ -513,5 +561,6 @@ export class DownloadManager extends EventEmitter {
     });
     await Promise.all(pausePromises);
     await this.persist();
+    this.itemSourceUrls.clear();
   }
 }
