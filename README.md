@@ -15,6 +15,9 @@ AB Download Manager codebase.
 - Website: not published
 - Export feature docs: docs/features/export/
 - History feature docs: docs/features/history/
+- Accessibility feature docs: docs/features/accessibility/
+- Notification feature docs: docs/features/notifications/
+- Safety feature docs: docs/features/safety/
 
 <details>
 <summary>Build and test</summary>

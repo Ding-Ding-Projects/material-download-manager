@@ -108,6 +108,11 @@ reconciliation:
 10. The isolated Git-backed HistoryStore is available under
    design/electron/history/HistoryStore.ts; connect it to every user-managed
    record and settings mutation before calling local history complete.
+11. The renderer lane now supplies centralized accessibility semantics,
+   non-blocking notification history, and the native destructive-action gate.
+   Its current evidence is typecheck/build, existing engine/Electron tests, and
+   a cheap headless Settings/Escape/focus smoke; a renderer DOM harness,
+   notification bulk actions, and deletion history recording remain open.
 
 ## Git state and ownership
 
