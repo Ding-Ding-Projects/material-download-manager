@@ -185,6 +185,21 @@ That release run published stable
 release `v0.1.38` from `0aed1d2` and the sibling records `v0.1.36`/`v0.1.37`
 are captured in the offline changelog, which is current through v0.1.39.
 
+## Open handoff: auto-organize downloads (engine landed, UI pending)
+
+Branch `claude/auto-organize-downloads` at `faf94dfe` carries the complete,
+verified engine layer for category auto-organization (General, Documents,
+Videos, Music, Programs, Compressed) with user-defined regex filters that
+outrank the extension mapping. Settings schema, migration, IPC-edge
+validation, folder routing, and tests are in: engine 40/40, Electron 54/54,
+typecheck clean. The Settings tab UI (toggle, folder table, rule editor with
+its anchored regex builder), the documentation article, and the bundle regen
+remain. Issue #11 records the full handoff, the decided semantics, and the
+still-unstarted request for extensive README screenshots. The site
+narrow-width fix `a5a78b9` (mobile tab rail no longer inflates the layout
+viewport to 700px) is on the default branch; its CI cycle was queued at
+handoff time and its verdict belongs to the runs for that commit.
+
 ## Current implementation slice verified and published
 
 The active-download-cap test was corrected after real release run
