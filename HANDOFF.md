@@ -52,9 +52,11 @@ race: two saves shared `state.json.tmp`, and one could rename it before the
 other. StateStore now serializes saves per store, uses a unique temporary
 filename for each atomic write, and cleans up temporary files after success or
 failure. The engine test command also runs with `--test-concurrency=1
---test-timeout=30000` because its manager tests intentionally exercise
-process-global Windows profile state and a blocked test must fail within a
-bounded interval. Both current workflows use the self-hosted runner contract;
+--test-timeout=60000` because its manager tests intentionally exercise
+process-global Windows profile state and Node applies the timeout to each
+compiled test file as a whole. The 60-second file budget accommodates the
+deliberately serialized cases while still bounding a blocked file. Both current
+workflows use the self-hosted runner contract;
 the current runner and its fresh bootstrap evidence are recorded below.
 Historical run
 [31129129233](https://github.com/Ding-Ding-Projects/material-download-manager/actions/runs/31129129233)

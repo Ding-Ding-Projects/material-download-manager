@@ -68,10 +68,11 @@ The engine tests cover persisted headers, cross-origin credential stripping,
 Range reconstruction, pause/resume, concurrency across queues, serialized
 StateStore saves, schedule windows and race handling, redirect limits, timeout
 behavior, malformed range responses, categories, and throttling. The
-`test:engine` script uses Node's `--test-concurrency=1` and
-`--test-timeout=30000` because the manager tests exercise process-global Windows
-profile state intentionally and a blocked test must fail within a bounded
-interval.
+`test:engine` script uses Node's `--test-concurrency=1` because the manager
+tests exercise process-global Windows profile state intentionally. Node applies
+the CLI timeout to each compiled test file as a whole, so the suite uses
+`--test-timeout=60000`: that accommodates the deliberately serialized manager
+cases while still failing a blocked file within a bounded interval.
 
 ## Suggested articles
 
