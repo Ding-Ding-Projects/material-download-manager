@@ -45,6 +45,14 @@ jobs:
         shell: pwsh
         run: pwsh -NoProfile -File scripts/verify-self-hosted-bootstrap.ps1 -Phase postinstall
 
+      - name: Validate bundled documentation catalog
+        working-directory: design
+        run: npm run docs:bundle:check
+
+      - name: Test bundled documentation catalog
+        working-directory: design
+        run: npm run test:docs
+
       - name: Typecheck
         working-directory: design
         run: npm run typecheck
@@ -68,3 +76,11 @@ jobs:
       - name: Test Chromium extension contract
         working-directory: extension
         run: npm test
+
+      - name: Validate Pages source
+        working-directory: site
+        run: npm run check
+
+      - name: Build Pages source
+        working-directory: site
+        run: npm run build

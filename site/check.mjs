@@ -132,7 +132,7 @@ run("local image asset has meaningful alternative text", () => {
 });
 
 run("feature article inventory covers every embedded feature", () => {
-  assert.equal(content.features.length, 14);
+  assert.equal(content.features.length, 15);
   const ids = new Set(content.features.map((feature) => feature.id));
   for (const feature of content.features) {
     assert.ok(feature.title && feature.summary && feature.category, `${feature.id} has identity fields`);

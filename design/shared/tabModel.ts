@@ -114,6 +114,17 @@ export function createDefaultTabState(): TabState {
       pinned: false,
       dirty: false,
     },
+    {
+      id: "documentation",
+      label: "Documentation",
+      title: "Offline feature documentation",
+      windowId: "main",
+      workspaceId: "default",
+      stripId: "main",
+      groupId,
+      pinned: false,
+      dirty: false,
+    },
   ];
   return {
     tabs,
@@ -210,6 +221,20 @@ export function normalizeTabState(value: unknown): TabState {
       dirty: false,
     });
     firstGroup.tabIds.push("changelog");
+  }
+  if (firstGroup && !normalizedTabs.some((tab) => tab.id === "documentation")) {
+    normalizedTabs.push({
+      id: "documentation",
+      label: "Documentation",
+      title: "Offline feature documentation",
+      windowId: "main",
+      workspaceId: "default",
+      stripId: "main",
+      groupId: firstGroup.id,
+      pinned: false,
+      dirty: false,
+    });
+    firstGroup.tabIds.push("documentation");
   }
   const activeTabId = typeof value.activeTabId === "string" && normalizedTabs.some((tab) => tab.id === value.activeTabId)
     ? value.activeTabId

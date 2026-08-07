@@ -396,6 +396,35 @@ window.MDM_SITE_CONTENT = {
       suggested: ["browser-extension", "renderer-accessibility", "reliable-transfers"],
     },
     {
+      id: "in-app-documentation-browser",
+      category: "Documentation",
+      title: "In-app documentation browser",
+      summary: "Offline bundled Markdown articles with local article links, plain-text-first search, and an anchored regex builder inside the Windows app.",
+      docsPath: "../docs/features/documentation/in-app-documentation-browser.md",
+      tags: ["documentation", "offline", "markdown", "search"],
+      sections: {
+        behavior: [
+          "The Windows app bundles every categorized Markdown article under docs/features/ and renders it in a Documentation tab through one isolated React renderer.",
+          "The article index searches title, source path, and body locally. Relative links to bundled .md articles stay inside the Documentation tab; external links remain external.",
+        ],
+        configuration: [
+          "The Markdown files remain the source of truth. design/scripts/generate-documentation-bundle.mjs emits the checked-in renderer catalog, and the build fails when that catalog is stale.",
+          "The Documentation search is plain-text-first and has its own opt-in JavaScript RegExp builder and flags.",
+        ],
+        failureModes: [
+          "A missing or stale bundle fails the build with the exact regeneration command. Invalid regex fails closed and an empty result names the active query.",
+          "Unresolvable relative article links remain visible without guessing a local destination.",
+        ],
+        security: [
+          "The renderer does not read the filesystem or fetch documentation at runtime. Markdown becomes React nodes rather than executable HTML, and bounded local regex evaluation protects the renderer.",
+        ],
+        verification: [
+          "The bundle test checks source/catalog completeness, shared tests cover link resolution and search bounds, and the built-artifact smoke exercises the real Documentation tab, command-palette destination, regex search, relative link, code block, empty state, and narrow layout.",
+        ],
+      },
+      suggested: ["regex-builder", "tabbed-navigation", "site-foundation"],
+    },
+    {
       id: "site-foundation",
       category: "Site",
       title: "Landing and documentation site",

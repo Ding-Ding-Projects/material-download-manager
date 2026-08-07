@@ -21,11 +21,17 @@ the prototype's simulated engine is not part of the production download path.
 - `src/` — React renderer: title bar, sidebar (categories/queues), download
   list, add-download / details / settings dialogs, styled to match the
   original app's dark/light UI (see `vendor/ab-download-manager/assets/screenshots`).
+- `src/components/DocumentationPanel.tsx` and `src/generated/` — the offline
+  Documentation tab and its checked-in catalog generated from every
+  `docs/features/**/*.md` article. `MarkdownRenderer.tsx` renders provider
+  text as isolated React nodes and resolves bundled relative links locally.
 
 ## Development
 
 ```bash
 npm install
+npm run docs:bundle:check
+npm run test:docs
 npm run electron:dev   # vite + tsc --watch + electron, live reload
 ```
 
@@ -35,6 +41,7 @@ npm run electron:dev   # vite + tsc --watch + electron, live reload
 npm run build           # renderer (vite) + main process (tsc)
 npm run test:engine     # downloader and transfer tests
 npm run test:electron   # compiled Electron path/launch-mode tests
+npm run test:ui         # built-artifact CDP smoke, including Documentation
 npm run dist:win        # electron-builder Windows package (validate before release)
 ```
 
