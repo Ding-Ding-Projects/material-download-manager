@@ -15,7 +15,7 @@ import type { ExportFormat, ExportResult } from "../../shared/export";
 import { historyFilterRequest, normalizeHistoryFilter, type HistoryFilter, type HistoryView } from "../../shared/history";
 import { DEFAULT_QUEUE_ID } from "../../shared/types";
 import { StateStore } from "./persistence";
-import { detectCategory } from "./categories";
+import { resolveCategory, resolveDownloadFolder } from "./categories";
 import { probeUrl as httpProbeUrl, redactErrorMessage, redactUrl, sanitizeFileName } from "./HttpProbe";
 import { DownloadTask } from "./DownloadTask";
 import { SpeedLimiter } from "./SpeedLimiter";
@@ -254,8 +254,14 @@ export class DownloadManager extends EventEmitter {
 
   async addDownload(req: AddDownloadRequest): Promise<string> {
     const id = crypto.randomUUID();
-    const folder = req.folder || this.settings.defaultSaveFolder;
     let fileName = sanitizeFileName(req.fileName || "download");
+    const category = resolveCategory(fileName, req.url, this.settings.autoOrganizeRules ?? []);
+    const folder = resolveDownloadFolder(
+      req.folder,
+      this.settings.defaultSaveFolder,
+      category,
+      this.settings.autoOrganizeEnabled === true
+    );
     fileName = await this.resolveNameCollision(folder, fileName);
 
     const item: DownloadItem = {
@@ -263,7 +269,7 @@ export class DownloadManager extends EventEmitter {
       url: redactUrl(req.url),
       fileName,
       folder,
-      category: detectCategory(fileName),
+      category,
       status: "added",
       totalSize: null,
       downloadedSize: 0,

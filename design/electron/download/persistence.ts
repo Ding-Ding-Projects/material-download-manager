@@ -6,6 +6,7 @@ import type { AppSettings, DownloadItem, DownloadQueue } from "../../shared/type
 import { DEFAULT_QUEUE_ID } from "../../shared/types";
 import {
   createDefaultSettings,
+  isAutoOrganizeRules,
   isBoundedNumber,
   isDensityMode,
   isFunnyLevel,
@@ -72,6 +73,8 @@ export function migrateSettings(input: unknown, defaultSaveFolder: string): AppS
   adopt("uiFontFamily", isUIFontFamily);
   adopt("uiFontSize", (value): value is number => isBoundedNumber(value, 10, 32));
   adopt("uiFontWeight", isUIFontWeight);
+  adopt("autoOrganizeEnabled", (value): value is boolean => typeof value === "boolean");
+  adopt("autoOrganizeRules", isAutoOrganizeRules);
 
   // A newer file is read conservatively: known keys are still validated, but
   // the in-memory schema is always the current one so the next save upgrades it.

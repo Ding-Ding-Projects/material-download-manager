@@ -1,6 +1,8 @@
 import type {
   AppSettings,
+  AutoOrganizeRule,
   DensityMode,
+  DownloadCategory,
   FunnyLevel,
   LanguageMode,
   SettingKey,
@@ -8,7 +10,13 @@ import type {
   UIFontFamily,
   UIFontWeight,
 } from "./types";
-import { SETTING_KEYS } from "./types";
+import {
+  AUTO_ORGANIZE_RULE_LIMIT,
+  AUTO_ORGANIZE_RULE_NAME_MAX_LENGTH,
+  AUTO_ORGANIZE_RULE_PATTERN_MAX_LENGTH,
+  SETTING_KEYS,
+} from "./types";
+import { normalizeRegexFlags, validateRegexPattern } from "./regex";
 
 export const SETTINGS_SCHEMA_VERSION = 2;
 export const APP_DISPLAY_NAME_MAX_LENGTH = 64;
@@ -29,6 +37,7 @@ export const COMPILED_IN_DEFAULTS = {
   uiFontFamily: "segoe-ui" as UIFontFamily,
   uiFontSize: 13,
   uiFontWeight: 400 as UIFontWeight,
+  autoOrganizeEnabled: true,
 };
 
 export function compiledInProvenance(): SettingsProvenance {
@@ -42,6 +51,9 @@ export function createDefaultSettings(defaultSaveFolder: string): AppSettings {
     settingsVersion: SETTINGS_SCHEMA_VERSION,
     defaultSaveFolder,
     ...COMPILED_IN_DEFAULTS,
+    // A fresh array per settings object so one profile's rules can never
+    // alias another's through the shared compiled-in default.
+    autoOrganizeRules: [],
     settingProvenance: compiledInProvenance(),
   };
 }
@@ -76,6 +88,40 @@ export function isBoundedNumber(value: unknown, min: number, max: number): value
 
 export function isSettingKey(value: string): value is SettingKey {
   return (SETTING_KEYS as readonly string[]).includes(value);
+}
+
+export function isDownloadCategory(value: unknown): value is DownloadCategory {
+  return (
+    value === "image" ||
+    value === "music" ||
+    value === "video" ||
+    value === "apps" ||
+    value === "document" ||
+    value === "compressed" ||
+    value === "other"
+  );
+}
+
+/** Validate one auto-organize rule with the same bounds the editor enforces. */
+export function isAutoOrganizeRule(value: unknown): value is AutoOrganizeRule {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
+  const rule = value as Record<string, unknown>;
+  if (typeof rule.id !== "string" || rule.id.length === 0 || rule.id.length > 64) return false;
+  if (typeof rule.name !== "string" || rule.name.length > AUTO_ORGANIZE_RULE_NAME_MAX_LENGTH) return false;
+  if (
+    typeof rule.pattern !== "string" ||
+    rule.pattern.length === 0 ||
+    rule.pattern.length > AUTO_ORGANIZE_RULE_PATTERN_MAX_LENGTH
+  ) {
+    return false;
+  }
+  if (typeof rule.flags !== "string" || normalizeRegexFlags(rule.flags) !== rule.flags) return false;
+  if (validateRegexPattern(rule.pattern, rule.flags) !== null) return false;
+  return isDownloadCategory(rule.category);
+}
+
+export function isAutoOrganizeRules(value: unknown): value is AutoOrganizeRule[] {
+  return Array.isArray(value) && value.length <= AUTO_ORGANIZE_RULE_LIMIT && value.every(isAutoOrganizeRule);
 }
 
 /** Validate a renderer-originated patch before it reaches live application state. */
@@ -118,6 +164,10 @@ export function validateSettingsPatch(value: unknown): Partial<AppSettings> {
           return isBoundedNumber(settingValue, 10, 32);
         case "uiFontWeight":
           return isUIFontWeight(settingValue);
+        case "autoOrganizeEnabled":
+          return typeof settingValue === "boolean";
+        case "autoOrganizeRules":
+          return isAutoOrganizeRules(settingValue);
       }
     })();
     if (!valid) throw new Error(`Invalid value for setting: ${key}`);
