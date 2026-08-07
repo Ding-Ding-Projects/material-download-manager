@@ -95,10 +95,12 @@ timing is `00:04:08` from `2026-08-07T18:35:22.000Z` through
 [31188348179](https://github.com/Ding-Ding-Projects/material-download-manager/actions/runs/31188348179)
 and the release run is
 [31188346937](https://github.com/Ding-Ding-Projects/material-download-manager/actions/runs/31188346937).
-Integration commit `7f7e7554ced8c243365dbe570c057a45d5d924aa` contains that exact branch tip
-and passed the local verification matrix below. At this pre-publication
-checkpoint, default-branch release and Pages evidence remain separate pending
-checks; issue #8 and rolling Discussion #3 carry the post-push verdicts.
+Integration history commit `19ff65335e55babd5f2ba8b8be91ff37c5843eff`
+contains that exact branch tip and every preserved task checkpoint without
+replacing the hardened tree. It passed the local verification matrix below. At
+this pre-publication checkpoint, default-branch release and Pages evidence
+remain separate pending checks; issue #8 and rolling Discussion #3 carry the
+post-push verdicts.
 
 The v0.1.28 record above supersedes the older v0.1.26 release evidence for
 current default-branch status.
@@ -210,8 +212,9 @@ regex builder, participates in the persisted tab model, and is listed in the
 `Ctrl+Shift+F` command palette.
 
 The local verification for this slice is typecheck/build green, the bundle and
-shared documentation tests are green, Electron is 46/46, the built-artifact
-smoke is 24/24, and the Pages source check is 42/42. The smoke uses the real
+shared documentation tests are green, the download engine is 38/38, Electron
+is 54/54, the built-artifact smoke is 24/24, and the Pages source check is
+42/42. The smoke uses the real
 compiled renderer and preload bridge to open the tab, search in both modes,
 follow a relative article link, render a fenced code block, verify an honest
 empty state, open the command-palette destination, and preserve the existing
@@ -220,6 +223,16 @@ checks. The full user-facing article catalog is currently source-authored
 English while its surrounding app controls follow the selected language mode;
 translated article copies remain explicit follow-up work rather than an
 unverified claim.
+
+The final integration also recovered 15 previously untracked tests before
+cleanup: seven scheduled-source tests cover URL policy, bounded API and Home
+Assistant behavior, fail-safe fallback, token isolation, and stale-response
+ordering; eight history/export/changelog tests cover concurrent snapshots,
+append-only restore and discard records, argument and size bounds, export
+metadata and loss warnings, language serialization, commit links, filters, and
+unsafe input. Commits `76a5e2b` and `061a56a` preserve that coverage and make
+the existing scheduled-pause race deterministic with a promise-gated response
+body and protected cleanup.
 
 The first branch release run [31187148273](https://github.com/Ding-Ding-Projects/material-download-manager/actions/runs/31187148273)
 was intentionally red at the new bundle guard. The second branch Windows run
@@ -300,13 +313,13 @@ On the current verification tree, the following checks passed locally:
 | --- | --- |
 | `npm run typecheck` | Passed renderer and Electron TypeScript checks. |
 | `npm run build` | Passed Vite renderer and Electron main-process compilation. |
-| `npm run test:engine` | 31/31 passed locally, including concurrent and cross-instance StateStore saves, failed-write recovery, Range integrity, pause/resume, non-resumable fallback, custom-header persistence and cross-origin header stripping, global queue limits, schedule race handling, manager history hooks, filename sanitization, malformed Range rejection, categories, throttling, and URL redaction. |
-| `npm run test:electron` | 46/46 passed for export, local history, hook/index isolation, renderer-boundary history filter normalization, renderer settings validation, regex, tabs, documentation-link resolution/search bounds, command-palette foundations, compiled renderer-path resolution, secure updater IPC, version monotonicity, timeout/stale-event recovery, native Squirrel download-overlap protection, queue payload validation, Settings Escape handling, completion-notification preference handling, loopback handoff success/failure responses, slow-pending handoff acknowledgement, and the embedded changelog store/IPC path. |
+| `npm run test:engine` | 38/38 passed locally, including concurrent and cross-instance StateStore saves, failed-write recovery, Range integrity, pause/resume, non-resumable fallback, custom-header persistence and cross-origin header stripping, global queue limits, deterministic schedule race handling, manager history hooks, filename sanitization, malformed Range rejection, categories, throttling, URL redaction, bounded API schedule sources, and Home Assistant boolean sources. |
+| `npm run test:electron` | 54/54 passed for export, local history, concurrent and append-only history foundations, hook/index isolation, argument and snapshot bounds, renderer-boundary history filter normalization, renderer settings validation, regex, tabs, documentation-link resolution/search bounds, command-palette foundations, compiled renderer-path resolution, secure updater IPC, version monotonicity, timeout/stale-event recovery, native Squirrel download-overlap protection, queue payload validation, Settings Escape handling, completion-notification preference handling, loopback handoff success/failure responses, slow-pending handoff acknowledgement, export metadata/loss contracts, and changelog validation/filtering/store/IPC paths. |
 | `npm run test:ui` | 24/24 required checks passed through the built Electron/CDP smoke harness: renderer freshness, real preload bridge, tab shell including Documentation, offline article index and Markdown rendering, plain-text and regex article search, relative article navigation, honest empty state, command-palette destination, History tab controls and honest empty state, a seeded separate progress window with a named progressbar, four Settings tabs, independent search, anchored regex builder, Escape focus restoration, interactive-label structure, narrow layout at 520 CSS pixels and 2× scale, and cleanup. |
 | Chromium extension `npm test` | 12/12 passed for MV3 permissions and entrypoints, page/link/selected-text context-menu handoff, bounded link-target precedence, loopback protocol, bounded validation, settings import/export, regex safety, localization, and no remote assets/tracking. |
 | `npm run test:docs` and bundle guard | 2/2 bundle tests passed; all 30 categorized Markdown files are present in the generated renderer catalog. |
 | GitHub Pages source `npm run check` | 42/42 checks passed, including the new in-app documentation article, feature-article coverage, local-only assets, stable-manifest fail-closed behavior, publication-state rendering, prototype sanitization, and the browser-extension/progress-window articles. |
-| Branch remote stable release | `31188346937` and Windows verification `31188348179` are green for exact `a221f31`; stable `v0.1.35` is non-draft/non-prerelease with `Setup.exe`, `RELEASES`, full `material-download-manager-0.1.35-full.nupkg`, timing `00:04:08`, and the `Steamed Bean Curd Skin Roll · 鮮竹卷` code name. Integration commit `7f7e7554` contains that source tip; default-branch and Pages publication remain separate evidence. |
+| Branch remote stable release | `31188346937` and Windows verification `31188348179` are green for exact `a221f31`; stable `v0.1.35` is non-draft/non-prerelease with `Setup.exe`, `RELEASES`, full `material-download-manager-0.1.35-full.nupkg`, timing `00:04:08`, and the `Steamed Bean Curd Skin Roll · 鮮竹卷` code name. Integration history commit `19ff653` contains that source tip and every preserved task tip; default-branch and Pages publication remain separate evidence. |
 | Hidden-desktop progress capture | Passed through the cheap Lowlevel headless route: a real loopback handoff created a live download, and a dynamically resolved second `Chrome_WidgetWin_1` window rendered the separate 980×640 `Download progress` surface with the fixture filename, source URL, transferred bytes, speed, pause, cancel, and close controls. The capture was retained in the session scratchpad, outside the repository. The disposable desktop, Electron process, and fixture server were cleaned up. |
 | Remote GitHub Actions | Default-branch stable release [31182280753](https://github.com/Ding-Ding-Projects/material-download-manager/actions/runs/31182280753), Windows verification [31182280767](https://github.com/Ding-Ding-Projects/material-download-manager/actions/runs/31182280767), and Pages run [31182280754](https://github.com/Ding-Ding-Projects/material-download-manager/actions/runs/31182280754) are green for `613869c`; branch stable release [31181815994](https://github.com/Ding-Ding-Projects/material-download-manager/actions/runs/31181815994) and Windows verification [31181815918](https://github.com/Ding-Ding-Projects/material-download-manager/actions/runs/31181815918) are also green. |
 
@@ -420,9 +433,11 @@ initialized. GitHub Pages is enabled, deployed, and live at the URL above. The
 unsigned `v0.1.0` test release is historical evidence only; the stable feed is
 the dynamic latest-release record.
 
-The main checkout and the user-owned linked checkouts remain registered with
-Git. The release-helper checkout holds untracked `scripts/`, and the
-release-workflow checkout holds an untracked `.github/workflows/release.yml`;
-both are preserved because they contain uncommitted work. Any remaining stash
-or linked-checkout state is preserved until its exact ownership and clean,
-merged, pushed proof is available.
+The four linked checkouts that previously held uncommitted work are preserved
+as commits `b4a08e0`, `c7b9f62`, `c0b8d1a`, and `02cb473`; the former stash
+payload is preserved as `34639e9`. Integration history commit `19ff653`
+records every retained task tip as an ancestor without replacing newer files.
+Cleanup of merged task branches, linked checkouts, and the redundant stash is
+permitted only after the pushed default branch contains the final handoff and
+remote release checks report their actual result. Issue #8 and rolling
+Discussion #3 are the durable post-push record.
