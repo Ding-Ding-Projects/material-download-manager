@@ -130,6 +130,12 @@ export class HistoryStore {
     return next;
   }
 
+  /** Wait for every queued Git mutation before an owner tears down its data path. */
+  async flush(): Promise<void> {
+    await this.initialization?.catch(() => undefined);
+    await this.mutationChain.catch(() => undefined);
+  }
+
   private async writeSnapshot(snapshot: string): Promise<void> {
     const snapshotPath = path.join(this.repositoryPath, "snapshot.json");
     const temporaryPath = `${snapshotPath}.${randomUUID()}.tmp`;

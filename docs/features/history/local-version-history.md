@@ -17,6 +17,11 @@ the renderer state and out of these snapshots.
 The store supports date range, action, plain-text, and bounded local regex
 filters, revision diff, and export through the shared serializer.
 
+Manager shutdown drains asynchronous task-event persistence and the history
+mutation queue before returning. This keeps a just-finished transfer from
+leaving its local Git files in use while the application data directory is
+being closed or removed.
+
 ## Configuration
 
 The caller supplies a serialized snapshot and records real actions such as
@@ -34,11 +39,18 @@ restore result rather than claiming a revision exists. Revision subjects
 sanitize newlines. Snapshot encryption remains the caller's responsibility;
 the manager currently records non-secret metadata as local JSON.
 
+On Windows, test fixtures remove temporary history repositories with a bounded
+filesystem retry because the operating system can release a completed Git
+child process slightly after its awaited command completes. The retry is
+finite and does not hide a persistent lock.
+
 ## Verification
 
 design/electron/__tests__/history.test.ts covers append-only behavior,
 no-op suppression, restore-as-new-revision, action/text/regex filters, diffs,
-and JSONL export. Run npm run build and npm run test:electron from design/.
+and JSONL export. DownloadManager's full 31-test engine suite covers queue
+shutdown and local-history cleanup. Run npm run build, npm run test:engine, and
+npm run test:electron from design/.
 
 ## Suggested articles
 

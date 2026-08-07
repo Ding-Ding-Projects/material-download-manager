@@ -9,6 +9,11 @@ import type { DownloadQueue } from "../../../shared/types";
 import { startTestServer } from "./testServer";
 import { HistoryStore } from "../../history/HistoryStore";
 
+/** Windows can release a just-completed Git child a moment after its promise resolves. */
+async function removeTestRoot(root: string): Promise<void> {
+  await fsp.rm(root, { recursive: true, force: true, maxRetries: 20, retryDelay: 100 });
+}
+
 test("queue creation rejects malformed item IDs before persistence and processQueue fails closed", async () => {
   const root = await fsp.mkdtemp(path.join(os.tmpdir(), "mdm-queue-validation-test-"));
   const previousUserProfile = process.env.USERPROFILE;
@@ -48,7 +53,7 @@ test("queue creation rejects malformed item IDs before persistence and processQu
     assert.deepEqual(validQueue.itemIds, []);
   } finally {
     await manager.shutdown();
-    await fsp.rm(root, { recursive: true, force: true });
+    await removeTestRoot(root);
     if (previousUserProfile === undefined) delete process.env.USERPROFILE;
     else process.env.USERPROFILE = previousUserProfile;
   }
@@ -110,7 +115,7 @@ test("one global active-download cap is shared across multiple queues", async ()
     await manager.shutdown();
     await firstServer.close();
     await secondServer.close();
-    await fsp.rm(root, { recursive: true, force: true });
+    await removeTestRoot(root);
     if (previousUserProfile === undefined) delete process.env.USERPROFILE;
     else process.env.USERPROFILE = previousUserProfile;
   }
@@ -151,7 +156,7 @@ test("manager reloads persisted custom headers without exposing them in state", 
     await secondManager.shutdown();
   } finally {
     await server.close();
-    await fsp.rm(root, { recursive: true, force: true });
+    await removeTestRoot(root);
     if (previousUserProfile === undefined) delete process.env.USERPROFILE;
     else process.env.USERPROFILE = previousUserProfile;
   }
@@ -205,7 +210,7 @@ test("credentialed source URLs remain usable while state and history keep only r
   } finally {
     if (initialized) await manager.shutdown();
     await server.close();
-    await fsp.rm(root, { recursive: true, force: true });
+    await removeTestRoot(root);
     if (previousUserProfile === undefined) delete process.env.USERPROFILE;
     else process.env.USERPROFILE = previousUserProfile;
   }
@@ -249,7 +254,7 @@ test("malformed credential URLs stay redacted in item errors, persisted state an
     assert.match(historySnapshot ?? "", /example\.com:not-a-port/);
   } finally {
     if (initialized) await manager.shutdown();
-    await fsp.rm(root, { recursive: true, force: true });
+    await removeTestRoot(root);
     if (previousUserProfile === undefined) delete process.env.USERPROFILE;
     else process.env.USERPROFILE = previousUserProfile;
   }
@@ -315,7 +320,7 @@ test("manual resume waits for an in-flight schedule pause", async () => {
     await manager.shutdown();
   } finally {
     await server.close();
-    await fsp.rm(root, { recursive: true, force: true });
+    await removeTestRoot(root);
     if (previousUserProfile === undefined) delete process.env.USERPROFILE;
     else process.env.USERPROFILE = previousUserProfile;
   }
@@ -343,7 +348,7 @@ test("manager records download creation and deletion in local history", async ()
     assert.ok(revisions.some((revision) => revision.action === "deleted" && /history\.bin/.test(revision.summary)));
   } finally {
     await server.close();
-    await fsp.rm(root, { recursive: true, force: true });
+    await removeTestRoot(root);
     if (previousUserProfile === undefined) delete process.env.USERPROFILE;
     else process.env.USERPROFILE = previousUserProfile;
   }

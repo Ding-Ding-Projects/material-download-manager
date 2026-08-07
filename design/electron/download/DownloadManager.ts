@@ -91,6 +91,7 @@ export class DownloadManager extends EventEmitter {
   private shutDown = false;
   private itemOrder: string[] = [];
   private scheduledPauses: Map<string, Promise<void>> = new Map();
+  private pendingOperations = new Set<Promise<void>>();
   private scheduleClock = new QueueScheduleClock(() => this.processAllQueues());
 
   constructor(private userDataPath: string) {
@@ -203,6 +204,30 @@ export class DownloadManager extends EventEmitter {
     }
   }
 
+  /**
+   * EventEmitter does not await async listeners. Keep those listeners visible
+   * to shutdown so a Git-backed history write cannot outlive the manager's
+   * data directory cleanup.
+   */
+  private trackOperation(operation: Promise<unknown>): void {
+    let tracked!: Promise<void>;
+    tracked = operation.then(
+      () => {
+        this.pendingOperations.delete(tracked);
+      },
+      () => {
+        this.pendingOperations.delete(tracked);
+      }
+    );
+    this.pendingOperations.add(tracked);
+  }
+
+  private async drainPendingOperations(): Promise<void> {
+    while (this.pendingOperations.size > 0) {
+      await Promise.all(Array.from(this.pendingOperations));
+    }
+  }
+
   private async persist(action?: HistoryAction, summary?: string) {
     this.sanitizeItems();
     await this.store.save({
@@ -306,24 +331,36 @@ export class DownloadManager extends EventEmitter {
       speedLimiters: [this.globalSpeedLimiter],
     });
     task.on("progress", () => this.scheduleNotify());
-    task.on("completed", async () => {
-      this.tasks.delete(item.id);
-      await this.persist("updated", `Completed download ${item.fileName}`);
-      this.scheduleNotify();
-      this.emit("itemCompleted", item);
-      this.processAllQueues();
+    task.on("completed", () => {
+      this.trackOperation(
+        (async () => {
+          this.tasks.delete(item.id);
+          await this.persist("updated", `Completed download ${item.fileName}`);
+          this.scheduleNotify();
+          this.emit("itemCompleted", item);
+          this.processAllQueues();
+        })()
+      );
     });
-    task.on("error", async () => {
-      this.tasks.delete(item.id);
-      if (item.error !== null) item.error = redactErrorMessage(item.error, this.sourceUrl(item));
-      await this.persist("updated", `Recorded download error for ${item.fileName}`);
-      this.scheduleNotify();
-      this.processAllQueues();
+    task.on("error", () => {
+      this.trackOperation(
+        (async () => {
+          this.tasks.delete(item.id);
+          if (item.error !== null) item.error = redactErrorMessage(item.error, this.sourceUrl(item));
+          await this.persist("updated", `Recorded download error for ${item.fileName}`);
+          this.scheduleNotify();
+          this.processAllQueues();
+        })()
+      );
     });
-    task.on("paused", async () => {
+    task.on("paused", () => {
       if (!this.scheduledPauses.has(item.id)) {
-        await this.persist();
-        this.scheduleNotify();
+        this.trackOperation(
+          (async () => {
+            await this.persist();
+            this.scheduleNotify();
+          })()
+        );
       }
     });
     this.tasks.set(item.id, task);
@@ -335,13 +372,17 @@ export class DownloadManager extends EventEmitter {
     item.status = "downloading";
     item.error = null;
     const task = this.createTask(item);
-    task.start().catch(async (e) => {
-      item.status = "error";
-      item.error = redactErrorMessage(e, this.sourceUrl(item));
-      this.tasks.delete(item.id);
-           await this.persist();
-      this.scheduleNotify();
-      this.processAllQueues();
+    task.start().catch((e) => {
+      this.trackOperation(
+        (async () => {
+          item.status = "error";
+          item.error = redactErrorMessage(e, this.sourceUrl(item));
+          this.tasks.delete(item.id);
+          await this.persist();
+          this.scheduleNotify();
+          this.processAllQueues();
+        })()
+      );
     });
   }
 
@@ -606,13 +647,17 @@ export class DownloadManager extends EventEmitter {
     if (this.shutDown) return;
     this.shutDown = true;
     this.scheduleClock.stop();
+    const scheduledPausePromises = Array.from(this.scheduledPauses.values());
+    await Promise.all(scheduledPausePromises);
     this.scheduledPauses.clear();
     const pausePromises = Array.from(this.tasks.entries()).map(async ([id, task]) => {
       await task.pause();
       this.tasks.delete(id);
     });
     await Promise.all(pausePromises);
+    await this.drainPendingOperations();
     await this.persist();
+    await this.history.flush();
     this.itemSourceUrls.clear();
   }
 }
