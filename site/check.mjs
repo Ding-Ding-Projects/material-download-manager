@@ -7,6 +7,8 @@ import { fileURLToPath } from "node:url";
 const siteRoot = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(siteRoot, "..");
 const checks = [];
+const pagesManifestPreparer = await readFile(path.join(repoRoot, "scripts", "prepare-pages-release-manifest.ps1"), "utf8");
+const prototypeMockup = await readFile(path.join(repoRoot, "prototype", "AB Download Manager M3.dc.html"), "utf8");
 
 async function read(relativePath) {
   return readFile(path.join(siteRoot, relativePath), "utf8");
@@ -164,6 +166,16 @@ run("release content preserves the stable/test distinction", () => {
   assert.equal(release.channel, "test prerelease");
   assert.equal(release.installer, null);
   assert.match(release.summary, /not a stable production installer/i);
+});
+
+run("Pages publication states share one verified contract", () => {
+  assert.match(pagesManifestPreparer, /pages = 'verified'/);
+  assert.match(pagesManifestPreparer, /pages = 'unverified'/);
+  assert.match(app, /\["verified", "workflow-deployed"\]\.includes\(manifest\.publication\?\.pages\)/);
+});
+
+run("public prototype guidance contains no host-specific sample paths", () => {
+  assert.doesNotMatch(prototypeMockup, /C:\\\\Users\\\\you\\\\Downloads/i);
 });
 
 run("settings provide persisted language, independent tone, appearance, motion, and tab controls", () => {

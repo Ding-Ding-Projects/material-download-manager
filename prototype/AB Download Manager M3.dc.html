@@ -1596,7 +1596,7 @@ class Component extends DCLogic {
       systemTray: true, autoStart: false, sizeUnit: 'binary-bytes', speedUnit: 'decimal-bytes', averageSpeed: false,
       notifSound: true, soundGeneral: 'Chime', soundError: 'Alert', soundSuccess: 'Tada',
       autoShowProgress: true, showFinishWindow: true, renderApi: 'Default',
-      defaultFolder: 'C:\\Users\\you\\Downloads\\ABDM', useCategoryDefault: true,
+      defaultFolder: '%USERPROFILE%\\Downloads\\ABDM', useCategoryDefault: true,
       speedLimit: 0, threadCount: 8, maxConcurrentDownloads: 5, maxDownloadRetryCount: 3, dynamicPartCreation: true,
       proxyMode: 'direct', proxyType: 'HTTP', proxyHost: '', proxyPort: 8080, proxyAuth: false, proxyUser: '', proxyPass: '', proxyPac: '', proxyExclude: '',
       userAgent: '', ignoreSSL: false, serverLastModified: false,
@@ -1662,7 +1662,7 @@ class Component extends DCLogic {
   CODENAME = this.DIMSUM ? null : null;
 
   defaultCategories() {
-    const root = 'C:\\Users\\you\\Downloads\\ABDM\\';
+    const root = '%USERPROFILE%\\Downloads\\ABDM\\';
     return [
       { id: 0, name: 'Compressed', icon: 'folder_zip', path: root + 'Compressed', types: 'zip rar 7z tar gz bz2 xz iso dmg tgz', urls: '', usePath: true },
       { id: 1, name: 'Programs', icon: 'deployed_code', path: root + 'Programs', types: 'apk exe msi bat sh jar app deb rpm bin', urls: '', usePath: true },

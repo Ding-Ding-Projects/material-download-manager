@@ -1,6 +1,6 @@
 # ABDM → Material 3 rewrite — feature map (extracted from source)
 
-Source: locally mounted `ab-download-manager` repo (Kotlin/Compose desktop app, v1.10.1) + `agent-global-memory` global instructions (hui instructions).
+Source: locally mounted source repository (Kotlin/Compose desktop app, v1.10.1) plus the project requirements recorded for this prototype.
 All strings: `data/en_US.properties` (copied verbatim from repo). Changelog: `data/CHANGELOG.md` (verbatim). Logo: `assets/app_logo.svg`.
 
 ## Decisions (user)
@@ -50,7 +50,7 @@ Appearance: Theme (System/Dark/Light/Obsidian/Deep Ocean/Twilight/Black/Light Gr
 Download Engine: Default Download Folder, Use Category By Default; Global Speed Limiter (0=unlimited), Thread Count (max 256, warn >64), Max Concurrent Downloads (0=unlimited), Max Retries, Dynamic Part Creation; Per Host Settings ↗; Proxy (Direct/System/Manual/PAC + auth + exclusion list), Default User-Agent, Ignore SSL Certificates, Use Server Last-Modified; Track Deleted Files, Append .part Extension, Delete Partial File On Cancellation, Sparse File Allocation.
 Browser Integration: enabled, port (15151 default), Use API Key, API Key.
 
-## Global-instruction features layered on (agent-global-memory/memory/SHARED_INSTRUCTIONS.md)
+## Cross-cutting product requirements layered on
 MD3 Expressive everywhere · frameless custom Material title bar · language modes EN/playful-HK-Cantonese/Bilingual + two independent funny sliders 1–5 (voice-not-facts, disclosure at first run) · optional TTS narrator (OFF, EN/粵/Both serialized, debounced) · dim-sum surprise 10%/launch, non-optable, non-blocking (assets/dimsum, bilingual names) · release code name "Classic Har Gow · 蝦餃" on About/changelog v1 entry · browser-style tab strip (overflow, reorder, pin, group, 4 tab searches, bulk close containing/not-containing w/ preview, persistence) · regex builder anchored at EVERY search bar (guided construction, flags, sample text, live matches/groups, engine=JS RegExp, plain-text default, bidirectional sync) · settings search on every settings surface · context menus all carry search fields · non-blocking notifications bottom-right + notification centre history · super-confirmation for destructive actions (2 keys + full-range slider + progress/completion animation + Emergency exit) · per-element "Edit appearance…" (right-click) anchored editor w/ Word-depth typography + infinite color picker/translator (named/HEX/HEX8/RGB/HSL/HSV/HWB/LAB/LCH/OKLab/OKLCH/CMYK + contrast + gamut warning) + per-element reset/global reset/presets/export-import; editors theme themselves · appearance controls: theme, density, seed color, font family/size/weight live · bulk actions everywhere (multi-select, select-all page/all-matches, invert, delete/export/move/retry/tag preview counts) · export everything (JSON/JSONL/YAML/TOML/XML/CSV/TSV/Markdown/HTML/SQL per shape) · local version history panel (append-only, restore=new revision, date picker + action filter + regex search) · changelog viewer (every released version from data/CHANGELOG.md, date filter + calendar, search w/ regex, export/copy) · accessibility: keyboard, focus rings, roles, reduced motion, ≥44px targets, no clipping · empty states truthful, no fake data.
 
 ## Screen map (source file → built surface)

@@ -84,7 +84,7 @@ if ($stableCandidates.Count -gt 0) {
     }
     testPrereleases = $historicalTestReleases
     status = 'Stable release verified from the immutable GitHub release record.'
-    publication = [pscustomobject]@{ pages = 'workflow-deployed'; url = $PagesUrl; source = 'self-hosted Pages workflow' }
+    publication = [pscustomobject]@{ pages = 'verified'; url = $PagesUrl; source = 'self-hosted Pages workflow' }
   }
 } else {
   $manifest = [pscustomobject]@{
@@ -92,7 +92,7 @@ if ($stableCandidates.Count -gt 0) {
     stable = $null
     testPrereleases = $historicalTestReleases
     status = 'No stable production installer has been proven. The site must not render an installer button until a stable record with verified assets is added.'
-    publication = [pscustomobject]@{ pages = 'workflow-deployed'; url = $PagesUrl; source = 'self-hosted Pages workflow' }
+    publication = [pscustomobject]@{ pages = 'unverified'; url = $PagesUrl; source = 'self-hosted Pages workflow' }
   }
 }
 

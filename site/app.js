@@ -127,7 +127,8 @@
     aboutLede: ["The site is a local documentation artifact, not a claim that GitHub Pages or a stable installer is already published.", "呢個網站係本地文件產物，唔代表 GitHub Pages 或穩定版安裝程式已經發佈。"],
     publicationEyebrow: ["PUBLICATION", "發佈狀態"],
     publicationTitle: ["Pages status is unverified.", "Pages 狀態未驗證。"],
-    publicationBody: ["This checkout does not verify an external GitHub Pages deployment. The repository homepage remains honest until a real publication URL and its built output are proven.", "呢個 checkout 未驗證外部 GitHub Pages 部署；未有真實網址同建置輸出證明之前，倉庫首頁會保持老實。"],
+    publicationBody: ["The source checkout carries a fail-closed publication baseline. The Pages workflow injects the verified URL and release manifest into the deployed site.", "source checkout 保持 fail-closed 發佈基線；Pages workflow 會將驗證過嘅網址同 release manifest 注入已部署網站。"],
+    publicationDetail: ["Publication: not claimed", "發佈：未確認"],
     verificationEyebrow: ["VERIFICATION", "驗證"],
     verificationTitle: ["Small checks, concrete evidence.", "細細個檢查，實實在在證據。"],
     verificationOne: ["The static check audits local assets and article coverage.", "靜態檢查會數本地素材同文章覆蓋。"],
@@ -785,6 +786,25 @@
     const slot = $("#stable-download-slot");
     slot.replaceChildren();
     const stable = manifest.stable;
+    const pagesVerified = ["verified", "workflow-deployed"].includes(manifest.publication?.pages);
+    if (releaseIsStableVerified(stable)) {
+      COPY.releaseSummary = [
+        `Stable v${stable.version} is verified with a real unsigned installer and release evidence. Download it from the published release record.`,
+        `穩定版 v${stable.version} 已經有真實未簽名安裝程式同 release 證據；可以由已發布嘅版本記錄下載。`
+      ];
+    }
+    if (pagesVerified) {
+      COPY.aboutLede = [
+        "This published site is backed by the verified Pages URL and release manifest recorded in the deployment.",
+        "呢個已發布網站由部署記錄入面驗證過嘅 Pages 網址同 release manifest 支持。"
+      ];
+      COPY.publicationTitle = ["Pages publication verified.", "Pages 發佈已驗證。"];
+      COPY.publicationBody = [
+        `The live site is published at ${manifest.publication.url || "the configured Pages URL"}. Its release manifest is supplied by the self-hosted Pages workflow.`,
+        `Live site 已經發佈喺 ${manifest.publication.url || "已設定嘅 Pages 網址"}；release manifest 由 self-hosted Pages workflow 提供。`
+      ];
+      COPY.publicationDetail = ["Publication: verified", "發佈：已驗證"];
+    }
     if (releaseIsStableVerified(stable)) {
       const link = create("a", "button button-filled verified-download", `Download stable installer · v${stable.version}`);
       link.href = stable.installerUrl;
@@ -1093,7 +1113,7 @@
     renderReleaseGate();
     renderReleaseList();
     renderTabDiscovery();
-    $("#publication-status").textContent = manifest.publication?.pages === "verified" ? "Pages publication verified" : "Local source · Pages publication unverified";
+    $("#publication-status").textContent = ["verified", "workflow-deployed"].includes(manifest.publication?.pages) ? "Pages publication verified" : "Local source · Pages publication unverified";
     $("#about-feature-links").replaceChildren(...content.features.map((feature) => { const button = create("button", "chip-button", feature.title); button.type = "button"; button.addEventListener("click", () => selectArticle(feature.id)); return button; }));
     applySettings();
     bindTabs();

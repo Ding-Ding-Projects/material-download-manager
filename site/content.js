@@ -413,7 +413,7 @@ window.MDM_SITE_CONTENT = {
         failureModes: [
           "Plain-text search remains safe when regex mode is off. Invalid or oversized expressions fail closed, preserve the user's input, and show an inline message.",
           "If no stable release asset is proven, the site shows an honest unavailable state and does not render a disabled or guessed installer button.",
-          "External GitHub Pages publication is not claimed by the local site; the source documents that publication is still unverified."
+          "The local source keeps a fail-closed publication baseline. The Pages workflow injects the verified release manifest and URL into the deployed site."
         ],
         security: [
           "Search evaluation is local and bounded. Preferences remain in the browser's localStorage. Provider-authored article text is inserted as text nodes rather than interpreted as markup or script.",
