@@ -40,9 +40,17 @@ jobs:
         shell: pwsh
         run: node site/check.mjs
 
+      - name: Prepare Windows-safe Pages staging path
+        shell: pwsh
+        run: |
+          $staging = Join-Path $env:RUNNER_TEMP 'material-download-manager-pages'
+          $uploadPath = $staging -replace '\\', '/'
+          "PAGES_STAGING_PATH=$staging" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "PAGES_UPLOAD_PATH=$uploadPath" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
       - name: Build site to an isolated staging directory
         shell: pwsh
-        run: node site/build.mjs "$env:RUNNER_TEMP\material-download-manager-pages"
+        run: node site/build.mjs "$env:PAGES_STAGING_PATH"
 
       - name: Inject verified stable release metadata into the staging site
         shell: pwsh
@@ -52,7 +60,7 @@ jobs:
           $parts = $env:GITHUB_REPOSITORY.Split('/', 2)
           $pagesUrl = "https://$($parts[0].ToLowerInvariant()).github.io/$($parts[1].ToLowerInvariant())/"
           pwsh -NoProfile -File scripts/prepare-pages-release-manifest.ps1 `
-            -OutputDirectory "$env:RUNNER_TEMP\material-download-manager-pages" `
+            -OutputDirectory "$env:PAGES_STAGING_PATH" `
             -PagesUrl $pagesUrl
 
       - name: Configure GitHub Pages
@@ -63,7 +71,7 @@ jobs:
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: ${{ runner.temp }}/material-download-manager-pages
+          path: ${{ env.PAGES_UPLOAD_PATH }}
 
       - name: Deploy to GitHub Pages
         id: deployment
