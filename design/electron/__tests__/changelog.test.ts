@@ -1,5 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
+import path from "node:path";
 import {
   CHANGELOG_REPOSITORY_URL,
   ChangelogStore,
@@ -11,14 +13,21 @@ import {
 const store = new ChangelogStore(DEFAULT_CHANGELOG_ENTRIES, CHANGELOG_REPOSITORY_URL);
 
 test("embeds every published stable release with a full source commit", () => {
-  assert.equal(DEFAULT_CHANGELOG_ENTRIES.length, 28);
-  assert.equal(DEFAULT_CHANGELOG_ENTRIES[0].id, "v0.1.29");
+  assert.equal(DEFAULT_CHANGELOG_ENTRIES.length, 34);
+  assert.equal(DEFAULT_CHANGELOG_ENTRIES[0].id, "v0.1.35");
   assert.equal(DEFAULT_CHANGELOG_ENTRIES.at(-1)?.id, "v0.1.2");
   const view = store.getView();
-  assert.equal(view.totalEntries, 28);
-  assert.equal(view.matchingEntries, 28);
+  assert.equal(view.totalEntries, 34);
+  assert.equal(view.matchingEntries, 34);
   assert.ok(view.entries.every((entry) => entry.commitSha.length === 40));
   assert.ok(view.entries.every((entry) => entry.commitUrl === CHANGELOG_REPOSITORY_URL + "/commit/" + entry.commitSha));
+  const repositoryRoot = path.resolve(process.cwd(), "..");
+  for (const entry of view.entries) {
+    assert.doesNotThrow(
+      () => execFileSync("git", ["cat-file", "-e", `${entry.commitSha}^{commit}`], { cwd: repositoryRoot, stdio: "ignore" }),
+      `missing changelog commit ${entry.commitSha} for ${entry.id}`,
+    );
+  }
   assert.ok(isChangelogView(view));
 });
 

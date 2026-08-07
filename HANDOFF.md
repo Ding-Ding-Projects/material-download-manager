@@ -236,6 +236,15 @@ unsafe input. Commits `76a5e2b` and `061a56a` preserve that coverage and make
 the existing scheduled-pause race deterministic with a promise-gated response
 body and protected cleanup.
 
+The offline changelog is current through stable `v0.1.35`: it embeds all 34
+stable releases from `v0.1.2` onward with their published names, dates, and
+exact tagged source commits. The Electron completeness test now resolves every
+embedded SHA through the repository's Git object database; CI checks out full
+history so a missing or invented commit fails before shipping. The guard was
+proved by substituting a nonexistent 40-character SHA, observing the focused
+test fail for that exact entry, restoring the real commit, and rerunning it
+green.
+
 The first branch release run [31187148273](https://github.com/Ding-Ding-Projects/material-download-manager/actions/runs/31187148273)
 was intentionally red at the new bundle guard. The second branch Windows run
 [31187443242](https://github.com/Ding-Ding-Projects/material-download-manager/actions/runs/31187443242)

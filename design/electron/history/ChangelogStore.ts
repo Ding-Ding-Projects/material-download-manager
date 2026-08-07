@@ -17,6 +17,78 @@ export const CHANGELOG_REPOSITORY_URL = "https://github.com/Ding-Ding-Projects/m
  */
 export const DEFAULT_CHANGELOG_ENTRIES: readonly ChangelogEntry[] = [
   {
+    id: "v0.1.35",
+    version: "0.1.35",
+    releaseDate: "2026-08-07",
+    title: "v0.1.35 — Steamed Bean Curd Skin Roll · 鮮竹卷",
+    changes: [
+      { category: "Release", text: "Published as a stable, non-draft, non-prerelease release with intentionally unsigned Squirrel.Windows artifacts." },
+      { category: "Code name", text: "Steamed Bean Curd Skin Roll · 鮮竹卷" },
+      { category: "Source", text: "Release metadata identifies commit a221f31a5479bfb1fda736eae36a37351a923c0d." },
+    ],
+    commitSha: "a221f31a5479bfb1fda736eae36a37351a923c0d",
+  },
+  {
+    id: "v0.1.34",
+    version: "0.1.34",
+    releaseDate: "2026-08-07",
+    title: "v0.1.34 — Steamed Bitter Melon Stuffed with Fish · 鯪魚釀苦瓜",
+    changes: [
+      { category: "Release", text: "Published as a stable, non-draft, non-prerelease release with intentionally unsigned Squirrel.Windows artifacts." },
+      { category: "Code name", text: "Steamed Bitter Melon Stuffed with Fish · 鯪魚釀苦瓜" },
+      { category: "Source", text: "Release metadata identifies commit 2602fdb4650194a53459f8903ee2856218ca9df0." },
+    ],
+    commitSha: "2602fdb4650194a53459f8903ee2856218ca9df0",
+  },
+  {
+    id: "v0.1.33",
+    version: "0.1.33",
+    releaseDate: "2026-08-07",
+    title: "v0.1.33 — Steamed Eggplant Stuffed with Shrimp · 百花釀茄子",
+    changes: [
+      { category: "Release", text: "Published as a stable, non-draft, non-prerelease release with intentionally unsigned Squirrel.Windows artifacts." },
+      { category: "Code name", text: "Steamed Eggplant Stuffed with Shrimp · 百花釀茄子" },
+      { category: "Source", text: "Release metadata identifies commit 0050941cd34005b29ab4f31368101c3a9c5de4a6." },
+    ],
+    commitSha: "0050941cd34005b29ab4f31368101c3a9c5de4a6",
+  },
+  {
+    id: "v0.1.32",
+    version: "0.1.32",
+    releaseDate: "2026-08-07",
+    title: "v0.1.32 — Steamed Tofu Stuffed with Shrimp · 百花釀豆腐",
+    changes: [
+      { category: "Release", text: "Published as a stable, non-draft, non-prerelease release with intentionally unsigned Squirrel.Windows artifacts." },
+      { category: "Code name", text: "Steamed Tofu Stuffed with Shrimp · 百花釀豆腐" },
+      { category: "Source", text: "Release metadata identifies commit 0050941cd34005b29ab4f31368101c3a9c5de4a6." },
+    ],
+    commitSha: "0050941cd34005b29ab4f31368101c3a9c5de4a6",
+  },
+  {
+    id: "v0.1.31",
+    version: "0.1.31",
+    releaseDate: "2026-08-07",
+    title: "v0.1.31 — Steamed Fish Maw with Oyster Sauce · 蠔皇蒸花膠",
+    changes: [
+      { category: "Release", text: "Published as a stable, non-draft, non-prerelease release with intentionally unsigned Squirrel.Windows artifacts." },
+      { category: "Code name", text: "Steamed Fish Maw with Oyster Sauce · 蠔皇蒸花膠" },
+      { category: "Source", text: "Release metadata identifies commit 613869cdff1e68c35d6b0dda1d60f73ef2aa4271." },
+    ],
+    commitSha: "613869cdff1e68c35d6b0dda1d60f73ef2aa4271",
+  },
+  {
+    id: "v0.1.30",
+    version: "0.1.30",
+    releaseDate: "2026-08-07",
+    title: "v0.1.30 — Steamed Curry Cuttlefish · 咖喱蒸魷魚",
+    changes: [
+      { category: "Release", text: "Published as a stable, non-draft, non-prerelease release with intentionally unsigned Squirrel.Windows artifacts." },
+      { category: "Code name", text: "Steamed Curry Cuttlefish · 咖喱蒸魷魚" },
+      { category: "Source", text: "Release metadata identifies commit 613869cdff1e68c35d6b0dda1d60f73ef2aa4271." },
+    ],
+    commitSha: "613869cdff1e68c35d6b0dda1d60f73ef2aa4271",
+  },
+  {
     id: "v0.1.29",
     version: "0.1.29",
     releaseDate: "2026-08-07",
