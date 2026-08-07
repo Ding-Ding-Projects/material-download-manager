@@ -1,0 +1,25 @@
+{
+  "manifest_version": 3,
+  "name": "Material Download Manager Handoff",
+  "version": "0.1.0",
+  "description": "Send a page or link to a locally configured Material Download Manager endpoint.",
+  "minimum_chrome_version": "109",
+  "permissions": [
+    "activeTab",
+    "contextMenus",
+    "storage"
+  ],
+  "host_permissions": [
+    "http://127.0.0.1/*",
+    "http://localhost/*"
+  ],
+  "background": {
+    "service_worker": "src/service-worker.js",
+    "type": "module"
+  },
+  "action": {
+    "default_title": "Send to Material Download Manager",
+    "default_popup": "src/popup.html"
+  },
+  "options_page": "src/options.html"
+}

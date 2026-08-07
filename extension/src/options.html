@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Material Download Manager Extension Options</title>
+  <link rel="stylesheet" href="options.css">
+</head>
+<body>
+  <main class="shell" aria-labelledby="options-title">
+    <header class="page-header">
+      <p class="eyebrow" id="manager-name">Material Download Manager</p>
+      <h1 id="options-title" data-l10n="optionsTitle">Extension options</h1>
+      <p class="subtitle" data-l10n="optionsSubtitle">Configure a bounded local handoff and the way this extension speaks to you.</p>
+    </header>
+
+    <section class="search-section" aria-labelledby="settings-search-label">
+      <div class="search-wrap">
+        <label id="settings-search-label" for="settings-search" data-l10n="settingsSearch">Search settings</label>
+        <div class="search-controls">
+          <input id="settings-search" type="search" autocomplete="off" spellcheck="false" aria-describedby="search-summary">
+          <button id="regex-toggle" class="button button-secondary" type="button" aria-expanded="false" aria-controls="regex-builder" data-l10n="regexBuilder" data-l10n-aria="regexBuilder">Regex builder</button>
+        </div>
+        <p id="search-summary" class="search-summary" role="status" aria-live="polite"></p>
+        <section id="regex-builder" class="regex-popover" role="region" aria-labelledby="regex-builder-title" hidden>
+          <h2 id="regex-builder-title" data-l10n="regexBuilder">Regex builder</h2>
+          <p class="field-help" data-l10n="regexBuilderDescription">Build a JavaScript regular expression locally. Plain-text search stays the default.</p>
+          <div class="regex-grid">
+            <div>
+              <label for="regex-pattern" data-l10n="pattern">Pattern</label>
+              <input id="regex-pattern" type="text" maxlength="256" autocomplete="off" spellcheck="false">
+            </div>
+            <div>
+              <label for="regex-flags" data-l10n="flags">Flags</label>
+              <input id="regex-flags" type="text" maxlength="12" autocomplete="off" spellcheck="false" value="gi">
+            </div>
+          </div>
+          <label for="regex-sample" data-l10n="sampleText">Sample text</label>
+          <textarea id="regex-sample" maxlength="2048" rows="3">Download report.pdf and archive.zip</textarea>
+          <fieldset class="fragment-fieldset">
+            <legend data-l10n="guidedFragments">Guided fragments</legend>
+            <div class="fragment-list">
+              <button type="button" class="chip" data-fragment="literal" data-l10n="literal">Literal</button>
+              <button type="button" class="chip" data-fragment="characterClass" data-l10n="characterClass">Character class</button>
+              <button type="button" class="chip" data-fragment="anchorStart" data-l10n="startAnchor">Start anchor</button>
+              <button type="button" class="chip" data-fragment="group" data-l10n="group">Group</button>
+              <button type="button" class="chip" data-fragment="alternation" data-l10n="alternation">Alternation</button>
+              <button type="button" class="chip" data-fragment="quantifier" data-l10n="quantifier">Quantifier</button>
+            </div>
+          </fieldset>
+          <p id="regex-feedback" class="inline-status" role="status" aria-live="polite"></p>
+          <ol id="regex-matches" class="match-list"></ol>
+          <div class="regex-actions">
+            <button id="regex-apply" class="button button-primary" type="button" data-l10n="applyPattern">Use pattern for search</button>
+            <button id="regex-copy" class="button button-secondary" type="button" data-l10n="copyPattern">Copy pattern</button>
+            <button id="regex-export" class="button button-secondary" type="button" data-l10n="exportPattern">Export pattern</button>
+          </div>
+          <label class="check-row" for="regex-mode">
+            <input id="regex-mode" type="checkbox">
+            <span data-l10n="applyPattern">Use pattern for search</span>
+          </label>
+        </section>
+      </div>
+    </section>
+
+    <nav class="tabs" role="tablist" data-l10n-aria="optionsSections" aria-label="Extension options sections">
+      <button id="tab-connection" class="tab" type="button" role="tab" aria-selected="true" aria-controls="panel-connection" tabindex="0" data-tab="connection" data-l10n="connectionTab">Connection</button>
+      <button id="tab-preferences" class="tab" type="button" role="tab" aria-selected="false" aria-controls="panel-preferences" tabindex="-1" data-tab="preferences" data-l10n="preferencesTab">Preferences</button>
+      <button id="tab-help" class="tab" type="button" role="tab" aria-selected="false" aria-controls="panel-help" tabindex="-1" data-tab="help" data-l10n="helpTab">Help</button>
+    </nav>
+
+    <form id="settings-form">
+      <section id="panel-connection" class="tab-panel" role="tabpanel" aria-labelledby="tab-connection" data-panel="connection">
+        <div class="setting-card recovery-card" data-search="handoff bridge recovery local endpoint manual paste">
+          <h2 data-l10n="connectionDisabledTitle">Recovery state: the endpoint was cleared</h2>
+          <p data-l10n="connectionDisabledBody">The loopback bridge is enabled by the desktop app on its documented local endpoint. Clear it only when you explicitly want the extension disabled.</p>
+        </div>
+        <div class="setting-card" data-search="endpoint connection loopback http localhost 127.0.0.1 downloads">
+          <label for="handoff-endpoint" data-l10n="endpointLabel">Local handoff endpoint</label>
+          <input id="handoff-endpoint" name="handoffEndpoint" type="url" inputmode="url" maxlength="256" autocomplete="off" aria-describedby="endpoint-help endpoint-error">
+          <p id="endpoint-help" class="field-help" data-l10n="endpointHelp">Only loopback HTTP with an explicit port and the exact /v1/downloads path is accepted.</p>
+          <p id="endpoint-error" class="field-error" role="alert"></p>
+          <div class="inline-actions">
+            <button id="use-default-endpoint" class="button button-secondary" type="button" data-l10n="useDefaultEndpoint">Use default endpoint</button>
+            <button id="test-connection" class="button button-secondary" type="button" data-l10n="testConnection">Test connection</button>
+            <p id="connection-status" class="inline-status" role="status" aria-live="polite"></p>
+          </div>
+        </div>
+      </section>
+
+      <section id="panel-preferences" class="tab-panel" role="tabpanel" aria-labelledby="tab-preferences" data-panel="preferences" hidden>
+        <div class="setting-card" data-search="manager name display name title identity">
+          <label for="manager-display-name" data-l10n="managerNameLabel">Manager display name</label>
+          <input id="manager-display-name" name="managerName" type="text" maxlength="80" autocomplete="off" aria-describedby="manager-name-help">
+          <p id="manager-name-help" class="field-help" data-l10n="managerNameHelp">This changes the extension’s labels only; it does not change the desktop app identity or data folder.</p>
+          <button id="reset-manager-name" class="button button-secondary" type="button" data-l10n="resetManagerName">Reset name</button>
+        </div>
+        <div class="setting-card" data-search="language mode english cantonese bilingual localization">
+          <label for="language-mode" data-l10n="languageLabel">Language mode</label>
+          <select id="language-mode" name="languageMode" aria-describedby="language-help">
+            <option value="en" data-l10n="languageEnglish">English</option>
+            <option value="yue" data-l10n="languageCantonese">Playful Hong Kong Cantonese</option>
+            <option value="bilingual" data-l10n="languageBilingual">Bilingual</option>
+          </select>
+          <p id="language-help" class="field-help" data-l10n="languageHelp">Choose English, playful Hong Kong-style Cantonese, or bilingual copy.</p>
+        </div>
+        <div class="setting-card" data-search="funny level english cantonese humour warnings errors messages">
+          <label for="funny-level-en" data-l10n="funnyEnglishLabel">English funny level</label>
+          <div class="range-row"><input id="funny-level-en" name="funnyLevelEn" type="range" min="1" max="5" step="1"><output id="funny-level-en-output" for="funny-level-en">2</output></div>
+          <label for="funny-level-yue" data-l10n="funnyCantoneseLabel">Cantonese funny level</label>
+          <div class="range-row"><input id="funny-level-yue" name="funnyLevelYue" type="range" min="1" max="5" step="1"><output id="funny-level-yue-output" for="funny-level-yue">2</output></div>
+          <p class="field-help" data-l10n="funnyHelp">1 is fully serious; 5 is maximum playfulness. Facts, affected data, and choices stay explicit.</p>
+        </div>
+      </section>
+
+      <section id="panel-help" class="tab-panel" role="tabpanel" aria-labelledby="tab-help" data-panel="help" hidden>
+        <div class="setting-card" data-search="bridge audit electron native messaging recovery">
+          <h2 data-l10n="bridgeAuditTitle">How the local bridge stays bounded</h2>
+          <p data-l10n="bridgeAuditBody">The desktop app starts a loopback HandoffServer at http://127.0.0.1:43771. Chrome uses that HTTP seam, never the context-isolated renderer IPC. If the app is closed, the port is occupied, or the adapter rejects a request, the extension shows failure and keeps manual recovery available.</p>
+        </div>
+        <div class="setting-card" data-search="contract status post downloads cors timeout redirect security">
+          <h2 data-l10n="contractHeading">Contract summary</h2>
+          <p data-l10n="contractBody">The desktop adapter listens at http://127.0.0.1:43771, answers GET /v1/status, and accepts POST /v1/downloads. Redirects, credentials, non-loopback hosts, unknown paths, and oversized values are rejected. A 202 confirms queue dispatch; it is not a completed-download signal.</p>
+          <p data-l10n="manualRecovery">Recovery: if the desktop app is closed or the adapter fails, open the app and paste the URL into its real Add download flow.</p>
+        </div>
+        <div class="setting-card" data-search="funny level disclosure language settings">
+          <p data-l10n="settingsDisclosure">Funny levels style every message, including warnings and errors; they never change the facts. You can reset them at any time.</p>
+        </div>
+      </section>
+
+      <div class="form-actions">
+        <button id="save-settings" class="button button-primary" type="submit" data-l10n="saveSettings">Save settings</button>
+        <span id="dirty-state" class="dirty-state" role="status" aria-live="polite"></span>
+      </div>
+    </form>
+
+    <section class="setting-card export-card" aria-labelledby="export-heading" data-search="export import json settings file">
+      <h2 id="export-heading" data-l10n="exportHeading">Exportable settings</h2>
+      <p class="field-help" data-l10n="exportHelp">Exports a versioned JSON file. It includes the configured endpoint, so treat the file as local configuration.</p>
+      <div class="inline-actions">
+        <button id="export-settings" class="button button-secondary" type="button" data-l10n="exportSettings">Export settings</button>
+        <button id="import-settings" class="button button-secondary" type="button" data-l10n="importSettings">Import settings</button>
+        <input id="import-file" type="file" accept="application/json,.json" hidden>
+        <button id="reset-settings" class="button button-danger" type="button" data-l10n="resetSettings">Reset all settings</button>
+      </div>
+    </section>
+
+    <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  </main>
+  <script type="module" src="options.js"></script>
+</body>
+</html>
