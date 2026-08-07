@@ -299,8 +299,9 @@ reconciliation:
 
 This reconciliation and the CI hardening are on `main`; the current main tip
 is the source of truth for the verified stable release. The hardening slice is
-integrated on `main`; its branch `codex/ui-hardening-20260807` is preserved for
-traceability. The original
+integrated on `main`. The agent-owned integrated linked checkouts were clean,
+their tips were proven ancestors of the pushed default branch, and their
+branches and directories were removed after that proof. The original
 handoff history is preserved as an ancestor, and the original handoff branch
 remains untouched. Application issue [#8](https://github.com/Ding-Ding-Projects/material-download-manager/issues/8)
 remains open for this continuing handoff. The separate `agent-global-memory` repository
