@@ -9,8 +9,9 @@ unverified surface has shipped.
   pause/resume, persistence, queues, schedules, and bounded timeouts.
 - Separate frameless download-progress window with typed IPC, live state,
   pause/resume/cancel/close controls, and hidden-desktop capture evidence.
-- Manifest V3 Chromium extension with page/link capture through the loopback
-  protocol; accepted captures enter the desktop queue.
+- Manifest V3 Chromium extension with page/link/selected-text capture through
+  the loopback protocol; accepted captures enter the desktop queue and bounded
+  link-target precedence is covered by the extension contract test.
 - Persisted language, independent funny levels, appearance provenance, and a
   four-tab Settings dialog with one search and regex-builder state per tab.
 - Local Git-backed history plus a History app tab with date/action/text filters
