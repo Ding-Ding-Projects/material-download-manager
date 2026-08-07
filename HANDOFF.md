@@ -69,10 +69,18 @@ self-hosted workflows.
 
 ## Latest verified stable evidence
 
-At this handoff, the current main tip is
-`17cb95cd363b6935b9e9f6343825de51df2524d1`. The latest verified stable
-release is [`v0.1.26`](https://github.com/Ding-Ding-Projects/material-download-manager/releases/tag/v0.1.26),
+The earlier hardening handoff recorded main tip
+`17cb95cd363b6935b9e9f6343825de51df2524d1` and stable release
+[`v0.1.26`](https://github.com/Ding-Ding-Projects/material-download-manager/releases/tag/v0.1.26).
+That is historical evidence; the later default-branch tip is
+`d37ad7cacbd7528bc80551375dc683be36c73eec` and the later verified stable
+release is [`v0.1.28`](https://github.com/Ding-Ding-Projects/material-download-manager/releases/tag/v0.1.28),
 published from that exact commit with `isDraft=false` and `isPrerelease=false`.
+The current integration candidate is merge commit `ae0822c`; its final
+default-branch release remains pending the remote integration run.
+
+The v0.1.28 record above supersedes the older v0.1.26 release evidence for
+current default-branch status.
 The README and stable feed use the repository's dynamic latest-release link so
 later successful pushes can advance the record without making this evidence
 pretend to be timeless.
@@ -108,6 +116,11 @@ and `publication.pages=verified`. The homepage, manifest endpoint, and
 immutable installer URL each returned HTTP 200. The live renderer's About view
 displayed the verified publication state; the stable feed remains dynamic and
 must be rechecked after any later release.
+
+The later verified `v0.1.28` Pages publication reports its exact `d37ad7c`
+source commit, `verified=true`, `unsigned=true`, and a stable installer URL;
+the next integration release must be checked again because the feed is
+intentionally dynamic.
 
 ## Current implementation slice verified and published
 
@@ -190,6 +203,14 @@ The application under `design/` includes:
 The prototype under `prototype/` is not loaded by the Electron build. Its
 simulated network layer remains reference-only.
 
+The current integration candidate also adds selected-text capture to the
+browser extension context menu and an embedded in-app stable changelog viewer.
+The viewer currently contains 28 published stable records, each with a full
+source commit link, ISO date filtering, anchored regex search, filtered copy,
+and Markdown export. The candidate is locally verified at merge commit
+`ae0822c`; it is not yet default-branch or release proof until the remote run
+publishes and verifies its real stable release.
+
 ## Verification evidence
 
 Run from `design/`:
@@ -212,12 +233,12 @@ On the current verification tree, the following checks passed locally:
 | `npm run typecheck` | Passed renderer and Electron TypeScript checks. |
 | `npm run build` | Passed Vite renderer and Electron main-process compilation. |
 | `npm run test:engine` | 31/31 passed locally, including concurrent and cross-instance StateStore saves, failed-write recovery, Range integrity, pause/resume, non-resumable fallback, custom-header persistence and cross-origin header stripping, global queue limits, schedule race handling, manager history hooks, filename sanitization, malformed Range rejection, categories, throttling, and URL redaction. |
-| `npm run test:electron` | 39/39 passed for export, local history, hook/index isolation, renderer-boundary history filter normalization, renderer settings validation, regex, tabs, command-palette foundations, compiled renderer-path resolution, secure updater IPC, version monotonicity, timeout/stale-event recovery, native Squirrel download-overlap protection, queue payload validation, Settings Escape handling, completion-notification preference handling, loopback handoff success/failure responses, and slow-pending handoff acknowledgement. |
-| `npm run test:ui` | 23/23 required checks passed through the built Electron/CDP smoke harness: renderer freshness, real preload bridge, tab shell, History tab controls and honest empty state, a seeded separate progress window with a named progressbar, four Settings tabs, independent search, anchored regex builder, Escape focus restoration, interactive-label structure, narrow layout at 520 CSS pixels and 2× scale, and cleanup. |
-| Chromium extension `npm test` | 12/12 passed for MV3 permissions and entrypoints, context-menu and popup handoff, loopback protocol, bounded validation, settings import/export, regex safety, localization, and no remote assets/tracking. |
+| `npm run test:electron` | 43/43 passed for export, local history, hook/index isolation, renderer-boundary history filter normalization, renderer settings validation, regex, tabs, command-palette foundations, compiled renderer-path resolution, secure updater IPC, version monotonicity, timeout/stale-event recovery, native Squirrel download-overlap protection, queue payload validation, Settings Escape handling, completion-notification preference handling, loopback handoff success/failure responses, slow-pending handoff acknowledgement, and the embedded changelog store/IPC path. |
+| `npm run test:ui` | 22/22 required checks passed through the built Electron/CDP smoke harness: renderer freshness, real preload bridge, tab shell, History tab controls and honest empty state, a seeded separate progress window with a named progressbar, four Settings tabs, independent search, anchored regex builder, Escape focus restoration, interactive-label structure, narrow layout at 520 CSS pixels and 2× scale, and cleanup. |
+| Chromium extension `npm test` | 12/12 passed for MV3 permissions and entrypoints, page/link/selected-text context-menu handoff, bounded link-target precedence, loopback protocol, bounded validation, settings import/export, regex safety, localization, and no remote assets/tracking. |
 | GitHub Pages source `npm run check` | 41/41 checks passed, including feature-article coverage, local-only assets, stable-manifest fail-closed behavior, publication-state rendering, prototype sanitization, and the browser-extension/progress-window articles. |
 | Hidden-desktop progress capture | Passed through the cheap Lowlevel headless route: a real loopback handoff created a live download, and a dynamically resolved second `Chrome_WidgetWin_1` window rendered the separate 980×640 `Download progress` surface with the fixture filename, source URL, transferred bytes, speed, pause, cancel, and close controls. The capture was retained in the session scratchpad, outside the repository. The disposable desktop, Electron process, and fixture server were cleaned up. |
-| Remote GitHub Actions | Current main verification [31173930281](https://github.com/Ding-Ding-Projects/material-download-manager/actions/runs/31173930281), stable release [31173928252](https://github.com/Ding-Ding-Projects/material-download-manager/actions/runs/31173928252), and Pages run [31173928353](https://github.com/Ding-Ding-Projects/material-download-manager/actions/runs/31173928353) are green. Historical failures remain linked where they explain fixes; they are not current verification evidence. |
+| Remote GitHub Actions | Default-branch stable release [31178625430](https://github.com/Ding-Ding-Projects/material-download-manager/actions/runs/31178625430), Windows verification [31178625434](https://github.com/Ding-Ding-Projects/material-download-manager/actions/runs/31178625434), and Pages run [31178625512](https://github.com/Ding-Ding-Projects/material-download-manager/actions/runs/31178625512) are green for `d37ad7c`; branch stable release [31178607000](https://github.com/Ding-Ding-Projects/material-download-manager/actions/runs/31178607000) and Windows verification [31178606993](https://github.com/Ding-Ding-Projects/material-download-manager/actions/runs/31178606993) are also green. The `ae0822c` integration run is still pending. |
 
 The hardening milestone corrected the compiled renderer path and made
 unpackaged production launches load the built renderer unless
@@ -270,9 +291,9 @@ reconciliation:
 1. Compare the runnable renderer with the prototype and decide which Material 3
    visual and interaction changes should be implemented next.
 2. Complete the remaining shared-memory product surfaces—full per-element
-   appearance editing, complete tab/group management, renderer history and
-   changelog browsers, complete bulk actions, scheduled external settings, and
-   the in-app documentation browser—without wiring the prototype's simulated
+   appearance editing, complete tab/group management, renderer history,
+   advanced changelog date/filter flows, complete bulk actions, scheduled
+   external settings, and the in-app documentation browser—without wiring the prototype's simulated
    engine into the app.
 3. Add renderer, IPC, packaging, accessibility, error-notification, and
    destructive-action coverage before calling the application release-ready.
