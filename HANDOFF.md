@@ -76,8 +76,12 @@ That is historical evidence; the later default-branch tip is
 `d37ad7cacbd7528bc80551375dc683be36c73eec` and the later verified stable
 release is [`v0.1.28`](https://github.com/Ding-Ding-Projects/material-download-manager/releases/tag/v0.1.28),
 published from that exact commit with `isDraft=false` and `isPrerelease=false`.
-The current integration candidate is merge commit `ae0822c`; its final
-default-branch release remains pending the remote integration run.
+The integration merge `ae0822c` and handoff commit `613869c` are now on the
+default branch. Stable [`v0.1.31`](https://github.com/Ding-Ding-Projects/material-download-manager/releases/tag/v0.1.31)
+is published from exact `613869cdff1e68c35d6b0dda1d60f73ef2aa4271` with
+`isDraft=false` and `isPrerelease=false`; its release, Windows verification,
+and Pages runs are recorded below. The release feed remains dynamic for later
+documentation-only refreshes.
 
 The v0.1.28 record above supersedes the older v0.1.26 release evidence for
 current default-branch status.
@@ -121,6 +125,11 @@ The later verified `v0.1.28` Pages publication reports its exact `d37ad7c`
 source commit, `verified=true`, `unsigned=true`, and a stable installer URL;
 the next integration release must be checked again because the feed is
 intentionally dynamic.
+
+The current verified Pages publication reports stable `0.1.31`, exact source
+`613869cdff1e68c35d6b0dda1d60f73ef2aa4271`, `verified=true`, `unsigned=true`,
+`publication.pages=verified`, homepage HTTP 200, manifest HTTP 200, and the
+immutable installer URL HTTP 200.
 
 ## Current implementation slice verified and published
 
@@ -203,13 +212,12 @@ The application under `design/` includes:
 The prototype under `prototype/` is not loaded by the Electron build. Its
 simulated network layer remains reference-only.
 
-The current integration candidate also adds selected-text capture to the
-browser extension context menu and an embedded in-app stable changelog viewer.
+The integrated main branch adds selected-text capture to the browser extension
+context menu and an embedded in-app stable changelog viewer.
 The viewer currently contains 28 published stable records, each with a full
 source commit link, ISO date filtering, anchored regex search, filtered copy,
-and Markdown export. The candidate is locally verified at merge commit
-`ae0822c`; it is not yet default-branch or release proof until the remote run
-publishes and verifies its real stable release.
+and Markdown export. The built artifact and hidden-desktop capture are verified;
+the stable release is `v0.1.31` from `613869c`.
 
 ## Verification evidence
 
@@ -238,7 +246,7 @@ On the current verification tree, the following checks passed locally:
 | Chromium extension `npm test` | 12/12 passed for MV3 permissions and entrypoints, page/link/selected-text context-menu handoff, bounded link-target precedence, loopback protocol, bounded validation, settings import/export, regex safety, localization, and no remote assets/tracking. |
 | GitHub Pages source `npm run check` | 41/41 checks passed, including feature-article coverage, local-only assets, stable-manifest fail-closed behavior, publication-state rendering, prototype sanitization, and the browser-extension/progress-window articles. |
 | Hidden-desktop progress capture | Passed through the cheap Lowlevel headless route: a real loopback handoff created a live download, and a dynamically resolved second `Chrome_WidgetWin_1` window rendered the separate 980×640 `Download progress` surface with the fixture filename, source URL, transferred bytes, speed, pause, cancel, and close controls. The capture was retained in the session scratchpad, outside the repository. The disposable desktop, Electron process, and fixture server were cleaned up. |
-| Remote GitHub Actions | Default-branch stable release [31178625430](https://github.com/Ding-Ding-Projects/material-download-manager/actions/runs/31178625430), Windows verification [31178625434](https://github.com/Ding-Ding-Projects/material-download-manager/actions/runs/31178625434), and Pages run [31178625512](https://github.com/Ding-Ding-Projects/material-download-manager/actions/runs/31178625512) are green for `d37ad7c`; branch stable release [31178607000](https://github.com/Ding-Ding-Projects/material-download-manager/actions/runs/31178607000) and Windows verification [31178606993](https://github.com/Ding-Ding-Projects/material-download-manager/actions/runs/31178606993) are also green. The `ae0822c` integration run is still pending. |
+| Remote GitHub Actions | Default-branch stable release [31182280753](https://github.com/Ding-Ding-Projects/material-download-manager/actions/runs/31182280753), Windows verification [31182280767](https://github.com/Ding-Ding-Projects/material-download-manager/actions/runs/31182280767), and Pages run [31182280754](https://github.com/Ding-Ding-Projects/material-download-manager/actions/runs/31182280754) are green for `613869c`; branch stable release [31181815994](https://github.com/Ding-Ding-Projects/material-download-manager/actions/runs/31181815994) and Windows verification [31181815918](https://github.com/Ding-Ding-Projects/material-download-manager/actions/runs/31181815918) are also green. |
 
 The hardening milestone corrected the compiled renderer path and made
 unpackaged production launches load the built renderer unless
@@ -329,9 +337,9 @@ reconciliation:
 
 ## Git state and ownership
 
-This reconciliation and the CI hardening are on `main`; the current main tip
-is the source of truth for the verified stable release. The hardening slice is
-integrated on `main`. The agent-owned integrated linked checkouts were clean,
+This reconciliation, CI hardening, browser capture, and changelog viewer are on
+`main`; the pushed default branch is the source of truth for the verified stable
+release. The agent-owned integrated linked checkouts were clean,
 their tips were proven ancestors of the pushed default branch, and their
 branches and directories were removed after that proof. The original
 handoff history is preserved as an ancestor, and the original handoff branch
