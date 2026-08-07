@@ -304,6 +304,16 @@ export function GridIcon({ size = 16, className, style }: IconProps) {
   );
 }
 
+export function HistoryIcon({ size = 16, className, style }: IconProps) {
+  return (
+    <svg {...base(size)} className={className} style={style}>
+      <path d="M4 7.5A8 8 0 1 1 3.5 13" />
+      <path d="M4 3.5v4h4" />
+      <path d="M12 8v4l2.5 1.5" />
+    </svg>
+  );
+}
+
 import type { DownloadCategory } from "@shared/types";
 
 const CATEGORY_ICONS: Record<DownloadCategory, (p: IconProps) => JSX.Element> = {

@@ -17,6 +17,12 @@ the renderer state and out of these snapshots.
 The store supports date range, action, plain-text, and bounded local regex
 filters, revision diff, and export through the shared serializer.
 
+The renderer exposes this store through the History browser tab. Its action
+filters are derived from the actions actually present in the returned history,
+and its date inputs cover complete local calendar days. The tab exports the
+filtered revision index as JSON, JSONL, YAML, TOML, CSV, Markdown, or HTML; it
+does not export raw snapshots through the renderer.
+
 Manager shutdown drains asynchronous task-event persistence and the history
 mutation queue before returning. This keeps a just-finished transfer from
 leaving its local Git files in use while the application data directory is
@@ -49,8 +55,10 @@ finite and does not hide a persistent lock.
 design/electron/__tests__/history.test.ts covers append-only behavior,
 no-op suppression, restore-as-new-revision, action/text/regex filters, diffs,
 and JSONL export. DownloadManager's full 31-test engine suite covers queue
-shutdown and local-history cleanup. Run npm run build, npm run test:engine, and
-npm run test:electron from design/.
+shutdown and local-history cleanup. The 20-check built-artifact UI smoke covers
+the History tab, its search/date/export controls, the four Settings tabs, the
+anchored regex builder, and Escape focus restoration. Run npm run build,
+npm run test:engine, npm run test:electron, and npm run test:ui from design/.
 
 ## Suggested articles
 

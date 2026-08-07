@@ -41,7 +41,9 @@ Run `npm run typecheck`, `npm run build`, `npm run test:electron`, and
 targets dynamically and inspects any separate progress-looking page for a
 named `role="progressbar"`. A cheap hidden-desktop capture must show the
 primary window and the separately resolved progress window from a real active
-download before release verification is complete.
+download before release verification is complete. The latest hidden-desktop
+pass resolved the second `Chrome_WidgetWin_1` at 980×640 and captured its live
+download-progress surface without touching the visible desktop.
 
 ## Suggested articles
 

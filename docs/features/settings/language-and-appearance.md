@@ -16,12 +16,14 @@ without spreading invalid values.
 
 The Settings dialog has its own local search field. Plain text is the default;
 the adjacent Regex button opens the shared bounded JavaScript RegExp builder.
-Matches name real setting sections and their result buttons return focus to the
-corresponding actual control. Closed advanced settings are opened before the
-target control receives focus. The nested builder consumes Escape to close only
-itself and returns focus to the Regex button, leaving Settings open. Custom
-checkbox buttons expose their checked state through `role="checkbox"` and
-`aria-checked`.
+The dialog is divided into four browser-style tabs—Language, Appearance,
+Downloads, and Advanced—with one independent search and regex-builder state per
+tab. The active tab is persisted. Matches name real setting sections and their
+result buttons return focus to the corresponding actual control. Closed
+advanced settings are opened before the target control receives focus. The
+nested builder consumes Escape to close only itself and returns focus to the
+Regex button, leaving Settings open. Custom checkbox buttons expose their
+checked state through `role="checkbox"` and `aria-checked`.
 
 ## Configuration
 
@@ -40,12 +42,14 @@ code and does not send settings over the network.
 
 design/electron/download/__tests__/persistence.test.ts covers defaults,
 provenance, legacy migration, malformed input, and round-trip persistence.
-Run npm run test:engine, npm run build, and npm run test:electron from design/.
+The built-artifact UI smoke covers the four Settings tabs, tab keyboard
+navigation, per-tab search, the anchored regex builder, and Escape focus
+restoration. Run npm run test:engine, npm run build, npm run test:electron, and
+npm run test:ui from design/.
 
 The remaining product-level work is explicit: apply localized/funny copy to
-every renderer message, make settings sections real browser-style tabs, and
-replace the current color input with the full continuous translator/editor
-required by the product policy.
+every renderer message and replace the current color input with the full
+continuous translator/editor required by the product policy.
 
 ## Suggested articles
 

@@ -80,6 +80,20 @@ export function isExportFormat(value: unknown): value is ExportFormat {
   return typeof value === "string" && EXPORT_FORMATS.includes(value as ExportFormat);
 }
 
+export function isExportResult(value: unknown): value is ExportResult {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const result = value as Record<string, unknown>;
+  const metadata = result.metadata;
+  if (typeof result.content !== "string" || typeof result.extension !== "string" || typeof result.mimeType !== "string" ||
+    !Array.isArray(result.warnings) || result.warnings.some((warning) => typeof warning !== "string") ||
+    !metadata || typeof metadata !== "object" || Array.isArray(metadata) ||
+    !result.roundTrip || typeof result.roundTrip !== "object" || Array.isArray(result.roundTrip)) return false;
+  const meta = metadata as Record<string, unknown>;
+  return meta.schema === EXPORT_METADATA_SCHEMA && meta.schemaVersion === EXPORT_METADATA_VERSION &&
+    isExportFormat(meta.format) && meta.encoding === "UTF-8" && meta.lineEnding === "LF" &&
+    typeof meta.recordCount === "number" && Number.isInteger(meta.recordCount) && meta.recordCount >= 0;
+}
+
 function asRecords(value: unknown): RecordValue[] {
   const values = Array.isArray(value) ? value : [value];
   return values.map((item) => (

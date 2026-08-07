@@ -10,7 +10,13 @@ import type {
   UpdateInstallResult,
   UpdateState,
   UpdateUnsavedWorkState,
+  ExportFormat,
+  ExportResult,
+  HistoryFilter,
+  HistoryView,
 } from "../shared/types";
+import { isExportResult } from "../shared/export";
+import { isHistoryView } from "../shared/history";
 import { isUpdateInstallResult, isUpdateState, isUpdateUnsavedWorkState } from "../shared/types";
 
 // Everything exposed to the renderer goes through this bridge. No direct
@@ -82,6 +88,17 @@ const api = {
   getSettings: (): Promise<AppSettings> => ipcRenderer.invoke(IPC.SETTINGS_GET),
   setSettings: (settings: Partial<AppSettings>): Promise<AppSettings> =>
     ipcRenderer.invoke(IPC.SETTINGS_SET, settings),
+
+  getHistoryView: async (filter?: HistoryFilter): Promise<HistoryView> => {
+    const view: unknown = await ipcRenderer.invoke(IPC.HISTORY_GET_VIEW, filter);
+    if (!isHistoryView(view)) throw new Error("Invalid history view from main process");
+    return view;
+  },
+  exportHistory: async (format: ExportFormat, filter?: HistoryFilter): Promise<ExportResult> => {
+    const result: unknown = await ipcRenderer.invoke(IPC.HISTORY_EXPORT_VIEW, format, filter);
+    if (!isExportResult(result)) throw new Error("Invalid history export from main process");
+    return result;
+  },
 
   createQueue: (queue: Partial<DownloadQueue>): Promise<DownloadQueue> =>
     ipcRenderer.invoke(IPC.QUEUE_CREATE, queue),

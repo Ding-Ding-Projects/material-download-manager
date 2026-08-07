@@ -11,6 +11,8 @@ import type {
   NewDownloadInfo,
   StateSnapshot,
 } from "../../shared/types";
+import type { ExportFormat, ExportResult } from "../../shared/export";
+import { historyFilterRequest, normalizeHistoryFilter, type HistoryFilter, type HistoryView } from "../../shared/history";
 import { DEFAULT_QUEUE_ID } from "../../shared/types";
 import { StateStore } from "./persistence";
 import { detectCategory } from "./categories";
@@ -568,6 +570,49 @@ export class DownloadManager extends EventEmitter {
     this.scheduleNotify();
     this.processAllQueues();
     return this.settings;
+  }
+
+  async getHistoryView(filter: unknown = undefined): Promise<HistoryView> {
+    const normalized = normalizeHistoryFilter(filter);
+    const request = historyFilterRequest(normalized);
+    const available = await this.history.isAvailable();
+    if (!available) {
+      return {
+        schemaVersion: 1,
+        available: false,
+        revisions: [],
+        actionCounts: {},
+        totalRevisions: 0,
+        matchingRevisions: 0,
+        request,
+        emptyReason: "Local history is unavailable; no revision data was exposed.",
+      };
+    }
+
+    const allRevisions = await this.history.listRevisions();
+    const revisions = await this.history.listRevisions(normalized);
+    const actionCounts: Record<string, number> = {};
+    for (const revision of revisions) actionCounts[revision.action] = (actionCounts[revision.action] ?? 0) + 1;
+    return {
+      schemaVersion: 1,
+      available: true,
+      revisions,
+      actionCounts,
+      totalRevisions: allRevisions.length,
+      matchingRevisions: revisions.length,
+      request,
+      emptyReason: revisions.length > 0
+        ? null
+        : allRevisions.length === 0
+          ? "No revisions are recorded yet."
+          : "No revisions match the active filters.",
+    };
+  }
+
+  async exportHistory(format: ExportFormat, filter: unknown = undefined): Promise<ExportResult> {
+    const normalized = normalizeHistoryFilter(filter);
+    if (!(await this.history.isAvailable())) throw new Error("Local history is unavailable");
+    return this.history.exportRevisions(format, normalized);
   }
 
   // ---- queues ---------------------------------------------------------------

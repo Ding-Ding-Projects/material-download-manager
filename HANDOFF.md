@@ -70,26 +70,26 @@ self-hosted workflows.
 ## Latest verified stable evidence
 
 At this handoff, the current main tip is
-`e6fd63d4227c740c7b73298784d95d0b84b9a869`. The latest implementation
+`57a43a2bf303c02ae84183f8b22d366e43c96105`. The latest implementation
 verification release recorded here is
-[`v0.1.12`](https://github.com/Ding-Ding-Projects/material-download-manager/releases/tag/v0.1.12);
+[`v0.1.14`](https://github.com/Ding-Ding-Projects/material-download-manager/releases/tag/v0.1.14);
 the README and stable feed use the repository's dynamic latest-release link so
 later successful pushes can advance the record without making this evidence
 pretend to be timeless.
 
 Self-hosted Windows verification run
-[31161445625](https://github.com/Ding-Ding-Projects/material-download-manager/actions/runs/31161445625),
+[31162615694](https://github.com/Ding-Ding-Projects/material-download-manager/actions/runs/31162615694),
 stable release run
-[31161445627](https://github.com/Ding-Ding-Projects/material-download-manager/actions/runs/31161445627),
+[31162615724](https://github.com/Ding-Ding-Projects/material-download-manager/actions/runs/31162615724),
 and Pages run
-[31161445620](https://github.com/Ding-Ding-Projects/material-download-manager/actions/runs/31161445620)
-are green. The published `v0.1.12` record is `isDraft=false`,
-`isPrerelease=false`, targets the exact `e6fd63d` commit, and carries
-`Setup.exe`, `RELEASES`, and `material-download-manager-0.1.12-full.nupkg`.
-Its measured workflow duration is `00:02:13`, from
-`2026-08-07T12:22:50.000Z` through `2026-08-07T12:25:03.000Z`.
+[31162616314](https://github.com/Ding-Ding-Projects/material-download-manager/actions/runs/31162616314)
+are green. The published `v0.1.14` record is `isDraft=false`,
+`isPrerelease=false`, targets the exact `57a43a2` commit, and carries
+`Setup.exe`, `RELEASES`, and `material-download-manager-0.1.14-full.nupkg`.
+Its measured workflow duration is `00:02:36`, from
+`2026-08-07T12:42:06.000Z` through `2026-08-07T12:44:42.000Z`.
 
-The release code name is **Quail Egg Siu Mai · 鵪鶉蛋燒賣**, resolved from the
+The release code name is **Beef Siu Mai · 牛肉燒賣**, resolved from the
 public `dim-sum-photos` catalog and linked to its published photo asset in the
 release notes. The CI line-count table reports 34,763 included lines (31,807
 non-blank) across source, tests, styles/markup, and other project code, plus a
@@ -99,13 +99,27 @@ rule for this release.
 
 At evidence-capture time, the live documentation site
 https://ding-ding-projects.github.io/material-download-manager/ reported
-`0.1.12`, the exact `e6fd63d` source commit, `verified=true`,
+`0.1.14`, the exact `57a43a2` source commit, `verified=true`,
 `unsigned=true`, and `publication.pages=verified`. The installer endpoint
 responded successfully with a real 115,368,960-byte `Setup.exe` asset. The
 live renderer was also checked through the real browser surface: its About
-view displayed “Pages publication verified” and the `0.1.12` stable release
+view displayed “Pages publication verified” and the `0.1.14` stable release
 metric. The stable feed remains dynamic and must be rechecked after any later
 release.
+
+## Current implementation slice awaiting publication
+
+The fresh branch `codex/global-features-20260807` adds a first-class History
+tab with validated IPC, date/action/text filters, an anchored regex builder,
+and filtered coding-format export. It also divides Settings into four
+persisted browser-style tabs with independent search/builder state and repairs
+Escape focus restoration for the nested builder. The local verification state
+is currently: typecheck and build passed; 31/31 engine tests, 37/37 Electron
+tests, 20/20 built-artifact UI checks, 12/12 extension tests, and 41/41 site
+checks passed. A cheap hidden-desktop run resolved the separate 980×640
+progress window and accepted a real protocol-v1 browser handoff. This slice is
+not yet a commit on the default branch, so no remote CI or new release is
+claimed here.
 
 ## Runnable application
 
@@ -125,6 +139,11 @@ The application under `design/` includes:
   accessibility semantics.
 - Tested foundations for the bounded regex builder, tab model and command
   palette, coding-format exports, and isolated local Git history.
+- A first-class History tab exposes bounded revision metadata, date/action/text
+  filters, an anchored regex builder, and filtered export without exposing raw
+  snapshots.
+- The Settings dialog has four persisted browser-style tabs with independent
+  search and regex-builder state.
 - A separate frameless download-progress window that follows a selected item,
   exposes pause/resume/cancel/close controls, and is opened through the real
   Electron IPC boundary.
@@ -157,12 +176,12 @@ On the current verification tree, the following checks passed locally:
 | `npm run typecheck` | Passed renderer and Electron TypeScript checks. |
 | `npm run build` | Passed Vite renderer and Electron main-process compilation. |
 | `npm run test:engine` | 31/31 passed locally, including concurrent and cross-instance StateStore saves, failed-write recovery, Range integrity, pause/resume, non-resumable fallback, custom-header persistence and cross-origin header stripping, global queue limits, schedule race handling, manager history hooks, filename sanitization, malformed Range rejection, categories, throttling, and URL redaction. |
-| `npm run test:electron` | 36/36 passed for export, local history, regex, tabs, command-palette foundations, compiled renderer-path resolution, secure updater IPC, version monotonicity, timeout/stale-event recovery, native Squirrel download-overlap protection, queue payload validation, Settings Escape handling, completion-notification preference handling, loopback handoff success/failure responses, and slow-pending handoff acknowledgement. |
-| `npm run test:ui` | 19/19 required checks passed through the built Electron/CDP smoke harness: renderer freshness, real preload bridge, tab shell, Settings dialog semantics, anchored regex builder, Escape focus restoration, and cleanup. The empty-profile run honestly reported no progress item; the active progress-window capture below covers the real transfer path. |
+| `npm run test:electron` | 37/37 passed for export, local history, renderer-boundary history filter normalization, regex, tabs, command-palette foundations, compiled renderer-path resolution, secure updater IPC, version monotonicity, timeout/stale-event recovery, native Squirrel download-overlap protection, queue payload validation, Settings Escape handling, completion-notification preference handling, loopback handoff success/failure responses, and slow-pending handoff acknowledgement. |
+| `npm run test:ui` | 20/20 required checks passed through the built Electron/CDP smoke harness: renderer freshness, real preload bridge, tab shell, History tab controls and honest empty state, four Settings tabs, independent search, anchored regex builder, Escape focus restoration, and cleanup. The empty-profile run honestly reported no progress item; the active Lowlevel progress-window capture below covers the real transfer path. |
 | Chromium extension `npm test` | 12/12 passed for MV3 permissions and entrypoints, context-menu and popup handoff, loopback protocol, bounded validation, settings import/export, regex safety, localization, and no remote assets/tracking. |
 | GitHub Pages source `npm run check` | 41/41 checks passed, including feature-article coverage, local-only assets, stable-manifest fail-closed behavior, publication-state rendering, prototype sanitization, and the browser-extension/progress-window articles. |
 | Hidden-desktop progress capture | Passed through the cheap Lowlevel headless route: a real loopback handoff created a live download, and a dynamically resolved second `Chrome_WidgetWin_1` window rendered the separate 980×640 `Download progress` surface with the fixture filename, source URL, transferred bytes, speed, pause, cancel, and close controls. The capture was retained in the session scratchpad, outside the repository. The disposable desktop, Electron process, and fixture server were cleaned up. |
-| Remote GitHub Actions | Current main verification [31161445625](https://github.com/Ding-Ding-Projects/material-download-manager/actions/runs/31161445625), stable release [31161445627](https://github.com/Ding-Ding-Projects/material-download-manager/actions/runs/31161445627), and Pages run [31161445620](https://github.com/Ding-Ding-Projects/material-download-manager/actions/runs/31161445620) are green. Historical failures remain linked where they explain fixes; they are not current verification evidence. |
+| Remote GitHub Actions | Current main verification [31162615694](https://github.com/Ding-Ding-Projects/material-download-manager/actions/runs/31162615694), stable release [31162615724](https://github.com/Ding-Ding-Projects/material-download-manager/actions/runs/31162615724), and Pages run [31162616314](https://github.com/Ding-Ding-Projects/material-download-manager/actions/runs/31162616314) are green. Historical failures remain linked where they explain fixes; they are not current verification evidence. |
 
 The hardening milestone corrected the compiled renderer path and made
 unpackaged production launches load the built renderer unless
@@ -179,7 +198,7 @@ the current release path requires `Setup.exe`, `RELEASES`, every referenced
 full or delta `.nupkg`, and `NotSigned` verification. The legacy unsigned
 `v0.1.0` prerelease carries the historical CI-built feed and assets, while
 `MDM_UPDATE_FEED_URL` remains an optional override. The stable feed was
-verified through `v0.1.12` at the evidence-capture point; later successful
+verified through `v0.1.14` at the evidence-capture point; later successful
 releases advance the same dynamic feed.
 
 The repository has a Windows push/dispatch workflow at
@@ -195,7 +214,7 @@ stages the local site before deployment, asks `actions/configure-pages@v5` to
 enable Pages when needed, and now has live verification at
 https://ding-ding-projects.github.io/material-download-manager/. The site
 injects the latest verified stable manifest only after the release asset
-inventory is checked. The `v0.1.12` deployment additionally verified the
+inventory is checked. The `v0.1.14` deployment additionally verified the
 rendered publication state through the live site.
 
 The release branch also passed local static checks for the workflow and helper
@@ -234,18 +253,18 @@ reconciliation:
 7. The isolated Git-backed HistoryStore is now wired to manager state changes,
    including download creation/completion/error/pause/resume/retry/cancel,
    deletion, queue changes, and settings changes. Connect its browse/restore
-   controls to the renderer and extend coverage to every user-managed record
-   before calling local history complete.
+   controls to the renderer and extend restore/diff coverage to every
+   user-managed record before calling local history complete.
 8. The renderer lane now supplies centralized accessibility semantics,
    non-blocking notification history, and the native destructive-action gate.
    Its current evidence is typecheck/build, 31 Electron tests, and a cheap
-   headless Settings/Escape/focus smoke; a renderer DOM harness, notification
+   headless History/Settings/Escape/focus smoke; a renderer DOM harness, notification
    bulk actions, deletion history recording, and full-copy localization remain
    open.
 9. The settings lane now supplies versioned language, funny-level, appearance,
-    provenance state, a local Settings search, and an anchored regex builder
-    with persistence tests. The surface still needs browser-style settings tabs,
-    full appearance-editor depth, and copy wiring across every renderer message.
+    provenance state, four browser-style Settings tabs, per-tab search, and an
+    anchored regex builder with persistence tests. Full appearance-editor depth
+    and copy wiring across every renderer message remain open.
 10. Keep the landing page, changelog viewer, release line counter, and
     sanitized instruction mirror current as the product surfaces are
     implemented.
@@ -253,17 +272,18 @@ reconciliation:
 ## Git state and ownership
 
 This reconciliation and the CI hardening are on `main`; the current main tip
-is the source of truth for the verified stable release. The original
+is the source of truth for the verified stable release. The current feature
+slice is in `codex/global-features-20260807` pending integration. The original
 handoff history is preserved as an ancestor, and the original handoff branch
-remains untouched. The application repository has no open GitHub issues at the
-time this handoff was refreshed. The separate `agent-global-memory` repository
+remains untouched. Application issue [#8](https://github.com/Ding-Ding-Projects/material-download-manager/issues/8)
+remains open for this continuing handoff. The separate `agent-global-memory` repository
 has open issues [#10](https://github.com/Ding-Ding-Projects/agent-global-memory/issues/10)
 and [#12](https://github.com/Ding-Ding-Projects/agent-global-memory/issues/12),
 which are owned by Status Hub and runner work and were left untouched here. GitHub
 Discussions are enabled and the rolling handoff thread is
 [`#3`](https://github.com/Ding-Ding-Projects/material-download-manager/discussions/3).
 The `v0.1.0` announcement is [`#4`](https://github.com/Ding-Ding-Projects/material-download-manager/discussions/4);
-the `v0.1.12` release announcement is [`#6`](https://github.com/Ding-Ding-Projects/material-download-manager/discussions/6),
+the `v0.1.14` release announcement is [`#7`](https://github.com/Ding-Ding-Projects/material-download-manager/discussions/7),
 and the previous `v0.1.8` announcement remains in the Discussion history. The
 wiki setting is enabled but its wiki repository is not
 initialized. GitHub Pages is enabled, deployed, and live at the URL above. The

@@ -42,7 +42,11 @@ desktop `npm run typecheck`, `npm run build`, and `npm run test:electron` from
 `design/`; the compiled Electron suite exercises the real loopback server's
 status, accepted handoff, credential rejection, and bounded-body behavior.
 The cheap headless app smoke must also prove the server is reachable from the
-running process before a shipped integration is called verified.
+running process before a shipped integration is called verified. The latest
+hidden-desktop pass queried `/v1/status` and submitted a real protocol-v1
+envelope for a live local transfer; the app returned `202` with
+`accepted=true` and `pending=true`, proving a browser capture enters the same
+queue that the separate progress window displays.
 
 ## Suggested articles
 

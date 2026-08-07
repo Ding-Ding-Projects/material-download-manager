@@ -8,6 +8,10 @@ import type {
   UpdateInstallResult,
   UpdateState,
   UpdateUnsavedWorkState,
+  ExportFormat,
+  ExportResult,
+  HistoryFilter,
+  HistoryView,
 } from "@shared/types";
 
 export interface MaterialDownloadManagerAPI {
@@ -31,6 +35,8 @@ export interface MaterialDownloadManagerAPI {
   openFolder(id: string): Promise<void>;
   getSettings(): Promise<AppSettings>;
   setSettings(settings: Partial<AppSettings>): Promise<AppSettings>;
+  getHistoryView(filter?: HistoryFilter): Promise<HistoryView>;
+  exportHistory(format: ExportFormat, filter?: HistoryFilter): Promise<ExportResult>;
   createQueue(queue: Partial<DownloadQueue>): Promise<DownloadQueue>;
   updateQueue(queue: DownloadQueue): Promise<void>;
   deleteQueue(id: string): Promise<void>;

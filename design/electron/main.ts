@@ -2,6 +2,8 @@ import { app, autoUpdater, BrowserWindow, ipcMain, shell, dialog, Notification }
 import path from "node:path";
 import { IPC, isUpdateUnsavedWorkState, type UpdateInstallResult, type UpdateState } from "../shared/types";
 import type { AddDownloadRequest, AppSettings, DownloadItem, DownloadQueue } from "../shared/types";
+import { isExportFormat } from "../shared/export";
+import { normalizeHistoryFilter } from "../shared/history";
 import { notifyDownloadComplete as showCompletionNotification, type CompletionNotificationPort } from "./completionNotification";
 import { extractBrowserHandoffRequests } from "./download/browserHandoff";
 import { assertQueueCreatePayload, DownloadManager } from "./download/DownloadManager";
@@ -303,6 +305,18 @@ function registerIpcHandlers() {
     assertTrustedSender(event);
     assertPartialSettings(settings);
     return manager.setSettings(settings);
+  });
+
+  ipcMain.handle(IPC.HISTORY_GET_VIEW, (event, filter: unknown) => {
+    assertTrustedSender(event);
+    const normalized = normalizeHistoryFilter(filter);
+    return manager.getHistoryView(normalized);
+  });
+  ipcMain.handle(IPC.HISTORY_EXPORT_VIEW, (event, format: unknown, filter: unknown) => {
+    assertTrustedSender(event);
+    if (!isExportFormat(format)) throw new Error("Invalid history export format");
+    const normalized = normalizeHistoryFilter(filter);
+    return manager.exportHistory(format, normalized);
   });
 
   ipcMain.handle(IPC.QUEUE_CREATE, (event, queue: unknown) => {

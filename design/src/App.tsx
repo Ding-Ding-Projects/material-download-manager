@@ -24,6 +24,8 @@ import CommandPalette, { type PaletteCommand } from "./components/CommandPalette
 import UpdaterBanner from "./components/UpdaterBanner";
 import TabStrip from "./components/TabStrip";
 import DimSumSurprise from "./components/DimSumSurprise";
+import HistoryPanel from "./components/HistoryPanel";
+import { setActiveTab } from "@shared/tabModel";
 
 const DESTRUCTIVE_REQUEST_EVENT = "mdm:request-destructive-action";
 const CLOSE_CONTEXT_MENU_EVENT = "mdm:close-context-menus";
@@ -124,6 +126,14 @@ export default function App() {
         keywords: ["preferences", "configuration", "language", "theme", "appearance"],
         section: "Settings",
         onSelect: () => openSettings(),
+      },
+      {
+        id: "destination.history",
+        label: copy.text("History", "紀錄"),
+        description: copy.text("Browse local revision history and export the filtered index", "瀏覽本機修訂紀錄並匯出篩選後索引"),
+        keywords: ["history", "revisions", "versions", "export", "undo"],
+        section: "Destinations",
+        onSelect: () => selectAppTab("history"),
       },
       ...(items.length > 0
         ? [{
@@ -315,6 +325,11 @@ export default function App() {
     if (tabId === "settings") {
       openSettings();
     }
+    if (tabId === "history") return;
+  }
+
+  function selectAppTab(tabId: string) {
+    setTabState((current) => setActiveTab(current, tabId));
   }
 
   return (
@@ -327,9 +342,15 @@ export default function App() {
       <div className="app-body">
         <Sidebar />
         <main className="main-pane" id={`tabpanel-${tabState.activeTabId ?? "downloads"}`} role="tabpanel" aria-labelledby={`app-tab-${tabState.activeTabId ?? "downloads"}`}>
-          <Toolbar />
-          <DownloadTable />
-          <StatusBar />
+          {tabState.activeTabId === "history" ? (
+            <HistoryPanel />
+          ) : (
+            <>
+              <Toolbar />
+              <DownloadTable />
+              <StatusBar />
+            </>
+          )}
         </main>
       </div>
 

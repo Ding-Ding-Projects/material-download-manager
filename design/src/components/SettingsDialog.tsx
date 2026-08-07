@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import type { AppSettings, SettingKey } from "@shared/types";
 import { createDefaultSettings, isHexColor } from "@shared/settings";
 import { createDefaultRegexBuilderState, evaluateRegex, type RegexBuilderState } from "@shared/regex";
@@ -16,55 +16,93 @@ import Dialog from "./Dialog";
 import { FolderIcon, SettingsIcon } from "./icons";
 import RegexBuilder from "./RegexBuilder";
 
+type SettingsTab = "language" | "appearance" | "downloads" | "advanced";
+
+const SETTINGS_TABS: readonly SettingsTab[] = ["language", "appearance", "downloads", "advanced"];
+const SETTINGS_TAB_STORAGE_KEY = "material-download-manager.settings.active-tab";
+
 const SETTINGS_SEARCH_INDEX = [
   {
     id: "settings-language-heading",
     targetId: "settings-language-mode",
+    tab: "language" as const,
     label: "Language mode English Cantonese bilingual funny level",
   },
   {
     id: "settings-appearance-heading",
     targetId: "settings-theme",
+    tab: "appearance" as const,
     label: "Appearance theme density accent seed color font family font size weight",
   },
   {
     id: "settings-display-name",
     targetId: "settings-display-name-input",
+    tab: "appearance" as const,
     label: "App display name title bar notifications identity data folder installer update feed",
   },
   {
     id: "settings-default-save-folder",
     targetId: "settings-default-save-folder-input",
+    tab: "downloads" as const,
     label: "Default save folder browse folder",
   },
   {
     id: "settings-performance",
     targetId: "settings-max-connections-per-download",
+    tab: "downloads" as const,
     label: "Max connections per download max active downloads",
   },
   {
     id: "settings-speed",
     targetId: "settings-global-speed-limit",
+    tab: "downloads" as const,
     label: "Global speed limit unlimited",
   },
   {
     id: "settings-startup",
     targetId: "settings-startup-toggle",
+    tab: "downloads" as const,
     label: "Start on system startup",
   },
   {
     id: "settings-completion",
     targetId: "settings-completion-toggle",
+    tab: "downloads" as const,
     label: "Show completion notification when a download completes",
   },
   {
     id: "settings-advanced",
     targetId: "settings-min-splittable-part-size",
+    tab: "advanced" as const,
     label: "Advanced minimum splittable part size",
   },
 ] as const;
 
-const SETTINGS_SEARCH_SAMPLE = SETTINGS_SEARCH_INDEX.map((entry) => entry.label).join("\n");
+function readSettingsTab(): SettingsTab {
+  try {
+    const stored = window.localStorage.getItem(SETTINGS_TAB_STORAGE_KEY);
+    if (stored && SETTINGS_TABS.includes(stored as SettingsTab)) return stored as SettingsTab;
+  } catch {
+    // A locked-down profile simply uses the stable first tab.
+  }
+  return "language";
+}
+
+function createSettingsSearchState(tab: SettingsTab): RegexBuilderState {
+  return {
+    ...createDefaultRegexBuilderState(),
+    sample: SETTINGS_SEARCH_INDEX.filter((entry) => entry.tab === tab).map((entry) => entry.label).join("\n"),
+  };
+}
+
+function createSettingsSearchStates(): Record<SettingsTab, RegexBuilderState> {
+  return {
+    language: createSettingsSearchState("language"),
+    appearance: createSettingsSearchState("appearance"),
+    downloads: createSettingsSearchState("downloads"),
+    advanced: createSettingsSearchState("advanced"),
+  };
+}
 
 export default function SettingsDialog() {
   const closeSettings = useAppStore((s) => s.closeSettings);
@@ -82,10 +120,12 @@ export default function SettingsDialog() {
   );
   const [saving, setSaving] = useState(false);
   const [accentError, setAccentError] = useState<string | null>(null);
-  const [settingsSearch, setSettingsSearch] = useState<RegexBuilderState>(() => ({
-    ...createDefaultRegexBuilderState(),
-    sample: SETTINGS_SEARCH_SAMPLE,
-  }));
+  const [activeSettingsTab, setActiveSettingsTab] = useState<SettingsTab>(() => {
+    if (settingsFocus === "language" || settingsFocus === "appearance") return settingsFocus;
+    return readSettingsTab();
+  });
+  const [settingsSearches, setSettingsSearches] = useState<Record<SettingsTab, RegexBuilderState>>(createSettingsSearchStates);
+  const settingsSearch = settingsSearches[activeSettingsTab];
   const [settingsRegexOpen, setSettingsRegexOpen] = useState(false);
   const settingsRegexButtonRef = useRef<HTMLButtonElement>(null);
   const [displayName, setDisplayName] = useState(readDisplayName);
@@ -101,26 +141,62 @@ export default function SettingsDialog() {
   const settingsSearchEvaluation = useMemo(
     () =>
       settingsSearch.mode === "regex"
-        ? evaluateRegex(settingsSearch.pattern, settingsSearch.flags, SETTINGS_SEARCH_SAMPLE)
+        ? evaluateRegex(settingsSearch.pattern, settingsSearch.flags, settingsSearch.sample)
         : null,
-    [settingsSearch.flags, settingsSearch.mode, settingsSearch.pattern]
+    [settingsSearch.flags, settingsSearch.mode, settingsSearch.pattern, settingsSearch.sample]
   );
   const matchingSettings = useMemo(() => {
     const query = settingsSearch.pattern;
     if (query.length === 0) return [];
     if (settingsSearch.mode === "regex") {
       if (settingsSearchEvaluation?.error) return [];
-      return SETTINGS_SEARCH_INDEX.filter((entry) => {
+      return SETTINGS_SEARCH_INDEX.filter((entry) => entry.tab === activeSettingsTab).filter((entry) => {
         const evaluation = evaluateRegex(settingsSearch.pattern, settingsSearch.flags, entry.label);
         return !evaluation.error && evaluation.matches.length > 0;
       });
     }
     const normalizedQuery = query.toLocaleLowerCase();
-    return SETTINGS_SEARCH_INDEX.filter((entry) => entry.label.toLocaleLowerCase().includes(normalizedQuery));
-  }, [settingsSearch, settingsSearchEvaluation]);
+    return SETTINGS_SEARCH_INDEX
+      .filter((entry) => entry.tab === activeSettingsTab)
+      .filter((entry) => entry.label.toLocaleLowerCase().includes(normalizedQuery));
+  }, [activeSettingsTab, settingsSearch, settingsSearchEvaluation]);
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(SETTINGS_TAB_STORAGE_KEY, activeSettingsTab);
+    } catch {
+      // A locked-down profile can still use the tabbed surface for this session.
+    }
+  }, [activeSettingsTab]);
+
+  function updateSettingsSearch(value: RegexBuilderState) {
+    setSettingsSearches((current) => ({ ...current, [activeSettingsTab]: value }));
+  }
+
+  function selectSettingsTab(tab: SettingsTab) {
+    setActiveSettingsTab(tab);
+    setSettingsRegexOpen(false);
+  }
+
+  function handleSettingsTabKeyDown(event: KeyboardEvent<HTMLButtonElement>, tab: SettingsTab) {
+    const currentIndex = SETTINGS_TABS.indexOf(tab);
+    let nextIndex: number | null = null;
+    if (event.key === "ArrowRight" || event.key === "ArrowDown") nextIndex = (currentIndex + 1) % SETTINGS_TABS.length;
+    if (event.key === "ArrowLeft" || event.key === "ArrowUp") nextIndex = (currentIndex - 1 + SETTINGS_TABS.length) % SETTINGS_TABS.length;
+    if (event.key === "Home") nextIndex = 0;
+    if (event.key === "End") nextIndex = SETTINGS_TABS.length - 1;
+    if (nextIndex === null) return;
+    event.preventDefault();
+    const nextTab = SETTINGS_TABS[nextIndex];
+    selectSettingsTab(nextTab);
+    window.requestAnimationFrame(() => document.getElementById(`settings-tab-${nextTab}`)?.focus());
+  }
 
   useEffect(() => {
     if (!settingsFocus) return;
+    if (settingsFocus === "language" || settingsFocus === "appearance") {
+      setActiveSettingsTab(settingsFocus);
+    }
     const targetId = settingsFocus === "language" ? "settings-language-mode" : "settings-theme";
     const frame = window.requestAnimationFrame(() => {
       const target = document.getElementById(targetId);
@@ -130,7 +206,7 @@ export default function SettingsDialog() {
       target.focus({ preventScroll: true });
     });
     return () => window.cancelAnimationFrame(frame);
-  }, [settingsFocus]);
+  }, [activeSettingsTab, settingsFocus]);
 
   function update<K extends keyof AppSettings>(key: K, value: AppSettings[K]) {
     setForm((f) => ({ ...f, [key]: value }));
@@ -152,6 +228,12 @@ export default function SettingsDialog() {
   }
 
   function jumpToSetting(id: string) {
+    const entry = SETTINGS_SEARCH_INDEX.find((candidate) => candidate.targetId === id);
+    if (entry && entry.tab !== activeSettingsTab) {
+      selectSettingsTab(entry.tab);
+      window.requestAnimationFrame(() => jumpToSetting(id));
+      return;
+    }
     const target = document.getElementById(id);
     if (!(target instanceof HTMLElement)) return;
     const details = target.closest("details");
@@ -178,8 +260,12 @@ export default function SettingsDialog() {
 
   function closeSettingsRegexBuilder() {
     setSettingsRegexOpen(false);
-    window.requestAnimationFrame(() => settingsRegexButtonRef.current?.focus());
   }
+
+  useLayoutEffect(() => {
+    if (settingsRegexOpen) return;
+    settingsRegexButtonRef.current?.focus({ preventScroll: true });
+  }, [settingsRegexOpen]);
 
   function handleSettingsEscape() {
     if (!settingsRegexOpen) return false;
@@ -210,6 +296,76 @@ export default function SettingsDialog() {
     }
   }
 
+  const settingsTabLabels: Record<SettingsTab, string> = {
+    language: ui.text("Language", "語言"),
+    appearance: ui.text("Appearance", "外觀"),
+    downloads: ui.text("Downloads", "下載"),
+    advanced: ui.text("Advanced", "進階"),
+  };
+
+  function renderSettingsSearch() {
+    return (
+      <section className="settings-search" aria-labelledby={`settings-search-heading-${activeSettingsTab}`}>
+        <div className="settings-section-heading" id={`settings-search-heading-${activeSettingsTab}`}>
+          {ui.text("Search this settings tab", "搜尋呢個設定分頁")}
+        </div>
+        <div className="settings-search-row">
+          <input
+            className="input"
+            type="search"
+            value={settingsSearch.pattern}
+            placeholder={ui.text("Search setting names and descriptions", "搜尋設定名稱同描述")}
+            aria-label={ui.text("Search settings", "搜尋設定")}
+            aria-invalid={settingsSearchEvaluation?.error ? true : undefined}
+            aria-describedby={settingsSearchEvaluation?.error ? `settings-search-error-${activeSettingsTab}` : undefined}
+            onChange={(event) => updateSettingsSearch({ ...settingsSearch, pattern: event.target.value })}
+          />
+          <button
+            type="button"
+            ref={settingsRegexButtonRef}
+            className={`btn btn-ghost btn-sm${settingsRegexOpen ? " active" : ""}`}
+            aria-expanded={settingsRegexOpen}
+            onClick={() => setSettingsRegexOpen((open) => !open)}
+          >
+            Regex
+          </button>
+        </div>
+        {settingsRegexOpen && (
+          <div className="settings-search-builder">
+            <RegexBuilder
+              title={`${settingsTabLabels[activeSettingsTab]} regex builder`}
+              value={settingsSearch}
+              onChange={updateSettingsSearch}
+            />
+          </div>
+        )}
+        {settingsSearchEvaluation?.error && (
+          <p id={`settings-search-error-${activeSettingsTab}`} className="field-error" role="alert">
+            {settingsSearchEvaluation.error}
+          </p>
+        )}
+        {settingsSearch.pattern.length > 0 && !settingsSearchEvaluation?.error && (
+          <div className="settings-search-results" aria-live="polite">
+            <span className="setting-helper">
+              {matchingSettings.length} {ui.text("matching setting", "個相符設定")}{matchingSettings.length === 1 ? "" : "s"}
+            </span>
+            {matchingSettings.length > 0 ? (
+              <ul>
+                {matchingSettings.map((entry) => (
+                  <li key={entry.id}>
+                    <button type="button" onClick={() => jumpToSetting(entry.targetId)}>{entry.label}</button>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <span className="setting-helper">{ui.text("No settings match this search.", "搵唔到相符設定。")}</span>
+            )}
+          </div>
+        )}
+      </section>
+    );
+  }
+
   return (
     <Dialog
       title={ui.settings}
@@ -229,60 +385,28 @@ export default function SettingsDialog() {
         </>
       }
     >
-      <section className="settings-search" aria-labelledby="settings-search-heading">
-        <div className="settings-section-heading" id="settings-search-heading">Search settings</div>
-        <div className="settings-search-row">
-          <input
-            className="input"
-            type="search"
-            value={settingsSearch.pattern}
-            placeholder="Search setting names and descriptions"
-            aria-label="Search settings"
-            aria-invalid={settingsSearchEvaluation?.error ? true : undefined}
-            aria-describedby={settingsSearchEvaluation?.error ? "settings-search-error" : undefined}
-            onChange={(event) => setSettingsSearch((current) => ({ ...current, pattern: event.target.value }))}
-          />
+      <div className="settings-tabs" role="tablist" aria-label={ui.text("Settings sections", "設定分頁")}>
+        {SETTINGS_TABS.map((tab) => (
           <button
+            key={tab}
             type="button"
-            ref={settingsRegexButtonRef}
-            className={`btn btn-ghost btn-sm${settingsRegexOpen ? " active" : ""}`}
-            aria-expanded={settingsRegexOpen}
-            onClick={() => setSettingsRegexOpen((open) => !open)}
+            id={`settings-tab-${tab}`}
+            className="settings-tab"
+            role="tab"
+            aria-selected={activeSettingsTab === tab}
+            aria-controls={`settings-panel-${tab}`}
+            tabIndex={activeSettingsTab === tab ? 0 : -1}
+            onClick={() => selectSettingsTab(tab)}
+            onKeyDown={(event) => handleSettingsTabKeyDown(event, tab)}
           >
-            Regex
+            {settingsTabLabels[tab]}
           </button>
-        </div>
-        {settingsRegexOpen && (
-          <div className="settings-search-builder">
-            <RegexBuilder
-              title="Settings regex builder"
-              value={settingsSearch}
-              onChange={setSettingsSearch}
-            />
-          </div>
-        )}
-        {settingsSearchEvaluation?.error && <p id="settings-search-error" className="field-error" role="alert">{settingsSearchEvaluation.error}</p>}
-        {settingsSearch.pattern.length > 0 && !settingsSearchEvaluation?.error && (
-          <div className="settings-search-results" aria-live="polite">
-            <span className="setting-helper">
-              {matchingSettings.length} matching setting{matchingSettings.length === 1 ? "" : "s"}
-            </span>
-            {matchingSettings.length > 0 ? (
-              <ul>
-                {matchingSettings.map((entry) => (
-                  <li key={entry.id}>
-                    <button type="button" onClick={() => jumpToSetting(entry.targetId)}>{entry.label}</button>
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <span className="setting-helper">No settings match this search.</span>
-            )}
-          </div>
-        )}
-      </section>
+        ))}
+      </div>
 
-      <section className="settings-section" aria-labelledby="settings-language-heading">
+      {activeSettingsTab === "language" && <div className="settings-tab-panel" id="settings-panel-language" role="tabpanel" aria-labelledby="settings-tab-language">
+        {renderSettingsSearch()}
+        <section className="settings-section" aria-labelledby="settings-language-heading">
         <div className="settings-section-heading" id="settings-language-heading">{copy.language}</div>
         <p className="setting-helper">{copy.languageHelper}</p>
         <label className="field">
@@ -341,9 +465,12 @@ export default function SettingsDialog() {
         </div>
         <p className="setting-disclosure" role="note">{copy.funnyDisclosure}</p>
         <p className="setting-preview" role="status">{ui.funnyPreview}</p>
-      </section>
+        </section>
+      </div>}
 
-      <section className="settings-section" aria-labelledby="settings-appearance-heading">
+      {activeSettingsTab === "appearance" && <div className="settings-tab-panel" id="settings-panel-appearance" role="tabpanel" aria-labelledby="settings-tab-appearance">
+        {renderSettingsSearch()}
+        <section className="settings-section" aria-labelledby="settings-appearance-heading">
         <div className="settings-section-heading" id="settings-appearance-heading">{copy.appearance}</div>
 
         <div className="field" id="settings-display-name" tabIndex={-1}>
@@ -489,8 +616,13 @@ export default function SettingsDialog() {
         <button type="button" className="btn btn-ghost" onClick={resetAllSettings} title={copy.resetAllConfirmation}>
           {copy.resetAll} (save folder kept · 保留儲存資料夾)
         </button>
-      </section>
+        </section>
+      </div>}
 
+      {activeSettingsTab === "downloads" && <div className="settings-tab-panel" id="settings-panel-downloads" role="tabpanel" aria-labelledby="settings-tab-downloads">
+        {renderSettingsSearch()}
+        <section className="settings-section" aria-labelledby="settings-downloads-heading">
+          <div className="settings-section-heading" id="settings-downloads-heading">{ui.downloads}</div>
       <label className="field" id="settings-default-save-folder" tabIndex={-1}>
         <span className="field-label">Default save folder</span>
         <div className="field-row">
@@ -617,7 +749,12 @@ export default function SettingsDialog() {
           {copy.reset}
         </button>
       </label>
+        </section>
+      </div>}
 
+      {activeSettingsTab === "advanced" && <div className="settings-tab-panel" id="settings-panel-advanced" role="tabpanel" aria-labelledby="settings-tab-advanced">
+        {renderSettingsSearch()}
+        <section className="settings-section" aria-labelledby="settings-advanced-heading">
       <details className="advanced-details" id="settings-advanced" tabIndex={-1}>
         <summary>Advanced</summary>
         <label className="field">
@@ -636,6 +773,8 @@ export default function SettingsDialog() {
           </button>
         </label>
       </details>
+        </section>
+      </div>}
     </Dialog>
   );
 }

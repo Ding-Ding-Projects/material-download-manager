@@ -2,6 +2,9 @@
 // and the React renderer (UI). Keep this file free of runtime imports so it can be
 // consumed from either side without pulling in Node or DOM specific code.
 
+import type { ExportFormat, ExportResult } from "./export";
+import type { HistoryFilter, HistoryView } from "./history";
+
 export type DownloadCategory =
   | "image"
   | "music"
@@ -285,4 +288,8 @@ export const IPC = {
   UPDATE_INSTALL: "update:install",
   UPDATE_OPEN_RELEASE_NOTES: "update:openReleaseNotes",
   UPDATE_SET_UNSAVED_WORK: "update:setUnsavedWork",
+  HISTORY_GET_VIEW: "history:getView",
+  HISTORY_EXPORT_VIEW: "history:exportView",
 } as const;
+
+export type { ExportFormat, ExportResult, HistoryFilter, HistoryView };

@@ -92,6 +92,17 @@ export function createDefaultTabState(): TabState {
       pinned: false,
       dirty: false,
     },
+    {
+      id: "history",
+      label: "History",
+      title: "Local revision history",
+      windowId: "main",
+      workspaceId: "default",
+      stripId: "main",
+      groupId,
+      pinned: false,
+      dirty: false,
+    },
   ];
   return {
     tabs,
@@ -160,6 +171,21 @@ export function normalizeTabState(value: unknown): TabState {
     ...group,
     tabIds: normalizedTabs.filter((tab) => tab.groupId === group.id).map((tab) => tab.id),
   }));
+  const firstGroup = normalizedGroups[0];
+  if (firstGroup && !normalizedTabs.some((tab) => tab.id === "history")) {
+    normalizedTabs.push({
+      id: "history",
+      label: "History",
+      title: "Local revision history",
+      windowId: "main",
+      workspaceId: "default",
+      stripId: "main",
+      groupId: firstGroup.id,
+      pinned: false,
+      dirty: false,
+    });
+    firstGroup.tabIds.push("history");
+  }
   const activeTabId = typeof value.activeTabId === "string" && normalizedTabs.some((tab) => tab.id === value.activeTabId)
     ? value.activeTabId
     : normalizedTabs[0]?.id ?? null;

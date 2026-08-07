@@ -8,6 +8,7 @@ AB Download Manager codebase.
 - Runnable app: [`design/`](design/)
 - Preserved visual prototype: [`prototype/`](prototype/)
 - Handoff: [`HANDOFF.md`](HANDOFF.md)
+- Roadmap: [`ROADMAP.md`](ROADMAP.md)
 - CI and release contract: [`CI.md`](CI.md)
 - Shared project guidance mirror: [`AGENTS.md`](AGENTS.md)
 - CI workflow: [Windows verification](.github/workflows/ci.yml)
@@ -57,8 +58,8 @@ and the validated Squirrel assets. It has no signing credentials or alternate
 distribution path. The historical unsigned test release
 [`v0.1.0`](https://github.com/Ding-Ding-Projects/material-download-manager/releases/tag/v0.1.0)
 is retained as prior evidence only. The latest implementation verification
-release is [`v0.1.12`](https://github.com/Ding-Ding-Projects/material-download-manager/releases/tag/v0.1.12),
-published from `e6fd63d4227c740c7b73298784d95d0b84b9a869` with `Setup.exe`,
+release is [`v0.1.14`](https://github.com/Ding-Ding-Projects/material-download-manager/releases/tag/v0.1.14),
+published from `57a43a2bf303c02ae84183f8b22d366e43c96105` with `Setup.exe`,
 `RELEASES`, and the full Squirrel package. The latest-release link above is
 deliberately dynamic because every successful push creates a new monotonic
 stable record.
@@ -73,7 +74,7 @@ The updater has a stable default feed at
 `MDM_UPDATE_FEED_URL` remains an optional main-process override. The historical
 unsigned `v0.1.0` test release is excluded from the stable feed. A new stable
 feed result is verified by the self-hosted release run that published
-`v0.1.12`; later successful runs advance the same feed without recycling a tag.
+`v0.1.14`; later successful runs advance the same feed without recycling a tag.
 
 The Windows verification workflow runs the typecheck, build, downloader tests,
 and compiled Electron path tests on every push and on manual dispatch.
@@ -99,14 +100,16 @@ network-backed application or silently replace it.
 The handoff reconciles the two previously conflicting trees without discarding
 either one. The Electron app now has a real add/probe/segmented-download,
 pause/resume, persistence, queue, schedule-clock, header, timeout, settings,
-notification, accessibility, safety, search, navigation, export, local
-history, loopback browser handoff, and a separate progress window. The
-Chromium extension sends validated page or link URLs through the loopback
-protocol; the prototype is never presented as the download path. Remaining
-release and product gaps are explicit in [`HANDOFF.md`](HANDOFF.md). The
+notification, accessibility, safety, search, navigation, export, a browsable
+local-history tab, loopback browser handoff, and a separate progress window.
+The Settings dialog now has four persisted browser-style tabs with independent
+search builders. The Chromium extension sends validated page or link URLs
+through the loopback protocol; a live accepted handoff joins the same queue the
+progress window displays. The prototype is never presented as the download
+path. Remaining release and product gaps are explicit in [`HANDOFF.md`](HANDOFF.md). The
 published site is the live documentation and installer entry point; its runtime
 manifest is injected from the latest verified stable release by the Pages
-workflow. The e6fd63d deployment was visually checked through the live
+workflow. The v0.1.14 deployment was visually checked through the live
 renderer, including its About publication state.
 
 </details>

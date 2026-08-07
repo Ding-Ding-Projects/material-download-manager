@@ -5,6 +5,7 @@ import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { evaluateRegex } from "../../shared/regex";
 import { exportRecords, type ExportFormat, type ExportResult } from "../../shared/export";
+import { HISTORY_ACTIONS, type HistoryAction, type HistoryFilter, type HistoryRevision } from "../../shared/history";
 
 const execFileAsync = promisify(execFile);
 
@@ -12,47 +13,14 @@ const MAX_SNAPSHOT_BYTES = 8 * 1024 * 1024;
 const MAX_SUMMARY_LENGTH = 1_024;
 const SAFE_REVISION_ID = /^(?:HEAD|[0-9a-f]{7,64})$/i;
 
-export type HistoryAction =
-  | "created"
-  | "updated"
-  | "deleted"
-  | "restored"
-  | "undone"
-  | "discarded"
-  | "imported"
-  | "settings-changed";
-
-export interface HistoryRevision {
-  id: string;
-  action: HistoryAction;
-  summary: string;
-  timestamp: string;
-}
-
-export interface HistoryFilter {
-  from?: number;
-  to?: number;
-  actions?: HistoryAction[];
-  text?: string;
-  regex?: boolean;
-  flags?: string;
-}
+export type { HistoryAction, HistoryFilter, HistoryRevision } from "../../shared/history";
 
 export interface HistoryActionCounts {
   [action: string]: number;
 }
 
 function isHistoryAction(value: string): value is HistoryAction {
-  return [
-    "created",
-    "updated",
-    "deleted",
-    "restored",
-    "undone",
-    "discarded",
-    "imported",
-    "settings-changed",
-  ].includes(value as HistoryAction);
+  return (HISTORY_ACTIONS as readonly string[]).includes(value);
 }
 
 function cleanSummary(summary: string): string {
@@ -122,6 +90,17 @@ export class HistoryStore {
       this.initialization = this.initialize();
     }
     await this.initialization;
+  }
+
+  /** True only when the local history repository can be opened and queried. */
+  async isAvailable(): Promise<boolean> {
+    try {
+      await this.ensureInitialized();
+      await this.git(["rev-parse", "--git-dir"]);
+      return true;
+    } catch {
+      return false;
+    }
   }
 
   private enqueueMutation<T>(operation: () => Promise<T>): Promise<T> {

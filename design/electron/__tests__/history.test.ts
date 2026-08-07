@@ -4,6 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import fsp from "node:fs/promises";
 import { HistoryStore } from "../history/HistoryStore";
+import { normalizeHistoryFilter } from "../../shared/history";
 
 test("records append-only local Git revisions and restores as a new action", async () => {
   const root = await fsp.mkdtemp(path.join(os.tmpdir(), "mdm-history-"));
@@ -39,4 +40,21 @@ test("history filters support bounded local regex and export", async () => {
   assert.equal((await history.listRevisions({ text: "^updated", regex: true, flags: "i" })).length, 1);
   const exported = await history.exportRevisions("jsonl");
   assert.match(exported.content, /action/);
+});
+
+test("history filter normalization bounds the renderer boundary", () => {
+  assert.deepEqual(
+    normalizeHistoryFilter({
+      from: 100,
+      to: 200,
+      actions: ["updated", "updated"],
+      text: "^updated",
+      regex: true,
+      flags: "gi",
+    }),
+    { from: 100, to: 200, actions: ["updated"], text: "^updated", regex: true, flags: "gi" },
+  );
+  assert.throws(() => normalizeHistoryFilter({ from: 200, to: 100 }), /must not be after/);
+  assert.throws(() => normalizeHistoryFilter({ text: "(", regex: true, flags: "g" }), /regular expression/);
+  assert.throws(() => normalizeHistoryFilter({ actions: ["not-real"] }), /history actions/);
 });

@@ -78,11 +78,13 @@ window.MDM_SITE_CONTENT = {
         behavior: [
           "HistoryStore keeps an isolated Git repository beneath the app data directory, never inside the user's project folder and never on a network path.",
           "A changed snapshot creates one append-only local revision with an action, factual summary, timestamp, and commit id. An unchanged snapshot records nothing.",
-          "Restore reads an earlier snapshot and records restoration as a new revision, so an undo remains possible. Download creation, completion/error, pause/resume/retry/cancel, deletion, queue changes, and settings changes are recorded."
+          "Restore reads an earlier snapshot and records restoration as a new revision, so an undo remains possible. Download creation, completion/error, pause/resume/retry/cancel, deletion, queue changes, and settings changes are recorded.",
+          "The application exposes the metadata through a History tab with matching counts, a no-match state, a date range, action chips derived from real history, and a filtered export action."
         ],
         configuration: [
           "Callers supply a serialized snapshot and a real action such as created, updated, deleted, restored, undone, imported, or settings-changed.",
-          "The current manager snapshot is local JSON metadata. Custom request-header values stay out of renderer state and snapshots."
+          "The current manager snapshot is local JSON metadata. Custom request-header values stay out of renderer state and snapshots.",
+          "The History tab keeps plain text as the default search and opens its own bounded JavaScript regex builder; JSON, JSONL, YAML, TOML, CSV, Markdown, and HTML exports use the same filter."
         ],
         failureModes: [
           "Git failures return an empty read result or a clear null restore result rather than claiming a revision exists.",
@@ -92,7 +94,7 @@ window.MDM_SITE_CONTENT = {
           "The history repository has local-only Git configuration and never contacts a remote. Snapshot encryption remains the caller's responsibility; the current manager records non-secret metadata as local JSON."
         ],
         verification: [
-          "History tests cover append-only behavior, no-op suppression, restore-as-new-revision, action/text/regex filters, diffs, and JSONL export."
+          "History tests cover append-only behavior, no-op suppression, restore-as-new-revision, action/text/regex filters, diffs, and JSONL export. The built-artifact UI smoke checks the History tab, date controls, search, export, and the four Settings tabs."
         ]
       },
       suggested: ["record-export", "regex-builder"]
@@ -285,7 +287,7 @@ window.MDM_SITE_CONTENT = {
         behavior: [
           "The settings schema provides English, playful Hong Kong-style Cantonese, and compact bilingual modes. English and Cantonese each have an independent funny-level slider from 1 through 5.",
           "Theme, density, accent seed color, UI font family, font size, and weight are validated at the persistence boundary and applied live through CSS variables. Provenance states whether a value was persisted or compiled in.",
-          "The settings search field is plain-text-first and opens the shared bounded JavaScript regex builder. Results focus the actual control and open closed sections before focus moves."
+          "The Settings dialog has four browser-style tabs—Language, Appearance, Downloads, and Advanced—with one persisted active tab and one independent search/regex-builder state per tab. Results focus the actual control and open closed sections before focus moves."
         ],
         configuration: [
           "Authoritative defaults and validators live in the shared settings schema. StateStore migrates state.json and persists changed settings before the main process saves them.",
@@ -299,7 +301,7 @@ window.MDM_SITE_CONTENT = {
           "Settings are local state. The site mirrors the same privacy boundary: preferences stay in localStorage and no analytics or third-party assets are loaded."
         ],
         verification: [
-          "Persistence tests cover defaults, provenance, legacy migration, malformed input, and round trips. Product-level gaps remain explicit: localized/funny copy across every renderer message, real settings tabs, and the full continuous color translator."
+          "Persistence tests cover defaults, provenance, legacy migration, malformed input, and round trips. The built-artifact UI smoke checks tab keyboard navigation, independent search, regex construction, and Escape focus restoration. Product-level gaps remain explicit: localized/funny copy across every renderer message and the full continuous color translator."
         ]
       },
       suggested: ["regex-builder", "tabbed-navigation", "renderer-accessibility"]
@@ -359,7 +361,7 @@ window.MDM_SITE_CONTENT = {
           "The bridge uses loopback-only HTTP, no tokens, no request-body logging, no third-party endpoint, and no arbitrary page-content fetch.",
         ],
         verification: [
-          "The extension suite covers the local contract; the compiled Electron suite covers the real loopback status and handoff server; the hidden-desktop smoke covers the running process boundary.",
+          "The extension suite covers the local contract; the compiled Electron suite covers the real loopback status and handoff server; a hidden-desktop run queried /v1/status and submitted a real protocol-v1 envelope that received a 202 accepted/pending response.",
         ],
       },
       suggested: ["reliable-transfers", "local-history", "site-foundation"],
@@ -388,7 +390,7 @@ window.MDM_SITE_CONTENT = {
           "The progress window uses context isolation, disabled Node integration, the same trusted-sender checks, and no remote renderer content.",
         ],
         verification: [
-          "Typecheck, build, compiled Electron tests, the dependency-free CDP smoke harness, and a cheap hidden-desktop capture provide the required evidence.",
+          "Typecheck, build, compiled Electron tests, the dependency-free CDP smoke harness, and a cheap hidden-desktop capture provide the required evidence. The latest capture resolved the separate 980×640 window dynamically and rendered its live progress surface.",
         ],
       },
       suggested: ["browser-extension", "renderer-accessibility", "reliable-transfers"],

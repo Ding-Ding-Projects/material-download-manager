@@ -16,9 +16,11 @@ const RUNTIME_CHECK_IDS = [
   "cdp-connected",
   "renderer-root-mounted",
   "feature-surface-mounted",
+  "history-panel",
   "progress-window",
   "settings-open",
   "settings-dialog-a11y",
+  "settings-tabs",
   "settings-search-control",
   "settings-search-interaction",
   "settings-regex-builder",
@@ -877,6 +879,29 @@ async function main(argv) {
       return { tabStripMounted: Boolean(tabList), tabs, fallbackSurface: tabList ? null : "toolbar + Settings" };
     `)));
 
+    await runCheck(result, "history-panel", async () => {
+      await clickByRole(cdp, "tab", "History");
+      await waitForPage(cdp, `Boolean(document.querySelector("#history-panel-heading"))`, "History tab surface", options.timeoutMs);
+      const evidence = await cdp.evaluate(pageExpression(`
+        const panel = document.querySelector(".history-panel");
+        const search = document.querySelector('input[aria-label="Search history"]');
+        const dates = document.querySelectorAll('.history-panel input[type="date"]');
+        const exportButton = findByRole("button", "Export filtered history");
+        const tab = document.querySelector('[role="tablist"][aria-label="Open tabs"] [role="tab"][aria-selected="true"]');
+        if (!panel || !isVisible(panel) || !search || !isVisible(search)) throw new Error("History panel or search is missing or hidden");
+        if (dates.length !== 2) throw new Error("History panel is missing its two native date filters");
+        if (!exportButton) throw new Error("History panel is missing its export action");
+        if (!tab || accessibleName(tab) !== "History") throw new Error("History tab is not the active application tab");
+        const results = document.querySelector(".history-results");
+        const status = document.querySelector(".history-empty, .history-status-error");
+        if (!results && !status) throw new Error("History panel did not expose a loaded result or an honest status state");
+        return { search: accessibleName(search), datePickers: dates.length, export: accessibleName(exportButton), activeTab: accessibleName(tab), loadedState: results ? "results" : "status" };
+      `));
+      await clickByRole(cdp, "tab", "Downloads");
+      await waitForPage(cdp, `document.querySelector('[role="tablist"][aria-label="Open tabs"] [role="tab"][aria-selected="true"]')?.textContent?.trim() === "Downloads"`, "return to Downloads tab", options.timeoutMs);
+      return evidence;
+    });
+
     await runCheck(result, "settings-open", async () => {
       await clickByRole(cdp, "button", "Settings");
       await waitForPage(cdp, `Boolean(document.querySelector(".dialog"))`, "Settings dialog surface", options.timeoutMs);
@@ -895,6 +920,39 @@ async function main(argv) {
       return { role: "dialog", name };
     `)));
 
+    await runCheck(result, "settings-tabs", async () => {
+      const initial = await cdp.evaluate(pageExpression(`
+        const tabList = document.querySelector('[role="tablist"][aria-label="Settings sections"]');
+        const tabs = tabList ? [...tabList.querySelectorAll('[role="tab"]')] : [];
+        const selected = tabs.filter((tab) => tab.getAttribute("aria-selected") === "true");
+        const panelId = selected[0]?.getAttribute("aria-controls");
+        const panel = panelId ? document.getElementById(panelId) : null;
+        if (!tabList || tabs.length !== 4) throw new Error("Settings surface must expose four browser-style tabs");
+        if (selected.length !== 1 || !panel || !isVisible(panel)) throw new Error("Settings tab selection does not expose one visible panel");
+        return { tabCount: tabs.length, selected: accessibleName(selected[0]), panel: panel.id };
+      `));
+      await clickByRole(cdp, "tab", "Appearance");
+      await waitForPage(cdp, `document.querySelector('[role="tablist"][aria-label="Settings sections"] [role="tab"][aria-selected="true"]')?.textContent?.trim() === "Appearance"`, "Appearance settings tab", options.timeoutMs);
+      const appearance = await cdp.evaluate(pageExpression(`
+        const panel = document.getElementById("settings-panel-appearance");
+        const search = panel?.querySelector('input[aria-label="Search settings"]');
+        const theme = panel?.querySelector("#settings-theme");
+        if (!panel || !isVisible(panel) || !theme || !isVisible(theme)) throw new Error("Appearance settings panel is not visible");
+        if (!(search instanceof HTMLInputElement)) throw new Error("Appearance tab has no independent settings search");
+        return { panel: panel.id, search: true, theme: true, persistedTab: window.localStorage.getItem("material-download-manager.settings.active-tab") };
+      `));
+      await setInputValue(cdp, 'input[aria-label="Search settings"]', "display name");
+      await waitForPage(cdp, `Boolean(document.querySelector("#settings-panel-appearance .settings-search-results")?.textContent?.match(/matching setting/i))`, "Appearance tab search result", options.timeoutMs);
+      await cdp.evaluate(pageExpression(`
+        const tab = document.getElementById("settings-tab-appearance");
+        if (!(tab instanceof HTMLElement)) throw new Error("Appearance tab control is missing");
+        tab.focus();
+        tab.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowLeft", bubbles: true }));
+      `));
+      await waitForPage(cdp, `document.querySelector('[role="tablist"][aria-label="Settings sections"] [role="tab"][aria-selected="true"]')?.textContent?.trim() === "Language"`, "Arrow-key settings tab navigation", options.timeoutMs);
+      return { ...initial, appearance, keyboardNavigation: "ArrowLeft moved to Language" };
+    });
+
     await runCheck(result, "settings-search-control", async () => cdp.evaluate(pageExpression(`
       const search = document.querySelector('input[aria-label="Search settings"]');
       if (!(search instanceof HTMLInputElement) || !isVisible(search)) throw new Error('Search settings input is missing or hidden');
@@ -905,7 +963,7 @@ async function main(argv) {
     `)));
 
     await runCheck(result, "settings-search-interaction", async () => {
-      await setInputValue(cdp, 'input[aria-label="Search settings"]', "appearance");
+      await setInputValue(cdp, 'input[aria-label="Search settings"]', "language");
       await waitForPage(
         cdp,
         `Boolean(document.querySelector(".settings-search-results")?.textContent?.match(/matching setting/i))`,
@@ -922,9 +980,9 @@ async function main(argv) {
 
     await runCheck(result, "settings-regex-builder", async () => {
       await clickByRole(cdp, "button", "Regex", ".settings-search-row");
-      await waitForPage(cdp, `Boolean(document.querySelector('section[aria-label="Settings regex builder"]'))`, "Settings regex builder", options.timeoutMs);
+      await waitForPage(cdp, `Boolean(document.querySelector('section[aria-label$="regex builder"]'))`, "Settings regex builder", options.timeoutMs);
       return cdp.evaluate(pageExpression(`
-        const builder = document.querySelector('section[aria-label="Settings regex builder"]');
+        const builder = document.querySelector('section[aria-label$="regex builder"]');
         const row = document.querySelector(".settings-search-row");
         const toggle = row ? findByRole("button", "Regex", row) : null;
         const modeGroup = builder?.querySelector('[role="radiogroup"][aria-label="Search mode"]');
@@ -950,7 +1008,7 @@ async function main(argv) {
 
     await runCheck(result, "escape-closes-builder-and-restores-focus", async () => {
       await dispatchEscape(cdp);
-      await waitForPage(cdp, `!document.querySelector('section[aria-label="Settings regex builder"]')`, "regex builder to close on Escape", options.timeoutMs);
+      await waitForPage(cdp, `!document.querySelector('section[aria-label$="regex builder"]')`, "regex builder to close on Escape", options.timeoutMs);
       return cdp.evaluate(pageExpression(`
         const row = document.querySelector(".settings-search-row");
         const toggle = row ? findByRole("button", "Regex", row) : null;
