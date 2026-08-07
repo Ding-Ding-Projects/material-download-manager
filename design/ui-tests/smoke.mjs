@@ -1034,6 +1034,79 @@ async function main(argv) {
       return { tabStripMounted: Boolean(tabList), tabs, fallbackSurface: tabList ? null : "toolbar + Settings" };
     `)));
 
+    await runCheck(result, "documentation-panel", async () => {
+      await clickByRole(cdp, "tab", "Documentation");
+      await waitForPage(cdp, `Boolean(document.querySelector("#documentation-panel-heading"))`, "Documentation tab surface", options.timeoutMs);
+      const initial = await cdp.evaluate(pageExpression(`
+        const panel = document.querySelector(".documentation-panel");
+        const search = document.querySelector('input[aria-label="Search documentation articles"]');
+        const articleButtons = document.querySelectorAll(".documentation-article-list button");
+        const activeTab = document.querySelector('[role="tablist"][aria-label="Open tabs"] [role="tab"][aria-selected="true"]');
+        const article = document.querySelector(".documentation-article");
+        if (!panel || !isVisible(panel) || !search || !isVisible(search)) throw new Error("Documentation panel or search is missing or hidden");
+        if (articleButtons.length === 0) throw new Error("Documentation article index is empty");
+        if (!article || !isVisible(article) || !article.querySelector(".documentation-markdown")) throw new Error("Documentation article renderer is missing");
+        if (!activeTab || accessibleName(activeTab) !== "Documentation") throw new Error("Documentation tab is not active");
+        return { articleCount: articleButtons.length, search: accessibleName(search), activeTab: accessibleName(activeTab), rendered: true };
+      `));
+
+      await setInputValue(cdp, 'input[aria-label="Search documentation articles"]', "progress window");
+      await waitForPage(cdp, `document.querySelectorAll(".documentation-article-list button").length > 0 && /progress window/i.test(document.querySelector(".documentation-article-list")?.textContent ?? "")`, "Documentation article search", options.timeoutMs);
+      await cdp.evaluate(pageExpression(`
+        const button = [...document.querySelectorAll(".documentation-article-list button")].find((candidate) => /progress window/i.test(candidate.textContent ?? ""));
+        if (!(button instanceof HTMLElement)) throw new Error("Progress-window article search result is missing");
+        button.click();
+      `));
+      await waitForPage(cdp, `/Separate download progress window/i.test(document.querySelector(".documentation-article-header")?.textContent ?? "")`, "selected Documentation article", options.timeoutMs);
+
+      const linkTarget = await cdp.evaluate(pageExpression(`
+        const link = [...document.querySelectorAll(".documentation-markdown a")].find((candidate) => /Renderer accessibility/i.test(candidate.textContent ?? ""));
+        if (!(link instanceof HTMLAnchorElement)) throw new Error("Rendered article is missing its relative Renderer accessibility link");
+        link.click();
+        return link.textContent?.trim() ?? "";
+      `));
+      await waitForPage(cdp, `/Renderer accessibility bridge/i.test(document.querySelector(".documentation-article-header")?.textContent ?? "")`, "relative Documentation article link", options.timeoutMs);
+
+      await clickByRole(cdp, "button", "Regex", ".documentation-search");
+      await waitForPage(cdp, `Boolean(document.querySelector('#documentation-search-builder section[aria-label$="regex builder"]'))`, "Documentation regex builder", options.timeoutMs);
+      await setInputValue(cdp, ".documentation-search .regex-pattern", "documentation|regex");
+      await waitForPage(cdp, `document.querySelectorAll(".documentation-article-list button").length > 0`, "Documentation regex results", options.timeoutMs);
+      const regexEvidence = await cdp.evaluate(pageExpression(`
+        const builder = document.querySelector("#documentation-search-builder section[aria-label$='regex builder']");
+        const resultCount = document.querySelectorAll(".documentation-article-list button").length;
+        if (!builder || !isVisible(builder)) throw new Error("Documentation regex builder is not visible");
+        if (resultCount === 0) throw new Error("Documentation regex search returned no result");
+        return { builder: true, resultCount, relativeLink: ${JSON.stringify(linkTarget)} };
+      `));
+
+      await setInputValue(cdp, 'input[aria-label="Search documentation articles"]', "no-such-bundled-article");
+      await waitForPage(cdp, `Boolean(document.querySelector(".documentation-index .documentation-empty"))`, "Documentation honest empty state", options.timeoutMs);
+      const empty = await cdp.evaluate(pageExpression(`
+        const emptyState = document.querySelector(".documentation-index .documentation-empty");
+        if (!emptyState || !isVisible(emptyState)) throw new Error("Documentation empty state is missing or hidden");
+        return emptyState.textContent?.replace(/\\s+/g, " ").trim() ?? "";
+      `));
+      await setInputValue(cdp, 'input[aria-label="Search documentation articles"]', "");
+      return { ...initial, relativeLink: linkTarget, regex: regexEvidence, emptyState: empty };
+    });
+
+    await runCheck(result, "documentation-command-palette", async () => {
+      await cdp.evaluate(pageExpression(`
+        document.dispatchEvent(new KeyboardEvent("keydown", { key: "f", code: "KeyF", ctrlKey: true, shiftKey: true, bubbles: true }));
+      `));
+      await waitForPage(cdp, `Boolean(document.querySelector('[role="dialog"].command-palette'))`, "command palette from Ctrl+Shift+F", options.timeoutMs);
+      await setInputValue(cdp, 'input[aria-label="Command palette search"]', "Documentation");
+      await waitForPage(cdp, `Boolean([...document.querySelectorAll(".command-palette-row")].find((row) => /Documentation/i.test(row.textContent ?? "")))`, "Documentation command-palette result", options.timeoutMs);
+      const evidence = await cdp.evaluate(pageExpression(`
+        const row = [...document.querySelectorAll(".command-palette-row")].find((candidate) => /Documentation/i.test(candidate.textContent ?? ""));
+        if (!(row instanceof HTMLElement)) throw new Error("Documentation command-palette result is missing");
+        return { result: accessibleName(row), shortcut: "Ctrl+Shift+F" };
+      `));
+      await dispatchEscape(cdp);
+      await waitForPage(cdp, `!document.querySelector('[role="dialog"].command-palette')`, "command palette close", options.timeoutMs);
+      return evidence;
+    });
+
     await runCheck(result, "history-panel", async () => {
       await clickByRole(cdp, "tab", "History");
       await waitForPage(cdp, `Boolean(document.querySelector("#history-panel-heading"))`, "History tab surface", options.timeoutMs);

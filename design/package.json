@@ -12,6 +12,10 @@
   },
   "scripts": {
     "dev": "vite",
+    "docs:bundle": "node scripts/generate-documentation-bundle.mjs",
+    "docs:bundle:check": "node scripts/generate-documentation-bundle.mjs --check",
+    "test:docs": "node --test scripts/documentationBundle.test.mjs",
+    "prebuild": "npm run docs:bundle:check",
     "build:renderer": "vite build",
     "build:electron": "tsc -p electron/tsconfig.json",
     "build": "npm run build:renderer && npm run build:electron",

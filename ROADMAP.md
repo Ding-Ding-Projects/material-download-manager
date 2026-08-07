@@ -30,10 +30,10 @@ unverified surface has shipped.
    translator and Word-depth typography controls.
 2. Complete persisted tab overflow, pinning, grouping, four discovery searches,
    and bulk-close review flows in the desktop app.
-3. Add the in-app offline documentation browser and finish the renderer
-   changelog viewer's advanced locale-aware date range, preset, and export
-   flows; the current viewer already embeds 28 published stable entries with
-   validated full commit links.
+3. Finish the renderer changelog viewer's advanced locale-aware date range,
+   preset, and export flows; the current viewer already embeds 28 published
+   stable entries with validated full commit links, and the offline in-app
+   Documentation browser is now shipped.
 4. Complete bulk actions and notification-history operations, including export,
    reviewable previews, undo/history recording, and accessibility coverage.
 5. Add scheduled language/appearance settings with validated HTTPS and Home

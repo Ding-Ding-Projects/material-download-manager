@@ -29,6 +29,7 @@ AB Download Manager codebase.
 - Download engine docs: docs/features/download-engine/
 - Browser handoff docs: [`docs/features/integrations/browser-extension.md`](docs/features/integrations/browser-extension.md)
 - Progress-window docs: [`docs/features/download-engine/progress-window.md`](docs/features/download-engine/progress-window.md)
+- In-app documentation docs: [`docs/features/documentation/in-app-documentation-browser.md`](docs/features/documentation/in-app-documentation-browser.md)
 
 <details>
 <summary>Build and test</summary>
@@ -37,11 +38,14 @@ From `design/`:
 
 ```powershell
 npm install
+npm run docs:bundle:check
+npm run test:docs
 npm run typecheck
 npm run build
 npm run build:electron
 npm run test:engine
 npm run test:electron
+npm run test:ui
 ```
 
 The Windows packaging command is `npm run dist:win`; the committed application
@@ -58,8 +62,8 @@ and the validated Squirrel assets. It has no signing credentials or alternate
 distribution path. The historical unsigned test release
 [`v0.1.0`](https://github.com/Ding-Ding-Projects/material-download-manager/releases/tag/v0.1.0)
 is retained as prior evidence only. The latest implementation verification
-release is [`v0.1.18`](https://github.com/Ding-Ding-Projects/material-download-manager/releases/tag/v0.1.18),
-published from `a0c27b621fa957de99d129d95df7a7e9bee396f6` with `Setup.exe`,
+release is [`v0.1.33`](https://github.com/Ding-Ding-Projects/material-download-manager/releases/tag/v0.1.33),
+published from `0050941cd34005b29ab4f31368101c3a9c5de4a6` with `Setup.exe`,
 `RELEASES`, and the full Squirrel package. The published record is stable,
 non-draft, non-prerelease, and unsigned. The latest-release link above is
 deliberately dynamic because every successful push creates a new monotonic
@@ -107,7 +111,10 @@ The Settings dialog now has four persisted browser-style tabs with independent
 search builders. The Chromium extension sends validated page or link URLs
 through the loopback protocol; a live accepted handoff joins the same queue the
 progress window displays. The prototype is never presented as the download
-path. Remaining release and product gaps are explicit in [`HANDOFF.md`](HANDOFF.md). The
+path. The app also ships an offline Documentation tab that bundles every
+categorized feature article, renders Markdown safely, keeps relative article
+links inside the app, and provides its own anchored regex search. Remaining
+release and product gaps are explicit in [`HANDOFF.md`](HANDOFF.md). The
 published site is the live documentation and installer entry point; its runtime
 manifest is injected from the latest verified stable release by the Pages
 workflow. The v0.1.18 deployment was checked through the live

@@ -78,7 +78,9 @@ release is [`v0.1.28`](https://github.com/Ding-Ding-Projects/material-download-m
 published from that exact commit with `isDraft=false` and `isPrerelease=false`.
 The integration merge `ae0822c` and handoff commit `613869c` are now on the
 default branch. Stable [`v0.1.31`](https://github.com/Ding-Ding-Projects/material-download-manager/releases/tag/v0.1.31)
-is published from exact `613869cdff1e68c35d6b0dda1d60f73ef2aa4271` with
+was the prior integration record. The current verified baseline is stable
+[`v0.1.33`](https://github.com/Ding-Ding-Projects/material-download-manager/releases/tag/v0.1.33),
+published from exact `0050941cd34005b29ab4f31368101c3a9c5de4a6` with
 `isDraft=false` and `isPrerelease=false`; its release, Windows verification,
 and Pages runs are recorded below. The release feed remains dynamic for later
 documentation-only refreshes.
@@ -179,6 +181,31 @@ focus pass after the React state commit for older Chromium/Node combinations.
 The failed release is a real red verdict, not a release candidate: packaging
 did not run and no draft, prerelease, or tag-only release was accepted.
 
+## Current implementation slice: offline in-app documentation browser
+
+The current branch adds a real Documentation tab to the Windows renderer. It
+bundles all 30 categorized Markdown files under `docs/features/` through the
+checked-in `design/src/generated/documentationArticles.ts` catalog, with a
+build-time completeness guard that fails when the catalog is stale. The shared
+React Markdown renderer keeps provider-authored text out of HTML injection,
+resolves relative `.md` links inside the tab, leaves external links external,
+and renders executable or absolute-local protocols as non-actionable text. The
+surface has its own plain-text-first search and anchored bounded JavaScript
+regex builder, participates in the persisted tab model, and is listed in the
+`Ctrl+Shift+F` command palette.
+
+The local verification for this slice is typecheck/build green, the bundle and
+shared documentation tests are green, Electron is 46/46, the built-artifact
+smoke is 24/24, and the Pages source check is 42/42. The smoke uses the real
+compiled renderer and preload bridge to open the tab, search in both modes,
+follow a relative article link, render a fenced code block, verify an honest
+empty state, open the command-palette destination, and preserve the existing
+separate progress-window, History, Settings, accessibility, and narrow-layout
+checks. The full user-facing article catalog is currently source-authored
+English while its surrounding app controls follow the selected language mode;
+translated article copies remain explicit follow-up work rather than an
+unverified claim.
+
 ## Runnable application
 
 The application under `design/` includes:
@@ -208,16 +235,20 @@ The application under `design/` includes:
 - A loopback-only Chromium extension handoff protocol with a popup, context
   menu, settings/options surface, local regex builder, bounded metadata, and
   explicit queue-failure responses.
+- An offline Documentation tab with the complete categorized article bundle,
+  safe Markdown rendering, local article navigation, plain-text search, and an
+  anchored regex builder.
 
 The prototype under `prototype/` is not loaded by the Electron build. Its
 simulated network layer remains reference-only.
 
 The integrated main branch adds selected-text capture to the browser extension
-context menu and an embedded in-app stable changelog viewer.
-The viewer currently contains 28 published stable records, each with a full
-source commit link, ISO date filtering, anchored regex search, filtered copy,
-and Markdown export. The built artifact and hidden-desktop capture are verified;
-the stable release is `v0.1.31` from `613869c`.
+context menu, an embedded in-app stable changelog viewer, and the offline
+Documentation tab. The viewer currently contains 28 published stable records,
+each with a full source commit link, ISO date filtering, anchored regex search,
+filtered copy, and Markdown export. The Documentation tab bundles 30
+categorized Markdown articles and resolves relative links locally. The stable
+baseline before this slice is `v0.1.33` from `0050941`.
 
 ## Verification evidence
 
@@ -225,6 +256,8 @@ Run from `design/`:
 
 ```powershell
 npm ci
+npm run docs:bundle:check
+npm run test:docs
 npm run typecheck
 npm run build
 npm run test:engine
@@ -241,10 +274,11 @@ On the current verification tree, the following checks passed locally:
 | `npm run typecheck` | Passed renderer and Electron TypeScript checks. |
 | `npm run build` | Passed Vite renderer and Electron main-process compilation. |
 | `npm run test:engine` | 31/31 passed locally, including concurrent and cross-instance StateStore saves, failed-write recovery, Range integrity, pause/resume, non-resumable fallback, custom-header persistence and cross-origin header stripping, global queue limits, schedule race handling, manager history hooks, filename sanitization, malformed Range rejection, categories, throttling, and URL redaction. |
-| `npm run test:electron` | 43/43 passed for export, local history, hook/index isolation, renderer-boundary history filter normalization, renderer settings validation, regex, tabs, command-palette foundations, compiled renderer-path resolution, secure updater IPC, version monotonicity, timeout/stale-event recovery, native Squirrel download-overlap protection, queue payload validation, Settings Escape handling, completion-notification preference handling, loopback handoff success/failure responses, slow-pending handoff acknowledgement, and the embedded changelog store/IPC path. |
-| `npm run test:ui` | 22/22 required checks passed through the built Electron/CDP smoke harness: renderer freshness, real preload bridge, tab shell, History tab controls and honest empty state, a seeded separate progress window with a named progressbar, four Settings tabs, independent search, anchored regex builder, Escape focus restoration, interactive-label structure, narrow layout at 520 CSS pixels and 2× scale, and cleanup. |
+| `npm run test:electron` | 45/45 passed for export, local history, hook/index isolation, renderer-boundary history filter normalization, renderer settings validation, regex, tabs, documentation-link resolution/search bounds, command-palette foundations, compiled renderer-path resolution, secure updater IPC, version monotonicity, timeout/stale-event recovery, native Squirrel download-overlap protection, queue payload validation, Settings Escape handling, completion-notification preference handling, loopback handoff success/failure responses, slow-pending handoff acknowledgement, and the embedded changelog store/IPC path. |
+| `npm run test:ui` | 24/24 required checks passed through the built Electron/CDP smoke harness: renderer freshness, real preload bridge, tab shell including Documentation, offline article index and Markdown rendering, plain-text and regex article search, relative article navigation, honest empty state, command-palette destination, History tab controls and honest empty state, a seeded separate progress window with a named progressbar, four Settings tabs, independent search, anchored regex builder, Escape focus restoration, interactive-label structure, narrow layout at 520 CSS pixels and 2× scale, and cleanup. |
 | Chromium extension `npm test` | 12/12 passed for MV3 permissions and entrypoints, page/link/selected-text context-menu handoff, bounded link-target precedence, loopback protocol, bounded validation, settings import/export, regex safety, localization, and no remote assets/tracking. |
-| GitHub Pages source `npm run check` | 41/41 checks passed, including feature-article coverage, local-only assets, stable-manifest fail-closed behavior, publication-state rendering, prototype sanitization, and the browser-extension/progress-window articles. |
+| `npm run test:docs` and bundle guard | 2/2 bundle tests passed; all 30 categorized Markdown files are present in the generated renderer catalog. |
+| GitHub Pages source `npm run check` | 42/42 checks passed, including the new in-app documentation article, feature-article coverage, local-only assets, stable-manifest fail-closed behavior, publication-state rendering, prototype sanitization, and the browser-extension/progress-window articles. |
 | Hidden-desktop progress capture | Passed through the cheap Lowlevel headless route: a real loopback handoff created a live download, and a dynamically resolved second `Chrome_WidgetWin_1` window rendered the separate 980×640 `Download progress` surface with the fixture filename, source URL, transferred bytes, speed, pause, cancel, and close controls. The capture was retained in the session scratchpad, outside the repository. The disposable desktop, Electron process, and fixture server were cleaned up. |
 | Remote GitHub Actions | Default-branch stable release [31182280753](https://github.com/Ding-Ding-Projects/material-download-manager/actions/runs/31182280753), Windows verification [31182280767](https://github.com/Ding-Ding-Projects/material-download-manager/actions/runs/31182280767), and Pages run [31182280754](https://github.com/Ding-Ding-Projects/material-download-manager/actions/runs/31182280754) are green for `613869c`; branch stable release [31181815994](https://github.com/Ding-Ding-Projects/material-download-manager/actions/runs/31181815994) and Windows verification [31181815918](https://github.com/Ding-Ding-Projects/material-download-manager/actions/runs/31181815918) are also green. |
 
@@ -300,8 +334,8 @@ reconciliation:
    visual and interaction changes should be implemented next.
 2. Complete the remaining shared-memory product surfaces—full per-element
    appearance editing, complete tab/group management, renderer history,
-   advanced changelog date/filter flows, complete bulk actions, scheduled
-   external settings, and the in-app documentation browser—without wiring the prototype's simulated
+   advanced changelog date/filter flows, complete bulk actions, and scheduled
+   external settings—without wiring the prototype's simulated
    engine into the app.
 3. Add renderer, IPC, packaging, accessibility, error-notification, and
    destructive-action coverage before calling the application release-ready.

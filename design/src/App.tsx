@@ -26,6 +26,7 @@ import TabStrip from "./components/TabStrip";
 import DimSumSurprise from "./components/DimSumSurprise";
 import HistoryPanel from "./components/HistoryPanel";
 import ChangelogPanel from "./components/ChangelogPanel";
+import DocumentationPanel from "./components/DocumentationPanel";
 import { setActiveTab } from "@shared/tabModel";
 
 const DESTRUCTIVE_REQUEST_EVENT = "mdm:request-destructive-action";
@@ -143,6 +144,14 @@ export default function App() {
         keywords: ["changelog", "release", "version", "commit", "notes"],
         section: "Destinations",
         onSelect: () => selectAppTab("changelog"),
+      },
+      {
+        id: "destination.documentation",
+        label: copy.text("Documentation", "文件"),
+        description: copy.text("Browse the offline feature articles bundled with the app", "瀏覽程式內置嘅離線功能文章"),
+        keywords: ["documentation", "docs", "help", "articles", "offline", "markdown"],
+        section: "Destinations",
+        onSelect: () => selectAppTab("documentation"),
       },
       ...(items.length > 0
         ? [{
@@ -336,6 +345,7 @@ export default function App() {
     }
     if (tabId === "history") return;
     if (tabId === "changelog") return;
+    if (tabId === "documentation") return;
   }
 
   function selectAppTab(tabId: string) {
@@ -356,6 +366,8 @@ export default function App() {
             <HistoryPanel />
           ) : tabState.activeTabId === "changelog" ? (
             <ChangelogPanel />
+          ) : tabState.activeTabId === "documentation" ? (
+            <DocumentationPanel />
           ) : (
             <>
               <Toolbar />
