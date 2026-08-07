@@ -1,0 +1,137 @@
+{
+  "schemaVersion": 1,
+  "runnerContract": {
+    "labels": [
+      "self-hosted",
+      "windows",
+      "x64",
+      "material-download-manager-windows-x64"
+    ],
+    "operatingSystem": "Windows",
+    "architecture": "X64",
+    "selectionRule": "Every job in the repository must match all labels. GitHub-hosted labels are not valid fallbacks."
+  },
+  "workflows": {
+    "verification": {
+      "file": ".github/workflows/ci.yml",
+      "jobs": ["verify"],
+      "dependencies": [
+        {
+          "name": "GitHub Actions runner",
+          "version": "Current runner compatible with Windows x64",
+          "source": "GitHub Actions runner registration",
+          "bootstrap": "Registered by the runner owner before workflow dispatch; the job verifies RUNNER_OS and RUNNER_ARCH."
+        },
+        {
+          "name": "Git",
+          "version": "2.x or newer",
+          "source": "git-scm.com",
+          "bootstrap": "Runner base dependency; preflight verifies git is available."
+        },
+        {
+          "name": "PowerShell",
+          "version": "7.x",
+          "source": "Microsoft PowerShell",
+          "bootstrap": "Runner base dependency; preflight verifies pwsh is available."
+        },
+        {
+          "name": "Node.js",
+          "version": "22.x",
+          "source": "actions/setup-node@v4",
+          "bootstrap": "Installed or selected by the workflow before the first project command."
+        },
+        {
+          "name": "npm",
+          "version": "Bundled with the selected Node.js 22.x runtime",
+          "source": "Node.js distribution",
+          "bootstrap": "Provided by actions/setup-node@v4 and verified before npm ci."
+        },
+        {
+          "name": "GitHub CLI",
+          "version": "2.x or newer",
+          "source": "cli.github.com",
+          "bootstrap": "Runner base dependency; preflight verifies gh is available for release metadata and evidence."
+        },
+        {
+          "name": "Material Download Manager dependencies",
+          "version": "design/package-lock.json lockfileVersion 3",
+          "source": "npm registry through npm ci",
+          "bootstrap": "npm ci from design/ on every job; the lockfile is the only dependency authority."
+        }
+      ]
+    },
+    "stable-release": {
+      "file": ".github/workflows/release.yml",
+      "jobs": ["release"],
+      "dependencies": [
+        {
+          "name": "GitHub Actions runner",
+          "version": "Current runner compatible with Windows x64",
+          "source": "GitHub Actions runner registration",
+          "bootstrap": "Registered by the runner owner before workflow dispatch; the job verifies RUNNER_OS and RUNNER_ARCH."
+        },
+        {
+          "name": "Git",
+          "version": "2.x or newer",
+          "source": "git-scm.com",
+          "bootstrap": "Runner base dependency; preflight verifies git is available."
+        },
+        {
+          "name": "PowerShell",
+          "version": "7.x",
+          "source": "Microsoft PowerShell",
+          "bootstrap": "Runner base dependency; preflight verifies pwsh is available."
+        },
+        {
+          "name": "Node.js",
+          "version": "22.x",
+          "source": "actions/setup-node@v4",
+          "bootstrap": "Installed or selected by the workflow before the first project command."
+        },
+        {
+          "name": "npm",
+          "version": "Bundled with the selected Node.js 22.x runtime",
+          "source": "Node.js distribution",
+          "bootstrap": "Provided by actions/setup-node@v4 and verified before npm ci."
+        },
+        {
+          "name": "GitHub CLI",
+          "version": "2.x or newer",
+          "source": "cli.github.com",
+          "bootstrap": "Runner base dependency; preflight verifies gh is available for reservations and release publication."
+        },
+        {
+          "name": "Material Download Manager dependencies",
+          "version": "design/package-lock.json lockfileVersion 3",
+          "source": "npm registry through npm ci",
+          "bootstrap": "npm ci from design/ on every job; the lockfile is the only dependency authority."
+        },
+        {
+          "name": "electron-builder",
+          "version": "24.13.3 from design/package-lock.json",
+          "source": "npm registry through npm ci",
+          "bootstrap": "The post-install check runs npx --no-install electron-builder --version before packaging."
+        },
+        {
+          "name": "Squirrel.Windows target",
+          "version": "electron-builder target declared by design/package.json",
+          "source": "electron-builder package",
+          "bootstrap": "Resolved by npm ci; the artifact check requires Setup.exe, RELEASES, and every referenced full or delta .nupkg."
+        }
+      ]
+    }
+  },
+  "bootstrap": {
+    "preInstallCommand": "pwsh -NoProfile -File scripts/verify-self-hosted-bootstrap.ps1 -Phase preinstall",
+    "nativeBinaryCommand": "pwsh -NoProfile -File scripts/complete-node-binary-bootstrap.ps1",
+    "postInstallCommand": "pwsh -NoProfile -File scripts/verify-self-hosted-bootstrap.ps1 -Phase postinstall",
+    "freshEnvironmentProof": "Run both phases on a disposable Windows x64 runner with an empty npm cache and no design/node_modules directory. A cache hit may accelerate the run, but npm ci must remain the supported cache-miss path.",
+    "manualPreparationForbidden": true,
+    "cacheMissPolicy": "Do not rely on a pre-populated node_modules directory or globally installed project dependencies."
+  },
+  "policy": {
+    "codeSigning": "Prohibited. The workflow clears inherited signing inputs, disables forceCodeSigning only in a temporary build copy, and verifies Setup.exe is NotSigned.",
+    "releaseChannel": "Stable release only: draft=false and isPrerelease=false after tests and artifact checks pass.",
+    "pages": "No Pages workflow is present until a matching self-hosted runner is available and the deployment path is proven loop-free."
+  }
+}

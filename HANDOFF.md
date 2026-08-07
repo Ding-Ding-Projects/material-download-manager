@@ -27,47 +27,44 @@ branch remains available as
 `origin/claude/submodule-design-folder-port-iyvesh`; it was preserved rather
 than rewritten.
 
-The release handoff is staged on
-`codex/release-pipeline-20260806` at `d794d24`. It adds the stable updater feed,
-the reproducible line-count and dim-sum metadata helpers, and the signed
-Windows release workflow. Signed production publishing remains blocked by the
-missing protected signing certificate and password, so the handoff does not
-claim a verified production installer.
+The release helpers and workflows preserve the stable updater feed, the
+reproducible line-count and dim-sum metadata helpers, and Squirrel.Windows
+packaging. Lane E makes the current automation contract explicit: all jobs use
+the labelled self-hosted Windows runner documented in [`CI.md`](CI.md), the
+dependency inventory is committed, and fresh bootstrap is checked before and
+after `npm ci`.
 
-The follow-up `codex/unsigned-release-20260806` branch adds an explicit,
-manual-dispatch-only `skip_signing` test route. It temporarily changes only the
-runner copy of `design/package.json`, restores that file after packaging,
-labels the result `UNSIGNED`, and forces a prerelease so it cannot become the
-stable updater feed. The route also clears empty or inherited Windows signing
-environment variables for the packaging child process and restores them in a
-`finally` block. This route is not signed production evidence and does not
-replace the normal signing gate.
+Code signing is prohibited. The stable release workflow clears inherited
+signing inputs, temporarily disables `forceCodeSigning` only in the runner copy
+of `design/package.json`, restores that file byte-for-byte, verifies
+`Setup.exe` is `NotSigned`, and publishes a stable release only when the
+published record reports `isPrerelease=false`, after tests and Squirrel
+artifact checks pass. There is no alternate distribution path.
 
-The release workflow also reserves the final version tag and the catalog
-code-name ref before packaging through the GitHub ref API. It retries only on a
-proven ref conflict and retains reservation tombstones after a failed build, so
-concurrent branch triggers cannot select duplicate repository-global release
-identities and no pending trigger is replaced by a global concurrency queue.
+The release workflow reserves a monotonic version tag and, when the public
+catalog is available, a unique dim-sum code-name ref through the GitHub ref API.
+It retains reservation tombstones after a failed later build so a future run
+advances rather than recycling a release identity. A catalog outage does not
+block the release; the release notes record that no code name was available.
 
-The latest unsigned hosted verification reached the engine suite but exposed a
-real concurrent StateStore write race: two saves shared `state.json.tmp`, and
-one could rename it before the other. StateStore now serializes saves per store,
-uses a unique temporary filename for each atomic write, and cleans up temporary
-files after success or failure. The engine test command also runs with
-`--test-concurrency=1 --test-timeout=30000` because its manager tests
-intentionally exercise process-global Windows profile state and a blocked test
-must fail within a bounded interval. Both Windows jobs have a 30-minute timeout.
-Hosted run
+The latest historical verification exposed a real concurrent StateStore write
+race: two saves shared `state.json.tmp`, and one could rename it before the
+other. StateStore now serializes saves per store, uses a unique temporary
+filename for each atomic write, and cleans up temporary files after success or
+failure. The engine test command also runs with `--test-concurrency=1
+--test-timeout=30000` because its manager tests intentionally exercise
+process-global Windows profile state and a blocked test must fail within a
+bounded interval. Both current workflows use the self-hosted runner contract;
+no new remote run is claimed until that runner exists. Historical run
 [31129129233](https://github.com/Ding-Ding-Projects/material-download-manager/actions/runs/31129129233)
-was canceled after recording the race. The fix was verified by unsigned
-dispatch run
+was canceled after recording the race. The fix was verified by the historical
+unsigned dispatch run
 [31130475054](https://github.com/Ding-Ding-Projects/material-download-manager/actions/runs/31130475054),
-which published `v0.1.0` from the corrected commit with `Setup.exe`,
+which published the legacy `v0.1.0` test release from the corrected commit with `Setup.exe`,
 `RELEASES`, and the full Squirrel package. Post-push verification run
 [31131193046](https://github.com/Ding-Ding-Projects/material-download-manager/actions/runs/31131193046)
-also passed. Signed post-push run
-[31131192930](https://github.com/Ding-Ding-Projects/material-download-manager/actions/runs/31131192930)
-stopped at the missing signing-secret gate before packaging.
+also passed. Those historical hosted runs do not verify the current
+self-hosted workflows.
 
 ## Runnable application
 
@@ -120,45 +117,46 @@ unpackaged production launches load the built renderer unless
 constrained to one safe Windows path segment, and ranged responses must agree
 with their `Content-Range` before bytes are written.
 
-A signed Windows packaging run (`npm run dist:win`) is still required before
-publishing an installer; a compile-only success is not packaging evidence. The
-package configuration now targets Squirrel.Windows x64 with signing enforced,
-and the main process has a bounded, fail-closed updater coordinator. The
-renderer now receives validated updater state through the secure preload bridge
-and shows explicit manual-check, `Later`, release-notes, and
-`Restart to install update` actions guarded by a fresh unsaved-work assertion.
-This handoff does not claim a signed installer or verified stable update. The
-unsigned `v0.1.0` test prerelease does carry the CI-built `RELEASES` feed and
-Squirrel assets, while `MDM_UPDATE_FEED_URL` remains an optional override. The
-unsigned local shape attempt produced no artifacts on this host and is not
-release evidence.
+The packaging command targets Squirrel.Windows x64, and the main process has a
+bounded, fail-closed updater coordinator. The renderer receives validated
+updater state through the secure preload bridge and shows explicit manual-check,
+`Later`, release-notes, and `Restart to install update` actions guarded by a
+fresh unsaved-work assertion. A compile-only success is not packaging evidence:
+the current release path requires `Setup.exe`, `RELEASES`, every referenced
+full or delta `.nupkg`, and `NotSigned` verification. The legacy unsigned
+`v0.1.0` prerelease carries the historical CI-built feed and assets, while
+`MDM_UPDATE_FEED_URL` remains an optional override. No current stable release
+or current remote workflow result is claimed from this handoff.
 
 The repository has a Windows push/dispatch workflow at
-[`.github/workflows/ci.yml`](.github/workflows/ci.yml) for the checks above and
-a separate [Windows release workflow](.github/workflows/release.yml). The
-release workflow is fail-closed on missing signing inputs, validates the
-Squirrel artifacts, and publishes signed production only after the signed build
-succeeds. The explicit unsigned manual-dispatch route publishes only a labeled
-test prerelease; signed production remains unpublished while those protected
-inputs are absent.
+[`.github/workflows/ci.yml`](.github/workflows/ci.yml) for validation and a
+separate [stable Windows release workflow](.github/workflows/release.yml). Both
+use the explicit self-hosted label contract and the committed dependency
+inventory. The release workflow validates tests and Squirrel assets, publishes
+one stable non-draft, non-prerelease release, records unsigned status, and
+verifies release timing and asset identity after publication. A Pages workflow
+is intentionally absent until the self-hosted runner and loop-free deployment
+boundary are available.
 
 The release branch also passed local static checks for the workflow and helper
 contracts: `actionlint -shellcheck=` passed, all 8 PowerShell run blocks parsed,
 the line-count table validated, the dim-sum metadata resolved to
 `Classic Har Gow · 蝦餃`, and `electron-builder --version` resolved to
-`24.13.3`. These checks do not substitute for the missing signed packaging
-run.
+`24.13.3`. The current workflow contract also passes local static inspection;
+the self-hosted release run remains unverified because no matching repository
+runner is registered.
 
 ## Known follow-up work
 
 These items remain open and are deliberately not hidden by the directory
 reconciliation:
 
-1. Configure the protected signing certificate and password, then validate the
-   Windows Squirrel installer and update artifacts on the supported build path,
-   including signing and the `RELEASES` feed. No signed production release is
-   published until that workflow run is green and its immutable assets are
-   verified; `v0.1.0` remains an unsigned test prerelease.
+1. Register a reachable Windows x64 self-hosted runner with all four labels in
+   [`CI.md`](CI.md), prove the fresh cache-miss bootstrap, then run the stable
+   release workflow. The run must publish and re-read one immutable stable
+   release with the unsigned warning, Squirrel assets, line-count attribution,
+   dim-sum metadata, and measured timing. The historical `v0.1.0` remains an
+   unsigned test release.
 2. Compare the runnable renderer with the prototype and decide which Material 3
    visual and interaction changes should be implemented next.
 3. Add the remaining product features only after their scope and production
@@ -209,8 +207,9 @@ Discussions are enabled and the rolling handoff thread is
 [`#3`](https://github.com/Ding-Ding-Projects/material-download-manager/discussions/3).
 The release announcement is [`#4`](https://github.com/Ding-Ding-Projects/material-download-manager/discussions/4).
 The wiki setting is enabled but its wiki repository is not initialized, and
-GitHub Pages is not configured. The unsigned `v0.1.0` test release is verified;
-no signed production installer or stable update release is claimed here.
+GitHub Pages is not configured. The unsigned `v0.1.0` test release is
+historical evidence only; no current stable release or self-hosted remote
+workflow result is claimed here because the runner inventory is empty.
 
 The main checkout and two linked checkouts remain registered with Git. The
 release-helper checkout holds untracked `scripts/`, and the release-workflow
