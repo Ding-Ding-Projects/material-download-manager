@@ -4,6 +4,7 @@ import { IPC, isUpdateUnsavedWorkState, type UpdateInstallResult, type UpdateSta
 import type { AddDownloadRequest, AppSettings, DownloadItem, DownloadQueue } from "../shared/types";
 import { notifyDownloadComplete as showCompletionNotification, type CompletionNotificationPort } from "./completionNotification";
 import { assertQueueCreatePayload, DownloadManager } from "./download/DownloadManager";
+import { HandoffServer } from "./extension/HandoffServer";
 import { isDevelopmentLaunch, resolveRendererPath } from "./runtimePaths";
 import {
   normalizeReleaseNotesUrl,
@@ -24,8 +25,10 @@ if (!gotSingleInstanceLock) {
 }
 
 let mainWindow: BrowserWindow | null = null;
+let progressWindow: BrowserWindow | null = null;
 let manager: DownloadManager;
 let updater: UpdateService | null = null;
+let handoffServer: HandoffServer | null = null;
 let rendererWorkState: { hasUnsavedWork: boolean; reason: string; receivedAt: number } | null = null;
 
 const appIconPath = path.join(__dirname, "../../build/icon.ico");
@@ -63,11 +66,52 @@ function createWindow() {
   });
 }
 
+function createProgressWindow() {
+  if (progressWindow && !progressWindow.isDestroyed()) {
+    if (progressWindow.isMinimized()) progressWindow.restore();
+    progressWindow.show();
+    progressWindow.focus();
+    progressWindow.webContents.send(IPC.STATE_CHANGED, manager.getState());
+    return;
+  }
+
+  progressWindow = new BrowserWindow({
+    width: 980,
+    height: 640,
+    minWidth: 720,
+    minHeight: 460,
+    show: false,
+    frame: false,
+    backgroundColor: "#16171d",
+    icon: appIconPath,
+    webPreferences: {
+      preload: path.join(__dirname, "preload.js"),
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: false,
+    },
+  });
+
+  progressWindow.once("ready-to-show", () => {
+    progressWindow?.show();
+    if (progressWindow && !progressWindow.isDestroyed()) {
+      progressWindow.webContents.send(IPC.STATE_CHANGED, manager.getState());
+    }
+  });
+  if (isDev) progressWindow.loadURL("http://localhost:5173/?view=progress");
+  else progressWindow.loadFile(resolveRendererPath(__dirname), { query: { view: "progress" } });
+  progressWindow.on("closed", () => {
+    progressWindow = null;
+  });
+}
+
 function assertTrustedSender(event: { sender: Electron.WebContents; senderFrame?: Electron.WebFrameMain | null }) {
-  if (!mainWindow || mainWindow.isDestroyed() || event.sender !== mainWindow.webContents) {
+  const trustedWindows = [mainWindow, progressWindow].filter((window): window is BrowserWindow => Boolean(window && !window.isDestroyed()));
+  const trustedWindow = trustedWindows.find((window) => window.webContents === event.sender);
+  if (!trustedWindow) {
     throw new Error("Untrusted renderer IPC sender");
   }
-  if (event.senderFrame && event.senderFrame !== mainWindow.webContents.mainFrame) {
+  if (event.senderFrame && event.senderFrame !== trustedWindow.webContents.mainFrame) {
     throw new Error("Untrusted renderer IPC frame");
   }
 }
@@ -133,8 +177,9 @@ function assertDownloadQueue(value: unknown): asserts value is DownloadQueue {
 }
 
 function broadcastState() {
-  if (!mainWindow || mainWindow.isDestroyed()) return;
-  mainWindow.webContents.send(IPC.STATE_CHANGED, manager.getState());
+  const state = manager.getState();
+  if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send(IPC.STATE_CHANGED, state);
+  if (progressWindow && !progressWindow.isDestroyed()) progressWindow.webContents.send(IPC.STATE_CHANGED, state);
 }
 
 function updateFallbackState(): UpdateState {
@@ -143,7 +188,7 @@ function updateFallbackState(): UpdateState {
     version: app.getVersion(),
     releaseNotesUrl: null,
     checkedAt: Date.now(),
-    message: "Updates are not available until a signed HTTPS feed is configured.",
+    message: "Updates are not available until the unsigned HTTPS feed is configured.",
   };
 }
 
@@ -283,6 +328,10 @@ function registerIpcHandlers() {
     assertTrustedSender(event);
     mainWindow?.close();
   });
+  ipcMain.handle(IPC.PROGRESS_WINDOW_OPEN, (event) => {
+    assertTrustedSender(event);
+    createProgressWindow();
+  });
 
   ipcMain.handle(IPC.UPDATE_GET_STATE, (event) => {
     assertTrustedSender(event);
@@ -355,6 +404,11 @@ app.whenReady().then(async () => {
   await manager.init();
   manager.on("stateChanged", broadcastState);
   manager.on("itemCompleted", notifyDownloadComplete);
+  handoffServer = new HandoffServer({
+    manager,
+    logger: (message) => console.warn(message),
+  });
+  await handoffServer.start();
   app.setLoginItemSettings({ openAtLogin: manager.getSettings().startOnSystemStartup });
 
   registerIpcHandlers();
@@ -367,6 +421,8 @@ app.whenReady().then(async () => {
 });
 
 app.on("window-all-closed", async () => {
+  await handoffServer?.stop();
+  if (progressWindow && !progressWindow.isDestroyed()) progressWindow.close();
   await manager?.shutdown();
   if (process.platform !== "darwin") app.quit();
 });
@@ -375,6 +431,8 @@ app.on("before-quit", async (e) => {
   updater?.stop();
   if (manager && !manager.isShutDown) {
     e.preventDefault();
+    await handoffServer?.stop();
+    if (progressWindow && !progressWindow.isDestroyed()) progressWindow.close();
     await manager.shutdown();
     app.quit();
   }

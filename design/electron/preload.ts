@@ -92,6 +92,7 @@ const api = {
   minimizeWindow: () => ipcRenderer.send(IPC.WINDOW_MINIMIZE),
   maximizeWindow: () => ipcRenderer.send(IPC.WINDOW_MAXIMIZE),
   closeWindow: () => ipcRenderer.send(IPC.WINDOW_CLOSE),
+  openProgressWindow: (): Promise<void> => ipcRenderer.invoke(IPC.PROGRESS_WINDOW_OPEN),
 };
 
 contextBridge.exposeInMainWorld("api", api);

@@ -38,6 +38,7 @@ export interface MaterialDownloadManagerAPI {
   minimizeWindow(): void;
   maximizeWindow(): void;
   closeWindow(): void;
+  openProgressWindow(): Promise<void>;
 }
 
 declare global {

@@ -267,6 +267,7 @@ export const IPC = {
   WINDOW_MINIMIZE: "window:minimize",
   WINDOW_MAXIMIZE: "window:maximize",
   WINDOW_CLOSE: "window:close",
+  PROGRESS_WINDOW_OPEN: "window:openProgress",
   UPDATE_GET_STATE: "update:getState",
   UPDATE_STATE_CHANGED: "update:stateChanged",
   UPDATE_CHECK: "update:check",
