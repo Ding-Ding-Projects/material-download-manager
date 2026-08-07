@@ -151,6 +151,9 @@ test("service worker runtime boundary stores settings and reports disabled hando
     assert.equal(saved.settings.funnyLevelEn, 4);
     assert.equal(contextMenus.created.length, 1);
     assert.match(contextMenus.created[0].title, /Test manager/);
+    assert.deepEqual(contextMenus.created[0].contexts, ["page", "link", "selection"]);
+    const contextMenuListener = contextMenus.onClicked.listeners[0];
+    assert.equal(typeof contextMenuListener, "function");
     const port = server.address().port;
     const configured = await send({ type: "SAVE_SETTINGS", settings: { handoffEndpoint: `http://127.0.0.1:${port}/v1/downloads` } });
     assert.equal(configured.settings.handoffEndpoint, `http://127.0.0.1:${port}/v1/downloads`);
@@ -162,6 +165,19 @@ test("service worker runtime boundary stores settings and reports disabled hando
     assert.equal(receivedBody.source, "material-download-manager-extension");
     assert.equal(receivedBody.url, "https://example.test/file.zip");
     assert.equal(receivedBody.title, "Example");
+    receivedBody = null;
+    contextMenuListener({
+      menuItemId: contextMenus.created[0].id,
+      pageUrl: "https://example.test/selection-page",
+      selectionText: "Selected text from the page",
+    }, { title: "Selection page" });
+    for (let attempt = 0; attempt < 20 && receivedBody === null; attempt += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    }
+    assert.ok(receivedBody, "selection context-menu handoff did not reach the manager");
+    assert.equal(receivedBody.url, "https://example.test/selection-page");
+    assert.equal(receivedBody.title, "Selection page");
+    assert.equal(receivedBody.selectionText, "Selected text from the page");
     managerPending = true;
     const pending = await send({ type: "HANDOFF_URL", url: "https://example.test/slow-file.zip" });
     assert.equal(pending.result.code, "handoff-pending");
@@ -206,9 +222,11 @@ test("handoff message boundary accepts only bounded download messages", () => {
   });
   assert.equal(message.type, "HANDOFF_URL");
   assert.equal(message.url, "https://example.test/archive.zip");
+  assert.equal(message.selectionText, "A small selection");
   assert.equal(validateIncomingMessage({ type: "HANDOFF_URL", url: "javascript:alert(1)" }), null);
   assert.equal(validateIncomingMessage({ type: "HANDOFF_URL", url: "https://user:pass@example.test/file" }), null);
   assert.equal(validateIncomingMessage({ type: "HANDOFF_URL", url: "https://example.test/file", title: "x".repeat(513) }), null);
+  assert.equal(validateIncomingMessage({ type: "HANDOFF_URL", url: "https://example.test/file", selectionText: "x".repeat(2049) }), null);
   assert.equal(validateIncomingMessage({ type: "UNKNOWN", url: "https://example.test/file" }), null);
   assert.deepEqual(validateIncomingMessage({ type: "GET_STATE" }), { type: "GET_STATE" });
 });
@@ -216,11 +234,12 @@ test("handoff message boundary accepts only bounded download messages", () => {
 test("handoff envelope normalizes safe URLs and records the protocol source", () => {
   assert.equal(normalizeDownloadUrl("file:///C:/secret.txt"), null);
   assert.equal(normalizeDownloadUrl("https://user:pass@example.test/file"), null);
-  const envelope = createHandoffEnvelope("https://example.test/file.zip", { title: "File" });
+  const envelope = createHandoffEnvelope("https://example.test/file.zip", { title: "File", selectionText: "Selected text" });
   assert.deepEqual(
-    { protocol: envelope.protocol, source: envelope.source, url: envelope.url, title: envelope.title },
-    { protocol: 1, source: "material-download-manager-extension", url: "https://example.test/file.zip", title: "File" },
+    { protocol: envelope.protocol, source: envelope.source, url: envelope.url, title: envelope.title, selectionText: envelope.selectionText },
+    { protocol: 1, source: "material-download-manager-extension", url: "https://example.test/file.zip", title: "File", selectionText: "Selected text" },
   );
+  assert.throws(() => createHandoffEnvelope("https://example.test/file.zip", { selectionText: "x".repeat(2049) }), /metadata is too large/);
   assert.match(envelope.requestedAt, /^\d{4}-\d{2}-\d{2}T/);
 });
 

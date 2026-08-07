@@ -55,6 +55,8 @@ Accept: application/json
 
 `url` must be an `http` or `https` URL without embedded credentials and is limited to 8,192 characters. `title` is optional and limited to 512 characters. `selectionText` is optional and limited to 2,048 characters. The adapter must treat the body as untrusted input and validate the same bounds before adding a download.
 
+The extension exposes the same capture action for `page`, `link`, and `selection` context-menu invocations. A page invocation uses `pageUrl`; a link invocation prefers `linkUrl`; a selection invocation uses the page URL and forwards the browser-provided `selectionText`. The selection text remains optional metadata: empty or absent text is omitted from the envelope, and text over 2,048 characters or any non-string value is rejected before serialization.
+
 The implemented adapter answers `202` after the `manager.addDownload(...)`
 request is accepted. Fast queueing includes a protocol marker, `accepted: true`,
 and the opaque download id:

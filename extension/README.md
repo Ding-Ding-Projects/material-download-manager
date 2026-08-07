@@ -14,7 +14,7 @@ The supported contract is documented in [`docs/handoff-contract.md`](docs/handof
 2. Choose **Load unpacked** and select this `extension/` directory.
 3. Open **Details → Extension options**.
 4. The default endpoint is already configured. Use **Test connection** to verify the running local adapter, or use **Use default endpoint** after changing it.
-5. Use the toolbar popup or the context menu on a page/link. Captured URLs are validated locally and handed to the app’s real download manager; failures are retained for the popup recovery surface.
+5. Use the toolbar popup or the context menu on a page, link, or selected text. Page captures use the page URL, link captures use the link target, and selection captures include the selected text as bounded metadata. Captured URLs and metadata are validated locally and handed to the app’s real download manager; failures are retained for the popup recovery surface.
 
 The options page includes browser-style tabs, keyboard-operable settings search, an anchored regex builder, English / playful Hong Kong Cantonese / bilingual language modes, separate English and Cantonese funny-level sliders from 1–5, a display-name setting, and versioned JSON settings export/import. A `202` handoff response means the adapter accepted the request for queue dispatch; it is not a completed-download signal.
 
@@ -25,7 +25,7 @@ Funny levels change voice only. Warnings, errors, URLs, affected data, and recov
 | Permission | Reason |
 | --- | --- |
 | `activeTab` | Read the active page URL only after the user opens the popup or invokes the extension action. |
-| `contextMenus` | Add the page/link “Send URL” action. |
+| `contextMenus` | Add the page, link, and selection “Send URL” action. |
 | `storage` | Persist local settings and the last handoff result. |
 | `http://127.0.0.1/*`, `http://localhost/*` | Permit only the documented loopback HTTP handoff; no arbitrary web-host access is declared. |
 
