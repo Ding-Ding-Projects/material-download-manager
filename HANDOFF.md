@@ -55,7 +55,8 @@ failure. The engine test command also runs with `--test-concurrency=1
 --test-timeout=30000` because its manager tests intentionally exercise
 process-global Windows profile state and a blocked test must fail within a
 bounded interval. Both current workflows use the self-hosted runner contract;
-no new remote run is claimed until that runner exists. Historical run
+the current runner and its fresh bootstrap evidence are recorded below.
+Historical run
 [31129129233](https://github.com/Ding-Ding-Projects/material-download-manager/actions/runs/31129129233)
 was canceled after recording the race. The fix was verified by the historical
 unsigned dispatch run
@@ -65,6 +66,40 @@ which published the legacy `v0.1.0` test release from the corrected commit with 
 [31131193046](https://github.com/Ding-Ding-Projects/material-download-manager/actions/runs/31131193046)
 also passed. Those historical hosted runs do not verify the current
 self-hosted workflows.
+
+## Current stable delivery
+
+The current main tip is `a008ce6446e5d25a02574d708401e4075e2253ac`.
+Self-hosted Windows verification run
+[31158991027](https://github.com/Ding-Ding-Projects/material-download-manager/actions/runs/31158991027)
+and stable release run
+[31158991143](https://github.com/Ding-Ding-Projects/material-download-manager/actions/runs/31158991143)
+are green. The published
+[`v0.1.8`](https://github.com/Ding-Ding-Projects/material-download-manager/releases/tag/v0.1.8)
+record is `isDraft=false`, `isPrerelease=false`, targets the exact main tip,
+and carries `Setup.exe`, `RELEASES`, and
+`material-download-manager-0.1.8-full.nupkg`. Its measured workflow duration
+is `00:02:05`, from `2026-08-07T11:54:12.000Z` through
+`2026-08-07T11:56:17.000Z`.
+
+The release code name is **Dried Scallop Shrimp Dumpling · 瑤柱蝦餃**, resolved
+from the public `dim-sum-photos` catalog and linked to its published photo
+asset in the release notes. The CI line-count table reports 34,691 included
+lines (31,741 non-blank) across source, tests, styles/markup, and other
+project code, plus a 40,784-line grand total including excluded tracked
+material. The counter reports zero surviving agent-attributed lines under its
+automation-identity rule for this release.
+
+The live documentation site is
+https://ding-ding-projects.github.io/material-download-manager/ and the
+repository homepage points to it. Its live release manifest reports `0.1.8`,
+the exact source commit above, `verified=true`, `unsigned=true`, and the
+published installer URL. The installer endpoint responds successfully with a
+real 115,368,960-byte `Setup.exe` asset. Pages run
+[31158991086](https://github.com/Ding-Ding-Projects/material-download-manager/actions/runs/31158991086)
+and explicitly dispatched run
+[31159402542](https://github.com/Ding-Ding-Projects/material-download-manager/actions/runs/31159402542)
+are green.
 
 ## Runnable application
 
@@ -121,7 +156,7 @@ On the current verification tree, the following checks passed locally:
 | Chromium extension `npm test` | 12/12 passed for MV3 permissions and entrypoints, context-menu and popup handoff, loopback protocol, bounded validation, settings import/export, regex safety, localization, and no remote assets/tracking. |
 | GitHub Pages source `npm run check` | 39/39 checks passed, including feature-article coverage, local-only assets, stable-manifest fail-closed behavior, and the browser-extension/progress-window articles. |
 | Hidden-desktop progress capture | Passed through the cheap Lowlevel headless route: a real loopback handoff created a live download, and a dynamically resolved second `Chrome_WidgetWin_1` window rendered the separate 980×640 `Download progress` surface with the fixture filename, source URL, transferred bytes, speed, pause, cancel, and close controls. The capture was retained in the session scratchpad, outside the repository. The disposable desktop, Electron process, and fixture server were cleaned up. |
-| Remote GitHub Actions | The repository runner is now online, but verification run [31155242513](https://github.com/Ding-Ding-Projects/material-download-manager/actions/runs/31155242513) is red at `Complete native dependency bootstrap` because the original check expected a nonexistent top-level esbuild executable. The bootstrap correction is on this task branch and must pass on a new run before stable publication is claimed. |
+| Remote GitHub Actions | Current main verification [31158991027](https://github.com/Ding-Ding-Projects/material-download-manager/actions/runs/31158991027), stable release [31158991143](https://github.com/Ding-Ding-Projects/material-download-manager/actions/runs/31158991143), and Pages runs [31158991086](https://github.com/Ding-Ding-Projects/material-download-manager/actions/runs/31158991086) and [31159402542](https://github.com/Ding-Ding-Projects/material-download-manager/actions/runs/31159402542) are green. Historical failures remain linked where they explain fixes; they are not current verification evidence. |
 
 The hardening milestone corrected the compiled renderer path and made
 unpackaged production launches load the built renderer unless
@@ -137,8 +172,8 @@ fresh unsaved-work assertion. A compile-only success is not packaging evidence:
 the current release path requires `Setup.exe`, `RELEASES`, every referenced
 full or delta `.nupkg`, and `NotSigned` verification. The legacy unsigned
 `v0.1.0` prerelease carries the historical CI-built feed and assets, while
-`MDM_UPDATE_FEED_URL` remains an optional override. No current stable release
-or current remote workflow result is claimed from this handoff.
+`MDM_UPDATE_FEED_URL` remains an optional override. The current stable feed is
+verified through `v0.1.8`.
 
 The repository has a Windows push/dispatch workflow at
 [`.github/workflows/ci.yml`](.github/workflows/ci.yml) for validation and a
@@ -150,84 +185,81 @@ verifies release timing and asset identity after publication. A self-hosted
 Pages workflow is now present at
 [`.github/workflows/pages.yml`](.github/workflows/pages.yml). It validates and
 stages the local site before deployment, asks `actions/configure-pages@v5` to
-enable Pages when needed, but its live URL remains unclaimed until the
-contracted runner executes it and the published surface is checked.
+enable Pages when needed, and now has live verification at
+https://ding-ding-projects.github.io/material-download-manager/. The site
+injects the verified stable `v0.1.8` manifest only after the release asset
+inventory is checked.
 
 The release branch also passed local static checks for the workflow and helper
 contracts: `actionlint -shellcheck=` passed, all 8 PowerShell run blocks parsed,
 the line-count table validated, the dim-sum metadata resolved to
 `Classic Har Gow · 蝦餃`, and `electron-builder --version` resolved to
 `24.13.3`. The current workflow contract also passes local static inspection;
-the self-hosted release run remains unverified because no matching repository
-runner is registered.
+the matching repository runner is registered and the current self-hosted
+release and Pages runs are verified above.
 
 ## Known follow-up work
 
 These items remain open and are deliberately not hidden by the directory
 reconciliation:
 
-1. The repository runner is registered with all four labels in [`CI.md`](CI.md).
-   Prove the fresh cache-miss bootstrap, then run the stable release workflow.
-   The run must publish and re-read one immutable stable
-   release with the unsigned warning, Squirrel assets, line-count attribution,
-   dim-sum metadata, and measured timing. The historical `v0.1.0` remains an
-   unsigned test release.
-2. Compare the runnable renderer with the prototype and decide which Material 3
+1. Compare the runnable renderer with the prototype and decide which Material 3
    visual and interaction changes should be implemented next.
-3. Complete the remaining shared-memory product surfaces—full per-element
+2. Complete the remaining shared-memory product surfaces—full per-element
    appearance editing, complete tab/group management, renderer history and
    changelog browsers, complete bulk actions, scheduled external settings, and
    the in-app documentation browser—without wiring the prototype's simulated
    engine into the app.
-4. Add renderer, IPC, packaging, accessibility, error-notification, and
+3. Add renderer, IPC, packaging, accessibility, error-notification, and
    destructive-action coverage before calling the application release-ready.
-5. The reusable local regex engine and builder foundation now live under
+4. The reusable local regex engine and builder foundation now live under
    `design/shared/regex.ts` and `design/src/components/RegexBuilder.tsx`; wire a
    separate anchored instance to every search surface before claiming the
    search requirement complete.
-6. The reusable tab state model, tab strip, and `Ctrl+Shift+F` command palette
+5. The reusable tab state model, tab strip, and `Ctrl+Shift+F` command palette
    now live under `design/shared/tabModel.ts` and `design/src/components/`;
    connect them to persisted app state and the real shell before calling the
    navigation requirements complete.
-7. The shared export serializer covers the required coding formats under
+6. The shared export serializer covers the required coding formats under
    design/shared/export.ts; connect it to filtered records, history, settings,
    and changelog surfaces with visible warning and format controls.
-8. The isolated Git-backed HistoryStore is now wired to manager state changes,
+7. The isolated Git-backed HistoryStore is now wired to manager state changes,
    including download creation/completion/error/pause/resume/retry/cancel,
    deletion, queue changes, and settings changes. Connect its browse/restore
    controls to the renderer and extend coverage to every user-managed record
    before calling local history complete.
-9. The renderer lane now supplies centralized accessibility semantics,
+8. The renderer lane now supplies centralized accessibility semantics,
    non-blocking notification history, and the native destructive-action gate.
    Its current evidence is typecheck/build, 31 Electron tests, and a cheap
    headless Settings/Escape/focus smoke; a renderer DOM harness, notification
    bulk actions, deletion history recording, and full-copy localization remain
    open.
-10. The settings lane now supplies versioned language, funny-level, appearance,
+9. The settings lane now supplies versioned language, funny-level, appearance,
     provenance state, a local Settings search, and an anchored regex builder
     with persistence tests. The surface still needs browser-style settings tabs,
     full appearance-editor depth, and copy wiring across every renderer message.
-11. Keep the landing page, changelog viewer, release line counter, and
+10. Keep the landing page, changelog viewer, release line counter, and
     sanitized instruction mirror current as the product surfaces are
     implemented.
 
 ## Git state and ownership
 
 This reconciliation and the CI hardening are on `main`; the current main tip
-is the source of truth for the next remote verification. The original
+is the source of truth for the verified stable release. The original
 handoff history is preserved as an ancestor, and the original handoff branch
 remains untouched. The application repository has no open GitHub issues at the
 time this handoff was refreshed. The separate `agent-global-memory` repository
-has open issue [#10](https://github.com/Ding-Ding-Projects/agent-global-memory/issues/10),
-which is owned by its Status Hub work and was left untouched here. GitHub
+has open issues [#10](https://github.com/Ding-Ding-Projects/agent-global-memory/issues/10)
+and [#12](https://github.com/Ding-Ding-Projects/agent-global-memory/issues/12),
+which are owned by Status Hub and runner work and were left untouched here. GitHub
 Discussions are enabled and the rolling handoff thread is
 [`#3`](https://github.com/Ding-Ding-Projects/material-download-manager/discussions/3).
-The release announcement is [`#4`](https://github.com/Ding-Ding-Projects/material-download-manager/discussions/4).
-The wiki setting is enabled but its wiki repository is not initialized, and
-GitHub Pages enablement is now requested by the workflow but not yet remotely
-verified. The unsigned `v0.1.0` test release is historical evidence only; no
-current stable release or successful current self-hosted workflow result is
-claimed until fresh main runs complete.
+The `v0.1.0` announcement is [`#4`](https://github.com/Ding-Ding-Projects/material-download-manager/discussions/4);
+the current `v0.1.8` release announcement is recorded in the repository's
+Discussion history. The wiki setting is enabled but its wiki repository is not
+initialized. GitHub Pages is enabled, deployed, and live at the URL above. The
+unsigned `v0.1.0` test release is historical evidence only; `v0.1.8` is the
+current stable release.
 
 The main checkout and the user-owned linked checkouts remain registered with
 Git. The release-helper checkout holds untracked `scripts/`, and the

@@ -132,16 +132,18 @@ and records that no code name was available.
 
 ## Pages and external verification boundary
 
-The Pages deployment workflow and source build path are present, but the live
-site is not claimed until a matching runner executes the deployment and the
-published URL is checked. The repository homepage and the site's stable
-installer button remain unchanged until that evidence exists. Run
+The Pages deployment workflow and source build path are live and verified at
+https://ding-ding-projects.github.io/material-download-manager/. The repository
+homepage points to that URL, and the live release manifest supplies the stable
+installer button only after the published release inventory is checked. Run
 `31155262910` proved the source and staging path but exposed that the repository
 had not been enabled for Pages; the workflow now requests enablement directly.
 
 The repository-level runner was registered on 2026-08-07 with the four labels
 above. Organization-level inventory still cannot be read with the current
 GitHub CLI account because GitHub returned HTTP 403 and required the
-`admin:org` scope. Verification and stable release remain unclaimed until a
-fresh main run completes; Pages enablement and the published URL remain
-unclaimed until the corrected deployment run completes.
+`admin:org` scope; this does not block the repository-scoped evidence. Main
+verification run `31158991027`, stable release run `31158991143`, and Pages
+runs `31158991086` and `31159402542` are green. The live manifest reports
+stable `v0.1.8` from `a008ce6446e5d25a02574d708401e4075e2253ac`, and the
+published installer endpoint responds with the real `Setup.exe` asset.

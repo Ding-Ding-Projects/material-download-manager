@@ -13,10 +13,12 @@ AB Download Manager codebase.
 - CI workflow: [Windows verification](.github/workflows/ci.yml)
 - Release workflow: [stable Windows release](.github/workflows/release.yml)
 - GitHub Pages source: [`site/`](site/)
+- Live site: [Material Download Manager on GitHub Pages](https://ding-ding-projects.github.io/material-download-manager/)
+- Latest stable release: [`v0.1.8`](https://github.com/Ding-Ding-Projects/material-download-manager/releases/tag/v0.1.8)
 - Chromium extension: [`extension/`](extension/)
 - Search feature docs: [`docs/features/search/`](docs/features/search/)
 - Navigation feature docs: [`docs/features/navigation/`](docs/features/navigation/)
-- Website: not published
+- Website: [ding-ding-projects.github.io/material-download-manager](https://ding-ding-projects.github.io/material-download-manager/)
 - Export feature docs: docs/features/export/
 - History feature docs: docs/features/history/
 - Accessibility feature docs: docs/features/accessibility/
@@ -54,7 +56,10 @@ non-draft release with `isPrerelease=false`, release timing, the line-count tabl
 and the validated Squirrel assets. It has no signing credentials or alternate
 distribution path. The historical unsigned test release
 [`v0.1.0`](https://github.com/Ding-Ding-Projects/material-download-manager/releases/tag/v0.1.0)
-is retained as prior evidence only; it is not the current release path.
+is retained as prior evidence only. The current verified stable release is
+[`v0.1.8`](https://github.com/Ding-Ding-Projects/material-download-manager/releases/tag/v0.1.8),
+published from `a008ce6446e5d25a02574d708401e4075e2253ac` with `Setup.exe`,
+`RELEASES`, and the full Squirrel package.
 
 Both workflows require the explicit self-hosted Windows label contract
 documented in [`CI.md`](CI.md), and both validate the committed dependency
@@ -65,8 +70,7 @@ The updater has a stable default feed at
 `https://github.com/Ding-Ding-Projects/material-download-manager/releases/latest/download/`;
 `MDM_UPDATE_FEED_URL` remains an optional main-process override. The historical
 unsigned `v0.1.0` test release is excluded from the stable feed. A new stable
-feed result is not claimed until a self-hosted release run publishes and
-verifies it.
+feed result is verified by the self-hosted release run that published `v0.1.8`.
 
 The Windows verification workflow runs the typecheck, build, downloader tests,
 and compiled Electron path tests on every push and on manual dispatch.
@@ -96,7 +100,9 @@ notification, accessibility, safety, search, navigation, export, local
 history, loopback browser handoff, and a separate progress window. The
 Chromium extension sends validated page or link URLs through the loopback
 protocol; the prototype is never presented as the download path. Remaining
-release and product gaps are explicit in [`HANDOFF.md`](HANDOFF.md).
+release and product gaps are explicit in [`HANDOFF.md`](HANDOFF.md). The
+published site is the live documentation and installer entry point; its runtime
+manifest currently reports stable `v0.1.8` from the same source commit.
 
 </details>
 
