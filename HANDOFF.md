@@ -149,8 +149,9 @@ one stable non-draft, non-prerelease release, records unsigned status, and
 verifies release timing and asset identity after publication. A self-hosted
 Pages workflow is now present at
 [`.github/workflows/pages.yml`](.github/workflows/pages.yml). It validates and
-stages the local site before deployment, but its live URL remains unclaimed
-until the contracted runner executes it and the published surface is checked.
+stages the local site before deployment, asks `actions/configure-pages@v5` to
+enable Pages when needed, but its live URL remains unclaimed until the
+contracted runner executes it and the published surface is checked.
 
 The release branch also passed local static checks for the workflow and helper
 contracts: `actionlint -shellcheck=` passed, all 8 PowerShell run blocks parsed,
@@ -165,9 +166,9 @@ runner is registered.
 These items remain open and are deliberately not hidden by the directory
 reconciliation:
 
-1. Register a reachable Windows x64 self-hosted runner with all four labels in
-   [`CI.md`](CI.md), prove the fresh cache-miss bootstrap, then run the stable
-   release workflow. The run must publish and re-read one immutable stable
+1. The repository runner is registered with all four labels in [`CI.md`](CI.md).
+   Prove the fresh cache-miss bootstrap, then run the stable release workflow.
+   The run must publish and re-read one immutable stable
    release with the unsigned warning, Squirrel assets, line-count attribution,
    dim-sum metadata, and measured timing. The historical `v0.1.0` remains an
    unsigned test release.
@@ -212,8 +213,8 @@ reconciliation:
 
 ## Git state and ownership
 
-This reconciliation and the CI hardening are on `main`; the verified release
-source commit is `2bfbe2921c4c28941ca9b557e284c1d6917e9cb4`. The original
+This reconciliation and the CI hardening are on `main`; the current main tip
+is the source of truth for the next remote verification. The original
 handoff history is preserved as an ancestor, and the original handoff branch
 remains untouched. The application repository has no open GitHub issues at the
 time this handoff was refreshed. The separate `agent-global-memory` repository
@@ -223,9 +224,10 @@ Discussions are enabled and the rolling handoff thread is
 [`#3`](https://github.com/Ding-Ding-Projects/material-download-manager/discussions/3).
 The release announcement is [`#4`](https://github.com/Ding-Ding-Projects/material-download-manager/discussions/4).
 The wiki setting is enabled but its wiki repository is not initialized, and
-GitHub Pages is not configured yet. The unsigned `v0.1.0` test release is
-historical evidence only; no current stable release or self-hosted remote
-workflow result is claimed here because the runner inventory is empty.
+GitHub Pages enablement is now requested by the workflow but not yet remotely
+verified. The unsigned `v0.1.0` test release is historical evidence only; no
+current stable release or successful current self-hosted workflow result is
+claimed until fresh main runs complete.
 
 The main checkout and the user-owned linked checkouts remain registered with
 Git. The release-helper checkout holds untracked `scripts/`, and the

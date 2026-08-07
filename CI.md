@@ -65,7 +65,8 @@ for the same ref.
 checks the dependency prerequisites, runs `site/check.mjs`, builds the checked
 site to an isolated runner-temporary directory, injects only the latest
 verified stable release record from `gh release view`, and deploys it through
-the official Pages actions. A stable installer button is absent when no
+the official Pages actions. `actions/configure-pages@v5` requests Pages
+enablement when the repository has not been configured yet. A stable installer button is absent when no
 non-draft, non-prerelease release with verified Squirrel assets exists.
 Deployment is not canceled halfway through: its concurrency group protects the
 side effect rather than abandoning a Pages upload. The workflow verifies the
@@ -127,11 +128,13 @@ and records that no code name was available.
 The Pages deployment workflow and source build path are present, but the live
 site is not claimed until a matching runner executes the deployment and the
 published URL is checked. The repository homepage and the site's stable
-installer button remain unchanged until that evidence exists.
+installer button remain unchanged until that evidence exists. Run
+`31155262910` proved the source and staging path but exposed that the repository
+had not been enabled for Pages; the workflow now requests enablement directly.
 
-The runner inventory was checked on 2026-08-07: the repository-level runner API
-returned zero registered runners. The organization-level inventory could not
-be read with the current GitHub CLI account because GitHub returned HTTP 403
-and required the `admin:org` scope. Therefore no remote workflow, release, or
-green CI result is claimed from this lane until the runner contract is
-registered and a real run completes.
+The repository-level runner was registered on 2026-08-07 with the four labels
+above. Organization-level inventory still cannot be read with the current
+GitHub CLI account because GitHub returned HTTP 403 and required the
+`admin:org` scope. Verification and stable release remain unclaimed until a
+fresh main run completes; Pages enablement and the published URL remain
+unclaimed until the corrected deployment run completes.
