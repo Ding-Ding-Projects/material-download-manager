@@ -70,42 +70,46 @@ self-hosted workflows.
 ## Latest verified stable evidence
 
 At this handoff, the current main tip is
-`a0c27b621fa957de99d129d95df7a7e9bee396f6`. The latest implementation
-verification release recorded here is
+`104a487d9b640b441663017c365de72d2e8a79cb`. The latest implementation
+verification release recorded here remains
 [`v0.1.18`](https://github.com/Ding-Ding-Projects/material-download-manager/releases/tag/v0.1.18);
-the README and stable feed use the repository's dynamic latest-release link so
+the documentation-only stable release from the current tip is
+[`v0.1.19`](https://github.com/Ding-Ding-Projects/material-download-manager/releases/tag/v0.1.19).
+The README and stable feed use the repository's dynamic latest-release link so
 later successful pushes can advance the record without making this evidence
 pretend to be timeless.
 
 Self-hosted Windows verification run
-[31173930281](https://github.com/Ding-Ding-Projects/material-download-manager/actions/runs/31173930281),
+[31174528877](https://github.com/Ding-Ding-Projects/material-download-manager/actions/runs/31174528877),
 stable release run
-[31173928252](https://github.com/Ding-Ding-Projects/material-download-manager/actions/runs/31173928252),
-and Pages run
-[31173928353](https://github.com/Ding-Ding-Projects/material-download-manager/actions/runs/31173928353)
-are green. The published `v0.1.18` record is `isDraft=false`,
-`isPrerelease=false`, targets the exact `a0c27b6` commit, and carries
-`Setup.exe`, `RELEASES`, and `material-download-manager-0.1.18-full.nupkg`.
-Its measured workflow duration is `00:02:33`, from
-`2026-08-07T15:24:10.000Z` through `2026-08-07T15:26:43.000Z`.
+[31174528870](https://github.com/Ding-Ding-Projects/material-download-manager/actions/runs/31174528870),
+original Pages run
+[31174528880](https://github.com/Ding-Ding-Projects/material-download-manager/actions/runs/31174528880),
+and post-publication Pages refresh
+[31174981359](https://github.com/Ding-Ding-Projects/material-download-manager/actions/runs/31174981359)
+are green. The published `v0.1.19` record is `isDraft=false`,
+`isPrerelease=false`, targets the exact `104a487` commit, and carries
+`Setup.exe`, `RELEASES`, and `material-download-manager-0.1.19-full.nupkg`.
+Its measured workflow duration is `00:02:34`, from
+`2026-08-07T15:34:56.000Z` through `2026-08-07T15:37:30.000Z`.
 
-The release code name is **Black Truffle Siu Mai · 黑松露燒賣**, resolved from the
+The release code name is **Dark Chocolate Crystal Dumpling · 黑朱古力水晶餃**, resolved from the
 public `dim-sum-photos` catalog and linked to its published photo asset in the
-release notes. The CI line-count table reports 36,615 included lines (33,559
+release notes. The CI line-count table reports 36,622 included lines (33,566
 non-blank) across source, tests, styles/markup, and other project code, plus a
-42,708-line grand total including excluded tracked material. The counter
+42,715-line grand total including excluded tracked material. The counter
 reports zero surviving agent-attributed lines under its automation-identity
 rule for this release.
 
 At evidence-capture time, the live documentation site
 https://ding-ding-projects.github.io/material-download-manager/ reported
-`0.1.18`, the exact `a0c27b6` source commit, `verified=true`,
+`0.1.19`, the exact `104a487` source commit, `verified=true`,
 `unsigned=true`, and `publication.pages=verified`. The installer endpoint
 responded successfully with a real 115,381,760-byte `Setup.exe` asset. The
 live renderer was also checked through the real browser surface: its About
-view displayed “Pages publication verified” and the `0.1.18` stable release
-metric. The stable feed remains dynamic and must be rechecked after any later
-release.
+view displayed “Pages publication verified”; the live manifest now reports the
+`0.1.19` stable release after the post-publication refresh. The stable feed
+remains dynamic and must be rechecked after any later release.
 
 ## Current implementation slice verified and published
 
@@ -115,8 +119,8 @@ path from unrelated staged files, and bound Git children; renderer settings
 patches are fully validated at the IPC edge; interactive controls are no
 longer nested inside labels; Settings grids collapse cleanly at narrow widths;
 and the built-artifact smoke now seeds and fail-closes on the separate progress
-window. Commits `6f6dc22` and `a0c27b6` are on `main` and pushed to the
-GitHub remote. Local verification is currently:
+window. Commits `6f6dc22`, `a0c27b6`, and documentation refresh `104a487` are
+on `main` and pushed to the GitHub remote. Local verification is currently:
 typecheck and build passed; 31/31 engine tests, 39/39 Electron tests, 23/23
 built-artifact UI checks, 12/12 extension tests, and 41/41 site checks passed.
 The first branch stable-release run
@@ -133,7 +137,8 @@ were green and published stable `v0.1.17`; the default-branch release,
 verification, and Pages runs [31173928252](https://github.com/Ding-Ding-Projects/material-download-manager/actions/runs/31173928252),
 [31173930281](https://github.com/Ding-Ding-Projects/material-download-manager/actions/runs/31173930281),
 and [31173928353](https://github.com/Ding-Ding-Projects/material-download-manager/actions/runs/31173928353)
-were also green and published stable `v0.1.18`.
+were also green and published stable `v0.1.18`; documentation refresh release
+`v0.1.19` and the post-publication Pages refresh are green as recorded above.
 
 The reusable method is to treat DOM removal and focus restoration as one
 observable contract in the built-artifact harness, while scheduling a second
@@ -218,7 +223,7 @@ the current release path requires `Setup.exe`, `RELEASES`, every referenced
 full or delta `.nupkg`, and `NotSigned` verification. The legacy unsigned
 `v0.1.0` prerelease carries the historical CI-built feed and assets, while
 `MDM_UPDATE_FEED_URL` remains an optional override. The stable feed was
-verified through `v0.1.18` at the evidence-capture point; later successful
+verified through `v0.1.19` at the evidence-capture point; later successful
 releases advance the same dynamic feed.
 
 The repository has a Windows push/dispatch workflow at
@@ -234,8 +239,9 @@ stages the local site before deployment, asks `actions/configure-pages@v5` to
 enable Pages when needed, and now has live verification at
 https://ding-ding-projects.github.io/material-download-manager/. The site
 injects the latest verified stable manifest only after the release asset
-inventory is checked. The `v0.1.18` deployment additionally verified the
-rendered publication state through the live site.
+inventory is checked. The `v0.1.19` deployment additionally refreshed the
+manifest after the stable release was published and verified the rendered
+publication state through the live site.
 
 The release branch also passed local static checks for the workflow and helper
 contracts: `actionlint -shellcheck=` passed, all 8 PowerShell run blocks parsed,
