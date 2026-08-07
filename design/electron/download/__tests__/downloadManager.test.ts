@@ -268,12 +268,19 @@ test("malformed credential URLs stay redacted in item errors, persisted state an
 
 test("manual resume waits for an in-flight schedule pause", async () => {
   const root = await fsp.mkdtemp(path.join(os.tmpdir(), "mdm-schedule-race-test-"));
-  const server = await startTestServer(512 * 1024, { bodyChunkDelayMs: 500 });
+  let releaseBody = () => {};
+  const bodyRelease = new Promise<void>((resolve) => {
+    releaseBody = resolve;
+  });
+  const server = await startTestServer(512 * 1024, { bodyRelease });
   const previousUserProfile = process.env.USERPROFILE;
   process.env.USERPROFILE = root;
+  const manager = new DownloadManager(root);
+  let initialized = false;
+  let releasePause = () => {};
   try {
-    const manager = new DownloadManager(root);
     await manager.init();
+    initialized = true;
     await manager.setSettings({ maxConnectionsPerDownload: 1, maxActiveDownloads: 1 });
     const queue = await manager.createQueue({ name: "Scheduled", maxConcurrent: 1 });
     const id = await manager.addDownload({
@@ -295,7 +302,6 @@ test("manual resume waits for an in-flight schedule pause", async () => {
     const task = internals.tasks.get(id);
     assert.ok(task, "the item should be active before the schedule closes");
     const realPause = task.pause.bind(task);
-    let releasePause!: () => void;
     const pauseGate = new Promise<void>((resolve) => {
       releasePause = resolve;
     });
@@ -323,8 +329,13 @@ test("manual resume waits for an in-flight schedule pause", async () => {
     await resumePromise;
     const status = manager.getState().items.find((item) => item.id === id)?.status;
     assert.ok(status === "queued" || status === "downloading", `unexpected resumed status: ${status}`);
+    releaseBody();
     await manager.shutdown();
+    initialized = false;
   } finally {
+    releasePause();
+    releaseBody();
+    if (initialized) await manager.shutdown();
     await server.close();
     await removeTestRoot(root);
     if (previousUserProfile === undefined) delete process.env.USERPROFILE;
