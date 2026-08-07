@@ -45,5 +45,15 @@ npm run test:ui         # built-artifact CDP smoke, including Documentation
 npm run dist:win        # electron-builder Windows package (validate before release)
 ```
 
+`npm run ensure:electron` (also run automatically before `start` and
+`test:ui`) verifies `node_modules/electron/dist` actually holds the platform
+binary and restores it when it is missing. npm 11's install-script gate can
+install the electron package without ever running its install script, and
+electron's own `install.js` extracts asynchronously, so on some hosts it exits
+0 while `dist/` is still empty. The ensure script is fully synchronous, judges
+success only by the binary existing, verifies any archive against the
+checksums shipped inside the electron package, and prefers the local
+`@electron/get` cache before downloading from the official release URL.
+
 Output lands in `release/`. Packaging still needs a supported Windows build
 verification before any installer is treated as a release artifact.
