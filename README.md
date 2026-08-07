@@ -11,6 +11,7 @@ AB Download Manager codebase.
 - Shared project guidance mirror: [`AGENTS.md`](AGENTS.md)
 - CI workflow: [Windows verification](.github/workflows/ci.yml)
 - Release workflow: [Windows release](.github/workflows/release.yml)
+- Landing and documentation site: [`site/`](site/) (local source; Pages publication not verified)
 - Search feature docs: [`docs/features/search/`](docs/features/search/)
 - Navigation feature docs: [`docs/features/navigation/`](docs/features/navigation/)
 - Website: not published
@@ -21,6 +22,7 @@ AB Download Manager codebase.
 - Safety feature docs: docs/features/safety/
 - Settings feature docs: docs/features/settings/
 - Download engine docs: docs/features/download-engine/
+- Site feature docs: docs/features/site/
 
 <details>
 <summary>Build and test</summary>
