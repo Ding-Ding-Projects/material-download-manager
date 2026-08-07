@@ -25,6 +25,11 @@ nested builder consumes Escape to close only itself and returns focus to the
 Regex button, leaving Settings open. Custom checkbox buttons expose their
 checked state through `role="checkbox"` and `aria-checked`.
 
+The dialog's outer layout uses non-interactive containers around reset and
+action controls, so controls are never nested inside a form label. At a 520
+CSS-pixel viewport the field and funny-level grids collapse to one column and
+the smoke check rejects horizontal overflow.
+
 ## Configuration
 
 The authoritative defaults and validators are in design/shared/settings.ts.
@@ -43,9 +48,11 @@ code and does not send settings over the network.
 design/electron/download/__tests__/persistence.test.ts covers defaults,
 provenance, legacy migration, malformed input, and round-trip persistence.
 The built-artifact UI smoke covers the four Settings tabs, tab keyboard
-navigation, per-tab search, the anchored regex builder, and Escape focus
-restoration. Run npm run test:engine, npm run build, npm run test:electron, and
-npm run test:ui from design/.
+navigation, per-tab search, the anchored regex builder, Escape focus
+restoration, interactive-label structure, and the narrow layout. The Electron
+suite also rejects unknown and non-finite renderer settings patches. Run npm
+run test:engine, npm run build, npm run test:electron, and npm run test:ui from
+design/.
 
 The remaining product-level work is explicit: apply localized/funny copy to
 every renderer message and replace the current color input with the full

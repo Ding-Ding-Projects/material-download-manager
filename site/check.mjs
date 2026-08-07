@@ -156,7 +156,11 @@ run("release entries carry full source commits and honest dates", () => {
     assert.match(release.commit, /^[0-9a-f]{40}$/);
     assert.ok(release.commitUrl.startsWith("https://github.com/"));
     assert.ok(release.releaseDate === null || /^\d{4}-\d{2}-\d{2}$/.test(release.releaseDate));
-    assert.ok(release.installer === null || typeof release.installer === "object");
+    assert.ok(release.installer === null || typeof release.installer === "object" || (release.verified === true && typeof release.installerUrl === "string"));
+    if (release.verified === true) {
+      assert.match(release.installerUrl, /^https:\/\//);
+      assert.ok(Array.isArray(release.assets) && release.assets.includes("Setup.exe") && release.assets.includes("RELEASES"));
+    }
   }
 });
 

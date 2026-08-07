@@ -54,7 +54,7 @@
     stableInstaller: ["stable installer", "穩定版安裝程式"],
     releaseReadiness: ["RELEASE READINESS", "版本準備狀態"],
     releaseTitle: ["Stable means proven.", "穩定版，要有證據先算。"],
-    releaseSummary: ["The repository has a verified unsigned test prerelease, but no stable production installer has passed the release gate. This site keeps the download action absent until the manifest proves one.", "倉庫有驗證過嘅未簽名測試預發版，但未有穩定生產安裝程式通過版本閘門；manifest 未證明之前，下載掣唔會出現。"],
+    releaseSummary: ["This checkout has no injected stable release record yet. The installer stays hidden until the Pages manifest proves a published, unsigned, non-prerelease release and its real Squirrel assets.", "呢個 checkout 暫時未有注入穩定版本紀錄；要等 Pages manifest 證明已發佈、未簽名、非預發版同埋真實 Squirrel 素材齊晒，安裝掣先會出現。"],
     viewReleaseEvidence: ["View release evidence →", "睇版本證據 →"],
     builtAround: ["BUILT AROUND THE WORK", "圍住實際工作起屋"],
     spotlightTitle: ["The useful bits have a paper trail.", "有用嘅嘢，留低晒腳印。"],

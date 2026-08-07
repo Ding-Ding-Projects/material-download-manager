@@ -423,13 +423,13 @@ function TabSearchControl({
 
   return (
     <div className="tab-search-control">
-      <label>
-        <span>{label}</span>
+      <div>
+        <span className="tab-search-label">{label}</span>
         <div className="tab-search-input-row">
           <input className="input" type="search" value={query.pattern} placeholder={copy.text("Search visible tab labels", "搜尋分頁標籤")} onChange={(event) => onQuery({ pattern: event.target.value })} aria-label={`${label} search`} />
           <button type="button" className="btn btn-ghost btn-sm" onClick={() => setBuilderOpen((open) => !open)} aria-expanded={builderOpen}>{copy.text("Regex", "正則")}</button>
         </div>
-      </label>
+      </div>
       {builderOpen && <RegexBuilder value={builderValue} onChange={(next) => onQuery({ mode: next.mode, pattern: next.pattern, flags: next.flags })} title={`${label} regex builder`} />}
       {results.length > 0 && (
         <ul className="tab-search-results" aria-live="polite">

@@ -124,6 +124,7 @@ export default function SettingsDialog() {
     if (settingsFocus === "language" || settingsFocus === "appearance") return settingsFocus;
     return readSettingsTab();
   });
+  const appliedSettingsFocus = useRef<typeof settingsFocus>(null);
   const [settingsSearches, setSettingsSearches] = useState<Record<SettingsTab, RegexBuilderState>>(createSettingsSearchStates);
   const settingsSearch = settingsSearches[activeSettingsTab];
   const [settingsRegexOpen, setSettingsRegexOpen] = useState(false);
@@ -194,6 +195,8 @@ export default function SettingsDialog() {
 
   useEffect(() => {
     if (!settingsFocus) return;
+    if (appliedSettingsFocus.current === settingsFocus) return;
+    appliedSettingsFocus.current = settingsFocus;
     if (settingsFocus === "language" || settingsFocus === "appearance") {
       setActiveSettingsTab(settingsFocus);
     }
@@ -206,7 +209,7 @@ export default function SettingsDialog() {
       target.focus({ preventScroll: true });
     });
     return () => window.cancelAnimationFrame(frame);
-  }, [activeSettingsTab, settingsFocus]);
+  }, [settingsFocus]);
 
   function update<K extends keyof AppSettings>(key: K, value: AppSettings[K]) {
     setForm((f) => ({ ...f, [key]: value }));
@@ -409,11 +412,12 @@ export default function SettingsDialog() {
         <section className="settings-section" aria-labelledby="settings-language-heading">
         <div className="settings-section-heading" id="settings-language-heading">{copy.language}</div>
         <p className="setting-helper">{copy.languageHelper}</p>
-        <label className="field">
-          <span className="field-label">{copy.language}</span>
+        <div className="field">
+          <span className="field-label" id="settings-language-mode-label">{copy.language}</span>
           <select
             id="settings-language-mode"
             className="input select"
+            aria-labelledby="settings-language-mode-label"
             value={form.languageMode}
             onChange={(e) => update("languageMode", e.target.value as AppSettings["languageMode"])}
           >
@@ -425,14 +429,16 @@ export default function SettingsDialog() {
           <button type="button" className="btn btn-ghost btn-sm setting-reset" onClick={() => resetSetting("languageMode")}>
             {copy.reset}
           </button>
-        </label>
+        </div>
 
         <div className="settings-level-grid">
-          <label className="field">
-            <span className="field-label">{copy.funnyEnglish}</span>
+          <div className="field">
+            <span className="field-label" id="settings-funny-english-label">{copy.funnyEnglish}</span>
             <input
+              id="settings-funny-english"
               className="range-input"
               type="range"
+              aria-labelledby="settings-funny-english-label"
               min={1}
               max={5}
               step={1}
@@ -444,12 +450,14 @@ export default function SettingsDialog() {
             <button type="button" className="btn btn-ghost btn-sm setting-reset" onClick={() => resetSetting("funnyLevelEnglish")}>
               {copy.reset}
             </button>
-          </label>
-          <label className="field">
-            <span className="field-label">{copy.funnyCantonese}</span>
+          </div>
+          <div className="field">
+            <span className="field-label" id="settings-funny-cantonese-label">{copy.funnyCantonese}</span>
             <input
+              id="settings-funny-cantonese"
               className="range-input"
               type="range"
+              aria-labelledby="settings-funny-cantonese-label"
               min={1}
               max={5}
               step={1}
@@ -461,7 +469,7 @@ export default function SettingsDialog() {
             <button type="button" className="btn btn-ghost btn-sm setting-reset" onClick={() => resetSetting("funnyLevelCantonese")}>
               {copy.reset}
             </button>
-          </label>
+          </div>
         </div>
         <p className="setting-disclosure" role="note">{copy.funnyDisclosure}</p>
         <p className="setting-preview" role="status">{ui.funnyPreview}</p>
@@ -497,11 +505,12 @@ export default function SettingsDialog() {
           {displayNameError && <span className="field-error" role="alert">{displayNameError}</span>}
         </div>
 
-        <label className="field">
-          <span className="field-label">Theme</span>
+        <div className="field">
+          <span className="field-label" id="settings-theme-label">Theme</span>
           <select
             id="settings-theme"
             className="input select"
+            aria-labelledby="settings-theme-label"
             value={form.theme}
             onChange={(e) => update("theme", e.target.value as AppSettings["theme"])}
           >
@@ -513,12 +522,14 @@ export default function SettingsDialog() {
           <button type="button" className="btn btn-ghost btn-sm setting-reset" onClick={() => resetSetting("theme")}>
             {copy.reset}
           </button>
-        </label>
+        </div>
 
-        <label className="field">
-          <span className="field-label">{copy.density}</span>
+        <div className="field">
+          <span className="field-label" id="settings-density-label">{copy.density}</span>
           <select
+            id="settings-density"
             className="input select"
+            aria-labelledby="settings-density-label"
             value={form.density}
             onChange={(e) => update("density", e.target.value as AppSettings["density"])}
           >
@@ -531,20 +542,22 @@ export default function SettingsDialog() {
           <button type="button" className="btn btn-ghost btn-sm setting-reset" onClick={() => resetSetting("density")}>
             {copy.reset}
           </button>
-        </label>
+        </div>
 
-        <label className="field">
-          <span className="field-label">{copy.accent}</span>
+        <div className="field">
+          <span className="field-label" id="settings-accent-label">{copy.accent}</span>
           <div className="field-row">
             <input
               className="color-input"
               type="color"
+              aria-labelledby="settings-accent-label"
               aria-label="Accent color picker"
               value={form.accentSeedColor.slice(0, 7)}
               onChange={(e) => updateAccent(e.target.value)}
             />
             <input
               className="input"
+              aria-label="Accent color value"
               type="text"
               value={form.accentSeedColor}
               aria-invalid={accentError !== null}
@@ -557,12 +570,14 @@ export default function SettingsDialog() {
           <button type="button" className="btn btn-ghost btn-sm setting-reset" onClick={() => resetSetting("accentSeedColor")}>
             {copy.reset}
           </button>
-        </label>
+        </div>
 
-        <label className="field">
-          <span className="field-label">{copy.fontFamily}</span>
+        <div className="field">
+          <span className="field-label" id="settings-font-family-label">{copy.fontFamily}</span>
           <select
+            id="settings-font-family"
             className="input select"
+            aria-labelledby="settings-font-family-label"
             value={form.uiFontFamily}
             onChange={(e) => update("uiFontFamily", e.target.value as AppSettings["uiFontFamily"])}
           >
@@ -576,14 +591,16 @@ export default function SettingsDialog() {
           <button type="button" className="btn btn-ghost btn-sm setting-reset" onClick={() => resetSetting("uiFontFamily")}>
             {copy.reset}
           </button>
-        </label>
+        </div>
 
         <div className="field-pair">
-          <label className="field">
-            <span className="field-label">{copy.fontSize}</span>
+          <div className="field">
+            <span className="field-label" id="settings-font-size-label">{copy.fontSize}</span>
             <input
+              id="settings-font-size"
               className="input"
               type="number"
+              aria-labelledby="settings-font-size-label"
               min={10}
               max={32}
               value={form.uiFontSize}
@@ -593,11 +610,13 @@ export default function SettingsDialog() {
             <button type="button" className="btn btn-ghost btn-sm setting-reset" onClick={() => resetSetting("uiFontSize")}>
               {copy.reset}
             </button>
-          </label>
-          <label className="field">
-            <span className="field-label">{copy.fontWeight}</span>
+          </div>
+          <div className="field">
+            <span className="field-label" id="settings-font-weight-label">{copy.fontWeight}</span>
             <select
+              id="settings-font-weight"
               className="input select"
+              aria-labelledby="settings-font-weight-label"
               value={form.uiFontWeight}
               onChange={(e) => update("uiFontWeight", Number(e.target.value) as AppSettings["uiFontWeight"])}
             >
@@ -610,7 +629,7 @@ export default function SettingsDialog() {
             <button type="button" className="btn btn-ghost btn-sm setting-reset" onClick={() => resetSetting("uiFontWeight")}>
               {copy.reset}
             </button>
-          </label>
+          </div>
         </div>
 
         <button type="button" className="btn btn-ghost" onClick={resetAllSettings} title={copy.resetAllConfirmation}>
@@ -623,30 +642,32 @@ export default function SettingsDialog() {
         {renderSettingsSearch()}
         <section className="settings-section" aria-labelledby="settings-downloads-heading">
           <div className="settings-section-heading" id="settings-downloads-heading">{ui.downloads}</div>
-      <label className="field" id="settings-default-save-folder" tabIndex={-1}>
-        <span className="field-label">Default save folder</span>
-        <div className="field-row">
+      <div className="field" id="settings-default-save-folder" tabIndex={-1}>
+        <span className="field-label" id="settings-default-save-folder-label">Default save folder</span>
+          <div className="field-row">
           <input
             className="input"
             id="settings-default-save-folder-input"
             type="text"
+            aria-labelledby="settings-default-save-folder-label"
             value={form.defaultSaveFolder}
             onChange={(e) => update("defaultSaveFolder", e.target.value)}
           />
-          <button type="button" className="icon-btn" title="Choose folder" onClick={() => void handlePickFolder()}>
+          <button type="button" className="icon-btn" title="Choose folder" aria-label="Choose default save folder" onClick={() => void handlePickFolder()}>
             <FolderIcon size={15} />
           </button>
         </div>
         <span className="setting-source">{source("defaultSaveFolder", "the platform Downloads folder")}</span>
-      </label>
+      </div>
 
       <div className="field-pair" id="settings-performance" tabIndex={-1}>
-        <label className="field">
-          <span className="field-label">Max connections per download</span>
+        <div className="field">
+          <span className="field-label" id="settings-max-connections-label">Max connections per download</span>
           <input
             className="input"
             id="settings-max-connections-per-download"
             type="number"
+            aria-labelledby="settings-max-connections-label"
             min={1}
             max={32}
             value={form.maxConnectionsPerDownload}
@@ -656,13 +677,14 @@ export default function SettingsDialog() {
           <button type="button" className="btn btn-ghost btn-sm setting-reset" onClick={() => resetSetting("maxConnectionsPerDownload")}>
             {copy.reset}
           </button>
-        </label>
-        <label className="field">
-          <span className="field-label">Max active downloads</span>
+        </div>
+        <div className="field">
+          <span className="field-label" id="settings-max-active-label">Max active downloads</span>
           <input
             className="input"
             id="settings-max-active-downloads"
             type="number"
+            aria-labelledby="settings-max-active-label"
             min={1}
             max={32}
             value={form.maxActiveDownloads}
@@ -672,16 +694,17 @@ export default function SettingsDialog() {
           <button type="button" className="btn btn-ghost btn-sm setting-reset" onClick={() => resetSetting("maxActiveDownloads")}>
             {copy.reset}
           </button>
-        </label>
+        </div>
       </div>
 
-      <label className="field" id="settings-speed" tabIndex={-1}>
-        <span className="field-label">Global speed limit</span>
+      <div className="field" id="settings-speed" tabIndex={-1}>
+        <span className="field-label" id="settings-global-speed-label">Global speed limit</span>
         <div className="field-row">
           <input
             className="input"
             id="settings-global-speed-limit"
             type="number"
+            aria-labelledby="settings-global-speed-label"
             min={0.1}
             step={0.1}
             disabled={unlimitedSpeed}
@@ -689,7 +712,7 @@ export default function SettingsDialog() {
             onChange={(e) => setSpeedMBs(Number(e.target.value) || 0)}
           />
           <span className="field-suffix">MB/s</span>
-          <label className="checkbox-row">
+          <div className="checkbox-row">
             <button
               type="button"
               id="settings-unlimited-speed"
@@ -700,7 +723,7 @@ export default function SettingsDialog() {
               aria-label="Unlimited speed"
             />
             <span>Unlimited</span>
-          </label>
+          </div>
         </div>
         <span className="setting-source">{source("globalSpeedLimitBytes", "0 bytes/sec (unlimited)")}</span>
         <button
@@ -714,9 +737,9 @@ export default function SettingsDialog() {
         >
           {copy.reset}
         </button>
-      </label>
+      </div>
 
-      <label className="checkbox-row field" id="settings-startup" tabIndex={-1}>
+      <div className="checkbox-row field" id="settings-startup" tabIndex={-1}>
         <button
           type="button"
           id="settings-startup-toggle"
@@ -731,9 +754,9 @@ export default function SettingsDialog() {
         <button type="button" className="btn btn-ghost btn-sm setting-reset" onClick={() => resetSetting("startOnSystemStartup")}>
           {copy.reset}
         </button>
-      </label>
+      </div>
 
-      <label className="checkbox-row field" id="settings-completion" tabIndex={-1}>
+      <div className="checkbox-row field" id="settings-completion" tabIndex={-1}>
         <button
           type="button"
           id="settings-completion-toggle"
@@ -748,7 +771,7 @@ export default function SettingsDialog() {
         <button type="button" className="btn btn-ghost btn-sm setting-reset" onClick={() => resetSetting("showCompleteDialog")}>
           {copy.reset}
         </button>
-      </label>
+      </div>
         </section>
       </div>}
 
@@ -757,12 +780,13 @@ export default function SettingsDialog() {
         <section className="settings-section" aria-labelledby="settings-advanced-heading">
       <details className="advanced-details" id="settings-advanced" tabIndex={-1}>
         <summary>Advanced</summary>
-        <label className="field">
-          <span className="field-label">Minimum splittable part size (KB)</span>
+        <div className="field">
+          <span className="field-label" id="settings-min-splittable-label">Minimum splittable part size (KB)</span>
           <input
             className="input"
             id="settings-min-splittable-part-size"
             type="number"
+            aria-labelledby="settings-min-splittable-label"
             min={1}
             value={Math.round(form.minConnectionPartSize / 1024)}
             onChange={(e) => update("minConnectionPartSize", Math.max(1, Number(e.target.value) || 1) * 1024)}
@@ -771,7 +795,7 @@ export default function SettingsDialog() {
           <button type="button" className="btn btn-ghost btn-sm setting-reset" onClick={() => resetSetting("minConnectionPartSize")}>
             {copy.reset}
           </button>
-        </label>
+        </div>
       </details>
         </section>
       </div>}

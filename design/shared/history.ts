@@ -136,7 +136,15 @@ export function isHistoryView(value: unknown): value is HistoryView {
 }
 
 function isHistoryFilterRequest(value: Record<string, unknown>): value is Record<string, unknown> & HistoryFilterRequest {
-  return (value.from === null || typeof value.from === "number") && (value.to === null || typeof value.to === "number") &&
-    Array.isArray(value.actions) && value.actions.every(isHistoryAction) && typeof value.text === "string" &&
-    typeof value.regex === "boolean" && typeof value.flags === "string";
+  const fromValid = value.from === null || (typeof value.from === "number" && Number.isFinite(value.from) && value.from >= 0);
+  const toValid = value.to === null || (typeof value.to === "number" && Number.isFinite(value.to) && value.to >= 0);
+  const rangeValid = value.from === null || value.to === null ||
+    (typeof value.from === "number" && typeof value.to === "number" && value.from <= value.to);
+  const textValid = typeof value.text === "string" && value.text.length <= MAX_FILTER_TEXT;
+  const flagsValid = typeof value.flags === "string" && value.flags.length <= MAX_FLAGS;
+  const regexValid = typeof value.regex === "boolean" &&
+    (!value.regex || (textValid && flagsValid && validateRegexPattern(value.text as string, value.flags as string) === null));
+  return fromValid && toValid && rangeValid &&
+    Array.isArray(value.actions) && value.actions.length <= MAX_ACTIONS && value.actions.every(isHistoryAction) &&
+    textValid && flagsValid && regexValid;
 }

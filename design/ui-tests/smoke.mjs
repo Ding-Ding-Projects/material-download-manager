@@ -2,6 +2,7 @@
 
 import { execFile, spawn } from "node:child_process";
 import { mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from "node:fs/promises";
+import { createServer } from "node:http";
 import net from "node:net";
 import os from "node:os";
 import path from "node:path";
@@ -20,6 +21,7 @@ const RUNTIME_CHECK_IDS = [
   "progress-window",
   "settings-open",
   "settings-dialog-a11y",
+  "settings-narrow-layout",
   "settings-tabs",
   "settings-search-control",
   "settings-search-interaction",
@@ -280,6 +282,91 @@ async function allocateLoopbackPort(requestedPort) {
   });
 }
 
+async function startFixtureServer() {
+  const body = Buffer.alloc(256 * 1024, 0x61);
+  const requests = [];
+  const timers = new Set();
+  const server = createServer((request, response) => {
+    const requestUrl = new URL(request.url ?? "/", "http://127.0.0.1");
+    requests.push({ method: request.method ?? "", path: requestUrl.pathname, receivedAt: new Date().toISOString() });
+    if (requestUrl.pathname !== "/ui-smoke.bin" || !["GET", "HEAD"].includes(request.method ?? "")) {
+      response.writeHead(404);
+      response.end();
+      return;
+    }
+    response.writeHead(200, {
+      "content-length": body.length,
+      "content-type": "application/octet-stream",
+    });
+    if (request.method === "HEAD") {
+      response.end();
+      return;
+    }
+    let offset = 0;
+    let activeTimer = null;
+    const sendChunk = () => {
+      if (response.destroyed) return;
+      if (offset >= body.length) {
+        response.end();
+        return;
+      }
+      const nextOffset = Math.min(offset + 16 * 1024, body.length);
+      response.write(body.subarray(offset, nextOffset));
+      offset = nextOffset;
+      activeTimer = setTimeout(() => {
+        if (activeTimer) timers.delete(activeTimer);
+        sendChunk();
+      }, 10);
+      timers.add(activeTimer);
+    };
+    response.once("close", () => {
+      if (activeTimer) {
+        clearTimeout(activeTimer);
+        timers.delete(activeTimer);
+      }
+    });
+    sendChunk();
+  });
+  await new Promise((resolve, reject) => {
+    server.once("error", reject);
+    server.listen(0, "127.0.0.1", resolve);
+  });
+  const address = server.address();
+  const port = typeof address === "object" && address ? address.port : 0;
+  if (!port) {
+    await new Promise((resolve) => server.close(() => resolve()));
+    throw new Error("Could not start the progress-window fixture server");
+  }
+  let closePromise = null;
+  return {
+    url: ["http://127.0.0.1:", String(port), "/ui-smoke.bin"].join(""),
+    requests,
+    waitForRequest: async (timeoutMs) => {
+      const deadline = Date.now() + timeoutMs;
+      while (Date.now() < deadline) {
+        const request = requests.find((candidate) => candidate.method === "GET" && candidate.path === "/ui-smoke.bin");
+        if (request) return request;
+        await sleep(25);
+      }
+      return null;
+    },
+    close: (timeoutMs = 3_000) => {
+      if (closePromise) return closePromise;
+      closePromise = new Promise((resolve, reject) => {
+        for (const timer of timers) clearTimeout(timer);
+        timers.clear();
+        const timeout = setTimeout(() => reject(new Error("fixture server did not close within the cleanup timeout")), timeoutMs);
+        server.close((error) => {
+          clearTimeout(timeout);
+          if (error) reject(error);
+          else resolve({ closed: true });
+        });
+      });
+      return closePromise;
+    },
+  };
+}
+
 function appendChildOutput(current, chunk) {
   const next = `${current}${chunk}`;
   return next.length <= MAX_CHILD_OUTPUT ? next : next.slice(next.length - MAX_CHILD_OUTPUT);
@@ -383,16 +470,19 @@ function derivedProgressScreenshotPath(options) {
   return path.join(parsed.dir, `${parsed.name}-progress${parsed.ext || ".png"}`);
 }
 
-async function inspectProgressWindow(port, mainTargetId, timeoutMs, screenshotPath) {
-  const targets = await listCdpTargets(port);
+async function inspectProgressWindow(port, mainTargetId, timeoutMs, screenshotPath, expectedItemId, expectedFileName, expectedUrl) {
+  let targets;
+  try {
+    targets = await listCdpTargets(port);
+  } catch (error) {
+    return { status: "unavailable", target: null, surface: null, screenshotPath: null, candidates: [], detail: formatError(error) };
+  }
   const separatePages = targets.filter(
     (target) => target && target.type === "page" && target.id !== mainTargetId && typeof target.webSocketDebuggerUrl === "string"
   );
   const inspectedTargets = [];
 
   for (const target of separatePages) {
-    const titleOrUrl = `${target.title ?? ""} ${target.url ?? ""}`.toLowerCase();
-    const namedAsProgress = /progress|download|update/.test(titleOrUrl);
     const candidate = {
       id: target.id ?? null,
       title: target.title ?? null,
@@ -404,16 +494,34 @@ async function inspectProgressWindow(port, mainTargetId, timeoutMs, screenshotPa
       await secondaryClient.connect();
       await secondaryClient.send("Runtime.enable");
       await secondaryClient.send("Page.enable");
-      const surface = await secondaryClient.evaluate(`(() => {
-        const progressBars = [...document.querySelectorAll('[role="progressbar"]')].map((element) => ({
-          name: element.getAttribute("aria-label") || element.getAttribute("aria-valuetext") || element.textContent?.replace(/\\s+/g, " ").trim() || "",
-          valueNow: element.getAttribute("aria-valuenow"),
-        }));
-        return { readyState: document.readyState, progressBarCount: progressBars.length, progressBars };
-      })()`);
-      const isProgressWindow = namedAsProgress || surface.progressBarCount > 0;
-      if (!isProgressWindow) continue;
+      const surface = await secondaryClient.evaluate([
+        "(() => {",
+        "const query = new URLSearchParams(window.location.search);",
+        "const root = document.querySelector('[data-surface=\"progress-window\"]');",
+        "const heading = document.querySelector('#progress-window-heading');",
+        "const sourceUrl = document.querySelector('.progress-url');",
+        "const progressBars = [...document.querySelectorAll('[role=\"progressbar\"]')].map((element) => ({",
+        "  name: element.getAttribute('aria-label') || element.getAttribute('aria-valuetext') || element.textContent?.replace(/\\s+/g, ' ').trim() || '',",
+        "  valueNow: element.getAttribute('aria-valuenow'),",
+        "}));",
+        "return {",
+        "  readyState: document.readyState,",
+        "  progressItem: query.get('progressItem'),",
+        "  dataSurface: root?.getAttribute('data-surface') ?? null,",
+        "  heading: heading?.textContent?.replace(/\\s+/g, ' ').trim() ?? null,",
+        "  sourceUrl: sourceUrl?.textContent?.replace(/\\s+/g, ' ').trim() ?? null,",
+        "  progressBarCount: progressBars.length,",
+        "  progressBars,",
+        "};",
+        "})()",
+      ].join("\n"));
+      if (surface.progressItem !== expectedItemId) continue;
       inspectedTargets.push({ ...candidate, surface });
+      if (surface.readyState !== "complete" || surface.dataSurface !== "progress-window") {
+        return { status: "loading", target: candidate, surface, screenshotPath: null, candidates: inspectedTargets };
+      }
+      if (surface.heading !== expectedFileName) throw new Error("progress window heading is " + JSON.stringify(surface.heading) + ", expected " + JSON.stringify(expectedFileName));
+      if (surface.sourceUrl !== expectedUrl) throw new Error("progress window source URL does not match the seeded fixture URL");
       if (surface.progressBarCount === 0) throw new Error("separate progress-looking page has no role=progressbar");
       if (surface.progressBars.some((bar) => !bar.name)) throw new Error("separate progress page has an unnamed progressbar");
       let capturedPath = null;
@@ -426,7 +534,7 @@ async function inspectProgressWindow(port, mainTargetId, timeoutMs, screenshotPa
         candidates: inspectedTargets,
       };
     } catch (error) {
-      if (namedAsProgress || inspectedTargets.length > 0) {
+      if (target.url?.includes(expectedItemId) || inspectedTargets.length > 0) {
         return { status: "failed", target: candidate, detail: formatError(error), candidates: inspectedTargets };
       }
     } finally {
@@ -680,7 +788,7 @@ function createResult(options) {
     progressWindow: { status: "not-run", target: null, surface: null, screenshotPath: null },
     launch: null,
     cdp: null,
-    cleanup: { processTerminated: false, userDataDirectoryRemoved: false },
+    cleanup: { processTerminated: false, fixtureServerClosed: false, userDataDirectoryRemoved: false },
     fatalError: null,
     durationMs: 0,
     summary: "",
@@ -742,6 +850,21 @@ async function stopProcess(launch, timeoutMs) {
     : { terminated: false, method: "timeout", exit: null };
 }
 
+async function removeDirectoryWithRetry(directory, timeoutMs = 5_000) {
+  const deadline = Date.now() + timeoutMs;
+  let lastError = null;
+  while (Date.now() < deadline) {
+    try {
+      await rm(directory, { recursive: true, force: true });
+      return;
+    } catch (error) {
+      lastError = error;
+      await sleep(100);
+    }
+  }
+  throw lastError ?? new Error("temporary directory removal timed out");
+}
+
 async function main(argv) {
   const startedAt = Date.now();
   let parsed;
@@ -763,6 +886,7 @@ async function main(argv) {
   let cdp = null;
   let userDataDirectory = null;
   let port = null;
+  let fixtureServer = null;
 
   try {
     const nodeRuntime = await runCheck(result, "node-runtime", async () => {
@@ -837,17 +961,6 @@ async function main(argv) {
       throw new Error("CDP WebSocket connection failed");
     }
 
-    await runCheck(result, "progress-window", async () => {
-      const progressWindow = await inspectProgressWindow(
-        port,
-        targetEvidence.target.id,
-        options.timeoutMs,
-        derivedProgressScreenshotPath(options)
-      );
-      result.progressWindow = progressWindow;
-      return progressWindow;
-    });
-
     await runCheck(result, "renderer-root-mounted", async () => {
       await waitForPage(
         cdp,
@@ -861,6 +974,48 @@ async function main(argv) {
         if (typeof window.api !== "object") throw new Error("preload bridge window.api is not mounted");
         return { rootChildren: root.children.length, preloadBridge: true };
       `));
+    });
+
+    await runCheck(result, "progress-window", async () => {
+      fixtureServer = await startFixtureServer();
+      const seeded = await cdp.evaluate(`(async () => {
+        const settings = await window.api.getSettings();
+        const itemId = await window.api.addDownload({
+           url: ${JSON.stringify(fixtureServer.url)},
+          folder: ${JSON.stringify(path.join(userDataDirectory, "downloads"))},
+          fileName: "ui-smoke.bin",
+          startImmediately: false,
+          headers: {},
+        });
+         const opened = await window.api.openProgressWindow(itemId);
+         if (!opened) throw new Error("main process refused to open the seeded progress window");
+         await window.api.resumeDownload(itemId);
+         return { itemId, fileName: "ui-smoke.bin", url: ${JSON.stringify(fixtureServer.url)}, opened };
+      })()`);
+      const fixtureRequest = await fixtureServer.waitForRequest(options.timeoutMs);
+      if (!fixtureRequest) throw new Error("the seeded download never issued a GET request to the loopback fixture");
+      if (fixtureRequest.path !== "/ui-smoke.bin") throw new Error("the seeded download requested an unexpected fixture path");
+      const deadline = Date.now() + options.timeoutMs;
+      let progressWindow = null;
+      while (Date.now() < deadline) {
+        progressWindow = await inspectProgressWindow(
+          port,
+          targetEvidence.target.id,
+          options.timeoutMs,
+          derivedProgressScreenshotPath(options),
+          seeded.itemId,
+          seeded.fileName,
+          seeded.url
+        );
+        const pageFinishedLoading = progressWindow.status === "failed" && progressWindow.surface?.readyState === "complete";
+        if (progressWindow.status === "checked" || pageFinishedLoading) break;
+        await sleep(100);
+      }
+      result.progressWindow = progressWindow;
+      if (!progressWindow || progressWindow.status !== "checked") {
+        throw new Error(`separate progress window was not verified: ${JSON.stringify(progressWindow)}`);
+      }
+      return { seeded, fixtureRequest, ...progressWindow };
     });
 
     await runCheck(result, "feature-surface-mounted", async () => cdp.evaluate(pageExpression(`
@@ -917,8 +1072,83 @@ async function main(argv) {
       if (!dialog) throw new Error('Settings surface is mounted but missing required role="dialog"');
       const name = accessibleName(dialog);
       if (name !== "Settings") throw new Error("Settings dialog accessible name is " + JSON.stringify(name) + ', not "Settings"');
-      return { role: "dialog", name };
+      const nestedInteractiveLabels = [...dialog.querySelectorAll("label")].flatMap((label) => [...label.querySelectorAll("button,[role=button]")].map((control) => ({
+        label: label.textContent?.replace(/\\s+/g, " ").trim() ?? "",
+        control: accessibleName(control),
+      })));
+      if (nestedInteractiveLabels.length > 0) throw new Error("Settings contains interactive controls nested inside labels: " + JSON.stringify(nestedInteractiveLabels));
+      const unnamedControls = [...dialog.querySelectorAll("input,select,textarea,button")]
+        .filter(isVisible)
+        .map((control) => ({ tag: control.tagName.toLowerCase(), id: control.id, name: accessibleName(control) }))
+        .filter((control) => !control.name);
+      if (unnamedControls.length > 0) throw new Error("Settings contains unnamed interactive controls: " + JSON.stringify(unnamedControls));
+      return { role: "dialog", name, nestedInteractiveLabels: 0, unnamedControls: 0 };
     `)));
+
+    await runCheck(result, "settings-narrow-layout", async () => {
+      await cdp.send("Emulation.setDeviceMetricsOverride", { width: 520, height: 720, deviceScaleFactor: 2, mobile: false });
+      try {
+        const tabNames = ["Language", "Appearance", "Downloads", "Advanced"];
+        const panels = [];
+        for (const tabName of tabNames) {
+          await clickByRole(cdp, "tab", tabName, '[role="dialog"]');
+          try {
+            await waitForPage(
+              cdp,
+              "document.querySelector('[role=\"tablist\"][aria-label=\"Settings sections\"] [role=\"tab\"][aria-selected=\"true\"]')?.textContent?.trim() === " + JSON.stringify(tabName),
+              tabName + " settings tab at the narrow viewport",
+              Math.min(options.timeoutMs, 5_000)
+            );
+          } catch (error) {
+            const state = await cdp.evaluate(pageExpression(`
+              const tabList = document.querySelector('[role="tablist"]');
+              return {
+                tabListLabel: tabList?.getAttribute("aria-label"),
+                selected: [...(tabList?.querySelectorAll('[role="tab"]') ?? [])]
+                  .filter((tab) => tab.getAttribute("aria-selected") === "true")
+                  .map((tab) => ({ text: tab.textContent?.trim(), name: accessibleName(tab), visible: isVisible(tab) })),
+                tabs: [...(tabList?.querySelectorAll('[role="tab"]') ?? [])]
+                  .map((tab) => ({ text: tab.textContent?.trim(), name: accessibleName(tab), visible: isVisible(tab) })),
+              };
+            `));
+            throw new Error(`${error instanceof Error ? error.message : String(error)}; tab state=${JSON.stringify(state)}`);
+          }
+          panels.push(await cdp.evaluate(pageExpression(`
+            const dialog = document.querySelector('[role="dialog"]');
+            const panel = document.querySelector('.settings-tab-panel[role="tabpanel"]');
+            if (!dialog || !isVisible(dialog) || !panel || !isVisible(panel)) throw new Error("Settings tab panel is not visible at the narrow viewport");
+            const overflowValues = [
+              document.documentElement.scrollWidth - window.innerWidth,
+              document.body.scrollWidth - window.innerWidth,
+              dialog.scrollWidth - dialog.clientWidth,
+              panel.scrollWidth - panel.clientWidth,
+            ];
+            const horizontalOverflow = Math.max(0, ...overflowValues);
+            if (horizontalOverflow > 1) {
+              const offenders = [...panel.querySelectorAll("*")]
+                .filter((element) => element.scrollWidth > element.clientWidth + 1)
+                .map((element) => ({ tag: element.tagName.toLowerCase(), id: element.id, className: element.className, clientWidth: element.clientWidth, scrollWidth: element.scrollWidth }))
+                .slice(0, 8);
+              throw new Error("narrow Settings viewport overflows horizontally: " + JSON.stringify({ panel: panel.id, innerWidth: window.innerWidth, overflowValues, dialog: { clientWidth: dialog.clientWidth, scrollWidth: dialog.scrollWidth }, panelBox: { clientWidth: panel.clientWidth, scrollWidth: panel.scrollWidth }, offenders }));
+            }
+            const visibleGrids = [...panel.querySelectorAll(".field-pair,.settings-level-grid")].filter(isVisible);
+            const wideGrids = visibleGrids.filter((grid) => getComputedStyle(grid).gridTemplateColumns.trim().split(/\\s+/).length > 1);
+            if (wideGrids.length > 0) throw new Error("narrow Settings viewport kept a multi-column grid: " + wideGrids.map((grid) => grid.className).join(", "));
+            const unnamedControls = [...panel.querySelectorAll("input,select,textarea,button")]
+              .filter(isVisible)
+              .map((control) => ({ id: control.id, tag: control.tagName.toLowerCase(), name: accessibleName(control) }))
+              .filter((control) => !control.name);
+            if (unnamedControls.length > 0) throw new Error("narrow Settings tab contains unnamed controls: " + JSON.stringify(unnamedControls));
+            return { panel: panel.id, horizontalOverflow, singleColumnGrids: visibleGrids.length, unnamedControls: 0 };
+          `)));
+        }
+        await clickByRole(cdp, "tab", "Language", '[role="dialog"]');
+        await waitForPage(cdp, 'document.querySelector(\'[role="tablist"][aria-label="Settings sections"] [role="tab"][aria-selected="true"]\')?.textContent?.trim() === "Language"', "restore Language settings tab", options.timeoutMs);
+        return { innerWidth: 520, innerHeight: 720, deviceScaleFactor: 2, panels };
+      } finally {
+        await cdp.send("Emulation.clearDeviceMetricsOverride").catch(() => undefined);
+      }
+    });
 
     await runCheck(result, "settings-tabs", async () => {
       const initial = await cdp.evaluate(pageExpression(`
@@ -1044,13 +1274,26 @@ async function main(argv) {
       if (output.error || output.stderr.trim()) result.launch.output = { error: output.error, stderr: output.stderr.trim().slice(-4_000) };
     }
 
+    if (fixtureServer) {
+      try {
+        await fixtureServer.close(Math.min(options.timeoutMs, 3_000));
+        result.cleanup.fixtureServerClosed = true;
+        recordCheck(result, "fixture-server-closed", "passed", "loopback fixture server closed after the Electron process stopped", { requests: fixtureServer.requests });
+      } catch (error) {
+        recordCheck(result, "fixture-server-closed", "failed", `loopback fixture server cleanup failed: ${formatError(error)}`, { requests: fixtureServer.requests });
+      }
+    } else {
+      result.cleanup.fixtureServerClosed = true;
+      recordCheck(result, "fixture-server-closed", "passed", "loopback fixture server was not started");
+    }
+
     if (userDataDirectory && options.keepUserDataDirectory) {
       result.cleanup.userDataDirectoryRemoved = false;
       result.cleanup.userDataDirectory = { status: "preserved-by-option", path: userDataDirectory };
       recordCheck(result, "temp-profile-cleaned", "passed", "temporary profile preserved by explicit --keep-user-data-dir option", { path: userDataDirectory });
     } else if (userDataDirectory) {
       try {
-        await rm(userDataDirectory, { recursive: true, force: true });
+        await removeDirectoryWithRetry(userDataDirectory);
         result.cleanup.userDataDirectoryRemoved = true;
         recordCheck(result, "temp-profile-cleaned", "passed", "temporary Electron profile removed");
       } catch (error) {

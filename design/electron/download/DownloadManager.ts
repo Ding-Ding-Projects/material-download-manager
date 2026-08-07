@@ -591,8 +591,10 @@ export class DownloadManager extends EventEmitter {
 
     const allRevisions = await this.history.listRevisions();
     const revisions = await this.history.listRevisions(normalized);
-    const actionCounts: Record<string, number> = {};
-    for (const revision of revisions) actionCounts[revision.action] = (actionCounts[revision.action] ?? 0) + 1;
+    // Keep the action vocabulary visible while one action is selected. Counts
+    // follow the other active filters, but intentionally omit the action
+    // predicate so a selected chip cannot disappear when its result is empty.
+    const actionCounts = await this.history.actionCounts({ ...normalized, actions: undefined });
     return {
       schemaVersion: 1,
       available: true,

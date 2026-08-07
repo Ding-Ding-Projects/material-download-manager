@@ -4,6 +4,7 @@ import { IPC, isUpdateUnsavedWorkState, type UpdateInstallResult, type UpdateSta
 import type { AddDownloadRequest, AppSettings, DownloadItem, DownloadQueue } from "../shared/types";
 import { isExportFormat } from "../shared/export";
 import { normalizeHistoryFilter } from "../shared/history";
+import { validateSettingsPatch } from "../shared/settings";
 import { notifyDownloadComplete as showCompletionNotification, type CompletionNotificationPort } from "./completionNotification";
 import { extractBrowserHandoffRequests } from "./download/browserHandoff";
 import { assertQueueCreatePayload, DownloadManager } from "./download/DownloadManager";
@@ -173,7 +174,7 @@ function assertAddDownloadRequest(value: unknown): asserts value is AddDownloadR
 }
 
 function assertPartialSettings(value: unknown): asserts value is Partial<AppSettings> {
-  assertRecord(value, "settings");
+  validateSettingsPatch(value);
 }
 
 function assertDownloadQueue(value: unknown): asserts value is DownloadQueue {

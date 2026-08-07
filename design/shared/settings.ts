@@ -77,3 +77,50 @@ export function isBoundedNumber(value: unknown, min: number, max: number): value
 export function isSettingKey(value: string): value is SettingKey {
   return (SETTING_KEYS as readonly string[]).includes(value);
 }
+
+/** Validate a renderer-originated patch before it reaches live application state. */
+export function validateSettingsPatch(value: unknown): Partial<AppSettings> {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    throw new Error("Invalid settings");
+  }
+
+  const patch = value as Record<string, unknown>;
+  for (const [key, settingValue] of Object.entries(patch)) {
+    if (!isSettingKey(key)) throw new Error(`Invalid setting key: ${key}`);
+    const valid = (() => {
+      switch (key) {
+        case "defaultSaveFolder":
+          return typeof settingValue === "string" && settingValue.length <= 32_768;
+        case "maxConnectionsPerDownload":
+        case "maxActiveDownloads":
+          return isBoundedNumber(settingValue, 1, 32) && Number.isInteger(settingValue);
+        case "globalSpeedLimitBytes":
+          return isBoundedNumber(settingValue, 0, Number.MAX_SAFE_INTEGER);
+        case "showCompleteDialog":
+        case "startOnSystemStartup":
+          return typeof settingValue === "boolean";
+        case "theme":
+          return settingValue === "dark" || settingValue === "light" || settingValue === "system";
+        case "minConnectionPartSize":
+          return isBoundedNumber(settingValue, 1, Number.MAX_SAFE_INTEGER) && Number.isInteger(settingValue);
+        case "languageMode":
+          return isLanguageMode(settingValue);
+        case "funnyLevelEnglish":
+        case "funnyLevelCantonese":
+          return isFunnyLevel(settingValue);
+        case "density":
+          return isDensityMode(settingValue);
+        case "accentSeedColor":
+          return isHexColor(settingValue);
+        case "uiFontFamily":
+          return isUIFontFamily(settingValue);
+        case "uiFontSize":
+          return isBoundedNumber(settingValue, 10, 32);
+        case "uiFontWeight":
+          return isUIFontWeight(settingValue);
+      }
+    })();
+    if (!valid) throw new Error(`Invalid value for setting: ${key}`);
+  }
+  return patch as Partial<AppSettings>;
+}

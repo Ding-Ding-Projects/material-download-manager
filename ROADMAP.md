@@ -14,10 +14,14 @@ unverified surface has shipped.
 - Persisted language, independent funny levels, appearance provenance, and a
   four-tab Settings dialog with one search and regex-builder state per tab.
 - Local Git-backed history plus a History app tab with date/action/text filters
-  and filtered coding-format export.
+  and filtered coding-format export; local commits disable hooks and isolate
+  the snapshot from unrelated staged files.
 - Material-style landing and documentation site, stable unsigned Squirrel
   packaging, self-hosted CI, GitHub Pages publication, and monotonic real
   releases.
+- Built-artifact UI smoke that fail-closes on the real separate progress window,
+  rejects nested interactive labels, and checks narrow Settings layout at 2×
+  scale.
 
 ## Next global-memory implementation slices
 

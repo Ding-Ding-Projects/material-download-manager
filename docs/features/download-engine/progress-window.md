@@ -37,9 +37,11 @@ accept a browser-provided target without main-process validation.
 ## Verification
 
 Run `npm run typecheck`, `npm run build`, `npm run test:electron`, and
-`node ui-tests/smoke.mjs` from `design/`. The smoke harness resolves CDP page
-targets dynamically and inspects any separate progress-looking page for a
-named `role="progressbar"`. A cheap hidden-desktop capture must show the
+`node ui-tests/smoke.mjs` from `design/`. The smoke harness starts a local
+fixture, creates a real queued item through the preload bridge, opens the
+separate window through the main-process IPC handler, resolves its CDP page
+target dynamically, waits for the built page to finish mounting, and rejects
+any result without a named `role="progressbar"`. A cheap hidden-desktop capture must show the
 primary window and the separately resolved progress window from a real active
 download before release verification is complete. The latest hidden-desktop
 pass resolved the second `Chrome_WidgetWin_1` at 980×640 and captured its live

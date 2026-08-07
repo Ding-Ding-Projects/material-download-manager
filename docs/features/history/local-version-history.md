@@ -40,9 +40,12 @@ protection.
 ## Failure modes and security
 
 The repository is initialized with local-only Git configuration and never
-contacts a remote. Git failures return an empty read result or a clear null
-restore result rather than claiming a revision exists. Revision subjects
-sanitize newlines. Snapshot encryption remains the caller's responsibility;
+contacts a remote. Every commit disables hooks, signing, and system Git
+configuration, bounds the child process, unstages unrelated index entries,
+and commits only `snapshot.json`; an unrelated staged file therefore remains
+uncommitted instead of leaking into the history snapshot. Git failures return
+an empty read result or a clear null restore result rather than claiming a
+revision exists. Revision subjects sanitize newlines. Snapshot encryption remains the caller's responsibility;
 the manager currently records non-secret metadata as local JSON.
 
 On Windows, test fixtures remove temporary history repositories with a bounded
@@ -54,10 +57,11 @@ finite and does not hide a persistent lock.
 
 design/electron/__tests__/history.test.ts covers append-only behavior,
 no-op suppression, restore-as-new-revision, action/text/regex filters, diffs,
-and JSONL export. DownloadManager's full 31-test engine suite covers queue
-shutdown and local-history cleanup. The 20-check built-artifact UI smoke covers
-the History tab, its search/date/export controls, the four Settings tabs, the
-anchored regex builder, and Escape focus restoration. Run npm run build,
+JSONL export, hook isolation, and unrelated-index isolation. DownloadManager's
+full 31-test engine suite covers queue shutdown and local-history cleanup. The
+built-artifact UI smoke covers the History tab, its search/date/export controls,
+the four Settings tabs, the anchored regex builder, Escape focus restoration,
+the separate progress window, and narrow Settings layout. Run npm run build,
 npm run test:engine, npm run test:electron, and npm run test:ui from design/.
 
 ## Suggested articles

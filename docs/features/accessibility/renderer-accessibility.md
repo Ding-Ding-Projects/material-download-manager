@@ -31,8 +31,11 @@ context.
 ## Verification
 
 Typecheck, renderer build, engine tests, Electron tests, and a cheap headless
-Electron smoke are required. The current renderer does not yet have a dedicated
-DOM test harness; that gap is recorded rather than treated as a pass.
+Electron smoke are required. The smoke explicitly rejects interactive controls
+nested inside labels and checks a 520 CSS-pixel, 2× device-scale Settings
+viewport for horizontal overflow and multi-column clipping. The current
+renderer does not yet have a dedicated DOM test harness; that gap is recorded
+rather than treated as a pass.
 
 ## Suggested articles
 

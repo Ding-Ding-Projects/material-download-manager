@@ -1,10 +1,14 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { execFile } from "node:child_process";
 import os from "node:os";
 import path from "node:path";
 import fsp from "node:fs/promises";
+import { promisify } from "node:util";
 import { HistoryStore } from "../history/HistoryStore";
 import { normalizeHistoryFilter } from "../../shared/history";
+
+const execFileAsync = promisify(execFile);
 
 test("records append-only local Git revisions and restores as a new action", async () => {
   const root = await fsp.mkdtemp(path.join(os.tmpdir(), "mdm-history-"));
@@ -57,4 +61,28 @@ test("history filter normalization bounds the renderer boundary", () => {
   assert.throws(() => normalizeHistoryFilter({ from: 200, to: 100 }), /must not be after/);
   assert.throws(() => normalizeHistoryFilter({ text: "(", regex: true, flags: "g" }), /regular expression/);
   assert.throws(() => normalizeHistoryFilter({ actions: ["not-real"] }), /history actions/);
+});
+
+test("local history isolates hooks and unrelated staged files", async () => {
+  const root = await fsp.mkdtemp(path.join(os.tmpdir(), "mdm-history-isolation-"));
+  const history = new HistoryStore(root);
+  await history.appendSnapshot("{\"value\":1}", "created", "Created the isolated record");
+
+  const marker = path.join(root, "hook-ran.txt");
+  const hookPath = path.join(history.repositoryPath, ".git", "hooks", "pre-commit");
+  await fsp.writeFile(hookPath, `#!/bin/sh\nprintf invoked > "${marker.replace(/\\/g, "/")}"\n`, { encoding: "utf8", mode: 0o755 });
+  await fsp.writeFile(path.join(history.repositoryPath, ".git", "hooks", "post-commit"), `#!/bin/sh\nprintf post > "${marker.replace(/\\/g, "/")}"\n`, { encoding: "utf8", mode: 0o755 });
+  const unrelated = path.join(history.repositoryPath, "unrelated.txt");
+  await fsp.writeFile(unrelated, "must not enter the snapshot history\n", "utf8");
+  await execFileAsync("git", ["add", "--", "unrelated.txt"], { cwd: history.repositoryPath, windowsHide: true });
+
+  await history.appendSnapshot("{\"value\":2}", "updated", "Updated without letting the hook run");
+  const tree = (await execFileAsync("git", ["ls-tree", "-r", "--name-only", "HEAD"], { cwd: history.repositoryPath, windowsHide: true })).stdout
+    .trim()
+    .split(/\r?\n/)
+    .filter(Boolean);
+
+  assert.deepEqual(tree, ["snapshot.json"]);
+  await assert.rejects(fsp.access(marker));
+  assert.equal((await execFileAsync("git", ["status", "--short"], { cwd: history.repositoryPath, windowsHide: true })).stdout.trim(), "A  unrelated.txt");
 });

@@ -1,5 +1,5 @@
 import type { KeyboardEvent as ReactKeyboardEvent, ReactNode } from "react";
-import { useEffect } from "react";
+import { useEffect, useId } from "react";
 import { CloseIcon } from "./icons";
 
 interface DialogProps {
@@ -15,6 +15,8 @@ interface DialogProps {
 }
 
 export default function Dialog({ title, icon, onClose, width = 460, children, footer, className, onEscape }: DialogProps) {
+  const titleId = `mdm-dialog-title-${useId().replace(/:/g, "")}`;
+
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
       if (e.key === "Escape" && !e.defaultPrevented) onClose();
@@ -34,12 +36,15 @@ export default function Dialog({ title, icon, onClose, width = 460, children, fo
       <div
         className={`dialog${className ? ` ${className}` : ""}`}
         style={{ width }}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
         onKeyDownCapture={handleDialogKeyDown}
       >
         <div className="dialog-header">
           <div className="dialog-header-title">
             {icon}
-            <span>{title}</span>
+            <span id={titleId}>{title}</span>
           </div>
           <button type="button" className="dialog-close-btn" aria-label="Close" onClick={onClose}>
             <CloseIcon size={15} />

@@ -71,7 +71,7 @@ window.MDM_SITE_CONTENT = {
       id: "local-history",
       category: "History",
       title: "Local version history",
-      summary: "Append-only Git-backed snapshots beside application data, with factual actions, restore-as-new-revision, filters, diffs, and export.",
+      summary: "Append-only Git-backed snapshots beside application data, with factual actions, restore-as-new-revision, filters, diffs, export, hook isolation, and staged-index isolation.",
       docsPath: "../docs/features/history/local-version-history.md",
       tags: ["history", "git", "restore", "audit"],
       sections: {
@@ -91,10 +91,10 @@ window.MDM_SITE_CONTENT = {
           "A history write is best effort and does not fail the operation the user actually requested."
         ],
         security: [
-          "The history repository has local-only Git configuration and never contacts a remote. Snapshot encryption remains the caller's responsibility; the current manager records non-secret metadata as local JSON."
+          "The history repository has local-only Git configuration and never contacts a remote. Hooks, signing, and system Git configuration are disabled for each child; only snapshot.json is committed, while unrelated staged files remain untouched. Snapshot encryption remains the caller's responsibility; the current manager records non-secret metadata as local JSON."
         ],
         verification: [
-          "History tests cover append-only behavior, no-op suppression, restore-as-new-revision, action/text/regex filters, diffs, and JSONL export. The built-artifact UI smoke checks the History tab, date controls, search, export, and the four Settings tabs."
+          "History tests cover append-only behavior, no-op suppression, restore-as-new-revision, action/text/regex filters, diffs, JSONL export, hook isolation, and unrelated-index isolation. The built-artifact UI smoke checks the History tab, date controls, search, export, separate progress window, and narrow Settings layout."
         ]
       },
       suggested: ["record-export", "regex-builder"]
@@ -227,7 +227,7 @@ window.MDM_SITE_CONTENT = {
       tags: ["accessibility", "aria", "focus", "keyboard"],
       sections: {
         behavior: [
-          "RendererAccessibilityBridge decorates visible shared surfaces with dialog and alert-dialog roles, modal labelling, focus containment and restoration, menu semantics, keyboard navigation/typeahead, sidebar activation, and visible shortcut metadata.",
+          "RendererAccessibilityBridge decorates visible shared surfaces with dialog and alert-dialog roles, modal labelling, focus containment and restoration, menu semantics, keyboard navigation/typeahead, sidebar activation, and visible shortcut metadata. The smoke rejects interactive controls nested inside labels and checks the narrow Settings layout for clipping.",
           "Download-table sort headers are real keyboard targets: Enter and Space apply the same action as a click, while aria-sort reports ascending, descending, or none."
         ],
         configuration: [
@@ -235,7 +235,7 @@ window.MDM_SITE_CONTENT = {
         ],
         failureModes: [
           "Focus is returned only to a still-connected originating control. Nested surfaces can consume Escape before shared dialog handling runs.",
-          "The current renderer does not yet have a dedicated DOM test harness; that gap is recorded rather than treated as a pass."
+          "The current renderer does not yet have a dedicated DOM test harness; that gap is recorded rather than treated as a pass. The built-artifact smoke supplies the real-process accessibility and narrow-layout evidence."
         ],
         security: [
           "The bridge grants no new IPC privileges and never copies provider-authored text into an executable context."
@@ -287,7 +287,7 @@ window.MDM_SITE_CONTENT = {
         behavior: [
           "The settings schema provides English, playful Hong Kong-style Cantonese, and compact bilingual modes. English and Cantonese each have an independent funny-level slider from 1 through 5.",
           "Theme, density, accent seed color, UI font family, font size, and weight are validated at the persistence boundary and applied live through CSS variables. Provenance states whether a value was persisted or compiled in.",
-          "The Settings dialog has four browser-style tabs—Language, Appearance, Downloads, and Advanced—with one persisted active tab and one independent search/regex-builder state per tab. Results focus the actual control and open closed sections before focus moves."
+          "The Settings dialog has four browser-style tabs—Language, Appearance, Downloads, and Advanced—with one persisted active tab and one independent search/regex-builder state per tab. Results focus the actual control and open closed sections before focus moves; outer action rows use non-interactive containers so buttons are not nested inside labels."
         ],
         configuration: [
           "Authoritative defaults and validators live in the shared settings schema. StateStore migrates state.json and persists changed settings before the main process saves them.",
@@ -301,7 +301,7 @@ window.MDM_SITE_CONTENT = {
           "Settings are local state. The site mirrors the same privacy boundary: preferences stay in localStorage and no analytics or third-party assets are loaded."
         ],
         verification: [
-          "Persistence tests cover defaults, provenance, legacy migration, malformed input, and round trips. The built-artifact UI smoke checks tab keyboard navigation, independent search, regex construction, and Escape focus restoration. Product-level gaps remain explicit: localized/funny copy across every renderer message and the full continuous color translator."
+          "Persistence tests cover defaults, provenance, legacy migration, malformed input, and round trips. The built-artifact UI smoke checks tab keyboard navigation, independent search, regex construction, Escape focus restoration, label structure, and narrow layout. Product-level gaps remain explicit: localized/funny copy across every renderer message and the full continuous color translator."
         ]
       },
       suggested: ["regex-builder", "tabbed-navigation", "renderer-accessibility"]
@@ -390,7 +390,7 @@ window.MDM_SITE_CONTENT = {
           "The progress window uses context isolation, disabled Node integration, the same trusted-sender checks, and no remote renderer content.",
         ],
         verification: [
-          "Typecheck, build, compiled Electron tests, the dependency-free CDP smoke harness, and a cheap hidden-desktop capture provide the required evidence. The latest capture resolved the separate 980×640 window dynamically and rendered its live progress surface.",
+          "Typecheck, build, compiled Electron tests, the dependency-free CDP smoke harness, and a cheap hidden-desktop capture provide the required evidence. The smoke seeds a local fixture through the real preload/main-process seam and fails closed unless the dynamically resolved 980×640 window renders a named progressbar; the latest capture rendered its live progress surface.",
         ],
       },
       suggested: ["browser-extension", "renderer-accessibility", "reliable-transfers"],
@@ -429,6 +429,205 @@ window.MDM_SITE_CONTENT = {
     }
   ],
   releases: [
+    {
+      version: "0.1.16",
+      channel: "stable release",
+      releaseDate: "2026-08-07",
+      commit: "5b968f54e976ca32f2d1c5b003acd5f34bdd9b5c",
+      commitUrl: "https://github.com/Ding-Ding-Projects/material-download-manager/commit/5b968f54e976ca32f2d1c5b003acd5f34bdd9b5c",
+      summary: "Stable unsigned Squirrel.Windows release with the verified separate progress window, History tab, Settings tabs, browser handoff, and real installer assets.",
+      status: "verified stable release",
+      verified: true,
+      installerUrl: "https://github.com/Ding-Ding-Projects/material-download-manager/releases/download/v0.1.16/Setup.exe",
+      assets: ["Setup.exe", "RELEASES", "material-download-manager-0.1.16-full.nupkg"],
+      notes: [
+        "Code name: Mushroom Siu Mai · 北菇燒賣.",
+        "Artifacts: Setup.exe, RELEASES, and the full Squirrel package.",
+        "Publication state: isDraft=false and isPrerelease=false; signing is intentionally disabled."
+      ]
+    },
+    {
+      version: "0.1.15",
+      channel: "stable release",
+      releaseDate: "2026-08-07",
+      commit: "5b968f54e976ca32f2d1c5b003acd5f34bdd9b5c",
+      commitUrl: "https://github.com/Ding-Ding-Projects/material-download-manager/commit/5b968f54e976ca32f2d1c5b003acd5f34bdd9b5c",
+      summary: "Stable unsigned Squirrel.Windows release with the verified History and Settings feature slice and real installer assets.",
+      status: "verified stable release",
+      verified: true,
+      installerUrl: "https://github.com/Ding-Ding-Projects/material-download-manager/releases/download/v0.1.15/Setup.exe",
+      assets: ["Setup.exe", "RELEASES", "material-download-manager-0.1.15-full.nupkg"],
+      notes: ["Code name: Chicken Siu Mai · 雞肉燒賣.", "Publication state: isDraft=false and isPrerelease=false; signing is intentionally disabled."]
+    },
+    {
+      version: "0.1.14",
+      channel: "stable release",
+      releaseDate: "2026-08-07",
+      commit: "57a43a2bf303c02ae84183f8b22d366e43c96105",
+      commitUrl: "https://github.com/Ding-Ding-Projects/material-download-manager/commit/57a43a2bf303c02ae84183f8b22d366e43c96105",
+      summary: "Stable unsigned Squirrel.Windows release with the verified CI, Pages, updater, and installer contract.",
+      status: "verified stable release",
+      verified: true,
+      installerUrl: "https://github.com/Ding-Ding-Projects/material-download-manager/releases/download/v0.1.14/Setup.exe",
+      assets: ["Setup.exe", "RELEASES", "material-download-manager-0.1.14-full.nupkg"],
+      notes: ["Code name: Beef Siu Mai · 牛肉燒賣.", "Publication state: isDraft=false and isPrerelease=false; signing is intentionally disabled."]
+    },
+    {
+      version: "0.1.13",
+      channel: "stable release",
+      releaseDate: "2026-08-07",
+      commit: "57a43a2bf303c02ae84183f8b22d366e43c96105",
+      commitUrl: "https://github.com/Ding-Ding-Projects/material-download-manager/commit/57a43a2bf303c02ae84183f8b22d366e43c96105",
+      summary: "Stable unsigned Squirrel.Windows release with verified CI and installer assets.",
+      status: "verified stable release",
+      verified: true,
+      installerUrl: "https://github.com/Ding-Ding-Projects/material-download-manager/releases/download/v0.1.13/Setup.exe",
+      assets: ["Setup.exe", "RELEASES", "material-download-manager-0.1.13-full.nupkg"],
+      notes: ["Code name: Scallop Siu Mai · 帶子燒賣.", "Publication state: isDraft=false and isPrerelease=false; signing is intentionally disabled."]
+    },
+    {
+      version: "0.1.12",
+      channel: "stable release",
+      releaseDate: "2026-08-07",
+      commit: "e6fd63d4227c740c7b73298784d95d0b84b9a869",
+      commitUrl: "https://github.com/Ding-Ding-Projects/material-download-manager/commit/e6fd63d4227c740c7b73298784d95d0b84b9a869",
+      summary: "Stable unsigned Squirrel.Windows release with verified CI and installer assets.",
+      status: "verified stable release",
+      verified: true,
+      installerUrl: "https://github.com/Ding-Ding-Projects/material-download-manager/releases/download/v0.1.12/Setup.exe",
+      assets: ["Setup.exe", "RELEASES", "material-download-manager-0.1.12-full.nupkg"],
+      notes: ["Code name: Quail Egg Siu Mai · 鵪鶉蛋燒賣.", "Publication state: isDraft=false and isPrerelease=false; signing is intentionally disabled."]
+    },
+    {
+      version: "0.1.11",
+      channel: "stable release",
+      releaseDate: "2026-08-07",
+      commit: "e6fd63d4227c740c7b73298784d95d0b84b9a869",
+      commitUrl: "https://github.com/Ding-Ding-Projects/material-download-manager/commit/e6fd63d4227c740c7b73298784d95d0b84b9a869",
+      summary: "Stable unsigned Squirrel.Windows release with verified CI and installer assets.",
+      status: "verified stable release",
+      verified: true,
+      installerUrl: "https://github.com/Ding-Ding-Projects/material-download-manager/releases/download/v0.1.11/Setup.exe",
+      assets: ["Setup.exe", "RELEASES", "material-download-manager-0.1.11-full.nupkg"],
+      notes: ["Code name: Crab Roe Siu Mai · 蟹籽燒賣.", "Publication state: isDraft=false and isPrerelease=false; signing is intentionally disabled."]
+    },
+    {
+      version: "0.1.10",
+      channel: "stable release",
+      releaseDate: "2026-08-07",
+      commit: "895bc6e16de223111721457c05b09bfe641c7641",
+      commitUrl: "https://github.com/Ding-Ding-Projects/material-download-manager/commit/895bc6e16de223111721457c05b09bfe641c7641",
+      summary: "Stable unsigned Squirrel.Windows release with verified CI and installer assets.",
+      status: "verified stable release",
+      verified: true,
+      installerUrl: "https://github.com/Ding-Ding-Projects/material-download-manager/releases/download/v0.1.10/Setup.exe",
+      assets: ["Setup.exe", "RELEASES", "material-download-manager-0.1.10-full.nupkg"],
+      notes: ["Code name: Classic Siu Mai · 燒賣.", "Publication state: isDraft=false and isPrerelease=false; signing is intentionally disabled."]
+    },
+    {
+      version: "0.1.9",
+      channel: "stable release",
+      releaseDate: "2026-08-07",
+      commit: "895bc6e16de223111721457c05b09bfe641c7641",
+      commitUrl: "https://github.com/Ding-Ding-Projects/material-download-manager/commit/895bc6e16de223111721457c05b09bfe641c7641",
+      summary: "Stable unsigned Squirrel.Windows release with verified CI and installer assets.",
+      status: "verified stable release",
+      verified: true,
+      installerUrl: "https://github.com/Ding-Ding-Projects/material-download-manager/releases/download/v0.1.9/Setup.exe",
+      assets: ["Setup.exe", "RELEASES", "material-download-manager-0.1.9-full.nupkg"],
+      notes: ["Code name: Cuttlefish Shrimp Dumpling · 墨魚蝦餃.", "Publication state: isDraft=false and isPrerelease=false; signing is intentionally disabled."]
+    },
+    {
+      version: "0.1.8",
+      channel: "stable release",
+      releaseDate: "2026-08-07",
+      commit: "a008ce6446e5d25a02574d708401e4075e2253ac",
+      commitUrl: "https://github.com/Ding-Ding-Projects/material-download-manager/commit/a008ce6446e5d25a02574d708401e4075e2253ac",
+      summary: "Stable unsigned Squirrel.Windows release with verified CI and installer assets.",
+      status: "verified stable release",
+      verified: true,
+      installerUrl: "https://github.com/Ding-Ding-Projects/material-download-manager/releases/download/v0.1.8/Setup.exe",
+      assets: ["Setup.exe", "RELEASES", "material-download-manager-0.1.8-full.nupkg"],
+      notes: ["Code name: Dried Scallop Shrimp Dumpling · 瑤柱蝦餃.", "Publication state: isDraft=false and isPrerelease=false; signing is intentionally disabled."]
+    },
+    {
+      version: "0.1.7",
+      channel: "stable release",
+      releaseDate: "2026-08-07",
+      commit: "a008ce6446e5d25a02574d708401e4075e2253ac",
+      commitUrl: "https://github.com/Ding-Ding-Projects/material-download-manager/commit/a008ce6446e5d25a02574d708401e4075e2253ac",
+      summary: "Stable unsigned Squirrel.Windows release with verified CI and installer assets.",
+      status: "verified stable release",
+      verified: true,
+      installerUrl: "https://github.com/Ding-Ding-Projects/material-download-manager/releases/download/v0.1.7/Setup.exe",
+      assets: ["Setup.exe", "RELEASES", "material-download-manager-0.1.7-full.nupkg"],
+      notes: ["Code name: Lobster Dumpling · 龍蝦餃.", "Publication state: isDraft=false and isPrerelease=false; signing is intentionally disabled."]
+    },
+    {
+      version: "0.1.6",
+      channel: "stable release",
+      releaseDate: "2026-08-07",
+      commit: "47e493f0b2448dba24bd755e5a0eb0029b769ed4",
+      commitUrl: "https://github.com/Ding-Ding-Projects/material-download-manager/commit/47e493f0b2448dba24bd755e5a0eb0029b769ed4",
+      summary: "Stable unsigned Squirrel.Windows release with verified CI and installer assets.",
+      status: "verified stable release",
+      verified: true,
+      installerUrl: "https://github.com/Ding-Ding-Projects/material-download-manager/releases/download/v0.1.6/Setup.exe",
+      assets: ["Setup.exe", "RELEASES", "material-download-manager-0.1.6-full.nupkg"],
+      notes: ["Code name: Pea Shoot Shrimp Dumpling · 豆苗蝦餃.", "Publication state: isDraft=false and isPrerelease=false; signing is intentionally disabled."]
+    },
+    {
+      version: "0.1.5",
+      channel: "stable release",
+      releaseDate: "2026-08-07",
+      commit: "47e493f0b2448dba24bd755e5a0eb0029b769ed4",
+      commitUrl: "https://github.com/Ding-Ding-Projects/material-download-manager/commit/47e493f0b2448dba24bd755e5a0eb0029b769ed4",
+      summary: "Stable unsigned Squirrel.Windows release with verified CI and installer assets.",
+      status: "verified stable release",
+      verified: true,
+      installerUrl: "https://github.com/Ding-Ding-Projects/material-download-manager/releases/download/v0.1.5/Setup.exe",
+      assets: ["Setup.exe", "RELEASES", "material-download-manager-0.1.5-full.nupkg"],
+      notes: ["Code name: Spinach Shrimp Dumpling · 菠菜蝦餃.", "Publication state: isDraft=false and isPrerelease=false; signing is intentionally disabled."]
+    },
+    {
+      version: "0.1.4",
+      channel: "stable release",
+      releaseDate: "2026-08-07",
+      commit: "ea038ace72cfb1e36307884a21a8467304a0fefb",
+      commitUrl: "https://github.com/Ding-Ding-Projects/material-download-manager/commit/ea038ace72cfb1e36307884a21a8467304a0fefb",
+      summary: "Stable unsigned Squirrel.Windows release with verified CI and installer assets.",
+      status: "verified stable release",
+      verified: true,
+      installerUrl: "https://github.com/Ding-Ding-Projects/material-download-manager/releases/download/v0.1.4/Setup.exe",
+      assets: ["Setup.exe", "RELEASES", "material-download-manager-0.1.4-full.nupkg"],
+      notes: ["Code name: Chive Shrimp Dumpling · 韭菜蝦餃.", "Publication state: isDraft=false and isPrerelease=false; signing is intentionally disabled."]
+    },
+    {
+      version: "0.1.3",
+      channel: "stable release",
+      releaseDate: "2026-08-07",
+      commit: "ea038ace72cfb1e36307884a21a8467304a0fefb",
+      commitUrl: "https://github.com/Ding-Ding-Projects/material-download-manager/commit/ea038ace72cfb1e36307884a21a8467304a0fefb",
+      summary: "Stable unsigned Squirrel.Windows release with verified CI and installer assets.",
+      status: "verified stable release",
+      verified: true,
+      installerUrl: "https://github.com/Ding-Ding-Projects/material-download-manager/releases/download/v0.1.3/Setup.exe",
+      assets: ["Setup.exe", "RELEASES", "material-download-manager-0.1.3-full.nupkg"],
+      notes: ["Code name: Crab Roe Har Gow · 蟹籽蝦餃.", "Publication state: isDraft=false and isPrerelease=false; signing is intentionally disabled."]
+    },
+    {
+      version: "0.1.2",
+      channel: "stable release",
+      releaseDate: "2026-08-07",
+      commit: "63a8bdcfb5ff577e08fa0d6d030f3d5d9a6b3e2c",
+      commitUrl: "https://github.com/Ding-Ding-Projects/material-download-manager/commit/63a8bdcfb5ff577e08fa0d6d030f3d5d9a6b3e2c",
+      summary: "Stable unsigned Squirrel.Windows release with verified CI and installer assets.",
+      status: "verified stable release",
+      verified: true,
+      installerUrl: "https://github.com/Ding-Ding-Projects/material-download-manager/releases/download/v0.1.2/Setup.exe",
+      assets: ["Setup.exe", "RELEASES", "material-download-manager-0.1.2-full.nupkg"],
+      notes: ["Code name: Bamboo Shoot Har Gow · 筍尖蝦餃.", "Publication state: isDraft=false and isPrerelease=false; signing is intentionally disabled."]
+    },
     {
       version: "0.1.0",
       channel: "test prerelease",

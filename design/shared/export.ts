@@ -84,14 +84,27 @@ export function isExportResult(value: unknown): value is ExportResult {
   if (!value || typeof value !== "object" || Array.isArray(value)) return false;
   const result = value as Record<string, unknown>;
   const metadata = result.metadata;
-  if (typeof result.content !== "string" || typeof result.extension !== "string" || typeof result.mimeType !== "string" ||
-    !Array.isArray(result.warnings) || result.warnings.some((warning) => typeof warning !== "string") ||
+  if (typeof result.content !== "string" || typeof result.extension !== "string" || result.extension.length > 64 ||
+    typeof result.mimeType !== "string" || result.mimeType.length > 256 ||
+    !Array.isArray(result.warnings) || result.warnings.length > 64 || result.warnings.some((warning) => typeof warning !== "string" || warning.length > 4_096) ||
     !metadata || typeof metadata !== "object" || Array.isArray(metadata) ||
-    !result.roundTrip || typeof result.roundTrip !== "object" || Array.isArray(result.roundTrip)) return false;
+    !result.roundTrip || !isExportRoundTripMetadata(result.roundTrip)) return false;
   const meta = metadata as Record<string, unknown>;
   return meta.schema === EXPORT_METADATA_SCHEMA && meta.schemaVersion === EXPORT_METADATA_VERSION &&
     isExportFormat(meta.format) && meta.encoding === "UTF-8" && meta.lineEnding === "LF" &&
-    typeof meta.recordCount === "number" && Number.isInteger(meta.recordCount) && meta.recordCount >= 0;
+    typeof meta.recordCount === "number" && Number.isInteger(meta.recordCount) && meta.recordCount >= 0 &&
+    isExportRoundTripMetadata(meta.roundTrip);
+}
+
+function isExportRoundTripMetadata(value: unknown): value is ExportRoundTripMetadata {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const roundTrip = value as Record<string, unknown>;
+  const methods = ["native-data", "typed-envelope", "json-text-fields", "presentation", "schema"];
+  const statuses = ["lossless", "lossy", "not-a-data-export"];
+  return statuses.includes(roundTrip.status as string) && typeof roundTrip.canRoundTrip === "boolean" &&
+    typeof roundTrip.lossless === "boolean" && methods.includes(roundTrip.method as string) &&
+    Array.isArray(roundTrip.preserved) && roundTrip.preserved.length <= 128 && roundTrip.preserved.every((item) => typeof item === "string" && item.length <= 256) &&
+    Array.isArray(roundTrip.lost) && roundTrip.lost.length <= 128 && roundTrip.lost.every((item) => typeof item === "string" && item.length <= 256);
 }
 
 function asRecords(value: unknown): RecordValue[] {

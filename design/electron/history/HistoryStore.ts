@@ -12,6 +12,7 @@ const execFileAsync = promisify(execFile);
 const MAX_SNAPSHOT_BYTES = 8 * 1024 * 1024;
 const MAX_SUMMARY_LENGTH = 1_024;
 const SAFE_REVISION_ID = /^(?:HEAD|[0-9a-f]{7,64})$/i;
+const GIT_COMMAND_TIMEOUT_MS = 10_000;
 
 export type { HistoryAction, HistoryFilter, HistoryRevision } from "../../shared/history";
 
@@ -41,6 +42,25 @@ function snapshotByteLength(snapshot: string): number {
   return Buffer.byteLength(snapshot, "utf8");
 }
 
+function errorCode(error: unknown): number | string | undefined {
+  if (!error || typeof error !== "object") return undefined;
+  const code = (error as { code?: unknown }).code;
+  return typeof code === "number" || typeof code === "string" ? code : undefined;
+}
+
+function errorStderr(error: unknown): string {
+  if (!error || typeof error !== "object") return "";
+  const stderr = (error as { stderr?: unknown }).stderr;
+  return typeof stderr === "string" ? stderr : "";
+}
+
+function isMissingRevision(error: unknown): boolean {
+  const code = errorCode(error);
+  if (code === 1) return true;
+  if (code !== 128) return false;
+  return /Needed a single revision|does not have any commits yet|unknown revision|bad object|invalid object name|ambiguous argument/i.test(errorStderr(error));
+}
+
 /**
  * Isolated, local-only Git history for the app's serialized user state.
  *
@@ -51,18 +71,38 @@ function snapshotByteLength(snapshot: string): number {
  */
 export class HistoryStore {
   readonly repositoryPath: string;
+  private readonly disabledHooksPath: string;
   private initialization: Promise<void> | null = null;
   private mutationChain: Promise<unknown> = Promise.resolve();
 
   constructor(userDataPath: string) {
     this.repositoryPath = path.join(path.resolve(userDataPath), "local-history");
+    // Keep hooks outside the history checkout and point Git at a fresh path
+    // that the app never creates. This also blocks post-commit hooks, which
+    // --no-verify alone does not disable.
+    this.disabledHooksPath = path.join(path.dirname(this.repositoryPath), `history-hooks-${randomUUID()}`);
   }
 
   private async git(args: string[], trim = true): Promise<string> {
-    const result = await execFileAsync("git", ["--no-pager", ...args], {
+    const result = await execFileAsync("git", [
+      "--no-pager",
+      "-c",
+      `core.hooksPath=${this.disabledHooksPath}`,
+      "-c",
+      "commit.gpgSign=false",
+      ...args,
+    ], {
       cwd: this.repositoryPath,
       encoding: "utf8",
       maxBuffer: MAX_SNAPSHOT_BYTES * 2,
+      timeout: GIT_COMMAND_TIMEOUT_MS,
+      killSignal: "SIGKILL",
+      windowsHide: true,
+      env: {
+        ...process.env,
+        GIT_CONFIG_NOSYSTEM: "1",
+        GIT_TERMINAL_PROMPT: "0",
+      },
     });
     return trim ? result.stdout.trim() : result.stdout;
   }
@@ -86,10 +126,15 @@ export class HistoryStore {
   }
 
   private async ensureInitialized(): Promise<void> {
-    if (!this.initialization) {
-      this.initialization = this.initialize();
+    const pending = this.initialization ?? (this.initialization = this.initialize());
+    try {
+      await pending;
+    } catch (error) {
+      // A transient Git/filesystem timeout must not permanently poison this
+      // store instance; the next operation gets a bounded retry.
+      if (this.initialization === pending) this.initialization = null;
+      throw error;
     }
-    await this.initialization;
   }
 
   /** True only when the local history repository can be opened and queried. */
@@ -151,8 +196,10 @@ export class HistoryStore {
       await this.writeSnapshot(snapshot);
       const subject = `history: ${action} — ${cleanSummary(summary)}`;
       try {
+        // --only commits this path from the working tree and preserves any
+        // unrelated staged entries in the isolated repository's index.
         await this.git(["add", "--", "snapshot.json"]);
-        await this.git(["commit", "--quiet", ...(force ? ["--allow-empty"] : []), "-m", subject]);
+        await this.git(["commit", "--quiet", "--no-verify", "--only", ...(force ? ["--allow-empty"] : []), "-m", subject, "--", "snapshot.json"]);
       } catch (error) {
         // Keep a failed write recoverable and do not leave an uncommitted
         // replacement masquerading as the current committed state.
@@ -181,12 +228,13 @@ export class HistoryStore {
 
   async listRevisions(filter: HistoryFilter = {}): Promise<HistoryRevision[]> {
     await this.ensureInitialized();
-    let log = "";
     try {
-      log = await this.git(["log", "--format=%H%x09%aI%x09%s"]);
-    } catch {
-      return [];
+      await this.git(["rev-parse", "--verify", "--quiet", "HEAD"]);
+    } catch (error) {
+      if (isMissingRevision(error)) return [];
+      throw error;
     }
+    const log = await this.git(["log", "--format=%H%x09%aI%x09%s"]);
 
     return log.split(/\r?\n/).filter(Boolean).flatMap((line) => {
       const [id, timestamp, subject] = line.split("\t");
@@ -228,8 +276,9 @@ export class HistoryStore {
     await this.ensureInitialized();
     try {
       return await this.git(["show", `${revisionId}:snapshot.json`], false);
-    } catch {
-      return null;
+    } catch (error) {
+      if (isMissingRevision(error)) return null;
+      throw error;
     }
   }
 
@@ -262,8 +311,9 @@ export class HistoryStore {
     await this.ensureInitialized();
     try {
       return await this.git(["diff", `${revisionId}^`, revisionId, "--", "snapshot.json"]);
-    } catch {
-      return "";
+    } catch (error) {
+      if (isMissingRevision(error)) return "";
+      throw error;
     }
   }
 

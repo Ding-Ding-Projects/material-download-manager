@@ -58,9 +58,10 @@ and the validated Squirrel assets. It has no signing credentials or alternate
 distribution path. The historical unsigned test release
 [`v0.1.0`](https://github.com/Ding-Ding-Projects/material-download-manager/releases/tag/v0.1.0)
 is retained as prior evidence only. The latest implementation verification
-release is [`v0.1.14`](https://github.com/Ding-Ding-Projects/material-download-manager/releases/tag/v0.1.14),
-published from `57a43a2bf303c02ae84183f8b22d366e43c96105` with `Setup.exe`,
-`RELEASES`, and the full Squirrel package. The latest-release link above is
+release is [`v0.1.16`](https://github.com/Ding-Ding-Projects/material-download-manager/releases/tag/v0.1.16),
+published from `5b968f54e976ca32f2d1c5b003acd5f34bdd9b5c` with `Setup.exe`,
+`RELEASES`, and the full Squirrel package. The published record is stable,
+non-draft, non-prerelease, and unsigned. The latest-release link above is
 deliberately dynamic because every successful push creates a new monotonic
 stable record.
 
@@ -74,7 +75,7 @@ The updater has a stable default feed at
 `MDM_UPDATE_FEED_URL` remains an optional main-process override. The historical
 unsigned `v0.1.0` test release is excluded from the stable feed. A new stable
 feed result is verified by the self-hosted release run that published
-`v0.1.14`; later successful runs advance the same feed without recycling a tag.
+`v0.1.16`; later successful runs advance the same feed without recycling a tag.
 
 The Windows verification workflow runs the typecheck, build, downloader tests,
 and compiled Electron path tests on every push and on manual dispatch.
@@ -109,8 +110,8 @@ progress window displays. The prototype is never presented as the download
 path. Remaining release and product gaps are explicit in [`HANDOFF.md`](HANDOFF.md). The
 published site is the live documentation and installer entry point; its runtime
 manifest is injected from the latest verified stable release by the Pages
-workflow. The v0.1.14 deployment was visually checked through the live
-renderer, including its About publication state.
+workflow. The v0.1.16 deployment was visually checked through the live
+renderer, including its About publication state and installer link.
 
 </details>
 

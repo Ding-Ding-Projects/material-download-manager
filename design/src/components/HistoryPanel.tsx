@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import type { ExportFormat } from "@shared/export";
 import { createDefaultRegexBuilderState, type RegexBuilderState } from "@shared/regex";
 import { HISTORY_ACTIONS, type HistoryAction, type HistoryFilter, type HistoryView } from "@shared/history";
@@ -47,6 +47,8 @@ export default function HistoryPanel() {
   );
   const [builder, setBuilder] = useState<RegexBuilderState>(() => createDefaultRegexBuilderState());
   const [regexOpen, setRegexOpen] = useState(false);
+  const regexButtonRef = useRef<HTMLButtonElement>(null);
+  const previousRegexOpen = useRef(false);
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
   const [selectedActions, setSelectedActions] = useState<HistoryAction[]>([]);
@@ -56,6 +58,18 @@ export default function HistoryPanel() {
   const [format, setFormat] = useState<ExportFormat>("jsonl");
   const [exporting, setExporting] = useState(false);
   const [exportMessage, setExportMessage] = useState<string | null>(null);
+
+  useLayoutEffect(() => {
+    if (previousRegexOpen.current && !regexOpen) regexButtonRef.current?.focus({ preventScroll: true });
+    previousRegexOpen.current = regexOpen;
+  }, [regexOpen]);
+
+  function handleHistoryKeyDown(event: KeyboardEvent<HTMLElement>) {
+    if (event.key !== "Escape" || !regexOpen) return;
+    event.preventDefault();
+    event.stopPropagation();
+    setRegexOpen(false);
+  }
 
   const filter = useMemo<HistoryFilter>(() => ({
     ...(dateBoundary(fromDate, false) === undefined ? {} : { from: dateBoundary(fromDate, false) }),
@@ -99,9 +113,12 @@ export default function HistoryPanel() {
     try {
       const result = await window.api.exportHistory(format, filter);
       downloadText(`material-download-manager-history.${result.extension}`, result.content, result.mimeType);
+      const warnings = result.warnings.length > 0
+        ? ` Warnings: ${result.warnings.join(" ")}`
+        : "";
       setExportMessage(copy.text(
-        `Exported ${result.metadata.recordCount} revision records as ${format.toUpperCase()} (${result.metadata.encoding}, ${result.metadata.lineEnding}).`,
-        `已匯出 ${result.metadata.recordCount} 條修訂紀錄，格式 ${format.toUpperCase()}（${result.metadata.encoding}、${result.metadata.lineEnding}）。`
+        `Exported ${result.metadata.recordCount} revision records as ${format.toUpperCase()} (${result.metadata.encoding}, ${result.metadata.lineEnding}); round-trip is ${result.roundTrip.status}.${warnings}`,
+        `已匯出 ${result.metadata.recordCount} 條修訂紀錄，格式 ${format.toUpperCase()}（${result.metadata.encoding}、${result.metadata.lineEnding}）；往返狀態：${result.roundTrip.status}。${result.warnings.length > 0 ? `提示：${result.warnings.join(" ")}` : ""}`
       ));
     } catch (reason: unknown) {
       setError(reason instanceof Error ? reason.message : copy.text("History export failed.", "匯出紀錄失敗。"));
@@ -115,7 +132,7 @@ export default function HistoryPanel() {
     .sort(([left], [right]) => left.localeCompare(right));
 
   return (
-    <section className="history-panel" aria-labelledby="history-panel-heading">
+    <section className="history-panel" aria-labelledby="history-panel-heading" onKeyDownCapture={handleHistoryKeyDown}>
       <header className="history-panel-header">
         <div className="history-panel-title">
           <HistoryIcon size={18} />
@@ -150,12 +167,12 @@ export default function HistoryPanel() {
               onChange={(event) => setBuilder((state) => ({ ...state, pattern: event.target.value }))}
               aria-label={copy.text("Search history", "搜尋紀錄")}
             />
-            <button type="button" className="btn btn-ghost btn-sm" aria-expanded={regexOpen} onClick={() => setRegexOpen((open) => !open)}>
+            <button ref={regexButtonRef} type="button" className="btn btn-ghost btn-sm" aria-expanded={regexOpen} aria-controls="history-search-builder" onClick={() => setRegexOpen((open) => !open)}>
               {copy.text("Regex", "正則")}
             </button>
           </div>
           {regexOpen && (
-            <div className="history-search-builder">
+            <div id="history-search-builder" className="history-search-builder">
               <RegexBuilder title={copy.text("History regex builder", "紀錄正則建立器")} value={builder} onChange={setBuilder} />
             </div>
           )}

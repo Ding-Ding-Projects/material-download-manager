@@ -253,7 +253,7 @@
 
 .tab-search-panel {
   display: grid;
-  grid-template-columns: repeat(4, minmax(190px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(190px, 100%), 1fr));
   gap: 10px;
   max-height: min(55vh, 460px);
   overflow: auto;
@@ -270,7 +270,7 @@
   min-width: 0;
 }
 
-.tab-search-control > label > span {
+.tab-search-control > div > .tab-search-label {
   display: block;
   margin-bottom: 4px;
   color: var(--text-secondary);
@@ -317,10 +317,4 @@
 
 .tab-search-results button:hover {
   background: var(--bg-row-hover);
-}
-
-@media (max-width: 800px) {
-  .tab-search-panel {
-    grid-template-columns: 1fr;
-  }
 }

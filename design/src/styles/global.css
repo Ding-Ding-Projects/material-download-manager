@@ -1013,9 +1013,19 @@ textarea {
 }
 .settings-tab-panel {
   display: flex;
+  width: 100%;
   min-width: 0;
   flex-direction: column;
   gap: calc(14px * var(--density-scale, 1));
+}
+.dialog-body,
+.settings-section,
+.settings-search,
+.settings-search-row,
+.field,
+.field-pair,
+.settings-level-grid {
+  min-width: 0;
 }
 .settings-search {
   position: relative;
@@ -1323,7 +1333,10 @@ textarea {
 }
 .range-input {
   accent-color: var(--accent-solid);
-  width: 100%;
+  display: block;
+  min-width: 0;
+  max-width: calc(100% - 2px);
+  width: calc(100% - 2px);
 }
 .range-output {
   color: var(--text-primary);
@@ -2117,12 +2130,25 @@ textarea {
 }
 
 @media (max-width: 520px) {
+  .field-pair,
+  .settings-level-grid {
+    grid-template-columns: 1fr;
+  }
   .history-panel-header {
     flex-direction: column;
   }
   .history-panel-actions {
     width: 100%;
     justify-content: flex-start;
+  }
+  .history-panel-actions > * {
+    min-width: 0;
+  }
+  .history-search-row {
+    flex-wrap: wrap;
+  }
+  .history-search-row .input {
+    min-width: 0;
   }
   .history-date-fields {
     flex-direction: column;
