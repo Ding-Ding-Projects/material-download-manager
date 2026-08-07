@@ -8,10 +8,14 @@ const repositoryRoot = path.resolve(designRoot, "..");
 const sourceRoot = path.join(repositoryRoot, "docs", "features");
 const outputPath = path.join(designRoot, "src", "generated", "documentationArticles.ts");
 
+function compareStable(left, right) {
+  return left < right ? -1 : left > right ? 1 : 0;
+}
+
 async function collectMarkdown(directory) {
-  const entries = await readdir(directory, { withFileTypes: true });
+  const entries = (await readdir(directory, { withFileTypes: true })).sort((left, right) => compareStable(left.name, right.name));
   const files = [];
-  for (const entry of entries.sort((left, right) => left.name.localeCompare(right.name))) {
+  for (const entry of entries) {
     const absolute = path.join(directory, entry.name);
     if (entry.isDirectory()) files.push(...await collectMarkdown(absolute));
     else if (entry.isFile() && entry.name.toLocaleLowerCase().endsWith(".md")) files.push(absolute);
@@ -25,7 +29,7 @@ function articleTitle(body, relativePath) {
 }
 
 async function buildSource() {
-  const files = (await collectMarkdown(sourceRoot)).sort((left, right) => left.localeCompare(right));
+  const files = (await collectMarkdown(sourceRoot)).sort(compareStable);
   if (files.length === 0) throw new Error("No categorized documentation articles were found under docs/features");
   const articles = [];
   for (const absolute of files) {
