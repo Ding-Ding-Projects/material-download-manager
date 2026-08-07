@@ -11,6 +11,7 @@ import type {
 import { SETTING_KEYS } from "./types";
 
 export const SETTINGS_SCHEMA_VERSION = 2;
+export const APP_DISPLAY_NAME_MAX_LENGTH = 64;
 
 export const COMPILED_IN_DEFAULTS = {
   maxConnectionsPerDownload: 8,

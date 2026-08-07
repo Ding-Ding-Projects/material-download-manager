@@ -1,6 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { DEFAULT_QUEUE_ID, type DownloadCategory, type DownloadItem } from "@shared/types";
+import type { TabState } from "@shared/tabModel";
 import { useAppStore } from "./store/useAppStore";
+import { loadTabState, saveTabState } from "./store/tabPreferences";
+import { getUiCopy } from "./i18n/ui";
+import { chooseDimSum, type DimSumDish } from "./dimSum";
 import { CATEGORY_LABELS, CATEGORY_ORDER } from "./utils/category";
 import TitleBar from "./components/TitleBar";
 import Sidebar from "./components/Sidebar";
@@ -18,6 +22,8 @@ import NotificationCenter, { notify } from "./components/NotificationCenter";
 import RendererAccessibilityBridge from "./components/RendererAccessibilityBridge";
 import CommandPalette, { type PaletteCommand } from "./components/CommandPalette";
 import UpdaterBanner from "./components/UpdaterBanner";
+import TabStrip from "./components/TabStrip";
+import DimSumSurprise from "./components/DimSumSurprise";
 
 const DESTRUCTIVE_REQUEST_EVENT = "mdm:request-destructive-action";
 const CLOSE_CONTEXT_MENU_EVENT = "mdm:close-context-menus";
@@ -29,6 +35,7 @@ function itemName(item: DownloadItem): string {
 export default function App() {
   const ready = useAppStore((s) => s.ready);
   const theme = useAppStore((s) => s.settings?.theme ?? "system");
+  const settings = useAppStore((s) => s.settings);
   const dialogs = useAppStore((s) => s.dialogs);
   const items = useAppStore((s) => s.items);
   const queues = useAppStore((s) => s.queues);
@@ -41,6 +48,13 @@ export default function App() {
   const stopQueue = useAppStore((s) => s.stopQueue);
   const stopAllActive = useAppStore((s) => s.stopAllActive);
   const [destructiveRequest, setDestructiveRequest] = useState<DestructiveActionRequest | null>(null);
+  const [tabState, setTabState] = useState<TabState>(() => loadTabState());
+  const [dimSumSurprise, setDimSumSurprise] = useState<DimSumDish | null>(null);
+  const dimSumDrawn = useRef(false);
+  const copy = useMemo(
+    () => getUiCopy(settings),
+    [settings?.funnyLevelCantonese, settings?.funnyLevelEnglish, settings?.languageMode]
+  );
   const observedItems = useRef(false);
   const previousItems = useRef(new Map<string, Pick<DownloadItem, "status" | "error" | "fileName" | "url">>());
   const activeItems = items.filter((item) => item.status === "added" || item.status === "queued" || item.status === "downloading");
@@ -57,16 +71,16 @@ export default function App() {
     const commands: PaletteCommand[] = [
       {
         id: "action.add-url",
-        label: "Add URL",
-        description: "Open the download form for a new URL",
+        label: copy.text("Add URL", "加入網址"),
+        description: copy.text("Open the download form for a new URL", "開啟表格加入新網址"),
         keywords: ["download", "new", "create"],
         section: "Actions",
         onSelect: () => openAddDownload(),
       },
       {
         id: "action.stop-all",
-        label: "Stop All",
-        description: "Pause every active or queued download",
+        label: copy.text("Stop All", "全部停止"),
+        description: copy.text("Pause every active or queued download", "暫停所有進行中或排隊中嘅下載"),
         keywords: ["pause", "downloads", "stop"],
         section: "Actions",
         onSelect: stopAllActive,
@@ -74,14 +88,14 @@ export default function App() {
       {
         id: "action.check-for-updates",
         label: "Check for updates",
-        description: "Check the signed HTTPS update feed",
+        description: copy.text("Check the unsigned HTTPS update feed", "檢查未簽名 HTTPS 更新來源"),
         keywords: ["update", "version", "release", "restart"],
         section: "Actions",
         onSelect: () => void window.api.checkForUpdates(),
       },
       {
         id: "action.start-queue",
-        label: "Start Queue",
+        label: copy.text("Start Queue", "開始佇列"),
         description: `Start ${activeQueueName}`,
         keywords: ["queue", activeQueueName, "run", "resume"],
         section: "Actions",
@@ -89,7 +103,7 @@ export default function App() {
       },
       {
         id: "action.stop-queue",
-        label: "Stop Queue",
+        label: copy.text("Stop Queue", "停止佇列"),
         description: `Stop ${activeQueueName}`,
         keywords: ["queue", activeQueueName, "pause", "stop"],
         section: "Actions",
@@ -97,32 +111,32 @@ export default function App() {
       },
       {
         id: "destination.queues",
-        label: "Queues",
-        description: "Open the queue manager",
+        label: copy.queues,
+        description: copy.text("Open the queue manager", "開啟佇列管理器"),
         keywords: ["queue", "schedule", "concurrency"],
         section: "Destinations",
         onSelect: openQueues,
       },
       {
         id: "destination.settings",
-        label: "Settings",
-        description: "Open language, appearance, and download settings",
+        label: copy.settings,
+        description: copy.text("Open language, appearance, and download settings", "開啟語言、外觀同下載設定"),
         keywords: ["preferences", "configuration", "language", "theme", "appearance"],
         section: "Settings",
         onSelect: () => openSettings(),
       },
       {
         id: "settings.language",
-        label: "Settings · Language mode",
-        description: "Open Settings to adjust language mode and funny levels",
+        label: copy.text("Settings · Language mode", "設定 · 語言模式"),
+        description: copy.text("Open Settings to adjust language mode and funny levels", "開啟設定調整語言模式同搞笑程度"),
         keywords: ["english", "cantonese", "bilingual", "funny"],
         section: "Settings",
         onSelect: () => openSettings("language"),
       },
       {
         id: "settings.appearance",
-        label: "Settings · Appearance",
-        description: "Open Settings to adjust theme, density, accent, and fonts",
+        label: copy.text("Settings · Appearance", "設定 · 外觀"),
+        description: copy.text("Open Settings to adjust theme, density, accent, and fonts", "開啟設定調整主題、密度、主色同字型"),
         keywords: ["theme", "dark", "light", "density", "font", "accent"],
         section: "Settings",
         onSelect: () => openSettings("appearance"),
@@ -174,7 +188,7 @@ export default function App() {
     // Item-scoped actions intentionally stay out of this registry: it has no
     // focused/selected-item contract, so an action must never guess a download.
     return [...commands, ...categoryCommands, ...queueCommands];
-  }, [activeQueueId, activeQueueName, filter.kind, openAddDownload, openQueues, openSettings, queues, setFilter, startQueue, stopAllActive, stopQueue]);
+  }, [activeQueueId, activeQueueName, copy, filter.kind, openAddDownload, openQueues, openSettings, queues, setFilter, startQueue, stopAllActive, stopQueue]);
 
   useEffect(() => {
     const unsubscribe = useAppStore.getState().init();
@@ -189,6 +203,21 @@ export default function App() {
       root.setAttribute("data-theme", theme);
     }
   }, [theme]);
+
+  useEffect(() => {
+    saveTabState(tabState);
+  }, [tabState]);
+
+  useEffect(() => {
+    if (!ready || dimSumDrawn.current) return;
+    dimSumDrawn.current = true;
+    const currentSettings = useAppStore.getState().settings;
+    const firstRun = currentSettings
+      ? Object.values(currentSettings.settingProvenance).every((source) => source === "compiled-in")
+      : true;
+    if (firstRun || dialogs.addDownload || dialogs.settings || dialogs.queues || activeItems.length > 0) return;
+    if (Math.random() < 0.1) setDimSumSurprise(chooseDimSum());
+  }, [activeItems.length, dialogs.addDownload, dialogs.queues, dialogs.settings, ready]);
 
   useEffect(() => {
     function handleDestructiveRequest(event: Event) {
@@ -215,7 +244,7 @@ export default function App() {
       const previous = previousItems.current.get(item.id);
       if (!previous || previous.status === item.status) {
         if (item.error && item.error !== previous?.error) {
-          notify({ title: "Download error", message: `${itemName(item)}: ${item.error}`, tone: "error" });
+          notify({ title: copy.text("Download error", "下載錯誤"), message: copy.downloadError(itemName(item), item.error), tone: "error" });
         }
         return;
       }
@@ -226,14 +255,14 @@ export default function App() {
       if (item.status === "completed") {
         return;
       } else if (item.status === "error") {
-        notify({ title: "Download error", message: `${name}: ${item.error || "The manager reported an error."}`, tone: "error" });
+        notify({ title: copy.text("Download error", "下載錯誤"), message: copy.downloadError(name, item.error || copy.text("The manager reported an error.", "管理器回報咗一個錯誤。")), tone: "error" });
       } else {
         const status = item.status.charAt(0).toUpperCase() + item.status.slice(1);
-        notify({ title: "Download status", message: `${name}: ${status}.`, tone: "info" });
+        notify({ title: copy.text("Download status", "下載狀態"), message: copy.downloadStatus(name, status), tone: "info" });
       }
     });
     previousItems.current = current;
-  }, [items, ready]);
+  }, [copy, items, ready]);
 
   function cancelDestructiveAction() {
     window.dispatchEvent(new Event(CLOSE_CONTEXT_MENU_EVENT));
@@ -247,18 +276,32 @@ export default function App() {
       const failed = results.filter((result) => result.status === "rejected");
       if (failed.length > 0) {
         notify({
-          title: "Removal incomplete",
-          message: `${failed.length} of ${request.itemIds.length} item(s) could not be removed.`,
+          title: copy.text("Removal incomplete", "移除未完成"),
+          message: copy.removalIncomplete(failed.length, request.itemIds.length),
           tone: "error",
         });
         return;
       }
       notify({
-        title: "Removal complete",
-        message: `${request.itemIds.length} item(s) removed${request.deleteFile ? " and their files deleted" : " from the list"}.`,
+        title: copy.text("Removal complete", "移除完成"),
+        message: copy.removalComplete(request.itemIds.length, request.deleteFile),
         tone: "success",
       });
     });
+  }
+
+  function activateTab(tabId: string) {
+    if (tabId === "downloads") {
+      setFilter({ kind: "all" });
+      return;
+    }
+    if (tabId === "queues") {
+      openQueues();
+      return;
+    }
+    if (tabId === "settings") {
+      openSettings();
+    }
   }
 
   return (
@@ -266,10 +309,11 @@ export default function App() {
       <RendererAccessibilityBridge />
       <CommandPalette commands={paletteCommands} />
       <TitleBar />
+      <TabStrip state={tabState} onChange={setTabState} onActivate={activateTab} />
       <UpdaterBanner hasUnsavedWork={hasUnsavedWork} unsavedWorkReason={unsavedWorkReason} />
       <div className="app-body">
         <Sidebar />
-        <main className="main-pane">
+        <main className="main-pane" id={`tabpanel-${tabState.activeTabId ?? "downloads"}`} role="tabpanel" aria-labelledby={`app-tab-${tabState.activeTabId ?? "downloads"}`}>
           <Toolbar />
           <DownloadTable />
           <StatusBar />
@@ -287,6 +331,7 @@ export default function App() {
       {dialogs.settings && <SettingsDialog />}
       {dialogs.queues && <QueuesDialog />}
       <NotificationCenter />
+      {dimSumSurprise && <DimSumSurprise dish={dimSumSurprise} onDismiss={() => setDimSumSurprise(null)} />}
       {destructiveRequest && (
         <DestructiveActionGate
           request={destructiveRequest}

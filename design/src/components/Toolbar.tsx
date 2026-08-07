@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { DEFAULT_QUEUE_ID } from "@shared/types";
 import type { RegexBuilderState } from "@shared/regex";
 import { useAppStore } from "../store/useAppStore";
+import { getUiCopy } from "../i18n/ui";
 import {
   LinkAddIcon,
   PlayIcon,
@@ -31,6 +32,8 @@ export default function Toolbar() {
   const startQueue = useAppStore((s) => s.startQueue);
   const stopQueue = useAppStore((s) => s.stopQueue);
   const stopAllActive = useAppStore((s) => s.stopAllActive);
+  const settings = useAppStore((s) => s.settings);
+  const copy = getUiCopy(settings);
   const [regexOpen, setRegexOpen] = useState(false);
   const [sampleText, setSampleText] = useState("");
   const regexToggleRef = useRef<HTMLButtonElement>(null);
@@ -89,10 +92,10 @@ export default function Toolbar() {
             <input
               className="search-input"
               type="text"
-              placeholder="Search downloads"
+              placeholder={copy.searchDownloads}
               value={searchText}
               onChange={(e) => setSearchText(e.target.value)}
-              aria-label="Search downloads"
+              aria-label={copy.searchDownloads}
               aria-invalid={searchError !== null}
               aria-describedby={searchError ? "toolbar-search-error" : undefined}
             />
@@ -103,7 +106,7 @@ export default function Toolbar() {
               onClick={toggleRegexBuilder}
               aria-expanded={regexOpen}
               aria-controls="toolbar-search-regex-panel"
-              title="Open the search regex builder"
+              title={copy.text("Open the search regex builder", "開啟搜尋正則表達式工具")}
             >
               Regex
             </button>

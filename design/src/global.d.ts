@@ -1,6 +1,7 @@
 import type {
   AddDownloadRequest,
   AppSettings,
+  BrowserHandoffRequest,
   DownloadQueue,
   NewDownloadInfo,
   StateSnapshot,
@@ -20,6 +21,7 @@ export interface MaterialDownloadManagerAPI {
   setUnsavedWorkState(state: UpdateUnsavedWorkState): Promise<void>;
   probeUrl(url: string): Promise<NewDownloadInfo>;
   addDownload(req: AddDownloadRequest): Promise<string>;
+  enqueueCapturedDownload(req: BrowserHandoffRequest): Promise<string>;
   pauseDownload(id: string): Promise<void>;
   resumeDownload(id: string): Promise<void>;
   cancelDownload(id: string): Promise<void>;
@@ -38,6 +40,10 @@ export interface MaterialDownloadManagerAPI {
   minimizeWindow(): void;
   maximizeWindow(): void;
   closeWindow(): void;
+  openProgressWindow(itemId: string): Promise<boolean>;
+  onProgressTargetChanged(cb: (itemId: string) => void): () => void;
+  minimizeProgressWindow(): void;
+  closeProgressWindow(): void;
 }
 
 declare global {

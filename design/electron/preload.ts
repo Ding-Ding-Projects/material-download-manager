@@ -3,6 +3,7 @@ import { IPC } from "../shared/types";
 import type {
   AddDownloadRequest,
   AppSettings,
+  BrowserHandoffRequest,
   DownloadQueue,
   StateSnapshot,
   NewDownloadInfo,
@@ -66,6 +67,9 @@ const api = {
   addDownload: (req: AddDownloadRequest): Promise<string> =>
     ipcRenderer.invoke(IPC.ADD_DOWNLOAD, req),
 
+  enqueueCapturedDownload: (req: BrowserHandoffRequest): Promise<string> =>
+    ipcRenderer.invoke(IPC.HANDOFF_ADD_DOWNLOAD, req),
+
   pauseDownload: (id: string): Promise<void> => ipcRenderer.invoke(IPC.PAUSE, id),
   resumeDownload: (id: string): Promise<void> => ipcRenderer.invoke(IPC.RESUME, id),
   cancelDownload: (id: string): Promise<void> => ipcRenderer.invoke(IPC.CANCEL, id),
@@ -92,6 +96,18 @@ const api = {
   minimizeWindow: () => ipcRenderer.send(IPC.WINDOW_MINIMIZE),
   maximizeWindow: () => ipcRenderer.send(IPC.WINDOW_MAXIMIZE),
   closeWindow: () => ipcRenderer.send(IPC.WINDOW_CLOSE),
+
+  openProgressWindow: (itemId: string): Promise<boolean> =>
+    ipcRenderer.invoke(IPC.PROGRESS_OPEN, itemId),
+  onProgressTargetChanged: (cb: (itemId: string) => void) => {
+    const listener = (_: unknown, itemId: unknown) => {
+      if (typeof itemId === "string" && itemId.length > 0) cb(itemId);
+    };
+    ipcRenderer.on(IPC.PROGRESS_TARGET_CHANGED, listener);
+    return () => ipcRenderer.removeListener(IPC.PROGRESS_TARGET_CHANGED, listener);
+  },
+  minimizeProgressWindow: () => ipcRenderer.send(IPC.PROGRESS_MINIMIZE),
+  closeProgressWindow: () => ipcRenderer.send(IPC.PROGRESS_CLOSE),
 };
 
 contextBridge.exposeInMainWorld("api", api);

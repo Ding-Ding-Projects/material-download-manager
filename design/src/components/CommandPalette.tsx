@@ -1,6 +1,8 @@
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import RegexBuilder from "./RegexBuilder";
 import { evaluateRegex, validateRegexPattern, type RegexBuilderState } from "@shared/regex";
+import { useAppStore } from "../store/useAppStore";
+import { getUiCopy } from "../i18n/ui";
 import "../styles/command-palette.css";
 
 export interface PaletteCommand {
@@ -19,6 +21,8 @@ interface CommandPaletteProps {
 }
 
 export default function CommandPalette({ commands, open: controlledOpen, onOpenChange }: CommandPaletteProps) {
+  const settings = useAppStore((state) => state.settings);
+  const copy = getUiCopy(settings);
   const [localOpen, setLocalOpen] = useState(false);
   const [query, setQuery] = useState<RegexBuilderState>({ mode: "text", pattern: "", flags: "g", sample: "" });
   const [activeIndex, setActiveIndex] = useState(0);
@@ -146,13 +150,13 @@ export default function CommandPalette({ commands, open: controlledOpen, onOpenC
     >
       <section className="command-palette" role="dialog" aria-modal="true" aria-labelledby={titleId}>
         <div className="command-palette-header">
-          <h2 id={titleId}>Command palette</h2>
+          <h2 id={titleId}>{copy.commandPalette}</h2>
           <kbd>Ctrl+Shift+F</kbd>
         </div>
         <input
           ref={inputRef}
           className="input command-palette-input"
-          placeholder="Search commands, features, settings"
+          placeholder={copy.commandPaletteSearch}
           value={query.pattern}
           onChange={(event) => setQuery((current) => ({ ...current, pattern: event.target.value }))}
           onKeyDown={handleKeyDown}
@@ -175,7 +179,7 @@ export default function CommandPalette({ commands, open: controlledOpen, onOpenC
         </div>
         <div className="command-palette-list" id={listboxId} role="listbox" aria-label="Commands">
           {filtered.length === 0 ? (
-            <div className="command-palette-empty">{queryError ? "Fix the pattern to see commands." : "No matching commands."}</div>
+            <div className="command-palette-empty">{queryError ? copy.fixPattern : copy.noMatchingCommands}</div>
           ) : (
             filtered.map((command, index) => (
               <button
