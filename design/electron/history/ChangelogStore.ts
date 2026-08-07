@@ -17,6 +17,56 @@ export const CHANGELOG_REPOSITORY_URL = "https://github.com/Ding-Ding-Projects/m
  */
 export const DEFAULT_CHANGELOG_ENTRIES: readonly ChangelogEntry[] = [
   {
+    id: "v0.1.39",
+    version: "0.1.39",
+    releaseDate: "2026-08-07",
+    title: "v0.1.39 — Salted Caramel Chocolate Dumpling · 海鹽焦糖朱古力餃",
+    changes: [
+      { category: "Release", text: "Published as a stable, non-draft, non-prerelease release with intentionally unsigned Squirrel.Windows artifacts." },
+      { category: "Code name", text: "Salted Caramel Chocolate Dumpling · 海鹽焦糖朱古力餃" },
+      { category: "Build", text: "Default-branch integration of the self-healing electron binary bootstrap: ensure-electron-binary.mjs verifies the platform binary synchronously before start and the UI smoke harness, restoring it from a checksum-verified archive when the electron installer silently produces nothing." },
+      { category: "Source", text: "Release metadata identifies commit 356dc99d0d2124b6b8aea585ac6e3a13ea393525." },
+    ],
+    commitSha: "356dc99d0d2124b6b8aea585ac6e3a13ea393525",
+  },
+  {
+    id: "v0.1.38",
+    version: "0.1.38",
+    releaseDate: "2026-08-07",
+    title: "v0.1.38 — Mushroom Pork Tofu Skin Parcel · 北菇豬肉腐皮扎",
+    changes: [
+      { category: "Release", text: "Published as a stable, non-draft, non-prerelease release with intentionally unsigned Squirrel.Windows artifacts." },
+      { category: "Code name", text: "Mushroom Pork Tofu Skin Parcel · 北菇豬肉腐皮扎" },
+      { category: "Build", text: "Branch verification release for the self-healing electron binary bootstrap before its default-branch merge." },
+      { category: "Source", text: "Release metadata identifies commit 0aed1d21d2eda649f3f715ec55d79caa4602fe8d." },
+    ],
+    commitSha: "0aed1d21d2eda649f3f715ec55d79caa4602fe8d",
+  },
+  {
+    id: "v0.1.37",
+    version: "0.1.37",
+    releaseDate: "2026-08-07",
+    title: "v0.1.37 — Chicken and Fish Maw Bean Curd Roll · 雞絲花膠腐皮卷",
+    changes: [
+      { category: "Release", text: "Published as a stable, non-draft, non-prerelease release with intentionally unsigned Squirrel.Windows artifacts." },
+      { category: "Code name", text: "Chicken and Fish Maw Bean Curd Roll · 雞絲花膠腐皮卷" },
+      { category: "Source", text: "Release metadata identifies commit a1cf009ce1135be656f8fc1c6889ade7d2724834." },
+    ],
+    commitSha: "a1cf009ce1135be656f8fc1c6889ade7d2724834",
+  },
+  {
+    id: "v0.1.36",
+    version: "0.1.36",
+    releaseDate: "2026-08-07",
+    title: "v0.1.36 — Oyster Sauce Bean Curd Skin Roll · 蠔皇鮮竹卷",
+    changes: [
+      { category: "Release", text: "Published as a stable, non-draft, non-prerelease release with intentionally unsigned Squirrel.Windows artifacts." },
+      { category: "Code name", text: "Oyster Sauce Bean Curd Skin Roll · 蠔皇鮮竹卷" },
+      { category: "Source", text: "Release metadata identifies commit 327b5a2a7a1b45ad691d21f56eb8a6ca414c1b84." },
+    ],
+    commitSha: "327b5a2a7a1b45ad691d21f56eb8a6ca414c1b84",
+  },
+  {
     id: "v0.1.35",
     version: "0.1.35",
     releaseDate: "2026-08-07",

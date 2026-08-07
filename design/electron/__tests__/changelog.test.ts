@@ -13,12 +13,12 @@ import {
 const store = new ChangelogStore(DEFAULT_CHANGELOG_ENTRIES, CHANGELOG_REPOSITORY_URL);
 
 test("embeds every published stable release with a full source commit", () => {
-  assert.equal(DEFAULT_CHANGELOG_ENTRIES.length, 34);
-  assert.equal(DEFAULT_CHANGELOG_ENTRIES[0].id, "v0.1.35");
+  assert.equal(DEFAULT_CHANGELOG_ENTRIES.length, 38);
+  assert.equal(DEFAULT_CHANGELOG_ENTRIES[0].id, "v0.1.39");
   assert.equal(DEFAULT_CHANGELOG_ENTRIES.at(-1)?.id, "v0.1.2");
   const view = store.getView();
-  assert.equal(view.totalEntries, 34);
-  assert.equal(view.matchingEntries, 34);
+  assert.equal(view.totalEntries, 38);
+  assert.equal(view.matchingEntries, 38);
   assert.ok(view.entries.every((entry) => entry.commitSha.length === 40));
   assert.ok(view.entries.every((entry) => entry.commitUrl === CHANGELOG_REPOSITORY_URL + "/commit/" + entry.commitSha));
   const repositoryRoot = path.resolve(process.cwd(), "..");

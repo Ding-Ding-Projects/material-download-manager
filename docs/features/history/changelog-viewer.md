@@ -3,7 +3,7 @@
 The Windows Electron app exposes a first-class Changelog tab beside the local
 revision History tab. It is an in-app release browser, not a browser-only link.
 The panel embeds the currently published stable release records from v0.1.2
-through v0.1.35, including each release date, release identity, stable
+through v0.1.39, including each release date, release identity, stable
 distribution status, full source commit SHA, and a credential-free link to that
 commit in the repository.
 

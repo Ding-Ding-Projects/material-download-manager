@@ -152,6 +152,39 @@ The current verified Pages publication reports stable `0.1.31`, exact source
 `publication.pages=verified`, homepage HTTP 200, manifest HTTP 200, and the
 immutable installer URL HTTP 200.
 
+## Self-healing electron bootstrap and v0.1.39
+
+A fresh `npm ci` on the Windows verification host left
+`node_modules/electron/dist/electron.exe` missing: npm 11's install-script
+gate skipped electron's installer, and electron's own `install.js` exits 0 on
+the host's Node 26 without extracting anything because its asynchronous
+extraction is dropped at process exit. Commit
+`0aed1d21d2eda649f3f715ec55d79caa4602fe8d` adds
+`design/scripts/ensure-electron-binary.mjs` — a fully synchronous ensure step
+that judges success only by the binary on disk, checksum-verifies any archive
+against electron's bundled `checksums.json`, and restores from the
+`@electron/get` cache or the official release URL — wired as `prestart` and
+`pretest:ui`. The guard was verified in both directions: a no-op on a healthy
+tree and a real restore after `dist/` was deleted.
+
+The merge `356dc99d0d2124b6b8aea585ac6e3a13ea393525` landed on `main` after
+the full local matrix passed (docs 2/2, typecheck, build, engine 38/38,
+Electron 54/54, built-artifact UI smoke 25/25 with screenshot evidence). The
+default-branch chain is verified green: Windows verification
+[31215133820](https://github.com/Ding-Ding-Projects/material-download-manager/actions/runs/31215133820),
+stable release
+[31215134131](https://github.com/Ding-Ding-Projects/material-download-manager/actions/runs/31215134131),
+and Pages
+[31215133541](https://github.com/Ding-Ding-Projects/material-download-manager/actions/runs/31215133541).
+That release run published stable
+[`v0.1.39`](https://github.com/Ding-Ding-Projects/material-download-manager/releases/tag/v0.1.39)
+(code name Salted Caramel Chocolate Dumpling · 海鹽焦糖朱古力餃) from exact
+`356dc99d0d2124b6b8aea585ac6e3a13ea393525` with `isDraft=false`,
+`isPrerelease=false`, `Setup.exe`, `RELEASES`, and the full
+`material-download-manager-0.1.39-full.nupkg`. The branch verification
+release `v0.1.38` from `0aed1d2` and the sibling records `v0.1.36`/`v0.1.37`
+are captured in the offline changelog, which is current through v0.1.39.
+
 ## Current implementation slice verified and published
 
 The active-download-cap test was corrected after real release run
