@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Material Download Manager Handoff</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <main class="surface" aria-labelledby="popup-title">
+    <header class="hero">
+      <p class="eyebrow" id="manager-name">Material Download Manager</p>
+      <h1 id="popup-title" data-l10n="popupTitle">Send to Material Download Manager</h1>
+      <p class="subtitle" data-l10n="popupSubtitle">A local handoff, with the door firmly closed to the wider internet.</p>
+    </header>
+
+    <section class="status-card" aria-labelledby="handoff-status-heading">
+      <h2 id="handoff-status-heading" data-l10n="lastStatus">Latest handoff status</h2>
+      <p id="status-message" class="status-message" role="status" aria-live="polite">Ready</p>
+      <p id="recovery-message" class="recovery-message" data-l10n="optionsRecovery">Configure the documented loopback endpoint in Options, or paste the URL into the desktop app manually.</p>
+    </section>
+
+    <form id="handoff-form" novalidate>
+      <label for="url" data-l10n="currentUrl">URL</label>
+      <input id="url" name="url" type="url" inputmode="url" autocomplete="off" maxlength="8192" required aria-describedby="url-hint url-error">
+      <p id="url-hint" class="field-help" data-l10n="urlHint">Use an http:// or https:// URL without embedded credentials.</p>
+      <p id="url-error" class="field-error" role="alert"></p>
+      <div class="actions">
+        <button id="send-button" class="button button-primary" type="submit" data-l10n="sendUrl">Send URL</button>
+        <button id="options-button" class="button button-secondary" type="button" data-l10n="openOptions">Open options</button>
+      </div>
+    </form>
+
+    <p class="disclosure" data-l10n="settingsDisclosure">Funny levels style every message, including warnings and errors; they never change the facts. You can reset them at any time.</p>
+  </main>
+  <script type="module" src="popup.js"></script>
+</body>
+</html>
