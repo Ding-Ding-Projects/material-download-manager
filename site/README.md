@@ -1,0 +1,37 @@
+# Material Download Manager site
+
+This directory contains the local-asset landing and documentation surface. It
+uses plain browser HTML, CSS, SVG, and JavaScript; it has no runtime package
+dependencies, CDN assets, analytics, or network-loaded images.
+
+## Local checks
+
+Run from the repository root:
+
+```powershell
+npm --prefix site run check
+npm --prefix site run build
+```
+
+`check` validates the local asset inventory, article coverage, accessibility
+landmarks, regex-builder hooks, release manifest, and stable-installer gate.
+`build` runs the same check and copies the serving files to a temporary
+directory outside the repository. The output path is printed by the script so
+it can be opened by a local static server without adding generated output to
+the checkout.
+
+The site embeds the categorized feature articles so the documentation remains
+available without a fetch. The source Markdown remains authoritative in
+`docs/features/`; every site article links back to its category article.
+
+## Release and publication honesty
+
+`data/release-manifest.json` and its browser-loaded JavaScript form both state
+that no stable production installer has been proven. The UI creates a stable
+installer link only when a manifest record is marked verified, carries a stable
+version, uses an HTTPS asset URL, and lists the required Squirrel assets. The
+current test prerelease is intentionally not eligible.
+
+GitHub Pages publication is not claimed by this source. A real deployment URL
+and built-output verification must be added before the repository advertises a
+published site.

@@ -1,0 +1,369 @@
+<!doctype html>
+<html lang="en" data-theme="system" data-density="comfortable" data-tab-position="left">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Material Download Manager landing page and offline feature documentation.">
+  <title>Material Download Manager · Documentation</title>
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <a class="skip-link" href="#main-content">Skip to content</a>
+  <div class="site-frame">
+    <header class="topbar">
+      <div class="brand-lockup">
+        <span class="brand-mark" aria-hidden="true">↘</span>
+        <div>
+          <p class="eyebrow" data-copy="productEyebrow">LOCAL DOCUMENTATION</p>
+          <p class="brand-name" id="brand-name">Material Download Manager</p>
+        </div>
+      </div>
+      <div class="topbar-actions">
+        <span class="status-chip" id="publication-status">Local source · Pages publication unverified</span>
+        <button class="button button-tonal" id="command-palette-open" type="button" aria-haspopup="dialog" aria-controls="command-palette-dialog">
+          <span aria-hidden="true">⌕</span>
+          <span data-copy="openPalette">Command palette</span>
+          <kbd>Ctrl+Shift+F</kbd>
+        </button>
+      </div>
+    </header>
+
+    <div class="app-shell">
+      <aside class="tab-rail" aria-label="Documentation navigation">
+        <div class="rail-heading">
+          <span class="rail-heading-icon" aria-hidden="true">▦</span>
+          <span data-copy="sections">Sections</span>
+        </div>
+        <div class="tab-strip" id="tab-strip" role="tablist" aria-label="Site sections" aria-orientation="vertical">
+          <button class="tab-button is-active" type="button" role="tab" aria-selected="true" aria-controls="panel-overview" id="tab-overview" data-tab="overview" data-pinned="true">
+            <span class="tab-icon" aria-hidden="true">⌂</span><span class="tab-label" data-copy="overview">Overview</span><span class="pin-dot" aria-label="Pinned">•</span>
+          </button>
+          <button class="tab-button" type="button" role="tab" aria-selected="false" aria-controls="panel-features" id="tab-features" data-tab="features">
+            <span class="tab-icon" aria-hidden="true">✦</span><span class="tab-label" data-copy="features">Features</span>
+          </button>
+          <button class="tab-button" type="button" role="tab" aria-selected="false" aria-controls="panel-changelog" id="tab-changelog" data-tab="changelog">
+            <span class="tab-icon" aria-hidden="true">◷</span><span class="tab-label" data-copy="changelog">Changelog</span>
+          </button>
+          <button class="tab-button" type="button" role="tab" aria-selected="false" aria-controls="panel-settings" id="tab-settings" data-tab="settings">
+            <span class="tab-icon" aria-hidden="true">⚙</span><span class="tab-label" data-copy="settings">Settings</span>
+          </button>
+          <button class="tab-button" type="button" role="tab" aria-selected="false" aria-controls="panel-about" id="tab-about" data-tab="about">
+            <span class="tab-icon" aria-hidden="true">ⓘ</span><span class="tab-label" data-copy="about">About</span>
+          </button>
+        </div>
+        <div class="rail-footer">
+          <span class="material-seal" aria-hidden="true">M3</span>
+          <span data-copy="localAssets">Local assets only</span>
+        </div>
+      </aside>
+
+      <main class="content-shell" id="main-content">
+        <section class="tab-panel is-active" id="panel-overview" role="tabpanel" aria-labelledby="tab-overview" tabindex="0">
+          <div class="hero-grid">
+            <div class="hero-copy">
+              <p class="eyebrow" data-copy="heroEyebrow">WINDOWS DOWNLOADS, WITH RECEIPTS</p>
+              <h1 data-copy="heroTitle">A calmer way to move files.</h1>
+              <p class="hero-lede" data-copy="heroLede">Explore the real download engine, safety boundaries, local history, and release evidence behind Material Download Manager.</p>
+              <div class="hero-actions">
+                <button class="button button-filled" type="button" data-open-tab="features"><span aria-hidden="true">✦</span><span data-copy="exploreFeatures">Explore features</span></button>
+                <button class="button button-outlined" type="button" data-open-tab="settings"><span aria-hidden="true">⚙</span><span data-copy="customizeSite">Customize this site</span></button>
+              </div>
+              <p class="shortcut-note"><kbd>Ctrl+Shift+F</kbd> <span data-copy="shortcutHint">opens every feature, setting, and destination.</span></p>
+            </div>
+            <div class="hero-visual" aria-label="Illustration of a download moving safely into a local folder">
+              <div class="orbit orbit-one"></div>
+              <div class="orbit orbit-two"></div>
+              <div class="download-orb"><span aria-hidden="true">↓</span></div>
+              <div class="folder-card">
+                <span class="folder-icon" aria-hidden="true">▰</span>
+                <span>local-state.json</span>
+                <span class="mini-check" aria-label="Verified">✓</span>
+              </div>
+              <div class="hero-caption"><span class="signal-dot" aria-hidden="true"></span><span data-copy="heroCaption">Bounded · local · reviewable</span></div>
+            </div>
+          </div>
+
+          <div class="metric-grid" aria-label="Project evidence summary">
+            <article class="metric-card"><span class="metric-value">12</span><span class="metric-label" data-copy="featureArticles">feature articles</span><span class="metric-note" data-copy="featureArticlesNote">embedded offline</span></article>
+            <article class="metric-card"><span class="metric-value">5</span><span class="metric-label" data-copy="siteTabs">browser-style tabs</span><span class="metric-note" data-copy="siteTabsNote">keyboard reachable</span></article>
+            <article class="metric-card"><span class="metric-value">0</span><span class="metric-label" data-copy="remoteAssets">remote assets</span><span class="metric-note" data-copy="remoteAssetsNote">no CDN, no analytics</span></article>
+            <article class="metric-card"><span class="metric-value" id="release-metric">—</span><span class="metric-label" data-copy="stableInstaller">stable installer</span><span class="metric-note" id="release-metric-note">not proven</span></article>
+          </div>
+
+          <div class="content-grid two-column">
+            <article class="surface-card release-card" id="release-summary-card">
+              <div class="card-heading-row">
+                <div>
+                  <p class="eyebrow" data-copy="releaseReadiness">RELEASE READINESS</p>
+                  <h2 data-copy="releaseTitle">Stable means proven.</h2>
+                </div>
+                <span class="state-icon state-icon-warning" aria-label="Not stable">!</span>
+              </div>
+              <p data-copy="releaseSummary">The repository has a verified unsigned test prerelease, but no stable production installer has passed the release gate. This site keeps the download action absent until the manifest proves one.</p>
+              <div class="release-state-row"><span class="status-dot warning" aria-hidden="true"></span><strong id="release-state-label">No stable asset verified</strong></div>
+              <div class="stable-download-slot" id="stable-download-slot"></div>
+              <button class="text-button" type="button" data-open-tab="changelog" data-copy="viewReleaseEvidence">View release evidence →</button>
+            </article>
+            <article class="surface-card feature-spotlight">
+              <div class="card-heading-row">
+                <div>
+                  <p class="eyebrow" data-copy="builtAround">BUILT AROUND THE WORK</p>
+                  <h2 data-copy="spotlightTitle">The useful bits have a paper trail.</h2>
+                </div>
+                <span class="state-icon state-icon-accent" aria-hidden="true">↗</span>
+              </div>
+              <ul class="check-list">
+                <li><span aria-hidden="true">✓</span><span data-copy="spotlightOne">Range transfers and queue schedules stay bounded.</span></li>
+                <li><span aria-hidden="true">✓</span><span data-copy="spotlightTwo">Destructive actions show exact scope before they run.</span></li>
+                <li><span aria-hidden="true">✓</span><span data-copy="spotlightThree">Search and history stay local and exportable.</span></li>
+              </ul>
+              <button class="button button-tonal" type="button" data-open-tab="features"><span aria-hidden="true">→</span><span data-copy="readAllArticles">Read all articles</span></button>
+            </article>
+          </div>
+
+          <article class="surprise-card" id="dim-sum-surprise" hidden>
+            <div>
+              <p class="eyebrow" data-copy="smallDelight">A SMALL DELIGHT</p>
+              <h2 id="surprise-title">Shrimp dumpling · 蝦餃</h2>
+              <p id="surprise-copy">A tiny local illustration appeared. It will not interrupt your work.</p>
+            </div>
+            <img src="./assets/dim-sum.svg" alt="Illustration of a bamboo steamer holding shrimp dumplings">
+          </article>
+        </section>
+
+        <section class="tab-panel" id="panel-features" role="tabpanel" aria-labelledby="tab-features" tabindex="0" hidden>
+          <div class="page-heading">
+            <div>
+              <p class="eyebrow" data-copy="featureIndex">FEATURE INDEX</p>
+              <h1 data-copy="featureIndexTitle">Everything implemented, in one place.</h1>
+              <p data-copy="featureIndexLede">Search the feature articles locally. Plain text is the default; the builder is there when the exact shape matters.</p>
+            </div>
+            <span class="count-badge" id="feature-count">10 articles</span>
+          </div>
+          <div class="search-row" data-search-id="features">
+            <label class="search-field" for="feature-search"><span class="search-icon" aria-hidden="true">⌕</span><span class="sr-only">Search feature articles</span><input id="feature-search" type="search" autocomplete="off" placeholder="Search feature articles" data-copy-placeholder="featureSearchPlaceholder"></label>
+            <button class="button button-outlined builder-toggle" type="button" aria-expanded="false" aria-controls="builder-features"><span aria-hidden="true">.*</span><span data-copy="regexBuilder">Regex builder</span></button>
+            <span class="search-state" id="features-search-state">Plain text</span>
+            <div class="builder-popover" id="builder-features" role="dialog" aria-label="Feature search regex builder" hidden></div>
+          </div>
+          <div class="filter-row" aria-label="Feature categories">
+            <span class="filter-label" data-copy="filterByCategory">Filter by category</span>
+            <div id="category-filters" class="chip-row"></div>
+          </div>
+          <div class="feature-layout">
+            <div class="feature-grid" id="feature-grid" aria-live="polite"></div>
+            <article class="article-detail surface-card" id="article-detail" aria-live="polite">
+              <div class="empty-article-state">
+                <span class="empty-icon" aria-hidden="true">✦</span>
+                <h2 data-copy="selectArticle">Select an article</h2>
+                <p data-copy="selectArticleHint">Choose a feature card to read behavior, configuration, failure modes, security, verification, and suggested articles.</p>
+              </div>
+            </article>
+          </div>
+        </section>
+
+        <section class="tab-panel" id="panel-changelog" role="tabpanel" aria-labelledby="tab-changelog" tabindex="0" hidden>
+          <div class="page-heading">
+            <div>
+              <p class="eyebrow" data-copy="releaseHistory">RELEASE HISTORY</p>
+              <h1 data-copy="changelogTitle">Changelog and release evidence.</h1>
+              <p data-copy="changelogLede">Only recorded releases appear here. Missing dates and unavailable installers stay visible as missing facts.</p>
+            </div>
+            <div class="heading-actions">
+              <button class="button button-outlined" type="button" id="copy-changelog"><span aria-hidden="true">⧉</span><span data-copy="copyView">Copy view</span></button>
+              <button class="button button-outlined" type="button" id="download-changelog"><span aria-hidden="true">↓</span><span data-copy="downloadMarkdown">Download Markdown</span></button>
+            </div>
+          </div>
+          <div class="search-row" data-search-id="changelog">
+            <label class="search-field" for="changelog-search"><span class="search-icon" aria-hidden="true">⌕</span><span class="sr-only">Search changelog</span><input id="changelog-search" type="search" autocomplete="off" placeholder="Search changelog" data-copy-placeholder="changelogSearchPlaceholder"></label>
+            <button class="button button-outlined builder-toggle" type="button" aria-expanded="false" aria-controls="builder-changelog"><span aria-hidden="true">.*</span><span data-copy="regexBuilder">Regex builder</span></button>
+            <span class="search-state" id="changelog-search-state">Plain text</span>
+            <div class="builder-popover" id="builder-changelog" role="dialog" aria-label="Changelog regex builder" hidden></div>
+          </div>
+          <div class="date-filter-row">
+            <label class="field-control compact-control"><span data-copy="releaseDateFilter">Release date filter</span><input id="changelog-date" type="date"></label>
+            <span class="field-help" data-copy="releaseDateHelp">Entries without a recorded date remain visible and are labelled as unrecorded.</span>
+            <button class="text-button" type="button" id="clear-changelog-date" data-copy="clearDate">Clear date</button>
+          </div>
+          <div class="release-list" id="release-list" aria-live="polite"></div>
+        </section>
+
+        <section class="tab-panel" id="panel-settings" role="tabpanel" aria-labelledby="tab-settings" tabindex="0" hidden>
+          <div class="page-heading">
+            <div>
+              <p class="eyebrow" data-copy="siteSettings">SITE SETTINGS</p>
+              <h1 data-copy="settingsTitle">Make the docs feel like yours.</h1>
+              <p data-copy="settingsLede">Preferences are local to this browser. Every control states what it changes and where its current value came from.</p>
+            </div>
+            <button class="button button-outlined" type="button" id="reset-settings"><span aria-hidden="true">↺</span><span data-copy="resetAll">Reset all</span></button>
+          </div>
+          <div class="search-row" data-search-id="settings">
+            <label class="search-field" for="settings-search"><span class="search-icon" aria-hidden="true">⌕</span><span class="sr-only">Search site settings</span><input id="settings-search" type="search" autocomplete="off" placeholder="Search site settings" data-copy-placeholder="settingsSearchPlaceholder"></label>
+            <button class="button button-outlined builder-toggle" type="button" aria-expanded="false" aria-controls="builder-settings"><span aria-hidden="true">.*</span><span data-copy="regexBuilder">Regex builder</span></button>
+            <span class="search-state" id="settings-search-state">Plain text</span>
+            <div class="builder-popover" id="builder-settings" role="dialog" aria-label="Settings regex builder" hidden></div>
+          </div>
+          <p class="disclosure-note" data-copy="funnyDisclosure">Funny levels style all site messages, including warnings and errors. They change voice, never facts, and can be reset at any time.</p>
+          <div class="settings-grid" id="settings-list">
+            <article class="settings-card" data-setting-search="language language mode english cantonese bilingual 語言">
+              <div class="card-heading-row"><div><p class="eyebrow" data-copy="languageModeEyebrow">LANGUAGE MODE</p><h2 data-copy="languageModeTitle">Choose the reading voice.</h2></div><span class="state-icon state-icon-accent" aria-hidden="true">文</span></div>
+              <p class="field-explanation" data-copy="languageExplanation">Controls the primary language of every label on this site. Bilingual mode keeps English prominent and adds a compact Cantonese counterpart.</p>
+              <div class="segmented-control" id="language-mode-buttons" role="group" aria-label="Language mode">
+                <button type="button" data-setting="language" data-value="en">English</button>
+                <button type="button" data-setting="language" data-value="yue">香港粵語</button>
+                <button type="button" data-setting="language" data-value="bilingual">Bilingual</button>
+              </div>
+              <p class="provenance" data-provenance="language">Persisted in this browser</p>
+            </article>
+            <article class="settings-card" data-setting-search="english funny level humor tone copy">
+              <div class="card-heading-row"><div><p class="eyebrow">ENGLISH TONE</p><h2>English funny level</h2></div><output id="funny-en-output" class="value-output">3 / 5</output></div>
+              <p class="field-explanation">Styles English copy from professional to maximum playful voice. Facts and actions remain unchanged.</p>
+              <label class="range-control" for="funny-en"><span class="sr-only">English funny level from 1 to 5</span><input id="funny-en" type="range" min="1" max="5" step="1" value="3"><span class="range-endpoints"><span>Serious</span><span>Playful</span></span></label>
+              <p class="tone-preview" id="tone-preview-en"></p>
+              <p class="provenance">Persisted in this browser</p>
+            </article>
+            <article class="settings-card" data-setting-search="cantonese funny level humor tone copy">
+              <div class="card-heading-row"><div><p class="eyebrow">粵語語氣</p><h2>粵語 funny level</h2></div><output id="funny-yue-output" class="value-output">3 / 5</output></div>
+              <p class="field-explanation">調校粵語字句嘅幽默程度，由認真到最玩味；資料同埋下一步永遠保持清楚。</p>
+              <label class="range-control" for="funny-yue"><span class="sr-only">Cantonese funny level from 1 to 5</span><input id="funny-yue" type="range" min="1" max="5" step="1" value="3"><span class="range-endpoints"><span>認真</span><span>玩味</span></span></label>
+              <p class="tone-preview" id="tone-preview-yue"></p>
+              <p class="provenance">Persisted in this browser</p>
+            </article>
+            <article class="settings-card" data-setting-search="theme light dark system appearance">
+              <div class="card-heading-row"><div><p class="eyebrow" data-copy="themeEyebrow">THEME</p><h2 data-copy="themeTitle">Choose a surface.</h2></div><span class="state-icon state-icon-accent" aria-hidden="true">◐</span></div>
+              <p class="field-explanation" data-copy="themeExplanation">Applies a light, dark, or operating-system theme to the site shell, tabs, overlays, and cards.</p>
+              <label class="field-control"><span data-copy="themeLabel">Theme</span><select id="theme-setting"><option value="system">Use system</option><option value="light">Light</option><option value="dark">Dark</option></select></label>
+              <p class="provenance" data-provenance="theme">Compiled-in value: system</p>
+            </article>
+            <article class="settings-card" data-setting-search="density spacing comfortable compact appearance">
+              <div class="card-heading-row"><div><p class="eyebrow" data-copy="densityEyebrow">DENSITY</p><h2 data-copy="densityTitle">Set the breathing room.</h2></div><span class="state-icon state-icon-accent" aria-hidden="true">↕</span></div>
+              <p class="field-explanation" data-copy="densityExplanation">Changes card padding, tab height, and grid spacing without changing information or control reachability.</p>
+              <div class="segmented-control" role="group" aria-label="Site density"><button type="button" data-setting="density" data-value="comfortable">Comfortable</button><button type="button" data-setting="density" data-value="compact">Compact</button></div>
+              <p class="provenance" data-provenance="density">Compiled-in value: comfortable</p>
+            </article>
+            <article class="settings-card" data-setting-search="accent seed color appearance">
+              <div class="card-heading-row"><div><p class="eyebrow" data-copy="accentEyebrow">ACCENT</p><h2 data-copy="accentTitle">Tune the signal color.</h2></div><span class="state-icon state-icon-accent" aria-hidden="true">◈</span></div>
+              <p class="field-explanation" data-copy="accentExplanation">Sets the seed color used by focus rings, primary actions, links, and highlighted search results.</p>
+              <label class="color-control"><span data-copy="accentLabel">Accent seed color</span><input id="accent-setting" type="color" value="#6750A4"><code id="accent-value">#6750A4</code></label>
+              <p class="provenance" data-provenance="accent">Compiled-in value: #6750A4</p>
+            </article>
+            <article class="settings-card" data-setting-search="font size scale typography appearance">
+              <div class="card-heading-row"><div><p class="eyebrow" data-copy="typographyEyebrow">TYPOGRAPHY</p><h2 data-copy="typographyTitle">Keep type comfortable.</h2></div><span class="state-icon state-icon-accent" aria-hidden="true">Aa</span></div>
+              <p class="field-explanation" data-copy="typographyExplanation">Adjusts the site font scale while keeping system and CJK-safe fallbacks local.</p>
+              <label class="range-control" for="font-scale"><span data-copy="fontScaleLabel">Font scale</span><input id="font-scale" type="range" min="90" max="125" step="5" value="100"><span class="range-endpoints"><span>90%</span><span>125%</span></span></label>
+              <p class="provenance" data-provenance="fontScale">Compiled-in value: 100%</p>
+            </article>
+            <article class="settings-card" data-setting-search="motion reduced accessibility animation">
+              <div class="card-heading-row"><div><p class="eyebrow" data-copy="motionEyebrow">ACCESSIBILITY</p><h2 data-copy="motionTitle">Respect reduced motion.</h2></div><span class="state-icon state-icon-accent" aria-hidden="true">≈</span></div>
+              <p class="field-explanation" data-copy="motionExplanation">Turns decorative transitions off while preserving state, focus, and feedback.</p>
+              <label class="switch-row"><input id="reduced-motion" type="checkbox"><span class="switch-visual" aria-hidden="true"></span><span data-copy="reducedMotionLabel">Reduce motion</span></label>
+              <p class="provenance" data-provenance="reducedMotion">Compiled-in value: off</p>
+            </article>
+            <article class="settings-card" data-setting-search="tab position dock left top navigation tabs">
+              <div class="card-heading-row"><div><p class="eyebrow" data-copy="tabDockEyebrow">TAB DOCK</p><h2 data-copy="tabDockTitle">Choose the strip edge.</h2></div><span class="state-icon state-icon-accent" aria-hidden="true">▤</span></div>
+              <p class="field-explanation" data-copy="tabDockExplanation">Docks the site tab strip to the left or top. Keyboard arrow behavior follows the chosen orientation.</p>
+              <div class="segmented-control" role="group" aria-label="Tab strip position"><button type="button" data-setting="tabPosition" data-value="left">Left</button><button type="button" data-setting="tabPosition" data-value="top">Top</button></div>
+              <p class="provenance" data-provenance="tabPosition">Compiled-in value: left</p>
+            </article>
+            <article class="settings-card" data-setting-search="display name rename title identity">
+              <div class="card-heading-row"><div><p class="eyebrow" data-copy="displayNameEyebrow">DISPLAY NAME</p><h2 data-copy="displayNameTitle">Name the site shell.</h2></div><span class="state-icon state-icon-accent" aria-hidden="true">✎</span></div>
+              <p class="field-explanation" data-copy="displayNameExplanation">Changes the name shown in this page's brand and notifications only; it never changes repository or release identity.</p>
+              <label class="field-control"><span data-copy="displayNameLabel">Displayed name</span><input id="display-name" type="text" maxlength="80" value="Material Download Manager"></label>
+              <p class="provenance" data-provenance="displayName">Compiled-in value: Material Download Manager</p>
+            </article>
+          </div>
+
+          <details class="advanced-panel" open>
+            <summary data-copy="appearanceEditorSummary">Appearance editor · per-surface preview</summary>
+            <div class="advanced-panel-body">
+              <p class="field-explanation" data-copy="appearanceEditorExplanation">This editor changes the site surfaces it names, persists each choice, and keeps a reset path beside every control.</p>
+              <div class="appearance-editor-grid">
+                <label class="field-control"><span data-copy="appearanceTarget">Target surface</span><select id="appearance-target"><option value="cards">Cards</option><option value="tabs">Tabs</option><option value="notifications">Notifications</option><option value="hero">Hero</option></select></label>
+                <label class="color-control"><span data-copy="appearanceSurfaceColor">Surface accent</span><input id="appearance-surface-color" type="color" value="#6750A4"><code id="appearance-surface-value">#6750A4</code></label>
+                <label class="field-control"><span data-copy="appearanceRadius">Corner radius</span><input id="appearance-radius" type="range" min="8" max="32" step="2" value="20"><output id="appearance-radius-output">20px</output></label>
+                <label class="field-control"><span data-copy="appearanceSpacing">Spacing scale</span><select id="appearance-spacing"><option value="comfortable">Comfortable</option><option value="tight">Tight</option><option value="airy">Airy</option></select></label>
+              </div>
+              <div class="appearance-preview" id="appearance-preview"><span class="preview-swatch" aria-hidden="true"></span><span data-copy="appearancePreview">Preview follows the selected target.</span></div>
+              <button class="text-button" type="button" id="reset-appearance" data-copy="resetAppearance">Reset appearance overrides</button>
+            </div>
+          </details>
+
+          <details class="advanced-panel" open>
+            <summary data-copy="tabDiscoverySummary">Tab discovery lab · four independent searches</summary>
+            <div class="advanced-panel-body">
+              <p class="field-explanation" data-copy="tabDiscoveryExplanation">Each field owns its query, pattern, flags, and builder state. Results identify the strip, group, and pinned state instead of sharing hidden search state.</p>
+              <div class="tab-discovery-grid" id="tab-discovery-grid">
+                <div class="discovery-search search-row" data-search-id="tab-strip"><label class="search-field" for="tab-strip-search"><span class="sr-only">Current strip search</span><input id="tab-strip-search" type="search" placeholder="Current strip" data-copy-placeholder="currentStripPlaceholder"></label><button class="icon-button builder-toggle" type="button" aria-expanded="false" aria-controls="builder-tab-strip" aria-label="Open current strip regex builder">.*</button><div class="builder-popover" id="builder-tab-strip" role="dialog" aria-label="Current strip regex builder" hidden></div></div>
+                <div class="discovery-search search-row" data-search-id="tab-group"><label class="search-field" for="tab-group-search"><span class="sr-only">Inside groups search</span><input id="tab-group-search" type="search" placeholder="Inside groups" data-copy-placeholder="insideGroupsPlaceholder"></label><button class="icon-button builder-toggle" type="button" aria-expanded="false" aria-controls="builder-tab-group" aria-label="Open group tab regex builder">.*</button><div class="builder-popover" id="builder-tab-group" role="dialog" aria-label="Group tab regex builder" hidden></div></div>
+                <div class="discovery-search search-row" data-search-id="tab-groups"><label class="search-field" for="tab-groups-search"><span class="sr-only">Group names search</span><input id="tab-groups-search" type="search" placeholder="Group names" data-copy-placeholder="groupNamesPlaceholder"></label><button class="icon-button builder-toggle" type="button" aria-expanded="false" aria-controls="builder-tab-groups" aria-label="Open group name regex builder">.*</button><div class="builder-popover" id="builder-tab-groups" role="dialog" aria-label="Group name regex builder" hidden></div></div>
+                <div class="discovery-search search-row" data-search-id="tab-master"><label class="search-field" for="tab-master-search"><span class="sr-only">Master tab search</span><input id="tab-master-search" type="search" placeholder="Master tab search" data-copy-placeholder="masterTabPlaceholder"></label><button class="icon-button builder-toggle" type="button" aria-expanded="false" aria-controls="builder-tab-master" aria-label="Open master tab regex builder">.*</button><div class="builder-popover" id="builder-tab-master" role="dialog" aria-label="Master tab regex builder" hidden></div></div>
+              </div>
+              <div class="tab-results" id="tab-results" aria-live="polite"></div>
+            </div>
+          </details>
+        </section>
+
+        <section class="tab-panel" id="panel-about" role="tabpanel" aria-labelledby="tab-about" tabindex="0" hidden>
+          <div class="page-heading">
+            <div>
+              <p class="eyebrow" data-copy="aboutEyebrow">ABOUT THIS SURFACE</p>
+              <h1 data-copy="aboutTitle">A static site that tells the truth.</h1>
+              <p data-copy="aboutLede">The site is a local documentation artifact, not a claim that GitHub Pages or a stable installer is already published.</p>
+            </div>
+          </div>
+          <div class="content-grid two-column">
+            <article class="surface-card">
+              <div class="card-heading-row"><div><p class="eyebrow" data-copy="publicationEyebrow">PUBLICATION</p><h2 data-copy="publicationTitle">Pages status is unverified.</h2></div><span class="state-icon state-icon-warning" aria-hidden="true">!</span></div>
+              <p data-copy="publicationBody">This checkout does not verify an external GitHub Pages deployment. The repository homepage remains honest until a real publication URL and its built output are proven.</p>
+              <ul class="detail-list"><li><strong>Source:</strong> <code>site/**</code></li><li><strong>Assets:</strong> local HTML, CSS, JavaScript, and SVG only</li><li><strong>Publication:</strong> not claimed</li></ul>
+            </article>
+            <article class="surface-card">
+              <div class="card-heading-row"><div><p class="eyebrow" data-copy="verificationEyebrow">VERIFICATION</p><h2 data-copy="verificationTitle">Small checks, concrete evidence.</h2></div><span class="state-icon state-icon-accent" aria-hidden="true">✓</span></div>
+              <ul class="check-list"><li><span aria-hidden="true">✓</span><span data-copy="verificationOne">The static check audits local assets and article coverage.</span></li><li><span aria-hidden="true">✓</span><span data-copy="verificationTwo">The build copies to a temporary directory outside the checkout.</span></li><li><span aria-hidden="true">✓</span><span data-copy="verificationThree">The installer control is created only from verified stable metadata.</span></li></ul>
+              <button class="button button-tonal" type="button" data-open-tab="settings"><span aria-hidden="true">⚙</span><span data-copy="reviewSettings">Review settings</span></button>
+            </article>
+          </div>
+          <article class="surface-card docs-map-card">
+            <div class="card-heading-row"><div><p class="eyebrow" data-copy="docsMapEyebrow">DOCUMENTATION MAP</p><h2 data-copy="docsMapTitle">Feature articles stay connected.</h2></div><span class="state-icon state-icon-accent" aria-hidden="true">↗</span></div>
+            <p data-copy="docsMapBody">The feature index mirrors the categorized Markdown under <code>docs/features/</code>. Suggested-article links are local and keep the reader in the same surface.</p>
+            <div class="chip-row" id="about-feature-links"></div>
+          </article>
+        </section>
+      </main>
+    </div>
+  </div>
+
+  <div class="modal-layer" id="command-palette-layer" hidden>
+    <section class="command-palette-dialog" id="command-palette-dialog" role="dialog" aria-modal="true" aria-labelledby="command-palette-title" tabindex="-1">
+      <div class="dialog-heading"><div><p class="eyebrow" data-copy="commandPaletteEyebrow">COMMAND PALETTE</p><h2 id="command-palette-title" data-copy="commandPaletteTitle">Go somewhere useful.</h2></div><button class="icon-button" id="command-palette-close" type="button" aria-label="Close command palette">×</button></div>
+      <p class="dialog-help" data-copy="commandPaletteHelp">Search features, tabs, settings, and actions. Enter opens the exact destination.</p>
+      <div class="search-row" data-search-id="palette">
+        <label class="search-field" for="palette-search"><span class="search-icon" aria-hidden="true">⌕</span><span class="sr-only">Search commands</span><input id="palette-search" type="search" autocomplete="off" placeholder="Search commands" data-copy-placeholder="paletteSearchPlaceholder"></label>
+        <button class="button button-outlined builder-toggle" type="button" aria-expanded="false" aria-controls="builder-palette"><span aria-hidden="true">.*</span><span data-copy="regexBuilder">Regex builder</span></button>
+        <span class="search-state" id="palette-search-state">Plain text</span>
+        <div class="builder-popover" id="builder-palette" role="dialog" aria-label="Command palette regex builder" hidden></div>
+      </div>
+      <div class="palette-results" id="palette-results" role="listbox" aria-label="Command results"></div>
+      <p class="dialog-footer"><kbd>↑</kbd><kbd>↓</kbd> navigate · <kbd>Enter</kbd> open · <kbd>Esc</kbd> close</p>
+    </section>
+  </div>
+
+  <div class="context-menu" id="tab-context-menu" role="menu" aria-label="Tab actions" hidden>
+    <button type="button" role="menuitem" data-context-action="pin">Pin tab</button>
+    <button type="button" role="menuitem" data-context-action="appearance">Edit tab appearance…</button>
+  </div>
+  <div class="anchored-editor" id="tab-appearance-editor" role="dialog" aria-label="Tab appearance editor" hidden>
+    <div class="dialog-heading"><h2 data-copy="tabAppearanceTitle">Edit tab appearance</h2><button class="icon-button" id="tab-appearance-close" type="button" aria-label="Close tab appearance editor">×</button></div>
+    <p class="field-explanation" data-copy="tabAppearanceExplanation">Customize the selected tab's accent and shape. The editor stays local to this browser.</p>
+    <label class="color-control"><span data-copy="tabAccent">Tab accent</span><input id="tab-accent-setting" type="color" value="#6750A4"><code id="tab-accent-value">#6750A4</code></label>
+    <label class="field-control"><span data-copy="tabRadius">Tab radius</span><input id="tab-radius-setting" type="range" min="8" max="28" step="2" value="18"><output id="tab-radius-output">18px</output></label>
+    <button class="text-button" id="reset-tab-appearance" type="button" data-copy="resetTabAppearance">Reset selected tab</button>
+  </div>
+
+  <div class="notification-region" id="notification-region" aria-live="polite" aria-atomic="false"></div>
+
+  <script src="./content.js"></script>
+  <script src="./data/release-manifest.js"></script>
+  <script src="./app.js"></script>
+</body>
+</html>

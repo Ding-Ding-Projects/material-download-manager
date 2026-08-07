@@ -1,0 +1,13 @@
+{
+  "name": "material-download-manager-site",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Dependency-free local landing and documentation site for Material Download Manager.",
+  "engines": {
+    "node": ">=18.19.0"
+  },
+  "scripts": {
+    "check": "node check.mjs",
+    "build": "node build.mjs"
+  }
+}

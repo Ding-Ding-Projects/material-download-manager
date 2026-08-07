@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 220" role="img" aria-labelledby="title desc">
+  <title id="title">Dim sum illustration</title>
+  <desc id="desc">A small bamboo steamer holding three shrimp dumplings.</desc>
+  <defs>
+    <linearGradient id="basket" x1="0" x2="1">
+      <stop offset="0" stop-color="#bd6a3a"/>
+      <stop offset="1" stop-color="#e3a35e"/>
+    </linearGradient>
+  </defs>
+  <ellipse cx="160" cy="190" rx="122" ry="18" fill="#1f1d2b" opacity=".16"/>
+  <path d="M55 132h210l-14 46H69z" fill="url(#basket)" stroke="#7f412e" stroke-width="5"/>
+  <path d="M48 130c7 16 34 25 112 25s105-9 112-25" fill="none" stroke="#7f412e" stroke-width="8"/>
+  <path d="M62 144h196M67 158h186M73 172h174" stroke="#f3c47b" stroke-width="5" opacity=".8"/>
+  <path d="M50 128c2-43 35-70 110-70s108 27 110 70c-46 15-174 15-220 0Z" fill="#e7b873" stroke="#7f412e" stroke-width="5"/>
+  <path d="M75 99c28-15 142-15 170 0" fill="none" stroke="#f4d297" stroke-width="6"/>
+  <g fill="#fff2d5" stroke="#9a5b43" stroke-width="4">
+    <path d="M98 97c4-27 27-39 47-26l15 10 15-10c20-13 43-1 47 26-33 11-91 11-124 0Z"/>
+    <path d="M120 76c10 6 20 10 40 10s30-4 40-10" fill="none"/>
+    <path d="M99 101c20-7 102-7 122 0" fill="none"/>
+  </g>
+  <g fill="#f08f68">
+    <circle cx="138" cy="91" r="4"/>
+    <circle cx="160" cy="94" r="4"/>
+    <circle cx="182" cy="91" r="4"/>
+  </g>
+  <path d="M66 51c15-23 37-27 57-12M197 39c20-15 42-11 57 12" fill="none" stroke="#7c5cff" stroke-width="6" stroke-linecap="round" opacity=".75"/>
+</svg>
