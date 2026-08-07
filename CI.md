@@ -41,11 +41,14 @@ pwsh -NoProfile -File scripts/verify-self-hosted-bootstrap.ps1 -Phase postinstal
 
 The native bootstrap explicitly runs the declared Electron and esbuild install
 scripts because npm 11 can leave their package directories present while
-withholding install scripts. The post-install phase then requires both native
-binaries, the lockfile-installed `electron-builder` binary, and the lockfile's
-`lockfileVersion: 3`. A fresh-environment proof is a run on a disposable
-Windows x64 runner with an empty npm cache and no `design/node_modules`; a cache
-hit may speed it up but is not the proof.
+withholding install scripts. On Windows x64, esbuild's native executable is
+`design/node_modules/@esbuild/win32-x64/esbuild.exe`; the top-level package's
+`bin/esbuild` is a JavaScript launcher, not a second root-level executable. The
+post-install phase requires that platform binary to execute and match the
+lockfile package version, plus the Electron binary, the lockfile-installed
+`electron-builder` binary, and `lockfileVersion: 3`. A fresh-environment proof
+is a run on a disposable Windows x64 runner with an empty npm cache and no
+`design/node_modules`; a cache hit may speed it up but is not the proof.
 
 ## Validation workflow
 

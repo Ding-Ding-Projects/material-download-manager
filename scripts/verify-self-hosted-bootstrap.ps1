@@ -139,7 +139,7 @@ $packagePath = Join-Path $repositoryRoot 'design/package.json'
 $lockPath = Join-Path $repositoryRoot 'design/package-lock.json'
 $nodeModulesPath = Join-Path $repositoryRoot 'design/node_modules'
 $electronBinaryPath = Join-Path $repositoryRoot 'design/node_modules/electron/dist/electron.exe'
-$esbuildBinaryPath = Join-Path $repositoryRoot 'design/node_modules/esbuild/esbuild.exe'
+$esbuildBinaryPath = Join-Path $repositoryRoot 'design/node_modules/@esbuild/win32-x64/esbuild.exe'
 $package = Get-JsonFile $packagePath
 $lock = Get-JsonFile $lockPath
 if ($lock.lockfileVersion -ne 3) {
@@ -152,7 +152,7 @@ if (-not (Test-Path -LiteralPath $electronBinaryPath -PathType Leaf)) {
   Stop-WithMessage 'Electron native binary is missing; complete-node-binary-bootstrap.ps1 must run after npm ci.'
 }
 if (-not (Test-Path -LiteralPath $esbuildBinaryPath -PathType Leaf)) {
-  Stop-WithMessage 'esbuild native binary is missing; complete-node-binary-bootstrap.ps1 must run after npm ci.'
+  Stop-WithMessage 'esbuild native binary is missing at node_modules/@esbuild/win32-x64/esbuild.exe; complete-node-binary-bootstrap.ps1 must run after npm ci.'
 }
 if ([string]$package.name -ne 'material-download-manager') {
   Stop-WithMessage 'design/package.json has an unexpected package name.'
