@@ -174,9 +174,9 @@
         },
         {
           "name": "GitHub Pages actions",
-          "version": "configure-pages@v5, upload-pages-artifact@v3, deploy-pages@v4",
-          "source": "GitHub Actions",
-          "bootstrap": "Resolved by GitHub Actions on the contracted runner; no third-party site runtime dependency is installed."
+          "version": "configure-pages@v5, actions/upload-artifact@v4, deploy-pages@v4, Windows tar.exe",
+          "source": "GitHub Actions plus the runner's canonical Windows tar implementation",
+          "bootstrap": "Resolved by GitHub Actions on the contracted runner; the Pages job archives the site with PowerShell and tar.exe, uploads an artifact named github-pages, and deploys that artifact."
         },
         {
           "name": "Material Download Manager site",

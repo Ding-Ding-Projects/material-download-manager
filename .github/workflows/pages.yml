@@ -44,9 +44,7 @@ jobs:
         shell: pwsh
         run: |
           $staging = Join-Path $env:RUNNER_TEMP 'material-download-manager-pages'
-          $uploadPath = $staging -replace '\\', '/'
           "PAGES_STAGING_PATH=$staging" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-          "PAGES_UPLOAD_PATH=$uploadPath" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
       - name: Build site to an isolated staging directory
         shell: pwsh
@@ -68,10 +66,36 @@ jobs:
         with:
           enablement: true
 
+      - name: Archive Pages artifact with PowerShell
+        shell: pwsh
+        run: |
+          $tar = Get-Command tar.exe -ErrorAction SilentlyContinue
+          if ($null -eq $tar) {
+            throw 'The self-hosted runner must provide tar.exe for the Pages archive.'
+          }
+          $artifactPath = Join-Path $env:RUNNER_TEMP 'artifact.tar'
+          if (Test-Path -LiteralPath $artifactPath -PathType Leaf) {
+            Remove-Item -LiteralPath $artifactPath -Force
+          }
+          & $tar.Source -c -f $artifactPath `
+            --exclude=.git `
+            --exclude=.github `
+            -C $env:PAGES_STAGING_PATH .
+          if ($LASTEXITCODE -ne 0) {
+            throw "tar.exe failed to archive the Pages site with exit code $LASTEXITCODE."
+          }
+          if (-not (Test-Path -LiteralPath $artifactPath -PathType Leaf)) {
+            throw "tar.exe did not create the Pages artifact: $artifactPath"
+          }
+          "PAGES_ARTIFACT_PATH=$artifactPath" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
       - name: Upload Pages artifact
-        uses: actions/upload-pages-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
-          path: ${{ env.PAGES_UPLOAD_PATH }}
+          name: github-pages
+          path: ${{ runner.temp }}/artifact.tar
+          retention-days: 1
+          if-no-files-found: error
 
       - name: Deploy to GitHub Pages
         id: deployment

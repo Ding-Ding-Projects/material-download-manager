@@ -20,8 +20,11 @@ workflow stages its deployment artifact. Release data is kept in
 the two files must remain identical in source. The Pages workflow copies the
 checked site to runner-temporary staging and then uses the GitHub CLI to inject
 the latest verified stable release record there, so a release update does not
-create a repository push loop. A historical test prerelease is recorded
-separately from the stable slot and does not enable an installer download.
+create a repository push loop. It archives the staging directory with
+PowerShell and the runner's `tar.exe`, uploads the archive as the `github-pages`
+artifact, and deploys it with the official Pages deployment action. A
+historical test prerelease is recorded separately from the stable slot and
+does not enable an installer download.
 
 ## Failure modes
 
@@ -53,8 +56,10 @@ manifest distinction, and absence of remote assets. `npm run build` reruns the
 check and verifies the staged HTML includes the local runtime and manifest.
 The Pages workflow repeats both commands on the contracted self-hosted Windows
 runner, injects release metadata with
-`scripts/prepare-pages-release-manifest.ps1`, uploads the staged directory, and
-verifies the published HTML response.
+`scripts/prepare-pages-release-manifest.ps1`, creates the Pages tar archive in
+PowerShell because the runner cannot execute the Bash wrapper in
+`actions/upload-pages-artifact@v3`, uploads it as `github-pages`, and verifies
+the published HTML response.
 
 ## Suggested articles
 

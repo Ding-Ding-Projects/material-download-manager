@@ -68,7 +68,11 @@ for the same ref.
 checks the dependency prerequisites, runs `site/check.mjs`, builds the checked
 site to an isolated runner-temporary directory, injects only the latest
 verified stable release record from `gh release view`, and deploys it through
-the official Pages actions. `actions/configure-pages@v5` requests Pages
+the official Pages deployment action. The contracted Windows runner cannot
+execute the Bash wrapper in `actions/upload-pages-artifact@v3`, so the workflow
+archives the staged directory with PowerShell and `tar.exe`, uploads that
+`artifact.tar` as `github-pages` with `actions/upload-artifact@v4`, and then
+invokes `actions/deploy-pages@v4`. `actions/configure-pages@v5` requests Pages
 enablement when the repository has not been configured yet. A stable installer button is absent when no
 non-draft, non-prerelease release with verified Squirrel assets exists.
 Deployment is not canceled halfway through: its concurrency group protects the
