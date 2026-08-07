@@ -1,0 +1,583 @@
+name: Windows release
+
+on:
+  push:
+    branches:
+      - "**"
+  workflow_dispatch:
+
+concurrency:
+  group: windows-release-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  release:
+    name: Build and publish Windows release
+    runs-on: windows-latest
+    env:
+      GH_TOKEN: ${{ secrets.RELEASE_TOKEN || secrets.ORG_TOKEN || secrets.GITHUB_TOKEN }}
+    steps:
+      - name: Check out exact source commit
+        uses: actions/checkout@v4
+        with:
+          token: ${{ env.GH_TOKEN }}
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: design/package-lock.json
+
+      - name: Validate signing configuration
+        shell: pwsh
+        env:
+          CSC_LINK: ${{ secrets.CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+        run: |
+          $missing = @(
+            if ([string]::IsNullOrWhiteSpace($env:CSC_LINK)) { 'CSC_LINK' }
+            if ([string]::IsNullOrWhiteSpace($env:CSC_KEY_PASSWORD)) { 'CSC_KEY_PASSWORD' }
+          )
+          if ($missing.Count -gt 0) {
+            throw "Signed releases require these configured secrets: $($missing -join ', ')."
+          }
+
+      - name: Install design dependencies
+        working-directory: design
+        run: npm ci
+
+      - name: Typecheck
+        working-directory: design
+        run: npm run typecheck
+
+      - name: Build application
+        working-directory: design
+        run: npm run build
+
+      - name: Test download engine
+        working-directory: design
+        run: npm run test:engine
+
+      - name: Test Electron integration
+        working-directory: design
+        run: npm run test:electron
+
+      - name: Count source lines
+        id: line_count
+        shell: pwsh
+        run: |
+          $lineCountPath = Join-Path $env:RUNNER_TEMP 'line-count.txt'
+          & node scripts/count-lines.mjs *> $lineCountPath
+          if ($LASTEXITCODE -ne 0) {
+            throw "scripts/count-lines.mjs failed with exit code $LASTEXITCODE."
+          }
+          if (-not (Test-Path -LiteralPath $lineCountPath -PathType Leaf)) {
+            throw 'scripts/count-lines.mjs did not produce an output file.'
+          }
+          $lineCount = Get-Content -LiteralPath $lineCountPath -Raw
+          if (
+            [string]::IsNullOrWhiteSpace($lineCount) -or
+            $lineCount -notmatch '(?m)^\s*\|.+\|\s*$' -or
+            $lineCount -notmatch '(?im)\btotal\b'
+          ) {
+            throw 'scripts/count-lines.mjs returned malformed output; expected a nonempty Markdown table with a total row.'
+          }
+          "line_count_path=$lineCountPath" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+
+      - name: Resolve release metadata
+        id: metadata
+        shell: pwsh
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:GH_TOKEN)) {
+            throw 'GH_TOKEN is unavailable; release metadata cannot be resolved.'
+          }
+          $metadataPath = Join-Path $env:RUNNER_TEMP 'release-metadata.json'
+          & node scripts/resolve-release-metadata.mjs *> $metadataPath
+          if ($LASTEXITCODE -ne 0) {
+            throw "scripts/resolve-release-metadata.mjs failed with exit code $LASTEXITCODE."
+          }
+          if (-not (Test-Path -LiteralPath $metadataPath -PathType Leaf)) {
+            throw 'scripts/resolve-release-metadata.mjs did not produce JSON output.'
+          }
+          $metadataRaw = Get-Content -LiteralPath $metadataPath -Raw
+          try {
+            $metadata = $metadataRaw | ConvertFrom-Json -Depth 50
+          } catch {
+            throw 'scripts/resolve-release-metadata.mjs returned malformed JSON.'
+          }
+          if ($null -eq $metadata -or $metadata -is [array]) {
+            throw 'scripts/resolve-release-metadata.mjs must return one JSON object.'
+          }
+          $codeName = [string]$metadata.codeName
+          $photoUrl = [string]$metadata.photoUrl
+          $catalogUrl = [string]$metadata.catalogUrl
+          if ([string]::IsNullOrWhiteSpace($codeName) -or [string]::IsNullOrWhiteSpace($photoUrl)) {
+            throw 'Release metadata must contain nonempty codeName and photoUrl fields.'
+          }
+          if ($codeName -match '[\r\n]' -or $photoUrl -match '[\r\n]' -or $catalogUrl -match '[\r\n]') {
+            throw 'Release metadata fields must be single-line values.'
+          }
+          if ($photoUrl -notmatch '^https://[^\s]+$') {
+            throw 'Release metadata photoUrl must be an HTTPS URL.'
+          }
+          if (-not [string]::IsNullOrWhiteSpace($catalogUrl) -and $catalogUrl -notmatch '^https://[^\s]+$') {
+            throw 'Release metadata catalogUrl must be an HTTPS URL when present.'
+          }
+          @(
+            "metadata_path=$metadataPath"
+            "code_name=$codeName"
+            "photo_url=$photoUrl"
+            "catalog_url=$catalogUrl"
+          ) | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+
+      - name: Resolve next unique release version
+        id: version
+        shell: pwsh
+        run: |
+          $semverPattern = '^(?:v)?(?<major>0|[1-9]\d*)\.(?<minor>0|[1-9]\d*)\.(?<patch>0|[1-9]\d*)$'
+
+          function Parse-Semver([string]$value) {
+            if ([string]::IsNullOrWhiteSpace($value) -or $value -notmatch $semverPattern) {
+              return $null
+            }
+            return [pscustomobject]@{
+              Major = [int64]$Matches.major
+              Minor = [int64]$Matches.minor
+              Patch = [int64]$Matches.patch
+            }
+          }
+
+          function Compare-Semver($left, $right) {
+            foreach ($field in @('Major', 'Minor', 'Patch')) {
+              if ($left.$field -gt $right.$field) { return 1 }
+              if ($left.$field -lt $right.$field) { return -1 }
+            }
+            return 0
+          }
+
+          function Normalize-Tag($version) {
+            return "v$($version.Major).$($version.Minor).$($version.Patch)"
+          }
+
+          $package = Get-Content -LiteralPath (Join-Path $env:GITHUB_WORKSPACE 'design/package.json') -Raw | ConvertFrom-Json -Depth 20
+          $packageVersion = Parse-Semver ([string]$package.version)
+          if ($null -eq $packageVersion) {
+            throw 'design/package.json must contain a stable MAJOR.MINOR.PATCH version.'
+          }
+
+          $inventoryPath = Join-Path $env:RUNNER_TEMP 'release-inventory.json'
+          & gh release list --limit 1000 --json tagName,isDraft *> $inventoryPath
+          if ($LASTEXITCODE -ne 0) {
+            throw "gh release list failed with exit code $LASTEXITCODE."
+          }
+          $inventoryRaw = Get-Content -LiteralPath $inventoryPath -Raw
+          try {
+            $inventory = $inventoryRaw | ConvertFrom-Json -Depth 20
+          } catch {
+            throw 'gh release list returned malformed JSON.'
+          }
+
+          $usedTags = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+          $publishedVersions = @()
+          foreach ($release in @($inventory)) {
+            if ($null -eq $release -or $null -eq $release.tagName -or $null -eq $release.isDraft) {
+              throw 'gh release list returned a release without tagName or isDraft.'
+            }
+            $parsed = Parse-Semver ([string]$release.tagName)
+            if ($null -ne $parsed) {
+              [void]$usedTags.Add((Normalize-Tag $parsed))
+              if (-not [bool]$release.isDraft) {
+                $publishedVersions += $parsed
+              }
+            }
+          }
+
+          $maxPublished = $null
+          foreach ($published in $publishedVersions) {
+            if ($null -eq $maxPublished -or (Compare-Semver $published $maxPublished) -gt 0) {
+              $maxPublished = $published
+            }
+          }
+
+          if ($null -eq $maxPublished) {
+            $candidate = $packageVersion
+          } elseif ((Compare-Semver $packageVersion $maxPublished) -gt 0) {
+            $candidate = $packageVersion
+          } else {
+            $candidate = [pscustomobject]@{
+              Major = $maxPublished.Major
+              Minor = $maxPublished.Minor
+              Patch = $maxPublished.Patch + 1
+            }
+          }
+
+          while ($usedTags.Contains((Normalize-Tag $candidate))) {
+            $candidate = [pscustomobject]@{
+              Major = $candidate.Major
+              Minor = $candidate.Minor
+              Patch = $candidate.Patch + 1
+            }
+          }
+
+          $releaseTag = Normalize-Tag $candidate
+          $releaseVersion = "$($candidate.Major).$($candidate.Minor).$($candidate.Patch)"
+          @(
+            "release_tag=$releaseTag"
+            "release_version=$releaseVersion"
+          ) | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+
+      - name: Build signed Squirrel.Windows x64 installer
+        shell: pwsh
+        env:
+          CSC_LINK: ${{ secrets.CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+          RELEASE_VERSION: ${{ steps.version.outputs.release_version }}
+        run: |
+          $package = Get-Content -LiteralPath (Join-Path $env:GITHUB_WORKSPACE 'design/package.json') -Raw | ConvertFrom-Json -Depth 20
+          if ($package.build.forceCodeSigning -ne $true) {
+            throw 'design/package.json must keep build.forceCodeSigning enabled.'
+          }
+
+          $workspaceRoot = [System.IO.Path]::GetFullPath($env:GITHUB_WORKSPACE).TrimEnd('\') + '\'
+          $releaseRoot = [System.IO.Path]::GetFullPath((Join-Path $env:GITHUB_WORKSPACE 'design/release'))
+          if (-not $releaseRoot.StartsWith($workspaceRoot, [System.StringComparison]::OrdinalIgnoreCase)) {
+            throw 'The electron-builder output path is outside the checked-out workspace.'
+          }
+          if (Test-Path -LiteralPath $releaseRoot) {
+            Remove-Item -LiteralPath $releaseRoot -Recurse -Force
+          }
+
+          npm exec -- electron-builder --win squirrel --x64 --config.forceCodeSigning=true "--config.extraMetadata.version=$env:RELEASE_VERSION"
+          if ($LASTEXITCODE -ne 0) {
+            throw "electron-builder failed with exit code $LASTEXITCODE."
+          }
+          if (-not (Test-Path -LiteralPath $releaseRoot -PathType Container)) {
+            throw 'electron-builder did not produce its release output directory.'
+          }
+
+      - name: Collect and validate installer artifacts
+        id: artifacts
+        shell: pwsh
+        run: |
+          $sourceRoot = Join-Path $env:GITHUB_WORKSPACE 'design/release/squirrel-windows'
+          if (-not (Test-Path -LiteralPath $sourceRoot -PathType Container)) {
+            throw 'Expected design/release/squirrel-windows was not produced.'
+          }
+
+          $assetDir = Join-Path $env:RUNNER_TEMP 'release-assets'
+          if (Test-Path -LiteralPath $assetDir) {
+            Remove-Item -LiteralPath $assetDir -Recurse -Force
+          }
+          New-Item -ItemType Directory -Path $assetDir -Force | Out-Null
+
+          $setupCandidates = @(
+            Get-ChildItem -LiteralPath $sourceRoot -File |
+              Where-Object { $_.Extension -ieq '.exe' -and $_.BaseName -match '(?i)setup' }
+          )
+          if ($setupCandidates.Count -ne 1) {
+            throw 'Expected exactly one Squirrel setup executable in design/release/squirrel-windows.'
+          }
+
+          $setupPath = Join-Path $assetDir 'Setup.exe'
+          Copy-Item -LiteralPath $setupCandidates[0].FullName -Destination $setupPath
+
+          $releaseIndexSource = Join-Path $sourceRoot 'RELEASES'
+          if (-not (Test-Path -LiteralPath $releaseIndexSource -PathType Leaf)) {
+            throw 'Squirrel RELEASES was not produced.'
+          }
+          Copy-Item -LiteralPath $releaseIndexSource -Destination (Join-Path $assetDir 'RELEASES')
+
+          $nupkgSources = @(Get-ChildItem -LiteralPath $sourceRoot -File -Filter '*.nupkg')
+          if ($nupkgSources.Count -eq 0) {
+            throw 'No full or delta .nupkg package was produced.'
+          }
+          foreach ($nupkg in $nupkgSources) {
+            Copy-Item -LiteralPath $nupkg.FullName -Destination (Join-Path $assetDir $nupkg.Name)
+          }
+
+          $assetFiles = @(Get-ChildItem -LiteralPath $assetDir -File | Sort-Object Name)
+          $requiredNames = @('Setup.exe', 'RELEASES')
+          foreach ($requiredName in $requiredNames) {
+            $requiredPath = Join-Path $assetDir $requiredName
+            if (-not (Test-Path -LiteralPath $requiredPath -PathType Leaf)) {
+              throw "Collected artifact $requiredName is missing."
+            }
+          }
+          foreach ($asset in $assetFiles) {
+            if ($asset.Length -le 0) {
+              throw "Collected artifact $($asset.Name) is empty."
+            }
+          }
+
+          $packageNames = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+          foreach ($nupkg in $nupkgSources) { [void]$packageNames.Add($nupkg.Name) }
+          $referencedPackages = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+          foreach ($line in @(Get-Content -LiteralPath (Join-Path $assetDir 'RELEASES'))) {
+            $trimmed = $line.Trim()
+            if ([string]::IsNullOrWhiteSpace($trimmed)) { continue }
+            if ($trimmed -notmatch '^\S+\s+(?<name>.+\.nupkg)\s+\d+$') {
+              throw 'Squirrel RELEASES contains a malformed package reference.'
+            }
+            $packageName = $Matches.name.Trim()
+            if ([System.IO.Path]::GetFileName($packageName) -ne $packageName) {
+              throw 'Squirrel RELEASES contains a package path instead of a package filename.'
+            }
+            if (-not $packageNames.Contains($packageName)) {
+              throw "Squirrel RELEASES references a package that was not collected: $packageName."
+            }
+            [void]$referencedPackages.Add($packageName)
+          }
+          if ($referencedPackages.Count -eq 0) {
+            throw 'Squirrel RELEASES does not reference any package.'
+          }
+          foreach ($packageName in $packageNames) {
+            if (-not $referencedPackages.Contains($packageName)) {
+              throw "Collected package $packageName is not referenced by Squirrel RELEASES."
+            }
+          }
+
+          $signature = Get-AuthenticodeSignature -LiteralPath $setupPath
+          if ($signature.Status -ne 'Valid') {
+            throw 'Setup.exe does not have a valid Authenticode signature.'
+          }
+
+          $manifestPath = Join-Path $env:RUNNER_TEMP 'release-assets.json'
+          [pscustomobject]@{
+            directory = $assetDir
+            names = @($assetFiles.Name)
+          } | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $manifestPath -Encoding utf8
+          @(
+            "asset_dir=$assetDir"
+            "asset_manifest=$manifestPath"
+          ) | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+
+      - name: Create draft release and upload installer artifacts
+        shell: pwsh
+        env:
+          RELEASE_TAG: ${{ steps.version.outputs.release_tag }}
+          CODE_NAME: ${{ steps.metadata.outputs.code_name }}
+          ASSET_MANIFEST: ${{ steps.artifacts.outputs.asset_manifest }}
+        run: |
+          try {
+            $manifest = Get-Content -LiteralPath $env:ASSET_MANIFEST -Raw | ConvertFrom-Json -Depth 10
+          } catch {
+            throw 'The artifact manifest is malformed.'
+          }
+          if ($null -eq $manifest -or [string]::IsNullOrWhiteSpace([string]$manifest.directory)) {
+            throw 'The artifact manifest is missing its directory.'
+          }
+          $assetPaths = @(
+            Get-ChildItem -LiteralPath ([string]$manifest.directory) -File |
+              Sort-Object Name |
+              ForEach-Object { $_.FullName }
+          )
+          if ($assetPaths.Count -eq 0) {
+            throw 'The artifact manifest contains no files to upload.'
+          }
+
+          $initialNotesPath = Join-Path $env:RUNNER_TEMP 'initial-release-notes.md'
+          @"
+          Draft release $env:RELEASE_TAG
+
+          Source commit: $env:GITHUB_SHA
+          "@ | Set-Content -LiteralPath $initialNotesPath -Encoding utf8
+
+          $arguments = @(
+            'release', 'create', $env:RELEASE_TAG,
+            '--target', $env:GITHUB_SHA,
+            '--draft',
+            '--title', "$env:RELEASE_TAG - $env:CODE_NAME",
+            '--notes-file', $initialNotesPath
+          ) + $assetPaths
+          & gh @arguments
+          if ($LASTEXITCODE -ne 0) {
+            throw "gh release create failed with exit code $LASTEXITCODE."
+          }
+
+          $draftInventoryPath = Join-Path $env:RUNNER_TEMP 'draft-release-inventory.json'
+          & gh release list --limit 1000 --json tagName,isDraft *> $draftInventoryPath
+          if ($LASTEXITCODE -ne 0) {
+            throw "gh release list failed with exit code $LASTEXITCODE."
+          }
+          try {
+            $draftInventory = Get-Content -LiteralPath $draftInventoryPath -Raw | ConvertFrom-Json -Depth 20
+          } catch {
+            throw 'The draft release inventory returned malformed JSON.'
+          }
+          $draft = @($draftInventory) | Where-Object { [string]$_.tagName -eq $env:RELEASE_TAG } | Select-Object -First 1
+          if ($null -eq $draft -or -not [bool]$draft.isDraft) {
+            throw 'The created release was not found as a draft in the release inventory.'
+          }
+
+      - name: Publish release and finalize notes
+        shell: pwsh
+        env:
+          RELEASE_TAG: ${{ steps.version.outputs.release_tag }}
+          CODE_NAME: ${{ steps.metadata.outputs.code_name }}
+          PHOTO_URL: ${{ steps.metadata.outputs.photo_url }}
+          CATALOG_URL: ${{ steps.metadata.outputs.catalog_url }}
+          METADATA_PATH: ${{ steps.metadata.outputs.metadata_path }}
+          LINE_COUNT_PATH: ${{ steps.line_count.outputs.line_count_path }}
+          ASSET_MANIFEST: ${{ steps.artifacts.outputs.asset_manifest }}
+        run: |
+          & gh release edit $env:RELEASE_TAG --draft=false
+          if ($LASTEXITCODE -ne 0) {
+            throw "gh release edit failed to publish the release; exit code $LASTEXITCODE."
+          }
+
+          $publishedPath = Join-Path $env:RUNNER_TEMP 'published-release.json'
+          & gh release view $env:RELEASE_TAG --json tagName,targetCommitish,isDraft,publishedAt,assets,url *> $publishedPath
+          if ($LASTEXITCODE -ne 0) {
+            throw "gh release view failed with exit code $LASTEXITCODE."
+          }
+          try {
+            $published = Get-Content -LiteralPath $publishedPath -Raw | ConvertFrom-Json -Depth 30
+          } catch {
+            throw 'The published release returned malformed JSON.'
+          }
+          if ([string]$published.tagName -ne $env:RELEASE_TAG -or [string]$published.targetCommitish -ne $env:GITHUB_SHA -or [bool]$published.isDraft) {
+            throw 'The published release does not match the exact source commit or is still a draft.'
+          }
+          if ([string]::IsNullOrWhiteSpace([string]$published.publishedAt)) {
+            throw 'The published release did not provide publishedAt.'
+          }
+
+          $runPath = Join-Path $env:RUNNER_TEMP 'workflow-run.json'
+          & gh run view $env:GITHUB_RUN_ID --json startedAt *> $runPath
+          if ($LASTEXITCODE -ne 0) {
+            throw "gh run view failed with exit code $LASTEXITCODE."
+          }
+          try {
+            $run = Get-Content -LiteralPath $runPath -Raw | ConvertFrom-Json -Depth 10
+          } catch {
+            throw 'The workflow run metadata returned malformed JSON.'
+          }
+          if ([string]::IsNullOrWhiteSpace([string]$run.startedAt)) {
+            throw 'The workflow run did not provide startedAt.'
+          }
+
+          try {
+            $startedAt = ([DateTimeOffset]::Parse([string]$run.startedAt)).ToUniversalTime()
+            $publishedAt = ([DateTimeOffset]::Parse([string]$published.publishedAt)).ToUniversalTime()
+          } catch {
+            throw 'The workflow start or release publication timestamp is malformed.'
+          }
+          if ($publishedAt -lt $startedAt) {
+            throw 'Release publication occurred before workflow start; refusing to estimate timing.'
+          }
+          $elapsed = $publishedAt - $startedAt
+          $hours = [math]::Floor($elapsed.TotalHours)
+          $duration = '{0:00}:{1:00}:{2:00}' -f [int]$hours, $elapsed.Minutes, $elapsed.Seconds
+          $startedText = $startedAt.ToString("yyyy-MM-dd'T'HH:mm:ss.fff'Z'")
+          $publishedText = $publishedAt.ToString("yyyy-MM-dd'T'HH:mm:ss.fff'Z'")
+
+          try {
+            $metadata = Get-Content -LiteralPath $env:METADATA_PATH -Raw | ConvertFrom-Json -Depth 50
+            $manifest = Get-Content -LiteralPath $env:ASSET_MANIFEST -Raw | ConvertFrom-Json -Depth 10
+          } catch {
+            throw 'Release metadata or artifact manifest became unreadable before note publication.'
+          }
+          $expectedAssets = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+          foreach ($assetName in @($manifest.names)) {
+            if ([string]::IsNullOrWhiteSpace([string]$assetName)) {
+              throw 'The artifact manifest contains an empty artifact name.'
+            }
+            [void]$expectedAssets.Add([string]$assetName)
+          }
+          $publishedAssets = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+          foreach ($asset in @($published.assets)) {
+            if ($null -eq $asset -or [string]::IsNullOrWhiteSpace([string]$asset.name)) {
+              throw 'The published release asset inventory contains a nameless asset.'
+            }
+            [void]$publishedAssets.Add([string]$asset.name)
+          }
+          if ($publishedAssets.Count -ne $expectedAssets.Count) {
+            throw 'The published release asset list does not exactly match the validated installer set.'
+          }
+          foreach ($assetName in $expectedAssets) {
+            if (-not $publishedAssets.Contains($assetName)) {
+              throw "The published release is missing artifact $assetName."
+            }
+          }
+          $lineCount = Get-Content -LiteralPath $env:LINE_COUNT_PATH -Raw
+          $lineCountText = $lineCount.Trim()
+          $metadataJson = ($metadata | ConvertTo-Json -Depth 50).Trim()
+          $artifactList = (@($manifest.names) | Sort-Object | ForEach-Object { "- ``$_``" }) -join "`n"
+          if ([string]::IsNullOrWhiteSpace($artifactList)) {
+            throw 'The artifact manifest contains no artifact names for release notes.'
+          }
+          $jsonFenceStart = '```json'
+          $jsonFenceEnd = '```'
+
+          $catalogLine = if ([string]::IsNullOrWhiteSpace($env:CATALOG_URL)) {
+            '- Catalog metadata source: supplied by `resolve-release-metadata.mjs`.'
+          } else {
+            "- Catalog metadata source: [$env:CATALOG_URL]($env:CATALOG_URL)"
+          }
+          $notesPath = Join-Path $env:RUNNER_TEMP 'published-release-notes.md'
+          @"
+          # $env:RELEASE_TAG — $env:CODE_NAME
+
+          Source commit: ``$env:GITHUB_SHA``
+
+          ## Release code name
+
+          - Code name: **$env:CODE_NAME**
+          - Public photo: [$env:PHOTO_URL]($env:PHOTO_URL)
+          $catalogLine
+
+          <details>
+          <summary>Resolver metadata</summary>
+
+          $jsonFenceStart
+          $metadataJson
+          $jsonFenceEnd
+          </details>
+
+          ## Line count
+
+          $lineCountText
+
+          ## Artifacts
+
+          $artifactList
+
+          ## Workflow timing (UTC)
+
+          - Workflow started: ``$startedText``
+          - Workflow completed: ``$publishedText``
+          - Workflow duration: ``$duration``
+          "@ | Set-Content -LiteralPath $notesPath -Encoding utf8
+
+          & gh release edit $env:RELEASE_TAG --notes-file $notesPath
+          if ($LASTEXITCODE -ne 0) {
+            throw "gh release edit failed to update release notes; exit code $LASTEXITCODE."
+          }
+
+          $finalPath = Join-Path $env:RUNNER_TEMP 'final-release.json'
+          & gh release view $env:RELEASE_TAG --json tagName,targetCommitish,isDraft,publishedAt,assets,body,url *> $finalPath
+          if ($LASTEXITCODE -ne 0) {
+            throw "gh release view failed with exit code $LASTEXITCODE."
+          }
+          try {
+            $final = Get-Content -LiteralPath $finalPath -Raw | ConvertFrom-Json -Depth 30
+          } catch {
+            throw 'The final release verification returned malformed JSON.'
+          }
+          if ([bool]$final.isDraft -or [string]$final.targetCommitish -ne $env:GITHUB_SHA -or [string]::IsNullOrWhiteSpace([string]$final.publishedAt)) {
+            throw 'Final release verification failed for draft state, source commit, or publication timestamp.'
+          }
+          $finalBody = [string]$final.body
+          foreach ($marker in @($env:GITHUB_SHA, $env:CODE_NAME, $duration, 'Workflow started', 'Workflow completed', 'Workflow duration')) {
+            if ($finalBody.IndexOf($marker, [System.StringComparison]::Ordinal) -lt 0) {
+              throw "Final release notes are missing required marker: $marker."
+            }
+          }
