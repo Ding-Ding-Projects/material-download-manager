@@ -1,0 +1,18 @@
+window.MDM_RELEASE_MANIFEST = {
+  schemaVersion: 1,
+  stable: null,
+  testPrereleases: [
+    {
+      version: "0.1.0",
+      channel: "test prerelease",
+      unsigned: true,
+      installerVerified: true,
+      stableEligible: false
+    }
+  ],
+  status: "No stable production installer has been proven. The site must not render an installer button until a stable record with verified assets is added.",
+  publication: {
+    pages: "unverified",
+    reason: "GitHub Pages publication is not configured or verified by this checkout."
+  }
+};
