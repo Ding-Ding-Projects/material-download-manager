@@ -13,6 +13,7 @@ import type {
   HistoryFilter,
   HistoryView,
 } from "@shared/types";
+import type { ChangelogView, ChangelogViewRequest } from "../electron/history/ChangelogStore";
 
 export interface MaterialDownloadManagerAPI {
   getState(): Promise<StateSnapshot>;
@@ -37,6 +38,8 @@ export interface MaterialDownloadManagerAPI {
   setSettings(settings: Partial<AppSettings>): Promise<AppSettings>;
   getHistoryView(filter?: HistoryFilter): Promise<HistoryView>;
   exportHistory(format: ExportFormat, filter?: HistoryFilter): Promise<ExportResult>;
+  getChangelogView(request?: ChangelogViewRequest): Promise<ChangelogView>;
+  exportChangelog(format: ExportFormat, request?: ChangelogViewRequest): Promise<ExportResult>;
   createQueue(queue: Partial<DownloadQueue>): Promise<DownloadQueue>;
   updateQueue(queue: DownloadQueue): Promise<void>;
   deleteQueue(id: string): Promise<void>;

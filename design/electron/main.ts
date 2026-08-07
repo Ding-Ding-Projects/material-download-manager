@@ -9,6 +9,12 @@ import { notifyDownloadComplete as showCompletionNotification, type CompletionNo
 import { extractBrowserHandoffRequests } from "./download/browserHandoff";
 import { assertQueueCreatePayload, DownloadManager } from "./download/DownloadManager";
 import { HandoffServer } from "./extension/HandoffServer";
+import {
+  CHANGELOG_REPOSITORY_URL,
+  ChangelogStore,
+  createChangelogIpcHandlers,
+  DEFAULT_CHANGELOG_ENTRIES,
+} from "./history/ChangelogStore";
 import { isDevelopmentLaunch, resolveRendererPath } from "./runtimePaths";
 import {
   normalizeReleaseNotesUrl,
@@ -34,6 +40,9 @@ let manager: DownloadManager;
 let updater: UpdateService | null = null;
 let handoffServer: HandoffServer | null = null;
 let rendererWorkState: { hasUnsavedWork: boolean; reason: string; receivedAt: number } | null = null;
+const changelogHandlers = createChangelogIpcHandlers(
+  new ChangelogStore(DEFAULT_CHANGELOG_ENTRIES, CHANGELOG_REPOSITORY_URL)
+);
 
 const appIconPath = path.join(__dirname, "../../build/icon.ico");
 
@@ -318,6 +327,15 @@ function registerIpcHandlers() {
     if (!isExportFormat(format)) throw new Error("Invalid history export format");
     const normalized = normalizeHistoryFilter(filter);
     return manager.exportHistory(format, normalized);
+  });
+
+  ipcMain.handle(IPC.CHANGELOG_GET_VIEW, (event, request: unknown) => {
+    assertTrustedSender(event);
+    return changelogHandlers.getView(request);
+  });
+  ipcMain.handle(IPC.CHANGELOG_EXPORT_VIEW, (event, format: unknown, request: unknown) => {
+    assertTrustedSender(event);
+    return changelogHandlers.exportView(request, format);
   });
 
   ipcMain.handle(IPC.QUEUE_CREATE, (event, queue: unknown) => {

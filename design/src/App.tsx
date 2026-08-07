@@ -25,6 +25,7 @@ import UpdaterBanner from "./components/UpdaterBanner";
 import TabStrip from "./components/TabStrip";
 import DimSumSurprise from "./components/DimSumSurprise";
 import HistoryPanel from "./components/HistoryPanel";
+import ChangelogPanel from "./components/ChangelogPanel";
 import { setActiveTab } from "@shared/tabModel";
 
 const DESTRUCTIVE_REQUEST_EVENT = "mdm:request-destructive-action";
@@ -134,6 +135,14 @@ export default function App() {
         keywords: ["history", "revisions", "versions", "export", "undo"],
         section: "Destinations",
         onSelect: () => selectAppTab("history"),
+      },
+      {
+        id: "destination.changelog",
+        label: copy.text("Changelog", "更新日誌"),
+        description: copy.text("Browse embedded stable release notes and source commits", "瀏覽嵌入嘅穩定版本說明同來源 commit"),
+        keywords: ["changelog", "release", "version", "commit", "notes"],
+        section: "Destinations",
+        onSelect: () => selectAppTab("changelog"),
       },
       ...(items.length > 0
         ? [{
@@ -326,6 +335,7 @@ export default function App() {
       openSettings();
     }
     if (tabId === "history") return;
+    if (tabId === "changelog") return;
   }
 
   function selectAppTab(tabId: string) {
@@ -344,6 +354,8 @@ export default function App() {
         <main className="main-pane" id={`tabpanel-${tabState.activeTabId ?? "downloads"}`} role="tabpanel" aria-labelledby={`app-tab-${tabState.activeTabId ?? "downloads"}`}>
           {tabState.activeTabId === "history" ? (
             <HistoryPanel />
+          ) : tabState.activeTabId === "changelog" ? (
+            <ChangelogPanel />
           ) : (
             <>
               <Toolbar />
