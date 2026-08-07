@@ -85,6 +85,19 @@ published from exact `0050941cd34005b29ab4f31368101c3a9c5de4a6` with
 and Pages runs are recorded below. The release feed remains dynamic for later
 documentation-only refreshes.
 
+The current handoff branch has its own verified branch-only stable release
+[`v0.1.34`](https://github.com/Ding-Ding-Projects/material-download-manager/releases/tag/v0.1.34)
+from exact `2602fdb4650194a53459f8903ee2856218ca9df0`. It is real,
+`isDraft=false`, `isPrerelease=false`, and carries `Setup.exe`, `RELEASES`, and
+the full `material-download-manager-0.1.34-full.nupkg`. The release workflow
+timing is `00:04:06` from `2026-08-07T18:27:13.000Z` through
+`2026-08-07T18:31:19.000Z`; the Windows verification run is
+[31187649492](https://github.com/Ding-Ding-Projects/material-download-manager/actions/runs/31187649492)
+and the release run is
+[31187647061](https://github.com/Ding-Ding-Projects/material-download-manager/actions/runs/31187647061).
+This branch-only record is not default-branch or Pages proof; the next agent
+must integrate it before the release becomes the project's default state.
+
 The v0.1.28 record above supersedes the older v0.1.26 release evidence for
 current default-branch status.
 The README and stable feed use the repository's dynamic latest-release link so
@@ -213,7 +226,7 @@ confirmed the runner's fresh checkout converted tracked generated text to CRLF
 while the generator emitted LF; the raw-byte guard therefore failed even after
 the locale-dependent ordering was removed. The corrective commit normalizes
 line endings before comparison and retains code-point ordering. The branch
-must be dewed again and its replacement release/Windows runs checked before any
+must be pushed again and its replacement release/Windows runs checked before any
 default-branch integration.
 
 ## Runnable application
@@ -289,6 +302,7 @@ On the current verification tree, the following checks passed locally:
 | Chromium extension `npm test` | 12/12 passed for MV3 permissions and entrypoints, page/link/selected-text context-menu handoff, bounded link-target precedence, loopback protocol, bounded validation, settings import/export, regex safety, localization, and no remote assets/tracking. |
 | `npm run test:docs` and bundle guard | 2/2 bundle tests passed; all 30 categorized Markdown files are present in the generated renderer catalog. |
 | GitHub Pages source `npm run check` | 42/42 checks passed, including the new in-app documentation article, feature-article coverage, local-only assets, stable-manifest fail-closed behavior, publication-state rendering, prototype sanitization, and the browser-extension/progress-window articles. |
+| Branch remote stable release | `31187647061` and Windows verification `31187649492` are green for exact `2602fdb`; stable `v0.1.34` is non-draft/non-prerelease with `Setup.exe`, `RELEASES`, full `material-download-manager-0.1.34-full.nupkg`, timing `00:04:06`, and the `Steamed Bitter Melon Stuffed with Fish · 鯪魚釀苦瓜` code name. This is branch-only evidence until integration. |
 | Hidden-desktop progress capture | Passed through the cheap Lowlevel headless route: a real loopback handoff created a live download, and a dynamically resolved second `Chrome_WidgetWin_1` window rendered the separate 980×640 `Download progress` surface with the fixture filename, source URL, transferred bytes, speed, pause, cancel, and close controls. The capture was retained in the session scratchpad, outside the repository. The disposable desktop, Electron process, and fixture server were cleaned up. |
 | Remote GitHub Actions | Default-branch stable release [31182280753](https://github.com/Ding-Ding-Projects/material-download-manager/actions/runs/31182280753), Windows verification [31182280767](https://github.com/Ding-Ding-Projects/material-download-manager/actions/runs/31182280767), and Pages run [31182280754](https://github.com/Ding-Ding-Projects/material-download-manager/actions/runs/31182280754) are green for `613869c`; branch stable release [31181815994](https://github.com/Ding-Ding-Projects/material-download-manager/actions/runs/31181815994) and Windows verification [31181815918](https://github.com/Ding-Ding-Projects/material-download-manager/actions/runs/31181815918) are also green. |
 
