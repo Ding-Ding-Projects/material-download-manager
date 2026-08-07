@@ -4,6 +4,7 @@ import test from "node:test";
 import { createDefaultSettings } from "../../shared/settings";
 import {
   HandoffServer,
+  HANDOFF_QUEUE_RESPONSE_TIMEOUT_MS,
   HANDOFF_PATH,
   HANDOFF_PROTOCOL_VERSION,
   STATUS_PATH,
@@ -97,6 +98,34 @@ test("loopback handoff reports queue failures instead of claiming acceptance", a
     });
     assert.equal(messages.length, 1);
     assert.match(messages[0], /probe failed/);
+  } finally {
+    await server.stop();
+  }
+});
+
+test("loopback handoff acknowledges a slow queue without making the extension retry blindly", async () => {
+  const port = 43_875;
+  let completed = false;
+  const manager = {
+    getSettings: () => createDefaultSettings("C:/Downloads/MaterialDownloadManager"),
+    addDownload: async () => {
+      await new Promise((resolve) => setTimeout(resolve, HANDOFF_QUEUE_RESPONSE_TIMEOUT_MS + 100));
+      completed = true;
+      return "slow-download-id";
+    },
+  };
+  const server = new HandoffServer({ manager, port });
+  assert.equal(await server.start(), true);
+  try {
+    const acknowledged = await requestJson(port, "POST", HANDOFF_PATH, {
+      protocol: HANDOFF_PROTOCOL_VERSION,
+      source: "material-download-manager-extension",
+      url: "https://downloads.example.test/slow.zip",
+    });
+    assert.equal(acknowledged.statusCode, 202);
+    assert.deepEqual(acknowledged.body, { protocol: HANDOFF_PROTOCOL_VERSION, accepted: true, pending: true });
+    await new Promise((resolve) => setTimeout(resolve, 150));
+    assert.equal(completed, true);
   } finally {
     await server.stop();
   }

@@ -113,6 +113,8 @@ export default function ProgressWindow() {
             <span>{item?.eta !== null && item?.eta !== undefined ? formatEta(item.eta) : "—"}</span>
           </div>
 
+          {item?.error && <p className="progress-error" role="alert">{copy.downloadError(name, item.error)}</p>}
+
           {!ready && <p className="progress-note">{copy.text("Connecting to the download engine…", "連接緊下載引擎…")}</p>}
           {ready && !item && <p className="progress-note">{copy.text("This download is no longer available in the manager.", "呢個下載已經唔喺管理器入面。")}</p>}
 

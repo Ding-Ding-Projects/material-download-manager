@@ -27,9 +27,10 @@ function applyLanguage() {
 
 function resultMessage(value) {
   if (!value?.code) return localize("statusReady", settings);
-  const known = ["handoffSuccess", "handoffDisabled", "handoffFailed", "connectionSuccess", "connectionDisabled", "connectionFailed", "settingsSaved", "settingsImported", "settingsExported"];
+  const known = ["handoffSuccess", "handoffPending", "handoffDisabled", "handoffFailed", "connectionSuccess", "connectionDisabled", "connectionFailed", "settingsSaved", "settingsImported", "settingsExported"];
   const key = {
     "handoff-success": "handoffSuccess",
+    "handoff-pending": "handoffPending",
     "handoff-disabled": "handoffDisabled",
     "handoff-failed": "handoffFailed",
     "connection-success": "connectionSuccess",

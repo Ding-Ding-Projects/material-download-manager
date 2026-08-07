@@ -54,7 +54,10 @@ if ($stableCandidates.Count -gt 0) {
   if ($null -eq $setup -or $null -eq $releaseIndex -or $null -eq $fullPackage) {
     Stop-WithMessage 'The latest stable release is missing Setup.exe, RELEASES, or a full .nupkg.'
   }
-  $installerUrl = [string]$setup.downloadUrl
+  # `gh release view --json assets` exposes the browser download URL as `url`.
+  # `downloadUrl` is not a GitHub CLI field, so using it would silently remove
+  # the stable installer button from the deployed site.
+  $installerUrl = [string]$setup.url
   if ($installerUrl -notmatch '^https://') {
     Stop-WithMessage 'The verified Setup.exe asset did not provide an HTTPS download URL.'
   }

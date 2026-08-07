@@ -21,6 +21,7 @@
 .progress-fill { display: block; height: 100%; min-width: 2px; border-radius: inherit; background: var(--accent-gradient); transition: width 180ms ease-out; }
 .progress-metrics { flex-wrap: wrap; gap: 10px 18px; margin-top: 14px; color: var(--text-secondary); font-size: 13px; }
 .progress-metrics strong { color: var(--text-primary); font-size: 18px; }
+.progress-error { margin: 18px 0 0; color: var(--status-error); overflow-wrap: anywhere; }
 .progress-note { margin: 24px 0 0; color: var(--text-secondary); }
 .progress-actions { flex-wrap: wrap; gap: 10px; margin-top: 32px; }
 .progress-action-btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 40px; padding: 0 16px; border: 1px solid var(--border-color-strong); border-radius: var(--radius); background: var(--bg-input); color: var(--text-primary); cursor: pointer; }

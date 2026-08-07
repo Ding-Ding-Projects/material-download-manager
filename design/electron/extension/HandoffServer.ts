@@ -12,6 +12,7 @@ export const MAX_HANDOFF_BODY_BYTES = 16 * 1024;
 export const MAX_URL_LENGTH = 8_192;
 export const MAX_TITLE_LENGTH = 512;
 export const MAX_SELECTION_LENGTH = 2_048;
+export const HANDOFF_QUEUE_RESPONSE_TIMEOUT_MS = 1_000;
 
 export interface HandoffManager {
   getSettings(): AppSettings;
@@ -214,8 +215,36 @@ export class HandoffServer {
         startImmediately: true,
       };
       try {
-        const downloadId = await this.options.manager.addDownload(requestToAdd);
-        writeJson(response, 202, { protocol: HANDOFF_PROTOCOL_VERSION, accepted: true, downloadId });
+        const queuePromise = Promise.resolve().then(() => this.options.manager.addDownload(requestToAdd));
+        let timer: ReturnType<typeof setTimeout> | undefined;
+        const pending = new Promise<{ kind: "pending" }>((resolve) => {
+          timer = setTimeout(() => resolve({ kind: "pending" }), HANDOFF_QUEUE_RESPONSE_TIMEOUT_MS);
+        });
+        const result = await Promise.race([
+          queuePromise.then(
+            (downloadId) => ({ kind: "accepted" as const, downloadId }),
+            (error) => ({ kind: "failed" as const, error }),
+          ),
+          pending,
+        ]);
+        if (timer) clearTimeout(timer);
+        if (result.kind === "pending") {
+          void queuePromise.catch((error) => {
+            this.options.logger?.(`Extension handoff could not be queued after acknowledgement: ${error instanceof Error ? error.message : "unknown failure"}`);
+          });
+          writeJson(response, 202, { protocol: HANDOFF_PROTOCOL_VERSION, accepted: true, pending: true });
+          return;
+        }
+        if (result.kind === "failed") {
+          this.options.logger?.(`Extension handoff could not be queued: ${result.error instanceof Error ? result.error.message : "unknown failure"}`);
+          writeJson(response, 500, {
+            protocol: HANDOFF_PROTOCOL_VERSION,
+            accepted: false,
+            error: "The download could not be queued.",
+          });
+          return;
+        }
+        writeJson(response, 202, { protocol: HANDOFF_PROTOCOL_VERSION, accepted: true, downloadId: result.downloadId });
       } catch (error) {
         this.options.logger?.(`Extension handoff could not be queued: ${error instanceof Error ? error.message : "unknown failure"}`);
         writeJson(response, 500, {

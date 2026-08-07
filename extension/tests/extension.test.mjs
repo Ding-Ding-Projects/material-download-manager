@@ -97,6 +97,7 @@ test("service worker runtime boundary stores settings and reports disabled hando
   globalThis.chrome = chromeMock;
   let receivedBody = null;
   let managerAccepted = true;
+  let managerPending = false;
   const server = createServer((request, response) => {
     if (request.method === "OPTIONS") {
       response.writeHead(204, {
@@ -118,7 +119,7 @@ test("service worker runtime boundary stores settings and reports disabled hando
       request.on("end", () => {
         receivedBody = JSON.parse(Buffer.concat(chunks).toString("utf8"));
         response.writeHead(202, { "Content-Type": "application/json" });
-        response.end(JSON.stringify({ protocol: 1, accepted: managerAccepted, downloadId: "extension-test-id" }));
+        response.end(JSON.stringify({ protocol: 1, accepted: managerAccepted, pending: managerPending, downloadId: "extension-test-id" }));
       });
       return;
     }
@@ -161,6 +162,11 @@ test("service worker runtime boundary stores settings and reports disabled hando
     assert.equal(receivedBody.source, "material-download-manager-extension");
     assert.equal(receivedBody.url, "https://example.test/file.zip");
     assert.equal(receivedBody.title, "Example");
+    managerPending = true;
+    const pending = await send({ type: "HANDOFF_URL", url: "https://example.test/slow-file.zip" });
+    assert.equal(pending.result.code, "handoff-pending");
+    assert.equal(pending.result.ok, true);
+    managerPending = false;
     managerAccepted = false;
     const unconfirmed = await send({ type: "HANDOFF_URL", url: "https://example.test/file.zip" });
     assert.equal(unconfirmed.result.code, "handoff-failed");

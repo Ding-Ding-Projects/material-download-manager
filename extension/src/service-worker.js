@@ -11,7 +11,7 @@ import { localize } from "./shared/localization.js";
 const MENU_ID = "send-to-material-download-manager";
 const REQUEST_TIMEOUT_MS = 1_500;
 const MAX_STATUS_BODY = 4_096;
-const SUCCESS_CODES = new Set(["handoff-success", "connection-success", "settings-saved", "settings-imported"]);
+const SUCCESS_CODES = new Set(["handoff-success", "handoff-pending", "connection-success", "settings-saved", "settings-imported"]);
 let contextMenuRefresh = Promise.resolve();
 
 function result(code, detail = null) {
@@ -130,6 +130,7 @@ async function handoffUrl(message, settings) {
     if (responseBody?.protocol !== HANDOFF_PROTOCOL_VERSION || responseBody?.accepted !== true) {
       return result("handoff-failed", "The manager did not confirm that the URL was queued.");
     }
+    if (responseBody.pending === true) return result("handoff-pending");
     return result("handoff-success");
   } catch (error) {
     return result("handoff-failed", error instanceof Error && error.name === "AbortError" ? "Timed out after 1500 ms." : "The loopback endpoint could not be reached.");

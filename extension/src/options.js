@@ -97,6 +97,7 @@ function showToast(text) {
 function resultMessage(value) {
   const key = {
     "handoff-success": "handoffSuccess",
+    "handoff-pending": "handoffPending",
     "handoff-disabled": "handoffDisabled",
     "handoff-failed": "handoffFailed",
     "connection-success": "connectionSuccess",
