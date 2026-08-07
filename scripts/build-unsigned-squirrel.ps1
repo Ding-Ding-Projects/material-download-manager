@@ -38,6 +38,11 @@ try {
 if ($null -eq $package.build -or $null -eq $package.build.forceCodeSigning) {
   Stop-WithMessage 'design/package.json must declare build.forceCodeSigning so the unsigned override is explicit.'
 }
+foreach ($control in @('forceCodeSigning', 'signExecutable', 'signAndEditExecutable')) {
+  if ($package.build.$control -ne $false) {
+    Stop-WithMessage "design/package.json must set build.$control to false because code signing is prohibited."
+  }
+}
 
 if (-not (Test-Path -LiteralPath $releaseRoot -PathType Container)) {
   New-Item -ItemType Directory -Path $releaseRoot -Force | Out-Null
@@ -66,6 +71,8 @@ foreach ($name in $signingEnvironmentNames) {
 $exitCode = 1
 try {
   $package.build.forceCodeSigning = $false
+  $package.build.signExecutable = $false
+  $package.build.signAndEditExecutable = $false
   $temporaryJson = $package | ConvertTo-Json -Depth 40
   [System.IO.File]::WriteAllText(
     $packagePath,

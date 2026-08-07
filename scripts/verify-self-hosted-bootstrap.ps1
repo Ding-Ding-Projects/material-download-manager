@@ -57,8 +57,8 @@ if ($labels.Count -ne 4 -or $labels[0] -ne 'self-hosted' -or $labels[1] -ne 'win
 }
 
 $workflowEntries = @($inventory.workflows.PSObject.Properties)
-if ($workflowEntries.Count -lt 2) {
-  Stop-WithMessage 'The dependency inventory must cover both verification and stable-release workflows.'
+if ($workflowEntries.Count -lt 3) {
+  Stop-WithMessage 'The dependency inventory must cover verification, stable-release, and Pages workflows.'
 }
 
 $workflowTexts = @{}

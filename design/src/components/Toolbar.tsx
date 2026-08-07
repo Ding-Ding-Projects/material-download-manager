@@ -10,6 +10,7 @@ import {
   SettingsIcon,
   StopIcon,
   GridIcon,
+  ProgressIcon,
 } from "./icons";
 import RegexBuilder from "./RegexBuilder";
 import { getSearchValidationError } from "../hooks/useFilteredItems";
@@ -41,6 +42,7 @@ export default function Toolbar() {
   const activeQueueId = filter.kind === "queue" ? filter.queueId : DEFAULT_QUEUE_ID;
   const activeQueue = queues.find((q) => q.id === activeQueueId);
   const activeQueueName = activeQueue?.name ?? "Default Queue";
+  const progressItem = items.find((item) => ["downloading", "queued", "paused", "added"].includes(item.status)) ?? items[0] ?? null;
   const regexState: RegexBuilderState = {
     mode: searchMode,
     pattern: searchText,
@@ -175,6 +177,16 @@ export default function Toolbar() {
 
         <div className="toolbar-divider" />
 
+        <button
+          type="button"
+          className="toolbar-btn"
+          onClick={() => progressItem && void window.api.openProgressWindow(progressItem.id)}
+          disabled={!progressItem}
+          title={progressItem ? "Open the separate download progress window" : "Add a download before opening progress"}
+        >
+          <ProgressIcon size={18} />
+          <span>Progress Window</span>
+        </button>
         <button type="button" className="toolbar-btn" onClick={() => openQueues()}>
           <GridIcon size={18} />
           <span>Open Queues</span>

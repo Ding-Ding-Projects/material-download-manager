@@ -96,6 +96,7 @@ test("service worker runtime boundary stores settings and reports disabled hando
   const previousChrome = globalThis.chrome;
   globalThis.chrome = chromeMock;
   let receivedBody = null;
+  let managerAccepted = true;
   const server = createServer((request, response) => {
     if (request.method === "OPTIONS") {
       response.writeHead(204, {
@@ -116,8 +117,8 @@ test("service worker runtime boundary stores settings and reports disabled hando
       request.on("data", (chunk) => chunks.push(chunk));
       request.on("end", () => {
         receivedBody = JSON.parse(Buffer.concat(chunks).toString("utf8"));
-        response.writeHead(202);
-        response.end();
+        response.writeHead(202, { "Content-Type": "application/json" });
+        response.end(JSON.stringify({ protocol: 1, accepted: managerAccepted, downloadId: "extension-test-id" }));
       });
       return;
     }
@@ -160,6 +161,9 @@ test("service worker runtime boundary stores settings and reports disabled hando
     assert.equal(receivedBody.source, "material-download-manager-extension");
     assert.equal(receivedBody.url, "https://example.test/file.zip");
     assert.equal(receivedBody.title, "Example");
+    managerAccepted = false;
+    const unconfirmed = await send({ type: "HANDOFF_URL", url: "https://example.test/file.zip" });
+    assert.equal(unconfirmed.result.code, "handoff-failed");
   } finally {
     await new Promise((resolve) => server.close(resolve));
     if (previousChrome === undefined) delete globalThis.chrome;

@@ -1,0 +1,7 @@
+self-hosted-runner:
+  labels:
+    - material-download-manager-windows-x64
+
+config-variables: null
+
+paths: {}

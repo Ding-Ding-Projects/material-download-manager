@@ -1,0 +1,84 @@
+name: GitHub Pages
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Deployment is a side effect. Do not cancel a deployment halfway through.
+concurrency:
+  group: github-pages-${{ github.ref }}
+
+jobs:
+  deploy:
+    name: Build and deploy the local documentation site
+    runs-on: [self-hosted, windows, x64, material-download-manager-windows-x64]
+    timeout-minutes: 20
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.x
+
+      - name: Validate self-hosted bootstrap prerequisites
+        shell: pwsh
+        run: pwsh -NoProfile -File scripts/verify-self-hosted-bootstrap.ps1 -Phase preinstall
+
+      - name: Validate site source
+        shell: pwsh
+        run: node site/check.mjs
+
+      - name: Build site to an isolated staging directory
+        shell: pwsh
+        run: node site/build.mjs "$env:RUNNER_TEMP\material-download-manager-pages"
+
+      - name: Inject verified stable release metadata into the staging site
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_TOKEN || secrets.ORG_TOKEN || secrets.GITHUB_TOKEN }}
+        run: |
+          $parts = $env:GITHUB_REPOSITORY.Split('/', 2)
+          $pagesUrl = "https://$($parts[0].ToLowerInvariant()).github.io/$($parts[1].ToLowerInvariant())/"
+          pwsh -NoProfile -File scripts/prepare-pages-release-manifest.ps1 `
+            -OutputDirectory "$env:RUNNER_TEMP\material-download-manager-pages" `
+            -PagesUrl $pagesUrl
+
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: ${{ runner.temp }}/material-download-manager-pages
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
+
+      - name: Verify the published Pages response
+        shell: pwsh
+        env:
+          DEPLOYED_PAGE_URL: ${{ steps.deployment.outputs.page_url }}
+        run: |
+          $uri = [string]$env:DEPLOYED_PAGE_URL
+          if ([string]::IsNullOrWhiteSpace($uri)) {
+            $parts = $env:GITHUB_REPOSITORY.Split('/', 2)
+            $uri = "https://$($parts[0].ToLowerInvariant()).github.io/$($parts[1].ToLowerInvariant())/"
+          }
+          $response = Invoke-WebRequest -UseBasicParsing -Uri $uri -TimeoutSec 30
+          if ($response.StatusCode -ne 200 -or [string]$response.Content -notmatch 'Material Download Manager') {
+            throw "Published Pages response was not the expected site: $uri"
+          }
+          Write-Output "Verified published Pages response: $uri"

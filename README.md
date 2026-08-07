@@ -12,6 +12,8 @@ AB Download Manager codebase.
 - Shared project guidance mirror: [`AGENTS.md`](AGENTS.md)
 - CI workflow: [Windows verification](.github/workflows/ci.yml)
 - Release workflow: [stable Windows release](.github/workflows/release.yml)
+- GitHub Pages source: [`site/`](site/)
+- Chromium extension: [`extension/`](extension/)
 - Search feature docs: [`docs/features/search/`](docs/features/search/)
 - Navigation feature docs: [`docs/features/navigation/`](docs/features/navigation/)
 - Website: not published
@@ -22,6 +24,8 @@ AB Download Manager codebase.
 - Safety feature docs: docs/features/safety/
 - Settings feature docs: docs/features/settings/
 - Download engine docs: docs/features/download-engine/
+- Browser handoff docs: [`docs/features/integrations/browser-extension.md`](docs/features/integrations/browser-extension.md)
+- Progress-window docs: [`docs/features/download-engine/progress-window.md`](docs/features/download-engine/progress-window.md)
 
 <details>
 <summary>Build and test</summary>
@@ -88,10 +92,11 @@ network-backed application or silently replace it.
 The handoff reconciles the two previously conflicting trees without discarding
 either one. The Electron app now has a real add/probe/segmented-download,
 pause/resume, persistence, queue, schedule-clock, header, timeout, settings,
-notification, accessibility, safety, search, navigation, export, and local
-history foundation. The remaining release and product gaps are explicit in
-[`HANDOFF.md`](HANDOFF.md); the prototype is never presented as the download
-path.
+notification, accessibility, safety, search, navigation, export, local
+history, loopback browser handoff, and a separate progress window. The
+Chromium extension sends validated page or link URLs through the loopback
+protocol; the prototype is never presented as the download path. Remaining
+release and product gaps are explicit in [`HANDOFF.md`](HANDOFF.md).
 
 </details>
 

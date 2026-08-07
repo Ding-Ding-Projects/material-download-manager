@@ -26,6 +26,10 @@ paths, credentials, hosts, and private conversational vocabulary.
   template runtime are not the production download path.
 - Changes to the application must be tested at the real process boundary when
   they affect IPC, the preload bridge, plugins, or external integrations.
+- The browser handoff integration is loopback-only and bounded: validate the
+  protocol, URL, metadata size, content type, and queue result before claiming
+  acceptance. The progress view is a separate frameless Electron window and
+  must be verified as a real second window, not only as a renderer route.
 - Keep accessibility, keyboard reachability, visible focus, correct roles and
   names, contrast, reduced motion, and narrow-window layout in scope.
 - User-facing UI should use Material Design 3 tokens and components, with
@@ -44,6 +48,9 @@ paths, credentials, hosts, and private conversational vocabulary.
   smoke test. Report skipped or unavailable checks precisely.
 - Never count lines ad hoc when a committed counter exists; keep release
   metadata reproducible from the tagged commit.
+- Keep the local Pages source and Chromium extension documentation current with
+  the application behavior. A stable installer button or live Pages URL may be
+  published only after the immutable release and deployment evidence exists.
 
 ## Git handoff completion
 
@@ -57,6 +64,10 @@ paths, credentials, hosts, and private conversational vocabulary.
   safely integrated and report why.
 - If remote authentication, permissions, branch protection, or CI blocks a
   required step, report the exact blocker and do not claim completion.
+- CI and release jobs use the repository's explicitly labelled self-hosted
+  runner contract. The Windows release path is Squirrel.Windows and
+  intentionally unsigned; it must publish a real non-draft, non-prerelease
+  release only after tests, artifact validation, timing, and remote asset proof.
 
 ## Product honesty
 

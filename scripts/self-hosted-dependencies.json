@@ -57,6 +57,18 @@
           "version": "design/package-lock.json lockfileVersion 3",
           "source": "npm registry through npm ci",
           "bootstrap": "npm ci from design/ on every job; the lockfile is the only dependency authority."
+        },
+        {
+          "name": "Real Electron UI smoke harness",
+          "version": "Node.js built-ins plus the built Electron application",
+          "source": "Repository design/ui-tests/smoke.mjs",
+          "bootstrap": "npm run test:ui launches only the freshly built application and fails when the renderer, preload bridge, or separate window is missing."
+        },
+        {
+          "name": "Chromium extension contract tests",
+          "version": "Node.js built-ins; extension has no runtime dependencies",
+          "source": "Repository extension/tests/extension.test.mjs",
+          "bootstrap": "npm test from extension/ runs after checkout without a browser or external service."
         }
       ]
     },
@@ -117,6 +129,66 @@
           "version": "electron-builder target declared by design/package.json",
           "source": "electron-builder package",
           "bootstrap": "Resolved by npm ci; the artifact check requires Setup.exe, RELEASES, and every referenced full or delta .nupkg."
+        },
+        {
+          "name": "Real Electron UI smoke harness",
+          "version": "Node.js built-ins plus the built Electron application",
+          "source": "Repository design/ui-tests/smoke.mjs",
+          "bootstrap": "npm run test:ui launches only the freshly built application and fails when the renderer, preload bridge, or separate window is missing."
+        },
+        {
+          "name": "Chromium extension contract tests",
+          "version": "Node.js built-ins; extension has no runtime dependencies",
+          "source": "Repository extension/tests/extension.test.mjs",
+          "bootstrap": "npm test from extension/ runs after checkout without a browser or external service."
+        }
+      ]
+    },
+    "pages": {
+      "file": ".github/workflows/pages.yml",
+      "jobs": ["deploy"],
+      "dependencies": [
+        {
+          "name": "GitHub Actions runner",
+          "version": "Current runner compatible with Windows x64",
+          "source": "GitHub Actions runner registration",
+          "bootstrap": "Registered by the runner owner before workflow dispatch; the job verifies RUNNER_OS and RUNNER_ARCH."
+        },
+        {
+          "name": "Git",
+          "version": "2.x or newer",
+          "source": "git-scm.com",
+          "bootstrap": "Runner base dependency; preflight verifies git is available."
+        },
+        {
+          "name": "PowerShell",
+          "version": "7.x",
+          "source": "Microsoft PowerShell",
+          "bootstrap": "Runner base dependency; preflight verifies pwsh is available."
+        },
+        {
+          "name": "Node.js",
+          "version": "22.x",
+          "source": "actions/setup-node@v4",
+          "bootstrap": "Installed or selected by the workflow before the site check."
+        },
+        {
+          "name": "GitHub Pages actions",
+          "version": "configure-pages@v5, upload-pages-artifact@v3, deploy-pages@v4",
+          "source": "GitHub Actions",
+          "bootstrap": "Resolved by GitHub Actions on the contracted runner; no third-party site runtime dependency is installed."
+        },
+        {
+          "name": "Material Download Manager site",
+          "version": "site/package.json with no runtime dependencies",
+          "source": "Repository source",
+          "bootstrap": "node site/check.mjs and node site/build.mjs validate and stage only the repository's local assets; scripts/prepare-pages-release-manifest.ps1 uses the GitHub CLI to inject only an immutable stable release record after the source build."
+        },
+        {
+          "name": "Pages release manifest helper",
+          "version": "PowerShell 7 and GitHub CLI JSON output",
+          "source": "Repository scripts/prepare-pages-release-manifest.ps1",
+          "bootstrap": "The workflow supplies GH_TOKEN through the GitHub Actions secret fallback and writes the generated manifest only inside runner-temporary Pages staging output."
         }
       ]
     }
@@ -132,6 +204,6 @@
   "policy": {
     "codeSigning": "Prohibited. The workflow clears inherited signing inputs, disables forceCodeSigning only in a temporary build copy, and verifies Setup.exe is NotSigned.",
     "releaseChannel": "Stable release only: draft=false and isPrerelease=false after tests and artifact checks pass.",
-    "pages": "No Pages workflow is present until a matching self-hosted runner is available and the deployment path is proven loop-free."
+    "pages": "The Pages workflow is present and self-hosted; it remains unverified until a matching runner deploys the site and the live URL is checked."
   }
 }

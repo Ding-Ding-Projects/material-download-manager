@@ -84,6 +84,12 @@ The application under `design/` includes:
   accessibility semantics.
 - Tested foundations for the bounded regex builder, tab model and command
   palette, coding-format exports, and isolated local Git history.
+- A separate frameless download-progress window that follows a selected item,
+  exposes pause/resume/cancel/close controls, and is opened through the real
+  Electron IPC boundary.
+- A loopback-only Chromium extension handoff protocol with a popup, context
+  menu, settings/options surface, local regex builder, bounded metadata, and
+  explicit queue-failure responses.
 
 The prototype under `prototype/` is not loaded by the Electron build. Its
 simulated network layer remains reference-only.
@@ -98,6 +104,9 @@ npm run typecheck
 npm run build
 npm run test:engine
 npm run test:electron
+npm run test:ui
+# from extension/: npm test
+# from site/: npm run check && npm run build
 ```
 
 On the current verification tree, the following checks passed locally:
@@ -107,9 +116,12 @@ On the current verification tree, the following checks passed locally:
 | `npm run typecheck` | Passed renderer and Electron TypeScript checks. |
 | `npm run build` | Passed Vite renderer and Electron main-process compilation. |
 | `npm run test:engine` | 31/31 passed locally, including concurrent and cross-instance StateStore saves, failed-write recovery, Range integrity, pause/resume, non-resumable fallback, custom-header persistence and cross-origin header stripping, global queue limits, schedule race handling, manager history hooks, filename sanitization, malformed Range rejection, categories, throttling, and URL redaction. |
-| `npm run test:electron` | 31/31 passed for export, local history, regex, tabs, command-palette foundations, compiled renderer-path resolution, secure updater IPC, version monotonicity, timeout/stale-event recovery, native Squirrel download-overlap protection, queue payload validation, Settings Escape handling, and completion-notification preference handling. |
-| Hidden-desktop smoke | Passed through the cheap hidden-desktop route: direct Electron `v31.7.7` launch opened `Material Download Manager` at 1150×720, rendered the empty state and update state, opened Settings, filtered Settings with its anchored regex builder, and returned focus after Escape. The hidden desktop and process were cleaned up. |
-| Remote GitHub Actions | The earlier Windows verification run [31072760389](https://github.com/Ding-Ding-Projects/material-download-manager/actions/runs/31072760389) passed. Unsigned release run [31130475054](https://github.com/Ding-Ding-Projects/material-download-manager/actions/runs/31130475054) passed and published `v0.1.0` with the CI-built Squirrel assets. Post-push verification [31131193046](https://github.com/Ding-Ding-Projects/material-download-manager/actions/runs/31131193046) passed. Signed run [31131192930](https://github.com/Ding-Ding-Projects/material-download-manager/actions/runs/31131192930) failed before packaging because `CSC_LINK` and `CSC_KEY_PASSWORD` are not configured. |
+| `npm run test:electron` | 35/35 passed for export, local history, regex, tabs, command-palette foundations, compiled renderer-path resolution, secure updater IPC, version monotonicity, timeout/stale-event recovery, native Squirrel download-overlap protection, queue payload validation, Settings Escape handling, completion-notification preference handling, and loopback handoff success/failure responses. |
+| `npm run test:ui` | 19/19 required checks passed through the built Electron/CDP smoke harness: renderer freshness, real preload bridge, tab shell, Settings dialog semantics, anchored regex builder, Escape focus restoration, and cleanup. The empty-profile run honestly reported no progress item; the active progress-window capture below covers the real transfer path. |
+| Chromium extension `npm test` | 12/12 passed for MV3 permissions and entrypoints, context-menu and popup handoff, loopback protocol, bounded validation, settings import/export, regex safety, localization, and no remote assets/tracking. |
+| GitHub Pages source `npm run check` | 39/39 checks passed, including feature-article coverage, local-only assets, stable-manifest fail-closed behavior, and the browser-extension/progress-window articles. |
+| Hidden-desktop progress capture | Passed through the cheap Lowlevel headless route: a real loopback handoff created a live download, and a dynamically resolved second `Chrome_WidgetWin_1` window rendered the separate 980×640 `Download progress` surface with the fixture filename, source URL, transferred bytes, speed, pause, cancel, and close controls. The capture was retained in the session scratchpad, outside the repository. The disposable desktop, Electron process, and fixture server were cleaned up. |
+| Remote GitHub Actions | Historical hosted runs remain historical evidence only. The current self-hosted workflows, current stable release, and current Pages deployment are not claimed until the repository-level self-hosted runner executes them and their remote records are re-read. |
 
 The hardening milestone corrected the compiled renderer path and made
 unpackaged production launches load the built renderer unless
@@ -134,9 +146,11 @@ separate [stable Windows release workflow](.github/workflows/release.yml). Both
 use the explicit self-hosted label contract and the committed dependency
 inventory. The release workflow validates tests and Squirrel assets, publishes
 one stable non-draft, non-prerelease release, records unsigned status, and
-verifies release timing and asset identity after publication. A Pages workflow
-is intentionally absent until the self-hosted runner and loop-free deployment
-boundary are available.
+verifies release timing and asset identity after publication. A self-hosted
+Pages workflow is now present at
+[`.github/workflows/pages.yml`](.github/workflows/pages.yml). It validates and
+stages the local site before deployment, but its live URL remains unclaimed
+until the contracted runner executes it and the published surface is checked.
 
 The release branch also passed local static checks for the workflow and helper
 contracts: `actionlint -shellcheck=` passed, all 8 PowerShell run blocks parsed,
@@ -159,9 +173,11 @@ reconciliation:
    unsigned test release.
 2. Compare the runnable renderer with the prototype and decide which Material 3
    visual and interaction changes should be implemented next.
-3. Add the remaining product features only after their scope and production
-   behavior are defined; do not wire the prototype's simulated engine into the
-   app.
+3. Complete the remaining shared-memory product surfaces—full per-element
+   appearance editing, complete tab/group management, renderer history and
+   changelog browsers, complete bulk actions, scheduled external settings, and
+   the in-app documentation browser—without wiring the prototype's simulated
+   engine into the app.
 4. Add renderer, IPC, packaging, accessibility, error-notification, and
    destructive-action coverage before calling the application release-ready.
 5. The reusable local regex engine and builder foundation now live under
@@ -207,13 +223,13 @@ Discussions are enabled and the rolling handoff thread is
 [`#3`](https://github.com/Ding-Ding-Projects/material-download-manager/discussions/3).
 The release announcement is [`#4`](https://github.com/Ding-Ding-Projects/material-download-manager/discussions/4).
 The wiki setting is enabled but its wiki repository is not initialized, and
-GitHub Pages is not configured. The unsigned `v0.1.0` test release is
+GitHub Pages is not configured yet. The unsigned `v0.1.0` test release is
 historical evidence only; no current stable release or self-hosted remote
 workflow result is claimed here because the runner inventory is empty.
 
-The main checkout and two linked checkouts remain registered with Git. The
-release-helper checkout holds untracked `scripts/`, and the release-workflow
-checkout holds an untracked `.github/workflows/release.yml`; both are preserved
-because they contain uncommitted work. The merged CI-fix and unsigned-dispatch
-checkouts, plus the clean detached review checkout, were removed only after
-their ancestry and clean-state proofs. No stashes remain.
+The main checkout and the user-owned linked checkouts remain registered with
+Git. The release-helper checkout holds untracked `scripts/`, and the
+release-workflow checkout holds an untracked `.github/workflows/release.yml`;
+both are preserved because they contain uncommitted work. Any remaining stash
+or linked-checkout state is preserved until its exact ownership and clean,
+merged, pushed proof is available.

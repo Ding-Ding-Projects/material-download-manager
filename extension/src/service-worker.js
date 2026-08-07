@@ -119,6 +119,17 @@ async function handoffUrl(message, settings) {
       body: JSON.stringify(body),
     });
     if (!response.ok) return result("handoff-failed", `HTTP ${response.status}`);
+    const responseText = await readLimitedText(response);
+    if (!responseText) return result("handoff-failed", "The manager returned an empty handoff response.");
+    let responseBody;
+    try {
+      responseBody = JSON.parse(responseText);
+    } catch {
+      return result("handoff-failed", "The manager returned an invalid handoff response.");
+    }
+    if (responseBody?.protocol !== HANDOFF_PROTOCOL_VERSION || responseBody?.accepted !== true) {
+      return result("handoff-failed", "The manager did not confirm that the URL was queued.");
+    }
     return result("handoff-success");
   } catch (error) {
     return result("handoff-failed", error instanceof Error && error.name === "AbortError" ? "Timed out after 1500 ms." : "The loopback endpoint could not be reached.");

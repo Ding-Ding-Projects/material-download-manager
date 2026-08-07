@@ -125,6 +125,19 @@ export default function App() {
         section: "Settings",
         onSelect: () => openSettings(),
       },
+      ...(items.length > 0
+        ? [{
+            id: "action.open-progress-window",
+            label: copy.text("Open Progress Window", "開啟進度視窗"),
+            description: copy.text("Open a selected download in a separate window", "喺獨立視窗開啟所選下載"),
+            keywords: ["progress", "window", "download", "separate"],
+            section: "Actions",
+            onSelect: () => {
+              const target = useAppStore.getState().items.find((item) => ["downloading", "queued", "paused", "added"].includes(item.status)) ?? useAppStore.getState().items[0];
+              if (target) void window.api.openProgressWindow(target.id);
+            },
+          }]
+        : []),
       {
         id: "settings.language",
         label: copy.text("Settings · Language mode", "設定 · 語言模式"),
@@ -188,7 +201,7 @@ export default function App() {
     // Item-scoped actions intentionally stay out of this registry: it has no
     // focused/selected-item contract, so an action must never guess a download.
     return [...commands, ...categoryCommands, ...queueCommands];
-  }, [activeQueueId, activeQueueName, copy, filter.kind, openAddDownload, openQueues, openSettings, queues, setFilter, startQueue, stopAllActive, stopQueue]);
+  }, [activeQueueId, activeQueueName, copy, filter.kind, items, openAddDownload, openQueues, openSettings, queues, setFilter, startQueue, stopAllActive, stopQueue]);
 
   useEffect(() => {
     const unsubscribe = useAppStore.getState().init();

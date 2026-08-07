@@ -96,7 +96,7 @@ export default function UpdaterBanner({ hasUnsavedWork, unsavedWorkReason }: Upd
     try {
       const opened = await window.api.openUpdateReleaseNotes();
       if (!opened) {
-        notify({ title: "Release notes unavailable", message: "The signed update did not provide a safe release-notes link.", tone: "error" });
+        notify({ title: "Release notes unavailable", message: "The unsigned update did not provide a safe release-notes link.", tone: "error" });
       }
     } catch (error) {
       notify({
@@ -184,7 +184,7 @@ export default function UpdaterBanner({ hasUnsavedWork, unsavedWorkReason }: Upd
     <section className="updater-banner updater-banner-current" aria-live="polite" aria-label="Software update status">
       <div className="updater-copy">
         <strong>Updates</strong>
-        <span>Current version {state.version}. Check the signed HTTPS feed for a newer release.</span>
+        <span>Current version {state.version}. Check the unsigned HTTPS feed for a newer release.</span>
       </div>
       <button type="button" className="btn btn-secondary btn-sm" onClick={() => void checkForUpdates()} disabled={busy}>
         {busy ? "Checking…" : "Check for updates"}

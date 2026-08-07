@@ -336,6 +336,64 @@ window.MDM_SITE_CONTENT = {
       suggested: ["reliable-transfers", "notification-center", "language-appearance"]
     },
     {
+      id: "browser-extension",
+      category: "Integration",
+      title: "Chromium extension handoff",
+      summary: "Manifest V3 page and link capture through a credential-free loopback bridge owned by the desktop download manager.",
+      docsPath: "../docs/features/integrations/browser-extension.md",
+      tags: ["extension", "chromium", "capture", "loopback"],
+      sections: {
+        behavior: [
+          "The extension captures the active page or link from its popup or context menu and sends one validated envelope to the desktop app.",
+          "The desktop app owns queue persistence and progress, so an accepted handoff joins the same download state as an in-app URL.",
+        ],
+        configuration: [
+          "Options persist the manager name, loopback endpoint, language mode, independent funny levels, and versioned import/export settings.",
+          "The endpoint defaults to http://127.0.0.1:43771/v1/downloads and can be tested from the popup.",
+        ],
+        failureModes: [
+          "The extension times out, rejects credentials and redirects, bounds response bodies, and records an explicit recovery result when the desktop app is unavailable.",
+          "The desktop endpoint rejects non-loopback clients, oversized bodies, unsupported protocol versions, and invalid URLs.",
+        ],
+        security: [
+          "The bridge uses loopback-only HTTP, no tokens, no request-body logging, no third-party endpoint, and no arbitrary page-content fetch.",
+        ],
+        verification: [
+          "The extension suite covers the local contract; the compiled Electron suite covers the real loopback status and handoff server; the hidden-desktop smoke covers the running process boundary.",
+        ],
+      },
+      suggested: ["reliable-transfers", "local-history", "site-foundation"],
+    },
+    {
+      id: "progress-window",
+      category: "Download engine",
+      title: "Separate download progress window",
+      summary: "A second frameless desktop window with live progress, controls, accessible semantics, and one shared queue state.",
+      docsPath: "../docs/features/download-engine/progress-window.md",
+      tags: ["progress", "window", "accessibility", "downloads"],
+      sections: {
+        behavior: [
+          "The toolbar and command palette open a separate progress window for an active or stored download. The window has its own title controls and never starts a second engine.",
+          "A shared state broadcast updates the main window and progress window, while an item-target channel retargets one existing surface.",
+        ],
+        configuration: [
+          "The renderer uses ?view=progress&progressItem=<id>; the main process validates the id and the requesting frame before opening it.",
+          "Pause, resume, cancel, minimize, close, and progress reporting use the typed preload bridge.",
+        ],
+        failureModes: [
+          "A missing target returns false and leaves no orphan window. Closing the progress surface does not remove or stop the download.",
+          "Shutdown closes the secondary window before the manager, and late state events are ignored by destroyed windows.",
+        ],
+        security: [
+          "The progress window uses context isolation, disabled Node integration, the same trusted-sender checks, and no remote renderer content.",
+        ],
+        verification: [
+          "Typecheck, build, compiled Electron tests, the dependency-free CDP smoke harness, and a cheap hidden-desktop capture provide the required evidence.",
+        ],
+      },
+      suggested: ["browser-extension", "renderer-accessibility", "reliable-transfers"],
+    },
+    {
       id: "site-foundation",
       category: "Site",
       title: "Landing and documentation site",

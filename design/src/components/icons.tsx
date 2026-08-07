@@ -129,6 +129,14 @@ export function LinkAddIcon({ size = 16, className, style }: IconProps) {
   );
 }
 
+export function ProgressIcon({ size = 16, className, style }: IconProps) {
+  return (
+    <svg {...base(size)} className={className} style={style}>
+      <path d="M4 18V9M9 18V5M14 18v-7M19 18V3" />
+    </svg>
+  );
+}
+
 export function PlayIcon({ size = 16, className, style }: IconProps) {
   return (
     <svg {...base(size)} className={className} style={style} fill="currentColor" stroke="none">

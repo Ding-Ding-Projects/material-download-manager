@@ -50,8 +50,24 @@ hit may speed it up but is not the proof.
 ## Validation workflow
 
 `.github/workflows/ci.yml` runs on every push and on `workflow_dispatch`. It
-typechecks, builds, and runs the downloader and Electron integration suites.
-Its concurrency group cancels obsolete validation runs for the same ref.
+typechecks, builds, runs the downloader and Electron integration suites, runs
+the dependency-free real Electron/CDP UI smoke, and checks the Chromium
+extension contract. Its concurrency group cancels obsolete validation runs
+for the same ref.
+
+## GitHub Pages workflow
+
+`.github/workflows/pages.yml` runs on pushes to `main` and on
+`workflow_dispatch`. It uses the same four-label self-hosted runner contract,
+checks the dependency prerequisites, runs `site/check.mjs`, builds the checked
+site to an isolated runner-temporary directory, injects only the latest
+verified stable release record from `gh release view`, and deploys it through
+the official Pages actions. A stable installer button is absent when no
+non-draft, non-prerelease release with verified Squirrel assets exists.
+Deployment is not canceled halfway through: its concurrency group protects the
+side effect rather than abandoning a Pages upload. The workflow verifies the
+published HTML response after deployment. The source site has no runtime
+dependencies or remote assets.
 
 ## Stable release workflow
 
@@ -105,9 +121,10 @@ and records that no code name was available.
 
 ## Pages and external verification boundary
 
-No Pages deployment workflow is present. A Pages workflow will be added only
-after a matching self-hosted runner is available and the deployment path has
-an explicit loop-free proof.
+The Pages deployment workflow and source build path are present, but the live
+site is not claimed until a matching runner executes the deployment and the
+published URL is checked. The repository homepage and the site's stable
+installer button remain unchanged until that evidence exists.
 
 The runner inventory was checked on 2026-08-07: the repository-level runner API
 returned zero registered runners. The organization-level inventory could not

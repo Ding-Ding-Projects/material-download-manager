@@ -55,7 +55,22 @@ Accept: application/json
 
 `url` must be an `http` or `https` URL without embedded credentials and is limited to 8,192 characters. `title` is optional and limited to 512 characters. `selectionText` is optional and limited to 2,048 characters. The adapter must treat the body as untrusted input and validate the same bounds before adding a download.
 
-The implemented adapter answers `202` after validating the envelope and dispatching the request to `manager.addDownload(...)`. The extension does not trust response text for a successful handoff. A `202` means the adapter accepted the request for queue dispatch; it does not prove that the download completed, and a later manager rejection is logged by the Electron adapter rather than returned to Chrome.
+The implemented adapter answers `202` only after the `manager.addDownload(...)`
+promise resolves, and includes a protocol marker, `accepted: true`, and the
+opaque download id:
+
+```json
+{
+  "protocol": 1,
+  "accepted": true,
+  "downloadId": "local-id"
+}
+```
+
+The extension validates that response before reporting success. A `202` means
+the adapter accepted the request for queue dispatch; it does not prove that the
+download completed. If queueing fails, the adapter returns a generic `500`
+with `accepted: false`, while logging only the redacted internal diagnostic.
 
 Because JSON POST requests can trigger CORS preflight, the adapter must support:
 

@@ -8,11 +8,14 @@ the Electron application; `prototype/` remains reference material only.
 
 - [Reliable transfers](reliable-transfers.md) — headers, redirects, queues,
   timeouts, retries, persistence, and verification.
+- [Separate download progress window](progress-window.md) — a second live
+  progress surface sharing the main-process download state.
 
 ## Scope
 
 The engine currently covers segmented Range transfers, non-resumable fallback,
 pause/resume, queue concurrency, schedule polling, custom request headers,
-redirect limits, connection/idle/request timeouts, retry handling, and local
-state persistence. It does not claim installer, signed updater, or release
-coverage.
+redirect limits, connection/idle/request timeouts, retry handling, local state
+persistence, and the separate progress-window renderer route. Installer and
+release evidence is documented in the updates category; this category does not
+claim a release merely from a local build.

@@ -63,6 +63,14 @@ jobs:
         working-directory: design
         run: npm run test:electron
 
+      - name: Test real renderer and separate-window smoke
+        working-directory: design
+        run: npm run test:ui
+
+      - name: Test Chromium extension contract
+        working-directory: extension
+        run: npm test
+
       - name: Count source, tests, styles, markup, and surviving blame attribution
         id: line_count
         shell: pwsh

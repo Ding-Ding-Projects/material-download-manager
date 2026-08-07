@@ -21,7 +21,8 @@
     "dist:win": "npm run build && electron-builder --win squirrel --x64",
     "dist:win:dir": "npm run build && electron-builder --win --x64 --dir",
     "test:engine": "node --test --test-concurrency=1 --test-timeout=30000 dist-electron/electron/download/__tests__/*.test.js",
-    "test:electron": "node --test --test-timeout=30000 dist-electron/electron/__tests__/*.test.js"
+    "test:electron": "node --test --test-timeout=30000 dist-electron/electron/__tests__/*.test.js",
+    "test:ui": "node ui-tests/smoke.mjs"
   },
   "dependencies": {
     "zustand": "^4.5.5"
@@ -53,7 +54,9 @@
       "dist/**/*",
       "package.json"
     ],
-    "forceCodeSigning": true,
+    "forceCodeSigning": false,
+    "signExecutable": false,
+    "signAndEditExecutable": false,
     "win": {
       "target": [
         { "target": "squirrel", "arch": ["x64"] }
