@@ -85,18 +85,20 @@ published from exact `0050941cd34005b29ab4f31368101c3a9c5de4a6` with
 and Pages runs are recorded below. The release feed remains dynamic for later
 documentation-only refreshes.
 
-The current handoff branch has its own verified branch-only stable release
-[`v0.1.34`](https://github.com/Ding-Ding-Projects/material-download-manager/releases/tag/v0.1.34)
-from exact `2602fdb4650194a53459f8903ee2856218ca9df0`. It is real,
+The completed handoff branch has its own verified branch-only stable release
+[`v0.1.35`](https://github.com/Ding-Ding-Projects/material-download-manager/releases/tag/v0.1.35)
+from exact `a221f31a5479bfb1fda736eae36a37351a923c0d`. It is real,
 `isDraft=false`, `isPrerelease=false`, and carries `Setup.exe`, `RELEASES`, and
-the full `material-download-manager-0.1.34-full.nupkg`. The release workflow
-timing is `00:04:06` from `2026-08-07T18:27:13.000Z` through
-`2026-08-07T18:31:19.000Z`; the Windows verification run is
-[31187649492](https://github.com/Ding-Ding-Projects/material-download-manager/actions/runs/31187649492)
+the full `material-download-manager-0.1.35-full.nupkg`. The release workflow
+timing is `00:04:08` from `2026-08-07T18:35:22.000Z` through
+`2026-08-07T18:39:30.000Z`; the Windows verification run is
+[31188348179](https://github.com/Ding-Ding-Projects/material-download-manager/actions/runs/31188348179)
 and the release run is
-[31187647061](https://github.com/Ding-Ding-Projects/material-download-manager/actions/runs/31187647061).
-This branch-only record is not default-branch or Pages proof; the next agent
-must integrate it before the release becomes the project's default state.
+[31188346937](https://github.com/Ding-Ding-Projects/material-download-manager/actions/runs/31188346937).
+Integration commit `7f7e7554ced8c243365dbe570c057a45d5d924aa` contains that exact branch tip
+and passed the local verification matrix below. At this pre-publication
+checkpoint, default-branch release and Pages evidence remain separate pending
+checks; issue #8 and rolling Discussion #3 carry the post-push verdicts.
 
 The v0.1.28 record above supersedes the older v0.1.26 release evidence for
 current default-branch status.
@@ -225,9 +227,11 @@ was intentionally red at the new bundle guard. The second branch Windows run
 confirmed the runner's fresh checkout converted tracked generated text to CRLF
 while the generator emitted LF; the raw-byte guard therefore failed even after
 the locale-dependent ordering was removed. The corrective commit normalizes
-line endings before comparison and retains code-point ordering. The branch
-must be pushed again and its replacement release/Windows runs checked before any
-default-branch integration.
+line endings before comparison and retains code-point ordering. Stable
+`v0.1.34` verified that fix at `2602fdb`; the later handoff-only commit
+`a221f31` then produced stable `v0.1.35` with green release and Windows
+verification. Integration commit `7f7e7554` contains the complete verified
+branch history.
 
 ## Runnable application
 
@@ -297,12 +301,12 @@ On the current verification tree, the following checks passed locally:
 | `npm run typecheck` | Passed renderer and Electron TypeScript checks. |
 | `npm run build` | Passed Vite renderer and Electron main-process compilation. |
 | `npm run test:engine` | 31/31 passed locally, including concurrent and cross-instance StateStore saves, failed-write recovery, Range integrity, pause/resume, non-resumable fallback, custom-header persistence and cross-origin header stripping, global queue limits, schedule race handling, manager history hooks, filename sanitization, malformed Range rejection, categories, throttling, and URL redaction. |
-| `npm run test:electron` | 45/45 passed for export, local history, hook/index isolation, renderer-boundary history filter normalization, renderer settings validation, regex, tabs, documentation-link resolution/search bounds, command-palette foundations, compiled renderer-path resolution, secure updater IPC, version monotonicity, timeout/stale-event recovery, native Squirrel download-overlap protection, queue payload validation, Settings Escape handling, completion-notification preference handling, loopback handoff success/failure responses, slow-pending handoff acknowledgement, and the embedded changelog store/IPC path. |
+| `npm run test:electron` | 46/46 passed for export, local history, hook/index isolation, renderer-boundary history filter normalization, renderer settings validation, regex, tabs, documentation-link resolution/search bounds, command-palette foundations, compiled renderer-path resolution, secure updater IPC, version monotonicity, timeout/stale-event recovery, native Squirrel download-overlap protection, queue payload validation, Settings Escape handling, completion-notification preference handling, loopback handoff success/failure responses, slow-pending handoff acknowledgement, and the embedded changelog store/IPC path. |
 | `npm run test:ui` | 24/24 required checks passed through the built Electron/CDP smoke harness: renderer freshness, real preload bridge, tab shell including Documentation, offline article index and Markdown rendering, plain-text and regex article search, relative article navigation, honest empty state, command-palette destination, History tab controls and honest empty state, a seeded separate progress window with a named progressbar, four Settings tabs, independent search, anchored regex builder, Escape focus restoration, interactive-label structure, narrow layout at 520 CSS pixels and 2× scale, and cleanup. |
 | Chromium extension `npm test` | 12/12 passed for MV3 permissions and entrypoints, page/link/selected-text context-menu handoff, bounded link-target precedence, loopback protocol, bounded validation, settings import/export, regex safety, localization, and no remote assets/tracking. |
 | `npm run test:docs` and bundle guard | 2/2 bundle tests passed; all 30 categorized Markdown files are present in the generated renderer catalog. |
 | GitHub Pages source `npm run check` | 42/42 checks passed, including the new in-app documentation article, feature-article coverage, local-only assets, stable-manifest fail-closed behavior, publication-state rendering, prototype sanitization, and the browser-extension/progress-window articles. |
-| Branch remote stable release | `31187647061` and Windows verification `31187649492` are green for exact `2602fdb`; stable `v0.1.34` is non-draft/non-prerelease with `Setup.exe`, `RELEASES`, full `material-download-manager-0.1.34-full.nupkg`, timing `00:04:06`, and the `Steamed Bitter Melon Stuffed with Fish · 鯪魚釀苦瓜` code name. This is branch-only evidence until integration. |
+| Branch remote stable release | `31188346937` and Windows verification `31188348179` are green for exact `a221f31`; stable `v0.1.35` is non-draft/non-prerelease with `Setup.exe`, `RELEASES`, full `material-download-manager-0.1.35-full.nupkg`, timing `00:04:08`, and the `Steamed Bean Curd Skin Roll · 鮮竹卷` code name. Integration commit `7f7e7554` contains that source tip; default-branch and Pages publication remain separate evidence. |
 | Hidden-desktop progress capture | Passed through the cheap Lowlevel headless route: a real loopback handoff created a live download, and a dynamically resolved second `Chrome_WidgetWin_1` window rendered the separate 980×640 `Download progress` surface with the fixture filename, source URL, transferred bytes, speed, pause, cancel, and close controls. The capture was retained in the session scratchpad, outside the repository. The disposable desktop, Electron process, and fixture server were cleaned up. |
 | Remote GitHub Actions | Default-branch stable release [31182280753](https://github.com/Ding-Ding-Projects/material-download-manager/actions/runs/31182280753), Windows verification [31182280767](https://github.com/Ding-Ding-Projects/material-download-manager/actions/runs/31182280767), and Pages run [31182280754](https://github.com/Ding-Ding-Projects/material-download-manager/actions/runs/31182280754) are green for `613869c`; branch stable release [31181815994](https://github.com/Ding-Ding-Projects/material-download-manager/actions/runs/31181815994) and Windows verification [31181815918](https://github.com/Ding-Ding-Projects/material-download-manager/actions/runs/31181815918) are also green. |
 
