@@ -326,6 +326,15 @@ npm run test:ui
 # from site/: npm run check && npm run build
 ```
 
+The full local matrix was re-run green on integration tip `327b5a2` in a
+Linux container on Node `v22.22.2` (2026-08-07): documentation bundle guard
+2/2, renderer and Electron typecheck, Vite and Electron builds, engine 38/38,
+Electron 54/54, built-artifact UI smoke 24/24 (under an Xvfb virtual display,
+since the container has no native X server), Chromium extension 12/12, and
+Pages source check 42/42 plus a passing site build. This confirms the
+committed suites are reproducible outside the Windows runner; Windows
+packaging evidence remains the self-hosted release workflow record below.
+
 On the current verification tree, the following checks passed locally:
 
 | Check | Result |
