@@ -154,10 +154,15 @@ function oldestFile(files) {
 }
 
 async function inspectBuildFreshness(appDirectory, rendererArtifacts) {
+  const rendererRootSourceFiles = await Promise.all(
+    ["index.html", "vite.config.ts"].map((name) =>
+      requireNonEmptyFile(path.join(appDirectory, name), `renderer source ${name}`)
+    )
+  );
   const rendererSourceFiles = [
     ...(await collectFiles(path.join(appDirectory, "src"), (filePath) => [".ts", ".tsx", ".css"].includes(sourceFileExtension(filePath)))),
     ...(await collectFiles(path.join(appDirectory, "shared"), (filePath) => sourceFileExtension(filePath) === ".ts")),
-    ...(await collectFiles(appDirectory, (filePath) => ["index.html", "vite.config.ts"].includes(path.basename(filePath)))),
+    ...rendererRootSourceFiles,
   ];
   const mainSourceFiles = [
     ...(await collectFiles(path.join(appDirectory, "electron"), (filePath) => sourceFileExtension(filePath) === ".ts")),

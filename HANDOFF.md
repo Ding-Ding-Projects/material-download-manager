@@ -245,6 +245,14 @@ proved by substituting a nonexistent 40-character SHA, observing the focused
 test fail for that exact entry, restoring the real commit, and rerunning it
 green.
 
+The final built-artifact pass also corrected the freshness preflight itself.
+Its root-source scan previously recursed into `dist/`, treated the freshly
+written `dist/index.html` as source, and then rejected Vite's CSS asset for
+being written one millisecond earlier. The preflight now enumerates only the
+real root inputs (`index.html` and `vite.config.ts`) alongside `src/` and
+`shared/`, so it still fails on stale artifacts without comparing output files
+against one another.
+
 The first branch release run [31187148273](https://github.com/Ding-Ding-Projects/material-download-manager/actions/runs/31187148273)
 was intentionally red at the new bundle guard. The second branch Windows run
 [31187443242](https://github.com/Ding-Ding-Projects/material-download-manager/actions/runs/31187443242)
