@@ -18,11 +18,14 @@ function Require-Command([string]$Name) {
   }
 }
 
-function Get-JsonFile([string]$Path) {
+function Get-JsonFile([string]$Path, [switch]$AllowEmptyPropertyName) {
   if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) {
     Stop-WithMessage "Required JSON file is missing: $Path"
   }
   try {
+    if ($AllowEmptyPropertyName) {
+      return Get-Content -LiteralPath $Path -Raw | ConvertFrom-Json -Depth 40 -AsHashtable
+    }
     return Get-Content -LiteralPath $Path -Raw | ConvertFrom-Json -Depth 40
   } catch {
     Stop-WithMessage "JSON file is malformed: $Path"
@@ -141,7 +144,7 @@ $nodeModulesPath = Join-Path $repositoryRoot 'design/node_modules'
 $electronBinaryPath = Join-Path $repositoryRoot 'design/node_modules/electron/dist/electron.exe'
 $esbuildBinaryPath = Join-Path $repositoryRoot 'design/node_modules/@esbuild/win32-x64/esbuild.exe'
 $package = Get-JsonFile $packagePath
-$lock = Get-JsonFile $lockPath
+$lock = Get-JsonFile $lockPath -AllowEmptyPropertyName
 if ($lock.lockfileVersion -ne 3) {
   Stop-WithMessage "design/package-lock.json lockfileVersion is $($lock.lockfileVersion), expected 3."
 }

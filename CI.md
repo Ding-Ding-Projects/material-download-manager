@@ -46,7 +46,10 @@ withholding install scripts. On Windows x64, esbuild's native executable is
 `bin/esbuild` is a JavaScript launcher, not a second root-level executable. The
 post-install phase requires that platform binary to execute and match the
 lockfile package version, plus the Electron binary, the lockfile-installed
-`electron-builder` binary, and `lockfileVersion: 3`. A fresh-environment proof
+`electron-builder` binary, and `lockfileVersion: 3`. Its PowerShell JSON reader
+uses `-AsHashtable` only for `package-lock.json`, whose valid npm schema has an
+empty-string package key; the dependency inventory remains normal object JSON.
+A fresh-environment proof
 is a run on a disposable Windows x64 runner with an empty npm cache and no
 `design/node_modules`; a cache hit may speed it up but is not the proof.
 
