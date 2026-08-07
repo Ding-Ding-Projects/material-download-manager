@@ -432,9 +432,9 @@ kbd { display: inline-flex; align-items: center; min-height: 1.4rem; padding: .0
 @keyframes notification-in { from { opacity: 0; transform: translateY(.4rem); } to { opacity: 1; transform: translateY(0); } }
 
 html[data-tab-position="top"] .app-shell { display: flex; flex-direction: column; }
-html[data-tab-position="top"] .tab-rail { position: sticky; top: 4.55rem; z-index: 10; min-height: auto; padding: .65rem 1rem; border-right: 0; border-bottom: 1px solid var(--outline-variant); }
+html[data-tab-position="top"] .tab-rail { position: sticky; top: 4.55rem; z-index: 10; align-self: stretch; width: 100%; max-width: 100%; min-height: auto; padding: .65rem 1rem; border-right: 0; border-bottom: 1px solid var(--outline-variant); }
 html[data-tab-position="top"] .rail-heading { display: none; }
-html[data-tab-position="top"] .tab-strip { flex-direction: row; overflow-x: auto; }
+html[data-tab-position="top"] .tab-strip { flex-direction: row; max-width: 100%; overflow-x: auto; }
 html[data-tab-position="top"] .tab-button { flex: 0 0 auto; min-width: 8rem; justify-content: center; }
 html[data-tab-position="top"] .tab-button.is-pinned { border-left: 0; border-bottom: 3px solid var(--accent); }
 html[data-tab-position="top"] .rail-footer { display: none; }
@@ -456,9 +456,9 @@ html[data-reduced-motion="true"] *, html[data-reduced-motion="true"] *::before, 
   .topbar-actions { width: 100%; justify-content: space-between; }
   .status-chip { max-width: 54%; }
   .app-shell { display: flex; flex-direction: column; }
-  .tab-rail { position: sticky; top: 6.6rem; z-index: 10; min-height: auto; padding: .55rem .75rem; border-right: 0; border-bottom: 1px solid var(--outline-variant); }
+  .tab-rail { position: sticky; top: 6.6rem; z-index: 10; align-self: stretch; width: 100%; max-width: 100%; min-height: auto; padding: .55rem .75rem; border-right: 0; border-bottom: 1px solid var(--outline-variant); }
   .rail-heading { display: none; }
-  .tab-strip { flex-direction: row; overflow-x: auto; }
+  .tab-strip { flex-direction: row; max-width: 100%; overflow-x: auto; }
   .tab-button { flex: 0 0 auto; min-width: 7.2rem; justify-content: center; }
   .tab-button.is-pinned { border-left: 0; border-bottom: 3px solid var(--accent); }
   .rail-footer { display: none; }
@@ -476,7 +476,7 @@ html[data-reduced-motion="true"] *, html[data-reduced-motion="true"] *::before, 
 }
 
 @media (max-width: 460px) {
-  .brand-name { max-width: 19ch; }
+  .brand-name { max-width: 100%; }
   .topbar-actions { align-items: stretch; flex-direction: column; }
   .status-chip { max-width: 100%; }
   .topbar-actions .button { width: 100%; }
