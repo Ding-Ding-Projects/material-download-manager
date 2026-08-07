@@ -7,6 +7,353 @@ export const CHANGELOG_IPC_CHANNELS = {
   EXPORT_VIEW: "changelog:exportView",
 } as const;
 
+export const CHANGELOG_REPOSITORY_URL = "https://github.com/Ding-Ding-Projects/material-download-manager";
+
+/**
+ * Embedded from the repository's published stable release records at build
+ * time. The renderer never fetches release data at runtime. Each record keeps
+ * the factual release identity, source commit, and stable distribution state;
+ * the store derives the credential-free commit URL.
+ */
+export const DEFAULT_CHANGELOG_ENTRIES: readonly ChangelogEntry[] = [
+  {
+    id: "v0.1.29",
+    version: "0.1.29",
+    releaseDate: "2026-08-07",
+    title: "v0.1.29 — Steamed Beef Tripe with Chu Hou Sauce · 柱侯金錢肚",
+    changes: [
+      { category: "Release", text: "Published as a stable, non-draft, non-prerelease release with intentionally unsigned Squirrel.Windows artifacts." },
+      { category: "Code name", text: "Steamed Beef Tripe with Chu Hou Sauce · 柱侯金錢肚" },
+      { category: "Source", text: "Release metadata identifies commit 49c9e13682ac96481406e92e7e00866abdc9433e." },
+    ],
+    commitSha: "49c9e13682ac96481406e92e7e00866abdc9433e",
+  },
+  {
+    id: "v0.1.28",
+    version: "0.1.28",
+    releaseDate: "2026-08-07",
+    title: "v0.1.28 — Steamed Beef Tripe with Ginger and Scallion · 薑蔥牛柏葉",
+    changes: [
+      { category: "Release", text: "Published as a stable, non-draft, non-prerelease release with intentionally unsigned Squirrel.Windows artifacts." },
+      { category: "Code name", text: "Steamed Beef Tripe with Ginger and Scallion · 薑蔥牛柏葉" },
+      { category: "Source", text: "Release metadata identifies commit d37ad7cacbd7528bc80551375dc683be36c73eec." },
+    ],
+    commitSha: "d37ad7cacbd7528bc80551375dc683be36c73eec",
+  },
+  {
+    id: "v0.1.27",
+    version: "0.1.27",
+    releaseDate: "2026-08-07",
+    title: "v0.1.27 — Satay Chicken Feet · 沙嗲蒸鳳爪",
+    changes: [
+      { category: "Release", text: "Published as a stable, non-draft, non-prerelease release with intentionally unsigned Squirrel.Windows artifacts." },
+      { category: "Code name", text: "Satay Chicken Feet · 沙嗲蒸鳳爪" },
+      { category: "Source", text: "Release metadata identifies commit d37ad7cacbd7528bc80551375dc683be36c73eec." },
+    ],
+    commitSha: "d37ad7cacbd7528bc80551375dc683be36c73eec",
+  },
+  {
+    id: "v0.1.26",
+    version: "0.1.26",
+    releaseDate: "2026-08-07",
+    title: "v0.1.26 — Steamed Chicken Feet in Black Bean Sauce · 豉汁蒸鳳爪",
+    changes: [
+      { category: "Release", text: "Published as a stable, non-draft, non-prerelease release with intentionally unsigned Squirrel.Windows artifacts." },
+      { category: "Code name", text: "Steamed Chicken Feet in Black Bean Sauce · 豉汁蒸鳳爪" },
+      { category: "Source", text: "Release metadata identifies commit 17cb95cd363b6935b9e9f6343825de51df2524d1." },
+    ],
+    commitSha: "17cb95cd363b6935b9e9f6343825de51df2524d1",
+  },
+  {
+    id: "v0.1.25",
+    version: "0.1.25",
+    releaseDate: "2026-08-07",
+    title: "v0.1.25 — Steamed Pork Ribs with Plum Sauce · 梅子蒸排骨",
+    changes: [
+      { category: "Release", text: "Published as a stable, non-draft, non-prerelease release with intentionally unsigned Squirrel.Windows artifacts." },
+      { category: "Code name", text: "Steamed Pork Ribs with Plum Sauce · 梅子蒸排骨" },
+      { category: "Source", text: "Release metadata identifies commit 17cb95cd363b6935b9e9f6343825de51df2524d1." },
+    ],
+    commitSha: "17cb95cd363b6935b9e9f6343825de51df2524d1",
+  },
+  {
+    id: "v0.1.24",
+    version: "0.1.24",
+    releaseDate: "2026-08-07",
+    title: "v0.1.24 — Steamed Pork Ribs with Garlic · 蒜香蒸排骨",
+    changes: [
+      { category: "Release", text: "Published as a stable, non-draft, non-prerelease release with intentionally unsigned Squirrel.Windows artifacts." },
+      { category: "Code name", text: "Steamed Pork Ribs with Garlic · 蒜香蒸排骨" },
+      { category: "Source", text: "Release metadata identifies commit 45ad1b54e4911a39e6c43287fd9e68d6bd9b850c." },
+    ],
+    commitSha: "45ad1b54e4911a39e6c43287fd9e68d6bd9b850c",
+  },
+  {
+    id: "v0.1.23",
+    version: "0.1.23",
+    releaseDate: "2026-08-07",
+    title: "v0.1.23 — Steamed Pork Ribs with Black Bean · 豉汁蒸排骨",
+    changes: [
+      { category: "Release", text: "Published as a stable, non-draft, non-prerelease release with intentionally unsigned Squirrel.Windows artifacts." },
+      { category: "Code name", text: "Steamed Pork Ribs with Black Bean · 豉汁蒸排骨" },
+      { category: "Source", text: "Release metadata identifies commit 45ad1b54e4911a39e6c43287fd9e68d6bd9b850c." },
+    ],
+    commitSha: "45ad1b54e4911a39e6c43287fd9e68d6bd9b850c",
+  },
+  {
+    id: "v0.1.22",
+    version: "0.1.22",
+    releaseDate: "2026-08-07",
+    title: "v0.1.22 — Watercress Beef Balls · 西洋菜牛肉球",
+    changes: [
+      { category: "Release", text: "Published as a stable, non-draft, non-prerelease release with intentionally unsigned Squirrel.Windows artifacts." },
+      { category: "Code name", text: "Watercress Beef Balls · 西洋菜牛肉球" },
+      { category: "Source", text: "Release metadata identifies commit 35445636a3dd12b2004f2e5b374e5effef68562d." },
+    ],
+    commitSha: "35445636a3dd12b2004f2e5b374e5effef68562d",
+  },
+  {
+    id: "v0.1.21",
+    version: "0.1.21",
+    releaseDate: "2026-08-07",
+    title: "v0.1.21 — Dried Tangerine Peel Beef Balls · 陳皮牛肉球",
+    changes: [
+      { category: "Release", text: "Published as a stable, non-draft, non-prerelease release with intentionally unsigned Squirrel.Windows artifacts." },
+      { category: "Code name", text: "Dried Tangerine Peel Beef Balls · 陳皮牛肉球" },
+      { category: "Source", text: "Release metadata identifies commit 433c54dd72f749da8ecb611bd04f677b994115a2." },
+    ],
+    commitSha: "433c54dd72f749da8ecb611bd04f677b994115a2",
+  },
+  {
+    id: "v0.1.20",
+    version: "0.1.20",
+    releaseDate: "2026-08-07",
+    title: "v0.1.20 — Steamed Beef Balls · 山竹牛肉",
+    changes: [
+      { category: "Release", text: "Published as a stable, non-draft, non-prerelease release with intentionally unsigned Squirrel.Windows artifacts." },
+      { category: "Code name", text: "Steamed Beef Balls · 山竹牛肉" },
+      { category: "Source", text: "Release metadata identifies commit 433c54dd72f749da8ecb611bd04f677b994115a2." },
+    ],
+    commitSha: "433c54dd72f749da8ecb611bd04f677b994115a2",
+  },
+  {
+    id: "v0.1.19",
+    version: "0.1.19",
+    releaseDate: "2026-08-07",
+    title: "v0.1.19 — Dark Chocolate Crystal Dumpling · 黑朱古力水晶餃",
+    changes: [
+      { category: "Release", text: "Published as a stable, non-draft, non-prerelease release with intentionally unsigned Squirrel.Windows artifacts." },
+      { category: "Code name", text: "Dark Chocolate Crystal Dumpling · 黑朱古力水晶餃" },
+      { category: "Source", text: "Release metadata identifies commit 104a487d9b640b441663017c365de72d2e8a79cb." },
+    ],
+    commitSha: "104a487d9b640b441663017c365de72d2e8a79cb",
+  },
+  {
+    id: "v0.1.18",
+    version: "0.1.18",
+    releaseDate: "2026-08-07",
+    title: "v0.1.18 — Black Truffle Siu Mai · 黑松露燒賣",
+    changes: [
+      { category: "Release", text: "Published as a stable, non-draft, non-prerelease release with intentionally unsigned Squirrel.Windows artifacts." },
+      { category: "Code name", text: "Black Truffle Siu Mai · 黑松露燒賣" },
+      { category: "Source", text: "Release metadata identifies commit a0c27b621fa957de99d129d95df7a7e9bee396f6." },
+    ],
+    commitSha: "a0c27b621fa957de99d129d95df7a7e9bee396f6",
+  },
+  {
+    id: "v0.1.17",
+    version: "0.1.17",
+    releaseDate: "2026-08-07",
+    title: "v0.1.17 — Fish Maw Siu Mai · 花膠燒賣",
+    changes: [
+      { category: "Release", text: "Published as a stable, non-draft, non-prerelease release with intentionally unsigned Squirrel.Windows artifacts." },
+      { category: "Code name", text: "Fish Maw Siu Mai · 花膠燒賣" },
+      { category: "Source", text: "Release metadata identifies commit a0c27b621fa957de99d129d95df7a7e9bee396f6." },
+    ],
+    commitSha: "a0c27b621fa957de99d129d95df7a7e9bee396f6",
+  },
+  {
+    id: "v0.1.16",
+    version: "0.1.16",
+    releaseDate: "2026-08-07",
+    title: "v0.1.16 — Mushroom Siu Mai · 北菇燒賣",
+    changes: [
+      { category: "Release", text: "Published as a stable, non-draft, non-prerelease release with intentionally unsigned Squirrel.Windows artifacts." },
+      { category: "Code name", text: "Mushroom Siu Mai · 北菇燒賣" },
+      { category: "Source", text: "Release metadata identifies commit 5b968f54e976ca32f2d1c5b003acd5f34bdd9b5c." },
+    ],
+    commitSha: "5b968f54e976ca32f2d1c5b003acd5f34bdd9b5c",
+  },
+  {
+    id: "v0.1.15",
+    version: "0.1.15",
+    releaseDate: "2026-08-07",
+    title: "v0.1.15 — Chicken Siu Mai · 雞肉燒賣",
+    changes: [
+      { category: "Release", text: "Published as a stable, non-draft, non-prerelease release with intentionally unsigned Squirrel.Windows artifacts." },
+      { category: "Code name", text: "Chicken Siu Mai · 雞肉燒賣" },
+      { category: "Source", text: "Release metadata identifies commit 5b968f54e976ca32f2d1c5b003acd5f34bdd9b5c." },
+    ],
+    commitSha: "5b968f54e976ca32f2d1c5b003acd5f34bdd9b5c",
+  },
+  {
+    id: "v0.1.14",
+    version: "0.1.14",
+    releaseDate: "2026-08-07",
+    title: "v0.1.14 — Beef Siu Mai · 牛肉燒賣",
+    changes: [
+      { category: "Release", text: "Published as a stable, non-draft, non-prerelease release with intentionally unsigned Squirrel.Windows artifacts." },
+      { category: "Code name", text: "Beef Siu Mai · 牛肉燒賣" },
+      { category: "Source", text: "Release metadata identifies commit 57a43a2bf303c02ae84183f8b22d366e43c96105." },
+    ],
+    commitSha: "57a43a2bf303c02ae84183f8b22d366e43c96105",
+  },
+  {
+    id: "v0.1.13",
+    version: "0.1.13",
+    releaseDate: "2026-08-07",
+    title: "v0.1.13 — Scallop Siu Mai · 帶子燒賣",
+    changes: [
+      { category: "Release", text: "Published as a stable, non-draft, non-prerelease release with intentionally unsigned Squirrel.Windows artifacts." },
+      { category: "Code name", text: "Scallop Siu Mai · 帶子燒賣" },
+      { category: "Source", text: "Release metadata identifies commit 57a43a2bf303c02ae84183f8b22d366e43c96105." },
+    ],
+    commitSha: "57a43a2bf303c02ae84183f8b22d366e43c96105",
+  },
+  {
+    id: "v0.1.12",
+    version: "0.1.12",
+    releaseDate: "2026-08-07",
+    title: "v0.1.12 — Quail Egg Siu Mai · 鵪鶉蛋燒賣",
+    changes: [
+      { category: "Release", text: "Published as a stable, non-draft, non-prerelease release with intentionally unsigned Squirrel.Windows artifacts." },
+      { category: "Code name", text: "Quail Egg Siu Mai · 鵪鶉蛋燒賣" },
+      { category: "Source", text: "Release metadata identifies commit e6fd63d4227c740c7b73298784d95d0b84b9a869." },
+    ],
+    commitSha: "e6fd63d4227c740c7b73298784d95d0b84b9a869",
+  },
+  {
+    id: "v0.1.11",
+    version: "0.1.11",
+    releaseDate: "2026-08-07",
+    title: "v0.1.11 — Crab Roe Siu Mai · 蟹籽燒賣",
+    changes: [
+      { category: "Release", text: "Published as a stable, non-draft, non-prerelease release with intentionally unsigned Squirrel.Windows artifacts." },
+      { category: "Code name", text: "Crab Roe Siu Mai · 蟹籽燒賣" },
+      { category: "Source", text: "Release metadata identifies commit e6fd63d4227c740c7b73298784d95d0b84b9a869." },
+    ],
+    commitSha: "e6fd63d4227c740c7b73298784d95d0b84b9a869",
+  },
+  {
+    id: "v0.1.10",
+    version: "0.1.10",
+    releaseDate: "2026-08-07",
+    title: "v0.1.10 — Classic Siu Mai · 燒賣",
+    changes: [
+      { category: "Release", text: "Published as a stable, non-draft, non-prerelease release with intentionally unsigned Squirrel.Windows artifacts." },
+      { category: "Code name", text: "Classic Siu Mai · 燒賣" },
+      { category: "Source", text: "Release metadata identifies commit 895bc6e16de223111721457c05b09bfe641c7641." },
+    ],
+    commitSha: "895bc6e16de223111721457c05b09bfe641c7641",
+  },
+  {
+    id: "v0.1.9",
+    version: "0.1.9",
+    releaseDate: "2026-08-07",
+    title: "v0.1.9 — Cuttlefish Shrimp Dumpling · 墨魚蝦餃",
+    changes: [
+      { category: "Release", text: "Published as a stable, non-draft, non-prerelease release with intentionally unsigned Squirrel.Windows artifacts." },
+      { category: "Code name", text: "Cuttlefish Shrimp Dumpling · 墨魚蝦餃" },
+      { category: "Source", text: "Release metadata identifies commit 895bc6e16de223111721457c05b09bfe641c7641." },
+    ],
+    commitSha: "895bc6e16de223111721457c05b09bfe641c7641",
+  },
+  {
+    id: "v0.1.8",
+    version: "0.1.8",
+    releaseDate: "2026-08-07",
+    title: "v0.1.8 — Dried Scallop Shrimp Dumpling · 瑤柱蝦餃",
+    changes: [
+      { category: "Release", text: "Published as a stable, non-draft, non-prerelease release with intentionally unsigned Squirrel.Windows artifacts." },
+      { category: "Code name", text: "Dried Scallop Shrimp Dumpling · 瑤柱蝦餃" },
+      { category: "Source", text: "Release metadata identifies commit a008ce6446e5d25a02574d708401e4075e2253ac." },
+    ],
+    commitSha: "a008ce6446e5d25a02574d708401e4075e2253ac",
+  },
+  {
+    id: "v0.1.7",
+    version: "0.1.7",
+    releaseDate: "2026-08-07",
+    title: "v0.1.7 — Lobster Dumpling · 龍蝦餃",
+    changes: [
+      { category: "Release", text: "Published as a stable, non-draft, non-prerelease release with intentionally unsigned Squirrel.Windows artifacts." },
+      { category: "Code name", text: "Lobster Dumpling · 龍蝦餃" },
+      { category: "Source", text: "Release metadata identifies commit a008ce6446e5d25a02574d708401e4075e2253ac." },
+    ],
+    commitSha: "a008ce6446e5d25a02574d708401e4075e2253ac",
+  },
+  {
+    id: "v0.1.6",
+    version: "0.1.6",
+    releaseDate: "2026-08-07",
+    title: "v0.1.6 — Pea Shoot Shrimp Dumpling · 豆苗蝦餃",
+    changes: [
+      { category: "Release", text: "Published as a stable, non-draft, non-prerelease release with intentionally unsigned Squirrel.Windows artifacts." },
+      { category: "Code name", text: "Pea Shoot Shrimp Dumpling · 豆苗蝦餃" },
+      { category: "Source", text: "Release metadata identifies commit 47e493f0b2448dba24bd755e5a0eb0029b769ed4." },
+    ],
+    commitSha: "47e493f0b2448dba24bd755e5a0eb0029b769ed4",
+  },
+  {
+    id: "v0.1.5",
+    version: "0.1.5",
+    releaseDate: "2026-08-07",
+    title: "v0.1.5 — Spinach Shrimp Dumpling · 菠菜蝦餃",
+    changes: [
+      { category: "Release", text: "Published as a stable, non-draft, non-prerelease release with intentionally unsigned Squirrel.Windows artifacts." },
+      { category: "Code name", text: "Spinach Shrimp Dumpling · 菠菜蝦餃" },
+      { category: "Source", text: "Release metadata identifies commit 47e493f0b2448dba24bd755e5a0eb0029b769ed4." },
+    ],
+    commitSha: "47e493f0b2448dba24bd755e5a0eb0029b769ed4",
+  },
+  {
+    id: "v0.1.4",
+    version: "0.1.4",
+    releaseDate: "2026-08-07",
+    title: "v0.1.4 — Chive Shrimp Dumpling · 韭菜蝦餃",
+    changes: [
+      { category: "Release", text: "Published as a stable, non-draft, non-prerelease release with intentionally unsigned Squirrel.Windows artifacts." },
+      { category: "Code name", text: "Chive Shrimp Dumpling · 韭菜蝦餃" },
+      { category: "Source", text: "Release metadata identifies commit ea038ace72cfb1e36307884a21a8467304a0fefb." },
+    ],
+    commitSha: "ea038ace72cfb1e36307884a21a8467304a0fefb",
+  },
+  {
+    id: "v0.1.3",
+    version: "0.1.3",
+    releaseDate: "2026-08-07",
+    title: "v0.1.3 — Crab Roe Har Gow · 蟹籽蝦餃",
+    changes: [
+      { category: "Release", text: "Published as a stable, non-draft, non-prerelease release with intentionally unsigned Squirrel.Windows artifacts." },
+      { category: "Code name", text: "Crab Roe Har Gow · 蟹籽蝦餃" },
+      { category: "Source", text: "Release metadata identifies commit ea038ace72cfb1e36307884a21a8467304a0fefb." },
+    ],
+    commitSha: "ea038ace72cfb1e36307884a21a8467304a0fefb",
+  },
+  {
+    id: "v0.1.2",
+    version: "0.1.2",
+    releaseDate: "2026-08-07",
+    title: "v0.1.2 — Bamboo Shoot Har Gow · 筍尖蝦餃",
+    changes: [
+      { category: "Release", text: "Published as a stable, non-draft, non-prerelease release with intentionally unsigned Squirrel.Windows artifacts." },
+      { category: "Code name", text: "Bamboo Shoot Har Gow · 筍尖蝦餃" },
+      { category: "Source", text: "Release metadata identifies commit 63a8bdcfb5ff577e08fa0d6d030f3d5d9a6b3e2c." },
+    ],
+    commitSha: "63a8bdcfb5ff577e08fa0d6d030f3d5d9a6b3e2c",
+  },
+];
+
 const MAX_ENTRIES = 512;
 const MAX_ID_LENGTH = 128;
 const MAX_VERSION_LENGTH = 128;

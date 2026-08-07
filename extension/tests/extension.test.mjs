@@ -178,6 +178,17 @@ test("service worker runtime boundary stores settings and reports disabled hando
     assert.equal(receivedBody.url, "https://example.test/selection-page");
     assert.equal(receivedBody.title, "Selection page");
     assert.equal(receivedBody.selectionText, "Selected text from the page");
+    receivedBody = null;
+    contextMenuListener({
+      menuItemId: contextMenus.created[0].id,
+      linkUrl: "https://example.test/linked-file.zip",
+      pageUrl: "https://example.test/page-that-contains-link",
+    }, { title: "Link page" });
+    for (let attempt = 0; attempt < 20 && receivedBody === null; attempt += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    }
+    assert.ok(receivedBody, "link context-menu handoff did not reach the manager");
+    assert.equal(receivedBody.url, "https://example.test/linked-file.zip");
     managerPending = true;
     const pending = await send({ type: "HANDOFF_URL", url: "https://example.test/slow-file.zip" });
     assert.equal(pending.result.code, "handoff-pending");

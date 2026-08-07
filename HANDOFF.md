@@ -70,48 +70,59 @@ self-hosted workflows.
 ## Latest verified stable evidence
 
 At this handoff, the current main tip is
-`104a487d9b640b441663017c365de72d2e8a79cb`. The latest implementation
-verification release recorded here remains
-[`v0.1.18`](https://github.com/Ding-Ding-Projects/material-download-manager/releases/tag/v0.1.18);
-the documentation-only stable release from the current tip is
-[`v0.1.19`](https://github.com/Ding-Ding-Projects/material-download-manager/releases/tag/v0.1.19).
+`17cb95cd363b6935b9e9f6343825de51df2524d1`. The latest verified stable
+release is [`v0.1.26`](https://github.com/Ding-Ding-Projects/material-download-manager/releases/tag/v0.1.26),
+published from that exact commit with `isDraft=false` and `isPrerelease=false`.
 The README and stable feed use the repository's dynamic latest-release link so
 later successful pushes can advance the record without making this evidence
 pretend to be timeless.
 
-Self-hosted Windows verification run
-[31174528877](https://github.com/Ding-Ding-Projects/material-download-manager/actions/runs/31174528877),
-stable release run
-[31174528870](https://github.com/Ding-Ding-Projects/material-download-manager/actions/runs/31174528870),
-original Pages run
-[31174528880](https://github.com/Ding-Ding-Projects/material-download-manager/actions/runs/31174528880),
-and post-publication Pages refresh
-[31174981359](https://github.com/Ding-Ding-Projects/material-download-manager/actions/runs/31174981359)
-are green. The published `v0.1.19` record is `isDraft=false`,
-`isPrerelease=false`, targets the exact `104a487` commit, and carries
-`Setup.exe`, `RELEASES`, and `material-download-manager-0.1.19-full.nupkg`.
-Its measured workflow duration is `00:02:34`, from
-`2026-08-07T15:34:56.000Z` through `2026-08-07T15:37:30.000Z`.
+The replacement self-hosted verification chain is green: branch Windows
+[31177366944](https://github.com/Ding-Ding-Projects/material-download-manager/actions/runs/31177366944),
+branch stable release
+[31177367237](https://github.com/Ding-Ding-Projects/material-download-manager/actions/runs/31177367237),
+default-branch stable release
+[31177456111](https://github.com/Ding-Ding-Projects/material-download-manager/actions/runs/31177456111),
+default-branch Windows
+[31177456115](https://github.com/Ding-Ding-Projects/material-download-manager/actions/runs/31177456115),
+and default-branch Pages
+[31177456127](https://github.com/Ding-Ding-Projects/material-download-manager/actions/runs/31177456127).
+The release carries `Setup.exe`, `RELEASES`, and the full
+`material-download-manager-0.1.26-full.nupkg`; its measured workflow timing is
+`00:02:15`, from `2026-08-07T16:18:52.000Z` through
+`2026-08-07T16:21:07.000Z`. The downloaded `Setup.exe` is explicitly
+`NotSigned`, as required by the permanent no-signing policy.
 
-The release code name is **Dark Chocolate Crystal Dumpling · 黑朱古力水晶餃**, resolved from the
-public `dim-sum-photos` catalog and linked to its published photo asset in the
-release notes. The CI line-count table reports 36,622 included lines (33,566
-non-blank) across source, tests, styles/markup, and other project code, plus a
-42,715-line grand total including excluded tracked material. The counter
-reports zero surviving agent-attributed lines under its automation-identity
-rule for this release.
+The release code name is **Steamed Chicken Feet in Black Bean Sauce · 豉汁蒸鳳爪**,
+resolved from the public `dim-sum-photos` catalog and linked to its published
+photo asset in the release notes. The CI line-count table reports 36,641
+included lines (33,585 non-blank) across source, tests, styles/markup, and
+other project code, plus a 42,734-line grand total including excluded tracked
+material. The counter reports zero surviving agent-attributed lines under its
+automation-identity rule for this release.
 
 At evidence-capture time, the live documentation site
 https://ding-ding-projects.github.io/material-download-manager/ reported
-`0.1.19`, the exact `104a487` source commit, `verified=true`,
-`unsigned=true`, and `publication.pages=verified`. The installer endpoint
-responded successfully with a real 115,381,760-byte `Setup.exe` asset. The
-live renderer was also checked through the real browser surface: its About
-view displayed “Pages publication verified”; the live manifest now reports the
-`0.1.19` stable release after the post-publication refresh. The stable feed
-remains dynamic and must be rechecked after any later release.
+`0.1.26`, the exact `17cb95c` source commit, `verified=true`, `unsigned=true`,
+and `publication.pages=verified`. The homepage, manifest endpoint, and
+immutable installer URL each returned HTTP 200. The live renderer's About view
+displayed the verified publication state; the stable feed remains dynamic and
+must be rechecked after any later release.
 
 ## Current implementation slice verified and published
+
+The active-download-cap test was corrected after real release run
+[31176187879](https://github.com/Ding-Ding-Projects/material-download-manager/actions/runs/31176187879)
+exposed a timing race: the old 300 ms response could complete before the
+queued-state assertion and the suite ended 30 passed, 1 failed, and 1
+cancelled. Commit `17cb95c` adds a promise-controlled response body gate in the
+test server and releases it only after the assertion, with cleanup protection.
+The engine suite passed 31/31 with 0 failures and 0 cancellations on three
+consecutive local runs; the active-cap test took 2.28s, 2.57s, and 2.57s.
+This is test infrastructure only; production download code is unchanged.
+
+The earlier UI hardening slice below remains the historical implementation
+record that established the separate progress window and extension handoff.
 
 The fresh branch `codex/ui-hardening-20260807` hardens the History and Settings
 slice: local-history commits disable hooks and signing, isolate the snapshot

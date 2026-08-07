@@ -18,6 +18,11 @@ import type {
 import { isExportResult } from "../shared/export";
 import { isHistoryView } from "../shared/history";
 import { isUpdateInstallResult, isUpdateState, isUpdateUnsavedWorkState } from "../shared/types";
+import {
+  isChangelogView,
+  type ChangelogView,
+  type ChangelogViewRequest,
+} from "./history/ChangelogStore";
 
 // Everything exposed to the renderer goes through this bridge. No direct
 // Node/ipcRenderer access is ever given to renderer code.
@@ -97,6 +102,16 @@ const api = {
   exportHistory: async (format: ExportFormat, filter?: HistoryFilter): Promise<ExportResult> => {
     const result: unknown = await ipcRenderer.invoke(IPC.HISTORY_EXPORT_VIEW, format, filter);
     if (!isExportResult(result)) throw new Error("Invalid history export from main process");
+    return result;
+  },
+  getChangelogView: async (request?: ChangelogViewRequest): Promise<ChangelogView> => {
+    const view: unknown = await ipcRenderer.invoke(IPC.CHANGELOG_GET_VIEW, request);
+    if (!isChangelogView(view)) throw new Error("Invalid changelog view from main process");
+    return view;
+  },
+  exportChangelog: async (format: ExportFormat, request?: ChangelogViewRequest): Promise<ExportResult> => {
+    const result: unknown = await ipcRenderer.invoke(IPC.CHANGELOG_EXPORT_VIEW, format, request);
+    if (!isExportResult(result)) throw new Error("Invalid changelog export from main process");
     return result;
   },
 
