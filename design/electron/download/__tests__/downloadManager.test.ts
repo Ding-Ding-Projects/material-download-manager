@@ -61,12 +61,11 @@ test("queue creation rejects malformed item IDs before persistence and processQu
 
 test("one global active-download cap is shared across multiple queues", async () => {
   const root = await fsp.mkdtemp(path.join(os.tmpdir(), "mdm-manager-test-"));
-  const firstServer = await startTestServer(64 * 1024, {
-    // Keep the first slot observably active while Git-backed persistence and
-    // the CI event loop settle; 300 ms was short enough for the transfer to
-    // complete before the cap assertions ran on a busy self-hosted runner.
-    bodyChunkDelayMs: 5000,
+  let releaseFirstBody = () => {};
+  const firstBodyRelease = new Promise<void>((resolve) => {
+    releaseFirstBody = resolve;
   });
+  const firstServer = await startTestServer(64 * 1024, { bodyRelease: firstBodyRelease });
   const secondServer = await startTestServer(64 * 1024, { bodyChunkDelayMs: 150 });
   const previousUserProfile = process.env.USERPROFILE;
   process.env.USERPROFILE = root;
@@ -109,6 +108,7 @@ test("one global active-download cap is shared across multiple queues", async ()
     assert.equal(state.items.find((item) => item.id === firstId)?.status, "downloading");
     assert.equal(state.items.find((item) => item.id === secondId)?.status, "queued");
 
+    releaseFirstBody();
     await bothCompleted;
     for (let i = 0; i < 100 && secondServer.requestHeaders.length === 0; i++) {
       await new Promise((resolve) => setTimeout(resolve, 10));
@@ -117,6 +117,7 @@ test("one global active-download cap is shared across multiple queues", async ()
     assert.ok(secondServer.requestHeaders.length > 0, "the second queue should start after the first frees the global slot");
     assert.notEqual(state.items.find((item) => item.id === secondId)?.status, "queued");
   } finally {
+    releaseFirstBody();
     await manager.shutdown();
     await firstServer.close();
     await secondServer.close();

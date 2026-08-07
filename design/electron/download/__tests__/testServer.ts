@@ -26,6 +26,7 @@ export function startTestServer(
     redirectLocation?: string;
     responseDelayMs?: number;
     bodyChunkDelayMs?: number;
+    bodyRelease?: Promise<void>;
   } = {}
 ): Promise<TestServerHandle> {
   const supportRanges = opts.supportRanges ?? true;
@@ -36,7 +37,7 @@ export function startTestServer(
   const server = http.createServer((req, res) => {
     requestHeaders.push(req.headers);
 
-    const respond = () => {
+    const respond = async () => {
       const path = new URL(req.url ?? "/", "http://127.0.0.1").pathname;
       const redirectMatch = /^\/redirect\/(\d+)$/.exec(path);
       if (redirectMatch) {
@@ -91,7 +92,12 @@ export function startTestServer(
         ...(supportRanges ? { "Accept-Ranges": "bytes" } : {}),
         ...extraHeaders,
       });
-      if (opts.bodyChunkDelayMs && body.length > 1) {
+      if (opts.bodyRelease && body.length > 1) {
+        res.write(body.subarray(0, 1));
+        await opts.bodyRelease;
+        if (opts.bodyChunkDelayMs) setTimeout(() => res.end(body.subarray(1)), opts.bodyChunkDelayMs);
+        else res.end(body.subarray(1));
+      } else if (opts.bodyChunkDelayMs && body.length > 1) {
         res.write(body.subarray(0, 1));
         setTimeout(() => res.end(body.subarray(1)), opts.bodyChunkDelayMs);
       } else {
@@ -99,8 +105,8 @@ export function startTestServer(
       }
     };
 
-    if (opts.responseDelayMs) setTimeout(respond, opts.responseDelayMs);
-    else respond();
+    if (opts.responseDelayMs) setTimeout(() => void respond(), opts.responseDelayMs);
+    else void respond();
   });
 
   return new Promise((resolve) => {
