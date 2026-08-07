@@ -12,6 +12,10 @@ function compareStable(left, right) {
   return left < right ? -1 : left > right ? 1 : 0;
 }
 
+function normalizeLineEndings(value) {
+  return value.replace(/\r\n?/gu, "\n");
+}
+
 async function collectMarkdown(directory) {
   const entries = (await readdir(directory, { withFileTypes: true })).sort((left, right) => compareStable(left.name, right.name));
   const files = [];
@@ -52,7 +56,7 @@ const expected = await buildSource();
 if (process.argv.includes("--check")) {
   let actual = "";
   try {
-    actual = await readFile(outputPath, "utf8");
+    actual = normalizeLineEndings(await readFile(outputPath, "utf8"));
   } catch {
     throw new Error(`Documentation bundle is missing: ${path.relative(repositoryRoot, outputPath)}. Run npm run docs:bundle.`);
   }

@@ -207,11 +207,13 @@ translated article copies remain explicit follow-up work rather than an
 unverified claim.
 
 The first branch release run [31187148273](https://github.com/Ding-Ding-Projects/material-download-manager/actions/runs/31187148273)
-was intentionally red at the new bundle guard: Node 22 on the self-hosted
-runner ordered the generated paths differently from the local Node 26 run
-because the generator used locale-dependent `localeCompare`. The corrective
-commit replaces it with a code-point comparator; the branch must be dewed
-again and its replacement release/Windows runs must be checked before any
+was intentionally red at the new bundle guard. The second branch Windows run
+[31187443242](https://github.com/Ding-Ding-Projects/material-download-manager/actions/runs/31187443242)
+confirmed the runner's fresh checkout converted tracked generated text to CRLF
+while the generator emitted LF; the raw-byte guard therefore failed even after
+the locale-dependent ordering was removed. The corrective commit normalizes
+line endings before comparison and retains code-point ordering. The branch
+must be dewed again and its replacement release/Windows runs checked before any
 default-branch integration.
 
 ## Runnable application
