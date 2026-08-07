@@ -103,6 +103,17 @@ export function createDefaultTabState(): TabState {
       pinned: false,
       dirty: false,
     },
+    {
+      id: "changelog",
+      label: "Changelog",
+      title: "Published stable releases",
+      windowId: "main",
+      workspaceId: "default",
+      stripId: "main",
+      groupId,
+      pinned: false,
+      dirty: false,
+    },
   ];
   return {
     tabs,
@@ -185,6 +196,20 @@ export function normalizeTabState(value: unknown): TabState {
       dirty: false,
     });
     firstGroup.tabIds.push("history");
+  }
+  if (firstGroup && !normalizedTabs.some((tab) => tab.id === "changelog")) {
+    normalizedTabs.push({
+      id: "changelog",
+      label: "Changelog",
+      title: "Published stable releases",
+      windowId: "main",
+      workspaceId: "default",
+      stripId: "main",
+      groupId: firstGroup.id,
+      pinned: false,
+      dirty: false,
+    });
+    firstGroup.tabIds.push("changelog");
   }
   const activeTabId = typeof value.activeTabId === "string" && normalizedTabs.some((tab) => tab.id === value.activeTabId)
     ? value.activeTabId

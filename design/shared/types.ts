@@ -290,6 +290,8 @@ export const IPC = {
   UPDATE_SET_UNSAVED_WORK: "update:setUnsavedWork",
   HISTORY_GET_VIEW: "history:getView",
   HISTORY_EXPORT_VIEW: "history:exportView",
+  CHANGELOG_GET_VIEW: "changelog:getView",
+  CHANGELOG_EXPORT_VIEW: "changelog:exportView",
 } as const;
 
 export type { ExportFormat, ExportResult, HistoryFilter, HistoryView };
