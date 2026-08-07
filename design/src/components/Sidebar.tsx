@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { useAppStore } from "../store/useAppStore";
+import { getUiCopy } from "../i18n/ui";
 import { CATEGORY_LABELS, CATEGORY_ORDER } from "../utils/category";
 import { CategoryIcon, ChevronDownIcon, ChevronUpIcon, FolderIcon } from "./icons";
 
@@ -55,6 +56,8 @@ export default function Sidebar() {
   const queues = useAppStore((s) => s.queues);
   const filter = useAppStore((s) => s.filter);
   const setFilter = useAppStore((s) => s.setFilter);
+  const settings = useAppStore((s) => s.settings);
+  const copy = getUiCopy(settings);
 
   const [allExpanded, setAllExpanded] = useState(true);
   const [finishedExpanded, setFinishedExpanded] = useState(true);
@@ -81,7 +84,7 @@ export default function Sidebar() {
   return (
     <nav className="sidebar">
       <SidebarSection
-        label="All"
+        label={copy.text("All", "全部")}
         bold
         active={filter.kind === "all"}
         count={items.length}
@@ -109,7 +112,7 @@ export default function Sidebar() {
       </SidebarSection>
 
       <SidebarSection
-        label="Finished"
+        label={copy.text("Finished", "已完成")}
         active={filter.kind === "status" && filter.status === "finished"}
         count={finishedCount}
         expanded={finishedExpanded}
@@ -118,7 +121,7 @@ export default function Sidebar() {
       />
 
       <SidebarSection
-        label="Unfinished"
+        label={copy.text("Unfinished", "未完成")}
         active={filter.kind === "status" && filter.status === "unfinished"}
         count={unfinishedCount}
         expanded={unfinishedExpanded}
@@ -128,7 +131,7 @@ export default function Sidebar() {
 
       {queues.length > 0 && (
         <SidebarSection
-          label="Queues"
+          label={copy.queues}
           expanded={queuesExpanded}
           onToggleExpand={() => setQueuesExpanded((v) => !v)}
         >

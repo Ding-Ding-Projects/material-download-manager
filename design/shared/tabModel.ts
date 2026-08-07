@@ -28,6 +28,8 @@ export interface TabState {
   activeGroupId: string | null;
 }
 
+export const TAB_STATE_SCHEMA_VERSION = 1;
+
 export type TabSearchScope = "strip" | "group" | "groups" | "master";
 
 export interface TabSearchQuery {
@@ -52,6 +54,197 @@ export interface BulkCloseResult {
 
 export function defaultTabSearchQuery(): TabSearchQuery {
   return { mode: "text", pattern: "", flags: "g" };
+}
+
+export function createDefaultTabState(): TabState {
+  const groupId = "downloads-group";
+  const tabs: TabRecord[] = [
+    {
+      id: "downloads",
+      label: "Downloads",
+      title: "All downloads",
+      windowId: "main",
+      workspaceId: "default",
+      stripId: "main",
+      groupId,
+      pinned: true,
+      dirty: false,
+    },
+    {
+      id: "queues",
+      label: "Queues",
+      title: "Queue manager",
+      windowId: "main",
+      workspaceId: "default",
+      stripId: "main",
+      groupId,
+      pinned: false,
+      dirty: false,
+    },
+    {
+      id: "settings",
+      label: "Settings",
+      title: "Application settings",
+      windowId: "main",
+      workspaceId: "default",
+      stripId: "main",
+      groupId,
+      pinned: false,
+      dirty: false,
+    },
+  ];
+  return {
+    tabs,
+    groups: [{ id: groupId, name: "Downloads", color: "#7c5cff", collapsed: false, tabIds: tabs.map((tab) => tab.id) }],
+    activeTabId: "downloads",
+    activeStripId: "main",
+    activeGroupId: groupId,
+  };
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function readString(value: unknown, fallback: string, maxLength = 160): string {
+  return typeof value === "string" && value.trim().length > 0 ? value.trim().slice(0, maxLength) : fallback;
+}
+
+/**
+ * Load renderer-owned tab state defensively. Tabs are convenience UI state,
+ * so malformed local storage must fall back without affecting downloads or IPC.
+ */
+export function normalizeTabState(value: unknown): TabState {
+  const fallback = createDefaultTabState();
+  if (!isRecord(value) || !Array.isArray(value.tabs) || !Array.isArray(value.groups)) return fallback;
+
+  const rawTabs = value.tabs.filter(isRecord);
+  const ids = new Set<string>();
+  const tabs = rawTabs.flatMap((raw, index): TabRecord[] => {
+    const id = readString(raw.id, `tab-${index + 1}`, 96);
+    if (ids.has(id)) return [];
+    ids.add(id);
+    const groupId = typeof raw.groupId === "string" ? raw.groupId : null;
+    return [{
+      id,
+      label: readString(raw.label, id, 96),
+      title: typeof raw.title === "string" ? raw.title.slice(0, 180) : undefined,
+      windowId: readString(raw.windowId, "main", 96),
+      workspaceId: readString(raw.workspaceId, "default", 96),
+      stripId: readString(raw.stripId, "main", 96),
+      groupId,
+      pinned: raw.pinned === true,
+      dirty: raw.dirty === true,
+    }];
+  });
+
+  const groupIds = new Set<string>();
+  const groups = value.groups.filter(isRecord).flatMap((raw, index): TabGroup[] => {
+    const id = readString(raw.id, `group-${index + 1}`, 96);
+    if (groupIds.has(id)) return [];
+    groupIds.add(id);
+    return [{
+      id,
+      name: readString(raw.name, `Group ${index + 1}`, 96),
+      color: readString(raw.color, "#7c5cff", 32),
+      collapsed: raw.collapsed === true,
+      tabIds: [],
+    }];
+  });
+  const validGroupIds = new Set(groups.map((group) => group.id));
+  const normalizedTabs = tabs.map((tab) => ({
+    ...tab,
+    groupId: tab.groupId && validGroupIds.has(tab.groupId) ? tab.groupId : null,
+  }));
+  const normalizedGroups = groups.map((group) => ({
+    ...group,
+    tabIds: normalizedTabs.filter((tab) => tab.groupId === group.id).map((tab) => tab.id),
+  }));
+  const activeTabId = typeof value.activeTabId === "string" && normalizedTabs.some((tab) => tab.id === value.activeTabId)
+    ? value.activeTabId
+    : normalizedTabs[0]?.id ?? null;
+  const activeGroupId = typeof value.activeGroupId === "string" && normalizedGroups.some((group) => group.id === value.activeGroupId)
+    ? value.activeGroupId
+    : normalizedTabs.find((tab) => tab.id === activeTabId)?.groupId ?? null;
+
+  return {
+    tabs: normalizedTabs,
+    groups: normalizedGroups,
+    activeTabId,
+    activeStripId: readString(value.activeStripId, "main", 96),
+    activeGroupId,
+  };
+}
+
+export function setActiveTab(state: TabState, tabId: string): TabState {
+  const tab = state.tabs.find((candidate) => candidate.id === tabId);
+  if (!tab) return state;
+  return { ...state, activeTabId: tab.id, activeStripId: tab.stripId, activeGroupId: tab.groupId };
+}
+
+export function renameTab(state: TabState, tabId: string, label: string, title?: string): TabState {
+  const nextLabel = label.trim().slice(0, 96);
+  if (!nextLabel) return state;
+  return {
+    ...state,
+    tabs: state.tabs.map((tab) => tab.id === tabId ? { ...tab, label: nextLabel, title: title?.trim().slice(0, 180) || tab.title } : tab),
+  };
+}
+
+export function renameTabGroup(state: TabState, groupId: string, name: string): TabState {
+  const nextName = name.trim().slice(0, 96);
+  if (!nextName) return state;
+  return { ...state, groups: state.groups.map((group) => group.id === groupId ? { ...group, name: nextName } : group) };
+}
+
+export function createTab(state: TabState, input?: Partial<Pick<TabRecord, "label" | "title" | "groupId" | "stripId">>): { state: TabState; tab: TabRecord } {
+  const id = `tab-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  const groupId = input?.groupId && state.groups.some((group) => group.id === input.groupId) ? input.groupId : state.activeGroupId;
+  const tab: TabRecord = {
+    id,
+    label: input?.label?.trim().slice(0, 96) || `View ${state.tabs.length + 1}`,
+    title: input?.title?.trim().slice(0, 180) || "Download view",
+    windowId: "main",
+    workspaceId: "default",
+    stripId: input?.stripId || state.activeStripId,
+    groupId,
+    pinned: false,
+    dirty: false,
+  };
+  return {
+    tab,
+    state: {
+      ...state,
+      tabs: [...state.tabs, tab],
+      groups: state.groups.map((group) => group.id === groupId ? { ...group, tabIds: [...group.tabIds, tab.id] } : group),
+      activeTabId: tab.id,
+      activeGroupId: groupId,
+    },
+  };
+}
+
+export function closeTab(state: TabState, tabId: string): TabState {
+  const tab = state.tabs.find((candidate) => candidate.id === tabId);
+  if (!tab || tab.dirty) return state;
+  const remaining = state.tabs.filter((candidate) => candidate.id !== tabId);
+  const nextActive = state.activeTabId === tabId ? remaining[Math.max(0, state.tabs.findIndex((candidate) => candidate.id === tabId) - 1)]?.id ?? remaining[0]?.id ?? null : state.activeTabId;
+  return {
+    ...state,
+    tabs: remaining,
+    groups: state.groups.map((group) => ({ ...group, tabIds: group.tabIds.filter((id) => id !== tabId) })),
+    activeTabId: nextActive,
+    activeGroupId: remaining.find((candidate) => candidate.id === nextActive)?.groupId ?? null,
+  };
+}
+
+export function removeTabGroup(state: TabState, groupId: string): TabState {
+  if (!state.groups.some((group) => group.id === groupId)) return state;
+  return {
+    ...state,
+    tabs: state.tabs.map((tab) => tab.groupId === groupId ? { ...tab, groupId: null } : tab),
+    groups: state.groups.filter((group) => group.id !== groupId),
+    activeGroupId: state.activeGroupId === groupId ? null : state.activeGroupId,
+  };
 }
 
 function groupFor(state: TabState, tab: TabRecord): TabGroup | null {

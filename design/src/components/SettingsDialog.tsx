@@ -3,7 +3,14 @@ import type { AppSettings, SettingKey } from "@shared/types";
 import { createDefaultSettings, isHexColor } from "@shared/settings";
 import { createDefaultRegexBuilderState, evaluateRegex, type RegexBuilderState } from "@shared/regex";
 import { getSettingsCopy } from "../i18n/settings";
+import { getUiCopy } from "../i18n/ui";
 import { useAppStore } from "../store/useAppStore";
+import {
+  DEFAULT_DISPLAY_NAME,
+  normalizeDisplayName,
+  readDisplayName,
+  saveDisplayName,
+} from "../store/displayPreferences";
 import { settingSourceLabel } from "../store/settingsAppearance";
 import Dialog from "./Dialog";
 import { FolderIcon, SettingsIcon } from "./icons";
@@ -19,6 +26,11 @@ const SETTINGS_SEARCH_INDEX = [
     id: "settings-appearance-heading",
     targetId: "settings-theme",
     label: "Appearance theme density accent seed color font family font size weight",
+  },
+  {
+    id: "settings-display-name",
+    targetId: "settings-display-name-input",
+    label: "App display name title bar notifications identity data folder installer update feed",
   },
   {
     id: "settings-default-save-folder",
@@ -76,8 +88,11 @@ export default function SettingsDialog() {
   }));
   const [settingsRegexOpen, setSettingsRegexOpen] = useState(false);
   const settingsRegexButtonRef = useRef<HTMLButtonElement>(null);
+  const [displayName, setDisplayName] = useState(readDisplayName);
+  const [displayNameError, setDisplayNameError] = useState<string | null>(null);
 
   const copy = useMemo(() => getSettingsCopy(form.languageMode), [form.languageMode]);
+  const ui = useMemo(() => getUiCopy(form), [form]);
   const compiledDefaults = useMemo(
     () => createDefaultSettings(form.defaultSaveFolder),
     [form.defaultSaveFolder]
@@ -154,6 +169,8 @@ export default function SettingsDialog() {
   function resetAllSettings() {
     const defaults = createDefaultSettings(form.defaultSaveFolder);
     setForm({ ...defaults, defaultSaveFolder: form.defaultSaveFolder });
+    setDisplayName(DEFAULT_DISPLAY_NAME);
+    setDisplayNameError(null);
     setUnlimitedSpeed(true);
     setSpeedMBs(5);
     setAccentError(null);
@@ -175,6 +192,10 @@ export default function SettingsDialog() {
       setAccentError(copy.accentInvalid);
       return;
     }
+    if (!displayName.trim()) {
+      setDisplayNameError(ui.displayNameInvalid);
+      return;
+    }
 
     setSaving(true);
     try {
@@ -182,6 +203,7 @@ export default function SettingsDialog() {
         ...form,
         globalSpeedLimitBytes: unlimitedSpeed ? 0 : Math.round(speedMBs * 1024 * 1024),
       });
+      saveDisplayName(normalizeDisplayName(displayName));
       closeSettings();
     } finally {
       setSaving(false);
@@ -190,7 +212,7 @@ export default function SettingsDialog() {
 
   return (
     <Dialog
-      title="Settings"
+      title={ui.settings}
       icon={<SettingsIcon size={16} />}
       onClose={closeSettings}
       width={520}
@@ -198,11 +220,11 @@ export default function SettingsDialog() {
       footer={
         <>
           <button type="button" className="btn btn-primary" onClick={() => void handleSave()} disabled={saving}>
-            Save
+            {ui.text("Save", "儲存")}
           </button>
           <div className="spacer" />
           <button type="button" className="btn btn-ghost" onClick={closeSettings}>
-            Cancel
+            {ui.cancel}
           </button>
         </>
       }
@@ -318,10 +340,35 @@ export default function SettingsDialog() {
           </label>
         </div>
         <p className="setting-disclosure" role="note">{copy.funnyDisclosure}</p>
+        <p className="setting-preview" role="status">{ui.funnyPreview}</p>
       </section>
 
       <section className="settings-section" aria-labelledby="settings-appearance-heading">
         <div className="settings-section-heading" id="settings-appearance-heading">{copy.appearance}</div>
+
+        <div className="field" id="settings-display-name" tabIndex={-1}>
+          <label className="field-label" htmlFor="settings-display-name-input">{ui.displayName}</label>
+          <div className="field-row">
+            <input
+              className="input"
+              id="settings-display-name-input"
+              type="text"
+              maxLength={64}
+              value={displayName}
+              aria-invalid={displayNameError !== null}
+              aria-describedby="settings-display-name-helper"
+              onChange={(event) => {
+                setDisplayName(event.target.value);
+                setDisplayNameError(null);
+              }}
+            />
+            <button type="button" className="btn btn-ghost btn-sm" onClick={() => setDisplayName(DEFAULT_DISPLAY_NAME)}>
+              {ui.resetDisplayName}
+            </button>
+          </div>
+          <span className="setting-helper" id="settings-display-name-helper">{ui.displayNameHelper}</span>
+          {displayNameError && <span className="field-error" role="alert">{displayNameError}</span>}
+        </div>
 
         <label className="field">
           <span className="field-label">Theme</span>

@@ -119,6 +119,13 @@ export interface AddDownloadRequest {
   headers?: Record<string, string>;
 }
 
+/**
+ * Browser captures deliberately use the same request shape as the in-app
+ * add flow. The main process is the only owner of enqueueing, persistence,
+ * and progress broadcasts; a handoff cannot create a second download store.
+ */
+export type BrowserHandoffRequest = AddDownloadRequest;
+
 export interface NewDownloadInfo {
   url: string;
   suggestedFileName: string;
@@ -254,6 +261,7 @@ export const IPC = {
   RETRY: "download:retry",
   OPEN_FILE: "download:openFile",
   OPEN_FOLDER: "download:openFolder",
+  HANDOFF_ADD_DOWNLOAD: "download:handoffAdd",
   GET_STATE: "state:get",
   STATE_CHANGED: "state:changed",
   SETTINGS_GET: "settings:get",
@@ -267,6 +275,10 @@ export const IPC = {
   WINDOW_MINIMIZE: "window:minimize",
   WINDOW_MAXIMIZE: "window:maximize",
   WINDOW_CLOSE: "window:close",
+  PROGRESS_OPEN: "progress:open",
+  PROGRESS_CLOSE: "progress:close",
+  PROGRESS_MINIMIZE: "progress:minimize",
+  PROGRESS_TARGET_CHANGED: "progress:targetChanged",
   UPDATE_GET_STATE: "update:getState",
   UPDATE_STATE_CHANGED: "update:stateChanged",
   UPDATE_CHECK: "update:check",

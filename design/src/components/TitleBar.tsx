@@ -1,22 +1,27 @@
 import { useAppStore } from "../store/useAppStore";
+import { getUiCopy } from "../i18n/ui";
+import { useDisplayName } from "../store/displayPreferences";
 import { CloseIcon, LogoIcon, MaximizeIcon, MinimizeIcon } from "./icons";
 
 export default function TitleBar() {
   const minimizeWindow = useAppStore((s) => s.minimizeWindow);
   const maximizeWindow = useAppStore((s) => s.maximizeWindow);
   const closeWindow = useAppStore((s) => s.closeWindow);
+  const settings = useAppStore((s) => s.settings);
+  const displayName = useDisplayName();
+  const copy = getUiCopy(settings);
 
   return (
     <header className="titlebar">
       <div className="titlebar-brand">
         <LogoIcon size={20} />
-        <span className="titlebar-title">Material Download Manager</span>
+        <span className="titlebar-title" title={displayName}>{displayName}</span>
       </div>
       <div className="titlebar-controls">
         <button
           type="button"
           className="titlebar-btn"
-          aria-label="Minimize"
+          aria-label={copy.text("Minimize", "最小化")}
           onClick={() => minimizeWindow()}
         >
           <MinimizeIcon size={14} />
@@ -24,7 +29,7 @@ export default function TitleBar() {
         <button
           type="button"
           className="titlebar-btn"
-          aria-label="Maximize"
+          aria-label={copy.text("Maximize", "最大化")}
           onClick={() => maximizeWindow()}
         >
           <MaximizeIcon size={13} />
@@ -32,7 +37,7 @@ export default function TitleBar() {
         <button
           type="button"
           className="titlebar-btn titlebar-btn-close"
-          aria-label="Close"
+          aria-label={copy.close}
           onClick={() => closeWindow()}
         >
           <CloseIcon size={15} />
