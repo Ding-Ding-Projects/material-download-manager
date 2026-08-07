@@ -144,7 +144,7 @@ function refreshContextMenu(settings) {
     await chrome.contextMenus.create({
       id: MENU_ID,
       title: `${localize("sendUrl", effectiveSettings)} · ${effectiveSettings.managerName}`,
-      contexts: ["page", "link"],
+      contexts: ["page", "link", "selection"],
     });
   });
   return contextMenuRefresh;
@@ -174,6 +174,7 @@ chrome.contextMenus.onClicked.addListener((info, tab) => {
     type: "HANDOFF_URL",
     url: info.linkUrl || info.pageUrl,
     title: tab?.title,
+    selectionText: info.selectionText,
   });
   if (!message) {
     void recordResult(result("handoff-failed", "The context-menu target was not a usable URL."));
