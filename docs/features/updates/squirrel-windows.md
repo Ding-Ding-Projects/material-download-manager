@@ -3,8 +3,11 @@
 ## Behavior
 
 `design/package.json` targets Squirrel.Windows for x64 builds and explicitly
-sets `forceCodeSigning`, `signExecutable`, and `signAndEditExecutable` to
-`false`. Code signing is permanently prohibited for this project. A valid
+sets the supported `forceCodeSigning` root control and Windows
+`signAndEditExecutable` control to `false`. electron-builder 24.13.3 does not
+accept root-level `signExecutable` or `signAndEditExecutable` properties, so
+the helper rejects those schema-invalid controls rather than pretending they
+disable anything. Code signing is permanently prohibited for this project. A valid
 build produces `Setup.exe`, `RELEASES`, the full `.nupkg`, and any generated
 delta packages under the Squirrel output directory. The release workflow
 collects those real files, verifies that `Setup.exe` reports `NotSigned`, and

@@ -35,13 +35,17 @@ try {
   Stop-WithMessage 'design/package.json is malformed JSON.'
 }
 
-if ($null -eq $package.build -or $null -eq $package.build.forceCodeSigning) {
+if ($null -eq $package.build -or $null -eq $package.build.forceCodeSigning -or $null -eq $package.build.win) {
   Stop-WithMessage 'design/package.json must declare build.forceCodeSigning so the unsigned override is explicit.'
 }
-foreach ($control in @('forceCodeSigning', 'signExecutable', 'signAndEditExecutable')) {
-  if ($package.build.$control -ne $false) {
-    Stop-WithMessage "design/package.json must set build.$control to false because code signing is prohibited."
-  }
+if ($package.build.forceCodeSigning -ne $false) {
+  Stop-WithMessage 'design/package.json must set build.forceCodeSigning to false because code signing is prohibited.'
+}
+if ($package.build.win.signAndEditExecutable -ne $false) {
+  Stop-WithMessage 'design/package.json must set build.win.signAndEditExecutable to false because code signing is prohibited.'
+}
+if ($null -ne $package.build.PSObject.Properties['signExecutable'] -or $null -ne $package.build.PSObject.Properties['signAndEditExecutable']) {
+  Stop-WithMessage 'design/package.json contains unsupported root-level signing controls for the declared electron-builder schema.'
 }
 
 if (-not (Test-Path -LiteralPath $releaseRoot -PathType Container)) {
@@ -71,8 +75,7 @@ foreach ($name in $signingEnvironmentNames) {
 $exitCode = 1
 try {
   $package.build.forceCodeSigning = $false
-  $package.build.signExecutable = $false
-  $package.build.signAndEditExecutable = $false
+  $package.build.win.signAndEditExecutable = $false
   $temporaryJson = $package | ConvertTo-Json -Depth 40
   [System.IO.File]::WriteAllText(
     $packagePath,
