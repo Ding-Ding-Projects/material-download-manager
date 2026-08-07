@@ -26,6 +26,9 @@
     "dist:win:dir": "npm run build && electron-builder --win --x64 --dir",
     "test:engine": "node --test --test-concurrency=1 --test-timeout=60000 dist-electron/electron/download/__tests__/*.test.js",
     "test:electron": "node --test --test-timeout=30000 dist-electron/electron/__tests__/*.test.js",
+    "ensure:electron": "node scripts/ensure-electron-binary.mjs",
+    "prestart": "node scripts/ensure-electron-binary.mjs",
+    "pretest:ui": "node scripts/ensure-electron-binary.mjs",
     "test:ui": "node ui-tests/smoke.mjs"
   },
   "dependencies": {
