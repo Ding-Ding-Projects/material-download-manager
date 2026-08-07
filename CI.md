@@ -143,7 +143,9 @@ The repository-level runner was registered on 2026-08-07 with the four labels
 above. Organization-level inventory still cannot be read with the current
 GitHub CLI account because GitHub returned HTTP 403 and required the
 `admin:org` scope; this does not block the repository-scoped evidence. Main
-verification run `31158991027`, stable release run `31158991143`, and Pages
-runs `31158991086` and `31159402542` are green. The live manifest reports
-stable `v0.1.8` from `a008ce6446e5d25a02574d708401e4075e2253ac`, and the
-published installer endpoint responds with the real `Setup.exe` asset.
+verification run `31161445625`, stable release run `31161445627`, and Pages
+run `31161445620` are green. At evidence-capture time, the live manifest
+reported stable `v0.1.12` from `e6fd63d4227c740c7b73298784d95d0b84b9a869`,
+with `publication.pages=verified` and the published installer endpoint
+responding with the real `Setup.exe` asset. The repository's latest-release
+link remains dynamic for later successful stable runs.

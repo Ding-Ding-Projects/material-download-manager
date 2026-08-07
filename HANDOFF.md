@@ -67,39 +67,45 @@ which published the legacy `v0.1.0` test release from the corrected commit with 
 also passed. Those historical hosted runs do not verify the current
 self-hosted workflows.
 
-## Current stable delivery
+## Latest verified stable evidence
 
-The current main tip is `a008ce6446e5d25a02574d708401e4075e2253ac`.
+At this handoff, the current main tip is
+`e6fd63d4227c740c7b73298784d95d0b84b9a869`. The latest implementation
+verification release recorded here is
+[`v0.1.12`](https://github.com/Ding-Ding-Projects/material-download-manager/releases/tag/v0.1.12);
+the README and stable feed use the repository's dynamic latest-release link so
+later successful pushes can advance the record without making this evidence
+pretend to be timeless.
+
 Self-hosted Windows verification run
-[31158991027](https://github.com/Ding-Ding-Projects/material-download-manager/actions/runs/31158991027)
-and stable release run
-[31158991143](https://github.com/Ding-Ding-Projects/material-download-manager/actions/runs/31158991143)
-are green. The published
-[`v0.1.8`](https://github.com/Ding-Ding-Projects/material-download-manager/releases/tag/v0.1.8)
-record is `isDraft=false`, `isPrerelease=false`, targets the exact main tip,
-and carries `Setup.exe`, `RELEASES`, and
-`material-download-manager-0.1.8-full.nupkg`. Its measured workflow duration
-is `00:02:05`, from `2026-08-07T11:54:12.000Z` through
-`2026-08-07T11:56:17.000Z`.
+[31161445625](https://github.com/Ding-Ding-Projects/material-download-manager/actions/runs/31161445625),
+stable release run
+[31161445627](https://github.com/Ding-Ding-Projects/material-download-manager/actions/runs/31161445627),
+and Pages run
+[31161445620](https://github.com/Ding-Ding-Projects/material-download-manager/actions/runs/31161445620)
+are green. The published `v0.1.12` record is `isDraft=false`,
+`isPrerelease=false`, targets the exact `e6fd63d` commit, and carries
+`Setup.exe`, `RELEASES`, and `material-download-manager-0.1.12-full.nupkg`.
+Its measured workflow duration is `00:02:13`, from
+`2026-08-07T12:22:50.000Z` through `2026-08-07T12:25:03.000Z`.
 
-The release code name is **Dried Scallop Shrimp Dumpling · 瑤柱蝦餃**, resolved
-from the public `dim-sum-photos` catalog and linked to its published photo
-asset in the release notes. The CI line-count table reports 34,691 included
-lines (31,741 non-blank) across source, tests, styles/markup, and other
-project code, plus a 40,784-line grand total including excluded tracked
-material. The counter reports zero surviving agent-attributed lines under its
-automation-identity rule for this release.
+The release code name is **Quail Egg Siu Mai · 鵪鶉蛋燒賣**, resolved from the
+public `dim-sum-photos` catalog and linked to its published photo asset in the
+release notes. The CI line-count table reports 34,763 included lines (31,807
+non-blank) across source, tests, styles/markup, and other project code, plus a
+40,856-line grand total including excluded tracked material. The counter
+reports zero surviving agent-attributed lines under its automation-identity
+rule for this release.
 
-The live documentation site is
-https://ding-ding-projects.github.io/material-download-manager/ and the
-repository homepage points to it. Its live release manifest reports `0.1.8`,
-the exact source commit above, `verified=true`, `unsigned=true`, and the
-published installer URL. The installer endpoint responds successfully with a
-real 115,368,960-byte `Setup.exe` asset. Pages run
-[31158991086](https://github.com/Ding-Ding-Projects/material-download-manager/actions/runs/31158991086)
-and explicitly dispatched run
-[31159402542](https://github.com/Ding-Ding-Projects/material-download-manager/actions/runs/31159402542)
-are green.
+At evidence-capture time, the live documentation site
+https://ding-ding-projects.github.io/material-download-manager/ reported
+`0.1.12`, the exact `e6fd63d` source commit, `verified=true`,
+`unsigned=true`, and `publication.pages=verified`. The installer endpoint
+responded successfully with a real 115,368,960-byte `Setup.exe` asset. The
+live renderer was also checked through the real browser surface: its About
+view displayed “Pages publication verified” and the `0.1.12` stable release
+metric. The stable feed remains dynamic and must be rechecked after any later
+release.
 
 ## Runnable application
 
@@ -154,9 +160,9 @@ On the current verification tree, the following checks passed locally:
 | `npm run test:electron` | 36/36 passed for export, local history, regex, tabs, command-palette foundations, compiled renderer-path resolution, secure updater IPC, version monotonicity, timeout/stale-event recovery, native Squirrel download-overlap protection, queue payload validation, Settings Escape handling, completion-notification preference handling, loopback handoff success/failure responses, and slow-pending handoff acknowledgement. |
 | `npm run test:ui` | 19/19 required checks passed through the built Electron/CDP smoke harness: renderer freshness, real preload bridge, tab shell, Settings dialog semantics, anchored regex builder, Escape focus restoration, and cleanup. The empty-profile run honestly reported no progress item; the active progress-window capture below covers the real transfer path. |
 | Chromium extension `npm test` | 12/12 passed for MV3 permissions and entrypoints, context-menu and popup handoff, loopback protocol, bounded validation, settings import/export, regex safety, localization, and no remote assets/tracking. |
-| GitHub Pages source `npm run check` | 39/39 checks passed, including feature-article coverage, local-only assets, stable-manifest fail-closed behavior, and the browser-extension/progress-window articles. |
+| GitHub Pages source `npm run check` | 41/41 checks passed, including feature-article coverage, local-only assets, stable-manifest fail-closed behavior, publication-state rendering, prototype sanitization, and the browser-extension/progress-window articles. |
 | Hidden-desktop progress capture | Passed through the cheap Lowlevel headless route: a real loopback handoff created a live download, and a dynamically resolved second `Chrome_WidgetWin_1` window rendered the separate 980×640 `Download progress` surface with the fixture filename, source URL, transferred bytes, speed, pause, cancel, and close controls. The capture was retained in the session scratchpad, outside the repository. The disposable desktop, Electron process, and fixture server were cleaned up. |
-| Remote GitHub Actions | Current main verification [31158991027](https://github.com/Ding-Ding-Projects/material-download-manager/actions/runs/31158991027), stable release [31158991143](https://github.com/Ding-Ding-Projects/material-download-manager/actions/runs/31158991143), and Pages runs [31158991086](https://github.com/Ding-Ding-Projects/material-download-manager/actions/runs/31158991086) and [31159402542](https://github.com/Ding-Ding-Projects/material-download-manager/actions/runs/31159402542) are green. Historical failures remain linked where they explain fixes; they are not current verification evidence. |
+| Remote GitHub Actions | Current main verification [31161445625](https://github.com/Ding-Ding-Projects/material-download-manager/actions/runs/31161445625), stable release [31161445627](https://github.com/Ding-Ding-Projects/material-download-manager/actions/runs/31161445627), and Pages run [31161445620](https://github.com/Ding-Ding-Projects/material-download-manager/actions/runs/31161445620) are green. Historical failures remain linked where they explain fixes; they are not current verification evidence. |
 
 The hardening milestone corrected the compiled renderer path and made
 unpackaged production launches load the built renderer unless
@@ -172,8 +178,9 @@ fresh unsaved-work assertion. A compile-only success is not packaging evidence:
 the current release path requires `Setup.exe`, `RELEASES`, every referenced
 full or delta `.nupkg`, and `NotSigned` verification. The legacy unsigned
 `v0.1.0` prerelease carries the historical CI-built feed and assets, while
-`MDM_UPDATE_FEED_URL` remains an optional override. The current stable feed is
-verified through `v0.1.8`.
+`MDM_UPDATE_FEED_URL` remains an optional override. The stable feed was
+verified through `v0.1.12` at the evidence-capture point; later successful
+releases advance the same dynamic feed.
 
 The repository has a Windows push/dispatch workflow at
 [`.github/workflows/ci.yml`](.github/workflows/ci.yml) for validation and a
@@ -187,8 +194,9 @@ Pages workflow is now present at
 stages the local site before deployment, asks `actions/configure-pages@v5` to
 enable Pages when needed, and now has live verification at
 https://ding-ding-projects.github.io/material-download-manager/. The site
-injects the verified stable `v0.1.8` manifest only after the release asset
-inventory is checked.
+injects the latest verified stable manifest only after the release asset
+inventory is checked. The `v0.1.12` deployment additionally verified the
+rendered publication state through the live site.
 
 The release branch also passed local static checks for the workflow and helper
 contracts: `actionlint -shellcheck=` passed, all 8 PowerShell run blocks parsed,
@@ -255,11 +263,12 @@ which are owned by Status Hub and runner work and were left untouched here. GitH
 Discussions are enabled and the rolling handoff thread is
 [`#3`](https://github.com/Ding-Ding-Projects/material-download-manager/discussions/3).
 The `v0.1.0` announcement is [`#4`](https://github.com/Ding-Ding-Projects/material-download-manager/discussions/4);
-the current `v0.1.8` release announcement is recorded in the repository's
-Discussion history. The wiki setting is enabled but its wiki repository is not
+the `v0.1.12` release announcement is [`#6`](https://github.com/Ding-Ding-Projects/material-download-manager/discussions/6),
+and the previous `v0.1.8` announcement remains in the Discussion history. The
+wiki setting is enabled but its wiki repository is not
 initialized. GitHub Pages is enabled, deployed, and live at the URL above. The
-unsigned `v0.1.0` test release is historical evidence only; `v0.1.8` is the
-current stable release.
+unsigned `v0.1.0` test release is historical evidence only; the stable feed is
+the dynamic latest-release record.
 
 The main checkout and the user-owned linked checkouts remain registered with
 Git. The release-helper checkout holds untracked `scripts/`, and the
