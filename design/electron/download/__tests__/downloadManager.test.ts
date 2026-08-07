@@ -61,7 +61,12 @@ test("queue creation rejects malformed item IDs before persistence and processQu
 
 test("one global active-download cap is shared across multiple queues", async () => {
   const root = await fsp.mkdtemp(path.join(os.tmpdir(), "mdm-manager-test-"));
-  const firstServer = await startTestServer(64 * 1024, { bodyChunkDelayMs: 300 });
+  const firstServer = await startTestServer(64 * 1024, {
+    // Keep the first slot observably active while Git-backed persistence and
+    // the CI event loop settle; 300 ms was short enough for the transfer to
+    // complete before the cap assertions ran on a busy self-hosted runner.
+    bodyChunkDelayMs: 5000,
+  });
   const secondServer = await startTestServer(64 * 1024, { bodyChunkDelayMs: 150 });
   const previousUserProfile = process.env.USERPROFILE;
   process.env.USERPROFILE = root;
