@@ -70,44 +70,44 @@ self-hosted workflows.
 ## Latest verified stable evidence
 
 At this handoff, the current main tip is
-`5b968f54e976ca32f2d1c5b003acd5f34bdd9b5c`. The latest implementation
+`a0c27b621fa957de99d129d95df7a7e9bee396f6`. The latest implementation
 verification release recorded here is
-[`v0.1.16`](https://github.com/Ding-Ding-Projects/material-download-manager/releases/tag/v0.1.16);
+[`v0.1.18`](https://github.com/Ding-Ding-Projects/material-download-manager/releases/tag/v0.1.18);
 the README and stable feed use the repository's dynamic latest-release link so
 later successful pushes can advance the record without making this evidence
 pretend to be timeless.
 
 Self-hosted Windows verification run
-[31167759412](https://github.com/Ding-Ding-Projects/material-download-manager/actions/runs/31167759412),
+[31173930281](https://github.com/Ding-Ding-Projects/material-download-manager/actions/runs/31173930281),
 stable release run
-[31167759380](https://github.com/Ding-Ding-Projects/material-download-manager/actions/runs/31167759380),
+[31173928252](https://github.com/Ding-Ding-Projects/material-download-manager/actions/runs/31173928252),
 and Pages run
-[31167759410](https://github.com/Ding-Ding-Projects/material-download-manager/actions/runs/31167759410)
-are green. The published `v0.1.16` record is `isDraft=false`,
-`isPrerelease=false`, targets the exact `5b968f5` commit, and carries
-`Setup.exe`, `RELEASES`, and `material-download-manager-0.1.16-full.nupkg`.
-Its measured workflow duration is `00:02:03`, from
-`2026-08-07T13:54:38.000Z` through `2026-08-07T13:56:41.000Z`.
+[31173928353](https://github.com/Ding-Ding-Projects/material-download-manager/actions/runs/31173928353)
+are green. The published `v0.1.18` record is `isDraft=false`,
+`isPrerelease=false`, targets the exact `a0c27b6` commit, and carries
+`Setup.exe`, `RELEASES`, and `material-download-manager-0.1.18-full.nupkg`.
+Its measured workflow duration is `00:02:33`, from
+`2026-08-07T15:24:10.000Z` through `2026-08-07T15:26:43.000Z`.
 
-The release code name is **Mushroom Siu Mai · 北菇燒賣**, resolved from the
+The release code name is **Black Truffle Siu Mai · 黑松露燒賣**, resolved from the
 public `dim-sum-photos` catalog and linked to its published photo asset in the
-release notes. The CI line-count table reports 35,889 included lines (32,853
+release notes. The CI line-count table reports 36,615 included lines (33,559
 non-blank) across source, tests, styles/markup, and other project code, plus a
-41,982-line grand total including excluded tracked material. The counter
+42,708-line grand total including excluded tracked material. The counter
 reports zero surviving agent-attributed lines under its automation-identity
 rule for this release.
 
 At evidence-capture time, the live documentation site
 https://ding-ding-projects.github.io/material-download-manager/ reported
-`0.1.16`, the exact `5b968f5` source commit, `verified=true`,
+`0.1.18`, the exact `a0c27b6` source commit, `verified=true`,
 `unsigned=true`, and `publication.pages=verified`. The installer endpoint
-responded successfully with a real 115,377,152-byte `Setup.exe` asset. The
+responded successfully with a real 115,381,760-byte `Setup.exe` asset. The
 live renderer was also checked through the real browser surface: its About
-view displayed “Pages publication verified” and the `0.1.16` stable release
+view displayed “Pages publication verified” and the `0.1.18` stable release
 metric. The stable feed remains dynamic and must be rechecked after any later
 release.
 
-## Current implementation slice awaiting publication
+## Current implementation slice verified and published
 
 The fresh branch `codex/ui-hardening-20260807` hardens the History and Settings
 slice: local-history commits disable hooks and signing, isolate the snapshot
@@ -115,10 +115,11 @@ path from unrelated staged files, and bound Git children; renderer settings
 patches are fully validated at the IPC edge; interactive controls are no
 longer nested inside labels; Settings grids collapse cleanly at narrow widths;
 and the built-artifact smoke now seeds and fail-closes on the separate progress
-window. Commit `6f6dc22` is pushed to the branch's GitHub remote. Local verification is currently:
+window. Commits `6f6dc22` and `a0c27b6` are on `main` and pushed to the
+GitHub remote. Local verification is currently:
 typecheck and build passed; 31/31 engine tests, 39/39 Electron tests, 23/23
 built-artifact UI checks, 12/12 extension tests, and 41/41 site checks passed.
-The branch stable-release run
+The first branch stable-release run
 [31172713902](https://github.com/Ding-Ding-Projects/material-download-manager/actions/runs/31172713902)
 then failed before packaging on Node `v22.23.2`: 21 smoke checks passed but
 `escape-closes-builder-and-restores-focus` observed the Settings regex toggle
@@ -126,8 +127,13 @@ before its focus restoration. The follow-up in this checkout adds a
 post-commit animation-frame focus pass and makes the smoke wait for the closed,
 collapsed, focused state as one condition. The branch Windows verification
 run [31172713914](https://github.com/Ding-Ding-Projects/material-download-manager/actions/runs/31172713914)
-is still in progress; no new release is claimed until a replacement run is
-green and publishes a real stable installer.
+was green. Replacement branch release [31173473197](https://github.com/Ding-Ding-Projects/material-download-manager/actions/runs/31173473197)
+and verification [31173473285](https://github.com/Ding-Ding-Projects/material-download-manager/actions/runs/31173473285)
+were green and published stable `v0.1.17`; the default-branch release,
+verification, and Pages runs [31173928252](https://github.com/Ding-Ding-Projects/material-download-manager/actions/runs/31173928252),
+[31173930281](https://github.com/Ding-Ding-Projects/material-download-manager/actions/runs/31173930281),
+and [31173928353](https://github.com/Ding-Ding-Projects/material-download-manager/actions/runs/31173928353)
+were also green and published stable `v0.1.18`.
 
 The reusable method is to treat DOM removal and focus restoration as one
 observable contract in the built-artifact harness, while scheduling a second
@@ -195,7 +201,7 @@ On the current verification tree, the following checks passed locally:
 | Chromium extension `npm test` | 12/12 passed for MV3 permissions and entrypoints, context-menu and popup handoff, loopback protocol, bounded validation, settings import/export, regex safety, localization, and no remote assets/tracking. |
 | GitHub Pages source `npm run check` | 41/41 checks passed, including feature-article coverage, local-only assets, stable-manifest fail-closed behavior, publication-state rendering, prototype sanitization, and the browser-extension/progress-window articles. |
 | Hidden-desktop progress capture | Passed through the cheap Lowlevel headless route: a real loopback handoff created a live download, and a dynamically resolved second `Chrome_WidgetWin_1` window rendered the separate 980×640 `Download progress` surface with the fixture filename, source URL, transferred bytes, speed, pause, cancel, and close controls. The capture was retained in the session scratchpad, outside the repository. The disposable desktop, Electron process, and fixture server were cleaned up. |
-| Remote GitHub Actions | Current main verification [31167759412](https://github.com/Ding-Ding-Projects/material-download-manager/actions/runs/31167759412), stable release [31167759380](https://github.com/Ding-Ding-Projects/material-download-manager/actions/runs/31167759380), and Pages run [31167759410](https://github.com/Ding-Ding-Projects/material-download-manager/actions/runs/31167759410) are green. Historical failures remain linked where they explain fixes; they are not current verification evidence. |
+| Remote GitHub Actions | Current main verification [31173930281](https://github.com/Ding-Ding-Projects/material-download-manager/actions/runs/31173930281), stable release [31173928252](https://github.com/Ding-Ding-Projects/material-download-manager/actions/runs/31173928252), and Pages run [31173928353](https://github.com/Ding-Ding-Projects/material-download-manager/actions/runs/31173928353) are green. Historical failures remain linked where they explain fixes; they are not current verification evidence. |
 
 The hardening milestone corrected the compiled renderer path and made
 unpackaged production launches load the built renderer unless
@@ -212,7 +218,7 @@ the current release path requires `Setup.exe`, `RELEASES`, every referenced
 full or delta `.nupkg`, and `NotSigned` verification. The legacy unsigned
 `v0.1.0` prerelease carries the historical CI-built feed and assets, while
 `MDM_UPDATE_FEED_URL` remains an optional override. The stable feed was
-verified through `v0.1.16` at the evidence-capture point; later successful
+verified through `v0.1.18` at the evidence-capture point; later successful
 releases advance the same dynamic feed.
 
 The repository has a Windows push/dispatch workflow at
@@ -228,7 +234,7 @@ stages the local site before deployment, asks `actions/configure-pages@v5` to
 enable Pages when needed, and now has live verification at
 https://ding-ding-projects.github.io/material-download-manager/. The site
 injects the latest verified stable manifest only after the release asset
-inventory is checked. The `v0.1.16` deployment additionally verified the
+inventory is checked. The `v0.1.18` deployment additionally verified the
 rendered publication state through the live site.
 
 The release branch also passed local static checks for the workflow and helper
@@ -286,8 +292,9 @@ reconciliation:
 ## Git state and ownership
 
 This reconciliation and the CI hardening are on `main`; the current main tip
-is the source of truth for the verified stable release. The current hardening
-slice is in `codex/ui-hardening-20260807` pending integration. The original
+is the source of truth for the verified stable release. The hardening slice is
+integrated on `main`; its branch `codex/ui-hardening-20260807` is preserved for
+traceability. The original
 handoff history is preserved as an ancestor, and the original handoff branch
 remains untouched. Application issue [#8](https://github.com/Ding-Ding-Projects/material-download-manager/issues/8)
 remains open for this continuing handoff. The separate `agent-global-memory` repository
