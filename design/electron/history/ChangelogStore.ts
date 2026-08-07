@@ -17,6 +17,18 @@ export const CHANGELOG_REPOSITORY_URL = "https://github.com/Ding-Ding-Projects/m
  */
 export const DEFAULT_CHANGELOG_ENTRIES: readonly ChangelogEntry[] = [
   {
+    id: "v0.1.29",
+    version: "0.1.29",
+    releaseDate: "2026-08-07",
+    title: "v0.1.29 — Steamed Beef Tripe with Chu Hou Sauce · 柱侯金錢肚",
+    changes: [
+      { category: "Release", text: "Published as a stable, non-draft, non-prerelease release with intentionally unsigned Squirrel.Windows artifacts." },
+      { category: "Code name", text: "Steamed Beef Tripe with Chu Hou Sauce · 柱侯金錢肚" },
+      { category: "Source", text: "Release metadata identifies commit 49c9e13682ac96481406e92e7e00866abdc9433e." },
+    ],
+    commitSha: "49c9e13682ac96481406e92e7e00866abdc9433e",
+  },
+  {
     id: "v0.1.28",
     version: "0.1.28",
     releaseDate: "2026-08-07",

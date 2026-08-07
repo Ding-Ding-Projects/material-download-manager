@@ -3,7 +3,7 @@
 The Windows Electron app exposes a first-class Changelog tab beside the local
 revision History tab. It is an in-app release browser, not a browser-only link.
 The panel embeds the currently published stable release records from v0.1.2
-through v0.1.28, including each release date, release identity, stable
+through v0.1.29, including each release date, release identity, stable
 distribution status, full source commit SHA, and a credential-free link to that
 commit in the repository.
 
@@ -58,7 +58,7 @@ or direct ipcRenderer capability.
 
 ## Verification
 
-Focused tests in electron/__tests__/changelog.test.ts cover the 27 embedded
+Focused tests in electron/__tests__/changelog.test.ts cover the 28 embedded
 stable releases, full commit URL construction, search/date composition,
 validation failures, filtered Markdown export, and the store's IPC-safe
 adapter. Run them after building the Electron TypeScript output with:
