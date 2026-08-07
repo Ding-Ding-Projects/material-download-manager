@@ -263,11 +263,21 @@ export default function SettingsDialog() {
 
   function closeSettingsRegexBuilder() {
     setSettingsRegexOpen(false);
+    // The builder is removed by the state commit. Queue a second focus pass so
+    // Chromium versions that expose the post-commit DOM before the next frame
+    // still return focus to the control that opened the builder.
+    window.requestAnimationFrame(() => {
+      settingsRegexButtonRef.current?.focus({ preventScroll: true });
+    });
   }
 
   useLayoutEffect(() => {
     if (settingsRegexOpen) return;
     settingsRegexButtonRef.current?.focus({ preventScroll: true });
+    const frame = window.requestAnimationFrame(() => {
+      settingsRegexButtonRef.current?.focus({ preventScroll: true });
+    });
+    return () => window.cancelAnimationFrame(frame);
   }, [settingsRegexOpen]);
 
   function handleSettingsEscape() {

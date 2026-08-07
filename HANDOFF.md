@@ -115,10 +115,25 @@ path from unrelated staged files, and bound Git children; renderer settings
 patches are fully validated at the IPC edge; interactive controls are no
 longer nested inside labels; Settings grids collapse cleanly at narrow widths;
 and the built-artifact smoke now seeds and fail-closes on the separate progress
-window. Local verification is currently: typecheck and build passed; 31/31
-engine tests, 39/39 Electron tests, 23/23 built-artifact UI checks, 12/12
-extension tests, and 41/41 site checks passed. This slice is not yet a commit
-on the default branch, so no GitHub CI or new release is claimed here.
+window. Commit `6f6dc22` is pushed to the branch's GitHub remote. Local verification is currently:
+typecheck and build passed; 31/31 engine tests, 39/39 Electron tests, 23/23
+built-artifact UI checks, 12/12 extension tests, and 41/41 site checks passed.
+The branch stable-release run
+[31172713902](https://github.com/Ding-Ding-Projects/material-download-manager/actions/runs/31172713902)
+then failed before packaging on Node `v22.23.2`: 21 smoke checks passed but
+`escape-closes-builder-and-restores-focus` observed the Settings regex toggle
+before its focus restoration. The follow-up in this checkout adds a
+post-commit animation-frame focus pass and makes the smoke wait for the closed,
+collapsed, focused state as one condition. The branch Windows verification
+run [31172713914](https://github.com/Ding-Ding-Projects/material-download-manager/actions/runs/31172713914)
+is still in progress; no new release is claimed until a replacement run is
+green and publishes a real stable installer.
+
+The reusable method is to treat DOM removal and focus restoration as one
+observable contract in the built-artifact harness, while scheduling a second
+focus pass after the React state commit for older Chromium/Node combinations.
+The failed release is a real red verdict, not a release candidate: packaging
+did not run and no draft, prerelease, or tag-only release was accepted.
 
 ## Runnable application
 

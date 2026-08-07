@@ -1238,7 +1238,17 @@ async function main(argv) {
 
     await runCheck(result, "escape-closes-builder-and-restores-focus", async () => {
       await dispatchEscape(cdp);
-      await waitForPage(cdp, `!document.querySelector('section[aria-label$="regex builder"]')`, "regex builder to close on Escape", options.timeoutMs);
+      await waitForPage(
+        cdp,
+        `(() => {
+          const builderClosed = !document.querySelector('section[aria-label$="regex builder"]');
+          const row = document.querySelector(".settings-search-row");
+          const toggle = row?.querySelector("button[aria-expanded]");
+          return builderClosed && !!toggle && toggle.getAttribute("aria-expanded") === "false" && document.activeElement === toggle;
+        })()`,
+        "regex builder to close and restore focus on Escape",
+        options.timeoutMs
+      );
       return cdp.evaluate(pageExpression(`
         const row = document.querySelector(".settings-search-row");
         const toggle = row ? findByRole("button", "Regex", row) : null;
