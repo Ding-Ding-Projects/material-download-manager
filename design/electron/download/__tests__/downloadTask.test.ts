@@ -10,7 +10,7 @@ import { startTestServer } from "./testServer";
 import { probeUrl, redactErrorMessage, redactUrl, sanitizeFileName } from "../HttpProbe";
 import { DownloadTask } from "../DownloadTask";
 import { SpeedLimiter } from "../SpeedLimiter";
-import { detectCategory } from "../categories";
+import { detectCategory, resolveCategory, resolveDownloadFolder } from "../categories";
 import { headersForTarget, splitStoredDownload, withStoredHeaders } from "../downloadMetadata";
 import { isQueueScheduleActive, QueueScheduleClock } from "../queueSchedule";
 import type { DownloadItem } from "../../../shared/types";
@@ -504,6 +504,43 @@ test("category detection maps common extensions", () => {
   assert.equal(detectCategory("photo.png"), "image");
   assert.equal(detectCategory("report.pdf"), "document");
   assert.equal(detectCategory("mystery.xyz"), "other");
+});
+
+test("custom regex filters outrank the extension mapping and fall back safely", () => {
+  const rules = [
+    { id: "r1", name: "Podcasts", pattern: "podcast", flags: "i", category: "music" as const },
+    { id: "r2", name: "CI logs", pattern: "\\.log$", flags: "", category: "document" as const },
+  ];
+  // Rule matches the file name even though .zip maps to compressed.
+  assert.equal(resolveCategory("Podcast-Episode-12.zip", "https://example.test/a", rules), "music");
+  // Rule matches the URL when the file name says nothing.
+  assert.equal(resolveCategory("download", "https://example.test/podcast/12", rules), "music");
+  // Later rule still applies in list order.
+  assert.equal(resolveCategory("build.log", "https://example.test/b", rules), "document");
+  // No rule match falls back to the extension mapping.
+  assert.equal(resolveCategory("movie.mp4", "https://example.test/c", rules), "video");
+  // An invalid stored pattern matches nothing instead of throwing.
+  const broken = [{ id: "r3", name: "broken", pattern: "(", flags: "", category: "apps" as const }];
+  assert.equal(resolveCategory("movie.mp4", "https://example.test/d", broken), "video");
+});
+
+test("auto-organize routes default-folder downloads into the six category folders", () => {
+  const base = process.platform === "win32" ? "C:\\Users\\someone\\Downloads" : "/home/someone/Downloads";
+  const join = (name: string) => path.join(base, name);
+  // Empty requested folder organizes under the default.
+  assert.equal(resolveDownloadFolder("", base, "video", true), join("Videos"));
+  assert.equal(resolveDownloadFolder("", base, "music", true), join("Music"));
+  assert.equal(resolveDownloadFolder("", base, "apps", true), join("Programs"));
+  assert.equal(resolveDownloadFolder("", base, "compressed", true), join("Compressed"));
+  assert.equal(resolveDownloadFolder("", base, "document", true), join("Documents"));
+  assert.equal(resolveDownloadFolder("", base, "other", true), join("General"));
+  assert.equal(resolveDownloadFolder("", base, "image", true), join("General"));
+  // Choosing exactly the default folder still organizes; a different explicit
+  // folder is honored untouched; disabled means no routing at all.
+  assert.equal(resolveDownloadFolder(base, base, "video", true), join("Videos"));
+  const custom = process.platform === "win32" ? "D:\\Archive" : "/srv/archive";
+  assert.equal(resolveDownloadFolder(custom, base, "video", true), custom);
+  assert.equal(resolveDownloadFolder("", base, "video", false), base);
 });
 
 test("SpeedLimiter throttles throughput close to the configured cap", async () => {

@@ -14,6 +14,39 @@ export type DownloadCategory =
   | "compressed"
   | "other";
 
+/**
+ * Auto-organize folder names, keyed by detected category. The six visible
+ * folders are General, Documents, Videos, Music, Programs, and Compressed;
+ * images and uncategorized files both land in General so the on-disk layout
+ * matches the documented six-folder contract.
+ */
+export const AUTO_ORGANIZE_FOLDERS: Record<DownloadCategory, string> = {
+  other: "General",
+  image: "General",
+  document: "Documents",
+  video: "Videos",
+  music: "Music",
+  apps: "Programs",
+  compressed: "Compressed",
+};
+
+export const AUTO_ORGANIZE_RULE_LIMIT = 50;
+export const AUTO_ORGANIZE_RULE_NAME_MAX_LENGTH = 64;
+export const AUTO_ORGANIZE_RULE_PATTERN_MAX_LENGTH = 512;
+
+/**
+ * A user-authored regex filter that assigns a download to a category before
+ * the built-in extension mapping runs. The pattern is evaluated against the
+ * download's file name and its URL under the shared bounded regex evaluator.
+ */
+export interface AutoOrganizeRule {
+  id: string;
+  name: string;
+  pattern: string;
+  flags: string;
+  category: DownloadCategory;
+}
+
 export type DownloadStatus =
   | "added"
   | "queued"
@@ -87,6 +120,8 @@ export const SETTING_KEYS = [
   "uiFontFamily",
   "uiFontSize",
   "uiFontWeight",
+  "autoOrganizeEnabled",
+  "autoOrganizeRules",
 ] as const;
 
 export type SettingKey = (typeof SETTING_KEYS)[number];
@@ -110,6 +145,8 @@ export interface AppSettings {
   uiFontFamily: UIFontFamily;
   uiFontSize: number;
   uiFontWeight: UIFontWeight;
+  autoOrganizeEnabled: boolean;
+  autoOrganizeRules: AutoOrganizeRule[];
   settingProvenance: SettingsProvenance;
 }
 
