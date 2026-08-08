@@ -1,0 +1,52 @@
+name: material-download-manager-worker
+
+services:
+  ssh-range-worker:
+    build:
+      context: .
+      target: runtime
+    image: material-download-manager/ssh-range-worker:local
+    init: true
+    restart: unless-stopped
+    user: "10001:10001"
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 64
+    cpus: "1.0"
+    mem_limit: 512m
+    memswap_limit: 512m
+    stop_grace_period: 10s
+    ports:
+      - "127.0.0.1:${MDM_WORKER_HOST_PORT:-2222}:2222"
+    environment:
+      MDM_WORKER_ALLOWED_KEYS: "${MDM_WORKER_ALLOWED_KEYS:?Set one or more newline-separated Ed25519 public keys}"
+      MDM_WORKER_MAX_CONNECTIONS: "16"
+      MDM_WORKER_MAX_FETCHES: "4"
+    volumes:
+      - worker-state:/var/lib/mdm-worker
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=16m,mode=1777
+    logging:
+      driver: json-file
+      options:
+        max-size: "1m"
+        max-file: "2"
+    healthcheck:
+      test: ["CMD", "node", "dist/healthcheck.js"]
+      interval: 30s
+      timeout: 4s
+      start_period: 10s
+      retries: 3
+    labels:
+      com.material-download-manager.owner: material-download-manager
+      com.material-download-manager.component: ssh-range-worker
+      com.material-download-manager.managed: "true"
+
+volumes:
+  worker-state:
+    labels:
+      com.material-download-manager.owner: material-download-manager
+      com.material-download-manager.component: ssh-range-worker-state
