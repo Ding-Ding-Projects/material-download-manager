@@ -267,9 +267,11 @@ against those exact assets completed between 2026-08-08T01:39:33Z and
 2026-08-08T01:39:36Z. All seven files decode as 24-bit PNGs, have unique
 SHA-256 hashes, and use the documented 1100×900 or 520×760 dimensions. The
 capture finished with zero same-checkout Electron processes, zero disposable
-profiles, and zero headless capture desktops. Remote CI/release/Pages evidence,
-default-branch publication, and issue #11 closure remain pending; this section
-does not claim any of them early.
+profiles, and zero headless capture desktops. Commit
+`a852a8c96292ed969c3900393945d8a5471fb0fb` was then fast-forwarded into the
+local default branch. Remote CI, release, Pages, and issue-resolution verdicts
+are recorded on issue #11 for the pushed integration commit; this static
+handoff deliberately does not predict those external results.
 
 ## Current implementation slice verified and published
 

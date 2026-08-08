@@ -24,7 +24,7 @@ unverified surface has shipped.
   window, rejects nested interactive labels, and checks narrow Settings layout
   at 2× scale.
 
-## Current slice verified locally; publication evidence pending
+## Auto-organize foundation integrated
 
 - Default-folder auto-organization into six documented category paths, with
   `image` routed to General, no retroactive moves, and the folder-routing
@@ -36,11 +36,12 @@ unverified surface has shipped.
 - Terminable main-process workers with bounded IPC, deadlines, safe fallback,
   readiness handshakes, generation-checked previews, bounded match-only/full
   responses, and DNS-pinned schedule refreshes for user-authored rules.
-- Real-artifact coverage has passed for add/edit/reorder/remove/invalid/save/
+- Real-artifact coverage passed for add/edit/reorder/remove/invalid/save/
   reopen, builder bounds, focus, contrast, touch targets, bilingual narrow
   layout, command-palette teleport, separate History/Changelog action errors,
-  and exact process-tree cleanup. Default-branch CI, release, Pages, and issue
-  closure remain pending until publication is verified.
+  and exact process-tree cleanup. The corresponding issue and immutable release
+  record are the source of truth for remote CI, publication, and installer
+  evidence; this roadmap never predicts an in-flight workflow result.
 
 ## Next global-memory implementation slices
 
