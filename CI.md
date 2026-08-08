@@ -96,8 +96,15 @@ release identity or building an installer. It then:
 4. validates `Setup.exe`, `RELEASES`, every full and delta `.nupkg`, the
    `RELEASES` references, and the `NotSigned` Authenticode state through
    [`scripts/validate-squirrel-artifacts.ps1`](scripts/validate-squirrel-artifacts.ps1);
-5. uploads the validated assets to a draft, publishes one stable non-draft
-   release with `isPrerelease=false`, writes verified workflow timing, and re-reads the
+5. packages the Chromium extension into
+   `material-download-manager-extension-<version>.zip` through
+   [`scripts/package-extension.ps1`](scripts/package-extension.ps1), which
+   stages `manifest.json`, `src/`, `README.md`, and `docs/` at the archive
+   root, proves the archive carries `manifest.json` and
+   `src/service-worker.js`, and records the asset in the validated manifest;
+6. uploads the validated assets to a draft, publishes one stable non-draft
+   release with `isPrerelease=false`, writes verified workflow timing, an
+   extension install section, and re-reads the
    published release and asset inventory through
    [`scripts/publish-stable-release.ps1`](scripts/publish-stable-release.ps1).
 

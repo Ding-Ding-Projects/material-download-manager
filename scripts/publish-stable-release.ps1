@@ -163,6 +163,18 @@ try {
   if ([string]::IsNullOrWhiteSpace($artifactList)) {
     Stop-WithMessage 'The artifact manifest contains no names.'
   }
+  $extensionSection = ''
+  if ($manifest.PSObject.Properties.Name -contains 'extensionAsset' -and -not [string]::IsNullOrWhiteSpace([string]$manifest.extensionAsset)) {
+    $extensionAssetName = [string]$manifest.extensionAsset
+    $extensionSection = @"
+
+  ## Browser extension
+
+  - Asset: ``$extensionAssetName`` — the Chromium Manifest V3 handoff extension built from this exact source commit.
+  - Install: download the archive, extract it to a folder, open ``chrome://extensions``, enable **Developer mode**, choose **Load unpacked**, and select the extracted folder (``manifest.json`` sits at its root).
+  - The extension only talks to the app's documented loopback adapter at ``http://127.0.0.1:43771/v1/downloads``; it declares no remote hosts, analytics, or tracking.
+"@
+  }
   if ([bool]$metadata.available) {
     $photoLine = "- Public photo asset: [$($metadata.photoUrl)]($($metadata.photoUrl))"
     $catalogLine = "- Catalog source: [dim-sum catalog]($($metadata.catalogUrl)); published catalog release: ``$($metadata.catalogReleaseTag)``"
@@ -203,7 +215,7 @@ try {
   ## Installer artifacts
 
   $artifactList
-
+  $extensionSection
   ## Workflow timing (UTC)
 
   - Workflow started: ``$startedText``
