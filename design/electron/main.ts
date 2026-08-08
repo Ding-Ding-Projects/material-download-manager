@@ -2,6 +2,11 @@ import { app, autoUpdater, BrowserWindow, ipcMain, shell, dialog, Notification }
 import fsp from "node:fs/promises";
 import path from "node:path";
 import { IPC, isUpdateUnsavedWorkState, type UpdateInstallResult, type UpdateState } from "../shared/types";
+import {
+  installBrowserExtension,
+  installedExtensionPath,
+  resolveBundledExtensionRoot,
+} from "./extension/installExtension";
 import type { AddDownloadRequest, AppSettings, DownloadItem, DownloadQueue, SettingKey, SettingsPatch } from "../shared/types";
 import { isExportFormat } from "../shared/export";
 import { normalizeHistoryFilter } from "../shared/history";
@@ -371,6 +376,27 @@ function registerIpcHandlers() {
     assertTrustedSender(event);
     assertId(id);
     return manager.openFolder(id);
+  });
+
+  ipcMain.handle(IPC.EXTENSION_INSTALL, async (event) => {
+    assertTrustedSender(event);
+    const sourceRoot = resolveBundledExtensionRoot({
+      isPackaged: app.isPackaged,
+      resourcesPath: process.resourcesPath,
+      appRoot: app.getAppPath(),
+    });
+    const installedPath = await installBrowserExtension(sourceRoot, app.getPath("userData"));
+    return { installed: true, path: installedPath };
+  });
+
+  ipcMain.handle(IPC.EXTENSION_REVEAL, async (event) => {
+    assertTrustedSender(event);
+    const installedPath = await installedExtensionPath(app.getPath("userData"));
+    if (!installedPath) {
+      throw new Error("The browser extension has not been installed from this app yet.");
+    }
+    const failure = await shell.openPath(installedPath);
+    if (failure) throw new Error(failure);
   });
 
   ipcMain.handle(IPC.SETTINGS_GET, (event) => {

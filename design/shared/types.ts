@@ -228,6 +228,26 @@ export interface AddDownloadRequest {
  */
 export type BrowserHandoffRequest = Omit<AddDownloadRequest, "ssh"> & { ssh?: never };
 
+/**
+ * Result of staging the bundled Chromium extension onto disk from the app UI.
+ * `path` is the stable installed folder the user selects with Load unpacked.
+ */
+export interface BrowserExtensionInstallResult {
+  installed: true;
+  path: string;
+}
+
+export function isBrowserExtensionInstallResult(value: unknown): value is BrowserExtensionInstallResult {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    !Array.isArray(value) &&
+    (value as Record<string, unknown>).installed === true &&
+    typeof (value as Record<string, unknown>).path === "string" &&
+    ((value as Record<string, unknown>).path as string).length > 0
+  );
+}
+
 export interface NewDownloadInfo {
   url: string;
   suggestedFileName: string;
@@ -365,6 +385,8 @@ export const IPC = {
   RETRY: "download:retry",
   OPEN_FILE: "download:openFile",
   OPEN_FOLDER: "download:openFolder",
+  EXTENSION_INSTALL: "extension:install",
+  EXTENSION_REVEAL: "extension:reveal",
   HANDOFF_ADD_DOWNLOAD: "download:handoffAdd",
   GET_STATE: "state:get",
   STATE_CHANGED: "state:changed",

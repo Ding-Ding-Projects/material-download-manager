@@ -162,6 +162,12 @@ const SETTINGS_SEARCH_INDEX = [
     labels: ["Custom regex classification rules first match filename URL flags reorder", "自訂 regex 分類規則 第一條相符 檔名 網址 旗標 排序"],
   },
   {
+    id: "settings-browser-extension",
+    targetId: "settings-install-extension",
+    tab: "downloads" as const,
+    labels: ["Install browser extension Chrome Chromium load unpacked handoff", "安裝 瀏覽器 擴充功能 Chrome Chromium load unpacked 交接"],
+  },
+  {
     id: "settings-advanced",
     targetId: "settings-min-splittable-part-size",
     tab: "advanced" as const,
@@ -228,6 +234,10 @@ export default function SettingsDialog() {
   const [activeAutoOrganizeRuleId, setActiveAutoOrganizeRuleId] = useState<string | null>(null);
   const [autoOrganizeRuleSamples, setAutoOrganizeRuleSamples] = useState<Map<string, string>>(() => new Map());
   const [autoOrganizeRuleStatus, setAutoOrganizeRuleStatus] = useState("");
+  const [extensionBusy, setExtensionBusy] = useState(false);
+  const [extensionStatus, setExtensionStatus] = useState("");
+  const [extensionError, setExtensionError] = useState<string | null>(null);
+  const [extensionPath, setExtensionPath] = useState<string | null>(null);
   const autoOrganizeRuleButtonRefs = useRef(new Map<string, HTMLButtonElement>());
   const autoOrganizeRuleMoveButtonRefs = useRef(new Map<string, HTMLButtonElement>());
   const autoOrganizeRuleNameRefs = useRef(new Map<string, HTMLInputElement>());
@@ -576,6 +586,35 @@ export default function SettingsDialog() {
   async function handlePickFolder() {
     const picked = await pickFolder();
     if (picked) update("defaultSaveFolder", picked);
+  }
+
+  async function handleInstallExtension() {
+    setExtensionBusy(true);
+    setExtensionError(null);
+    try {
+      const result = await window.api.installBrowserExtension();
+      setExtensionPath(result.path);
+      setExtensionStatus(
+        ui.text(
+          `Ready. In Chrome open chrome://extensions, turn on Developer mode, click Load unpacked, and choose: ${result.path}`,
+          `搞掂。喺 Chrome 開 chrome://extensions,校開開發者模式,㩒 Load unpacked,揀:${result.path}`
+        )
+      );
+    } catch (error) {
+      setExtensionError(error instanceof Error ? error.message : String(error));
+      setExtensionStatus("");
+    } finally {
+      setExtensionBusy(false);
+    }
+  }
+
+  async function handleRevealExtension() {
+    setExtensionError(null);
+    try {
+      await window.api.revealBrowserExtension();
+    } catch (error) {
+      setExtensionError(error instanceof Error ? error.message : String(error));
+    }
   }
 
   function editSshHost(host: AppSettings["sshHosts"][number]) {
@@ -1692,6 +1731,47 @@ export default function SettingsDialog() {
         <button type="button" className="btn btn-ghost btn-sm setting-reset" onClick={() => resetSetting("showCompleteDialog")}>
           {copy.reset}
         </button>
+      </div>
+
+      <div className="field" id="settings-browser-extension" tabIndex={-1}>
+        <span className="field-label" id="settings-install-extension-label">
+          {ui.text("Browser extension", "瀏覽器擴充功能")}
+        </span>
+        <p className="setting-helper" id="settings-install-extension-helper">
+          {ui.text(
+            "Install the bundled Chromium extension so you can send pages and links straight to this app. It stages the extension into a stable folder; then load that folder in Chrome with Developer mode → Load unpacked.",
+            "安裝內置嘅 Chromium 擴充功能,就可以將網頁同連結直接掉去呢個 app。佢會將擴充功能放入一個固定資料夾,之後喺 Chrome 開開發者模式 → Load unpacked 揀嗰個資料夾。"
+          )}
+        </p>
+        <div className="field-row">
+          <button
+            type="button"
+            id="settings-install-extension"
+            className="btn btn-primary btn-sm"
+            aria-describedby="settings-install-extension-helper"
+            disabled={extensionBusy}
+            onClick={() => void handleInstallExtension()}
+          >
+            {extensionBusy
+              ? ui.text("Installing…", "安裝緊…")
+              : ui.text("Install browser extension", "安裝瀏覽器擴充功能")}
+          </button>
+          {extensionPath && (
+            <button
+              type="button"
+              className="btn btn-ghost btn-sm"
+              onClick={() => void handleRevealExtension()}
+            >
+              {ui.text("Open extension folder", "開啟擴充功能資料夾")}
+            </button>
+          )}
+        </div>
+        {extensionStatus && (
+          <p className="setting-helper" role="status" aria-live="polite">{extensionStatus}</p>
+        )}
+        {extensionError && (
+          <p className="field-error" role="alert">{extensionError}</p>
+        )}
       </div>
         </section>
       </div>}

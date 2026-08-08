@@ -24,6 +24,7 @@ import { isHistoryView } from "../shared/history";
 import { isDownloadCategory } from "../shared/settings";
 import { isRegexEvaluation, type RegexEvaluation } from "../shared/regex";
 import { isUpdateInstallResult, isUpdateState, isUpdateUnsavedWorkState } from "../shared/types";
+import { isBrowserExtensionInstallResult, type BrowserExtensionInstallResult } from "../shared/types";
 import {
   isChangelogView,
   type ChangelogView,
@@ -114,6 +115,14 @@ const api = {
   retryDownload: (id: string): Promise<void> => ipcRenderer.invoke(IPC.RETRY, id),
   openFile: (id: string): Promise<void> => ipcRenderer.invoke(IPC.OPEN_FILE, id),
   openFolder: (id: string): Promise<void> => ipcRenderer.invoke(IPC.OPEN_FOLDER, id),
+  installBrowserExtension: async (): Promise<BrowserExtensionInstallResult> => {
+    const result: unknown = await ipcRenderer.invoke(IPC.EXTENSION_INSTALL);
+    if (!isBrowserExtensionInstallResult(result)) {
+      throw new Error("The main process returned a malformed extension install result.");
+    }
+    return result;
+  },
+  revealBrowserExtension: (): Promise<void> => ipcRenderer.invoke(IPC.EXTENSION_REVEAL),
 
   getSettings: (): Promise<AppSettings> => ipcRenderer.invoke(IPC.SETTINGS_GET),
   setSettings: (settings: SettingsPatch, resetKeys: SettingKey[] = []): Promise<AppSettings> =>
