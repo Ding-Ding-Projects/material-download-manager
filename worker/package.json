@@ -1,0 +1,27 @@
+{
+  "name": "@material-download-manager/ssh-worker",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Bounded SSH range worker for Material Download Manager",
+  "type": "module",
+  "engines": {
+    "node": ">=24.0.0"
+  },
+  "scripts": {
+    "clean": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\"",
+    "build": "npm run clean && tsc -p tsconfig.json",
+    "start": "node dist/cli.js",
+    "healthcheck": "node dist/healthcheck.js",
+    "test": "npm run build && node --test --test-concurrency=1 tests/*.test.mjs",
+    "check:container": "node tests/docker-contract.mjs",
+    "check": "npm test && npm run check:container"
+  },
+  "dependencies": {
+    "ssh2": "1.17.0"
+  },
+  "devDependencies": {
+    "@types/node": "24.10.1",
+    "@types/ssh2": "1.15.5",
+    "typescript": "5.9.3"
+  }
+}
