@@ -75,6 +75,16 @@
           "!tests/**",
           "!coverage/**"
         ]
+      },
+      {
+        "from": "../extension",
+        "to": "browser-extension",
+        "filter": [
+          "manifest.json",
+          "src/**/*",
+          "README.md",
+          "docs/**/*"
+        ]
       }
     ],
     "forceCodeSigning": false,

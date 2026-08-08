@@ -41,6 +41,8 @@ export interface MaterialDownloadManagerAPI {
   retryDownload(id: string): Promise<void>;
   openFile(id: string): Promise<void>;
   openFolder(id: string): Promise<void>;
+  installBrowserExtension(): Promise<import("@shared/types").BrowserExtensionInstallResult>;
+  revealBrowserExtension(): Promise<void>;
   getSettings(): Promise<AppSettings>;
   setSettings(settings: SettingsPatch, resetKeys?: SettingKey[]): Promise<AppSettings>;
   saveSshHost(draft: SshHostDraft): Promise<AppSettings>;
