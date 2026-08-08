@@ -1,5 +1,22 @@
 # Handoff: Material Download Manager
 
+## CI moved to GitHub-hosted runners (2026-08-08)
+
+The three workflows (`ci.yml`, `pages.yml`, `release.yml`) now run on
+`windows-latest` instead of the former four-label self-hosted contract. The
+sole registered self-hosted runner `material-download-manager-self-hosted-20260807`
+went offline and left every push queued — no verification, release, or Pages
+run could complete — so on the repository owner's explicit direction the
+project adopted GitHub-hosted runners. This reverses the earlier
+self-hosted-only policy; because the repository is public, hosted runners also
+remove the self-hosted-on-public-repo execution-surface risk. The self-hosted
+bootstrap-assertion steps were dropped from the active workflows; the native
+Electron/esbuild binary bootstrap (`complete-node-binary-bootstrap.ps1`) is
+retained. `scripts/verify-self-hosted-bootstrap.ps1` and
+`scripts/self-hosted-dependencies.json` are kept only as reference for a future
+self-hosted re-introduction. Issue #12 tracks the runner decision. Code signing
+remains permanently prohibited and unaffected.
+
 ## Reconciled state
 
 The repository previously had two incompatible meanings for `design/`:
