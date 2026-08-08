@@ -10,8 +10,17 @@ The supported contract is documented in [`docs/handoff-contract.md`](docs/handof
 
 ## Load and use
 
+Every stable GitHub Release attaches this extension as
+`material-download-manager-extension-<version>.zip`, packaged from the same
+source commit as the installer. Download it from the
+[latest release](https://github.com/Ding-Ding-Projects/material-download-manager/releases/latest),
+extract it to a folder (`manifest.json` sits at the archive root), and load
+that folder below — or use this `extension/` directory directly from a
+checkout.
+
 1. Open `chrome://extensions` and enable **Developer mode**.
-2. Choose **Load unpacked** and select this `extension/` directory.
+2. Choose **Load unpacked** and select the extracted folder or this
+   `extension/` directory.
 3. Open **Details → Extension options**.
 4. The default endpoint is already configured. Use **Test connection** to verify the running local adapter, or use **Use default endpoint** after changing it.
 5. Use the toolbar popup or the context menu on a page, link, or selected text. Page captures use the page URL, link captures use the link target, and selection captures include the selected text as bounded metadata. Captured URLs and metadata are validated locally and handed to the app’s real download manager; failures are retained for the popup recovery surface.

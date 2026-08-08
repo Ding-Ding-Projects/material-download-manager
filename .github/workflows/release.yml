@@ -151,6 +151,13 @@ jobs:
           pwsh -NoProfile -File scripts/validate-squirrel-artifacts.ps1 -OutputDirectory $assetDirectory -ManifestPath $manifestPath
           "path=$manifestPath" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
 
+      - name: Package the Chromium extension release asset
+        shell: pwsh
+        run: |
+          $manifestPath = Join-Path $env:RUNNER_TEMP 'release-assets.json'
+          $assetDirectory = Join-Path $env:RUNNER_TEMP 'release-assets'
+          pwsh -NoProfile -File scripts/package-extension.ps1 -OutputDirectory $assetDirectory -ManifestPath $manifestPath -Version '${{ steps.version.outputs.version }}'
+
       - name: Publish and verify draft=false, isPrerelease=false stable release
         id: publish
         shell: pwsh

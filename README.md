@@ -16,7 +16,7 @@ AB Download Manager codebase.
 - GitHub Pages source: [`site/`](site/)
 - Live site: [Material Download Manager on GitHub Pages](https://ding-ding-projects.github.io/material-download-manager/)
 - Latest stable release: [view the latest stable GitHub Release](https://github.com/Ding-Ding-Projects/material-download-manager/releases/latest)
-- Chromium extension: [`extension/`](extension/)
+- Chromium extension: [`extension/`](extension/) — packaged with every stable release as `material-download-manager-extension-<version>.zip` on the [latest release](https://github.com/Ding-Ding-Projects/material-download-manager/releases/latest); extract it and use **Load unpacked** at `chrome://extensions`
 - Search feature docs: [`docs/features/search/`](docs/features/search/)
 - Navigation feature docs: [`docs/features/navigation/`](docs/features/navigation/)
 - Website: [ding-ding-projects.github.io/material-download-manager](https://ding-ding-projects.github.io/material-download-manager/)
