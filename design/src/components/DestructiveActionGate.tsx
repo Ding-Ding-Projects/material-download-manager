@@ -20,11 +20,12 @@ export function requestDestructiveAction(request: DestructiveActionRequest) {
 interface DestructiveActionGateProps {
   request: DestructiveActionRequest;
   actionName?: string;
+  affectedLabel?: string;
   onCancel: () => void;
   onConfirm: (request: DestructiveActionRequest) => void;
 }
 
-export default function DestructiveActionGate({ request, actionName: actionNameOverride, onCancel, onConfirm }: DestructiveActionGateProps) {
+export default function DestructiveActionGate({ request, actionName: actionNameOverride, affectedLabel: affectedLabelOverride, onCancel, onConfirm }: DestructiveActionGateProps) {
   const settings = useAppStore((state) => state.settings);
   const copy = getUiCopy(settings);
   const [keys, setKeys] = useState<[boolean, boolean]>([false, false]);
@@ -36,6 +37,7 @@ export default function DestructiveActionGate({ request, actionName: actionNameO
   const actionName = actionNameOverride ?? (request.deleteFile
     ? copy.text("remove the downloads and delete their files", "移除下載項目並刪除檔案")
     : copy.text("remove the downloads from the list", "由清單移除下載項目"));
+  const affectedLabel = affectedLabelOverride ?? copy.text("download", "下載項目");
   const bothKeysReady = keys[0] && keys[1];
 
   useEffect(() => {
@@ -110,7 +112,7 @@ export default function DestructiveActionGate({ request, actionName: actionNameO
 
         <div className="dialog-body destructive-gate-body">
           <p id="destructive-gate-description" className="destructive-gate-warning">
-            This will {actionName} for {request.itemIds.length} selected {request.itemIds.length === 1 ? "item" : "items"}. The action cannot be undone here.
+            This will {actionName} for {request.itemIds.length} selected {affectedLabel}{request.itemIds.length === 1 ? "" : "s"}. The action cannot be undone here.
           </p>
           <p className="destructive-gate-instruction">
              {copy.funny(

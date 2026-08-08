@@ -14,14 +14,29 @@ import type {
   SettingsPatch,
   StateSnapshot,
 } from "../../shared/types";
+import {
+  isDistributedDownloadSelection,
+  isDistributedRequestHeaders,
+  type DistributedDownloadSelection,
+  type SourceIdentity,
+} from "../../shared/distributedProtocol";
 import type { ExportFormat, ExportResult } from "../../shared/export";
 import { historyFilterRequest, normalizeHistoryFilter, type HistoryFilter, type HistoryView } from "../../shared/history";
 import { createDefaultSettings, validateSettingResetKeys, validateSettingsPatch } from "../../shared/settings";
 import { DEFAULT_QUEUE_ID, SETTING_KEYS } from "../../shared/types";
+import { cloneSshHostConfigs, isSshHostConfigs } from "../../shared/ssh";
 import { StateStore } from "./persistence";
 import { resolveCategoryIsolated, resolveDownloadFolder } from "./categories";
 import { probeUrl as httpProbeUrl, redactErrorMessage, redactUrl, sanitizeFileName } from "./HttpProbe";
 import { DownloadTask } from "./DownloadTask";
+import { CredentialVault, type DistributedSourceSecret } from "./distributed/CredentialVault";
+import {
+  DistributedDownloadTask,
+  type DistributedIdentityVerifier,
+  type DistributedRangeFetcher,
+} from "./distributed/DistributedDownloadTask";
+import { SshWorkerClient } from "./distributed/SshWorkerClient";
+import { DistributedSourceCapabilityError, StrictSourceProbe } from "./distributed/StrictSourceProbe";
 import { SpeedLimiter } from "./SpeedLimiter";
 import {
   cloneRequestHeaders,
@@ -37,6 +52,15 @@ const MAX_QUEUE_ID_LENGTH = 256;
 const MAX_QUEUE_ITEM_IDS = 10_000;
 
 export type LoginItemSettingsWriter = (openAtLogin: boolean) => void;
+
+type ManagedDownloadTask = DownloadTask | DistributedDownloadTask;
+
+export interface DownloadManagerDistributedDependencies {
+  credentialVault?: CredentialVault;
+  sourceProbe?: StrictSourceProbe;
+  rangeFetcher?: DistributedRangeFetcher;
+  identityVerifier?: DistributedIdentityVerifier;
+}
 
 function writeElectronLoginItemSettings(openAtLogin: boolean): void {
   if (!app || typeof app.setLoginItemSettings !== "function") throw new Error("Electron login-item settings are unavailable");
@@ -61,6 +85,37 @@ function assertQueueItemIds(value: unknown): asserts value is string[] {
   if (!Array.isArray(value) || value.length > MAX_QUEUE_ITEM_IDS || value.some((id) => !isQueueItemId(id))) {
     throw new Error("Invalid queue item IDs");
   }
+}
+
+function normalizeDistributedHeaders(input: unknown): Record<string, string> {
+  if (input === undefined) return {};
+  if (!isRecord(input)) throw new Error("Distributed download headers must be an object");
+  const normalized: Record<string, string> = {};
+  for (const [rawName, value] of Object.entries(input)) {
+    const name = rawName.toLowerCase();
+    if (Object.prototype.hasOwnProperty.call(normalized, name)) {
+      throw new Error("Distributed download headers contain a duplicate name");
+    }
+    if (typeof value !== "string") throw new Error("Distributed download headers must contain strings");
+    normalized[name] = value;
+  }
+  if (!isDistributedRequestHeaders(normalized)) {
+    throw new Error("Distributed download headers include an unsupported or transport-controlled field");
+  }
+  return normalized;
+}
+
+function sourceRequiresTrustedSshHost(url: string, headers: Record<string, string>): boolean {
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return true;
+  }
+  if (parsed.username || parsed.password || parsed.search.length > 0) return true;
+  return Object.keys(headers).some((name) =>
+    /authorization|cookie|token|secret|api[-_]?key|signature|referer/u.test(name)
+  );
 }
 
 /** Validate the partial shape accepted by the queue:create IPC call. */
@@ -96,10 +151,15 @@ export class DownloadManager extends EventEmitter {
   private queues: Map<string, DownloadQueue> = new Map();
   private settings!: AppSettings;
   private compiledSettings!: AppSettings;
-  private tasks: Map<string, DownloadTask> = new Map();
+  private tasks: Map<string, ManagedDownloadTask> = new Map();
   private itemHeaders: Map<string, Record<string, string>> = new Map();
   /** Raw source URLs stay in memory only so active credentialed transfers work. */
   private itemSourceUrls: Map<string, string> = new Map();
+  private distributedSources: Map<string, DistributedSourceSecret> = new Map();
+  private readonly credentialVault: CredentialVault;
+  private readonly distributedSourceProbe: StrictSourceProbe;
+  private readonly distributedRangeFetcher: DistributedRangeFetcher;
+  private readonly distributedIdentityVerifier: DistributedIdentityVerifier;
   private globalSpeedLimiter!: SpeedLimiter;
   private notifyScheduled = false;
   private shutDown = false;
@@ -111,10 +171,15 @@ export class DownloadManager extends EventEmitter {
   constructor(
     private userDataPath: string,
     private readonly writeLoginItemSettings: LoginItemSettingsWriter = writeElectronLoginItemSettings,
+    distributedDependencies: DownloadManagerDistributedDependencies = {},
   ) {
     super();
     this.store = new StateStore(userDataPath);
     this.history = new HistoryStore(userDataPath);
+    this.credentialVault = distributedDependencies.credentialVault ?? new CredentialVault();
+    this.distributedSourceProbe = distributedDependencies.sourceProbe ?? new StrictSourceProbe();
+    this.distributedRangeFetcher = distributedDependencies.rangeFetcher ?? new SshWorkerClient({ vault: this.credentialVault });
+    this.distributedIdentityVerifier = distributedDependencies.identityVerifier ?? this.distributedSourceProbe;
   }
 
   get isShutDown() {
@@ -175,12 +240,55 @@ export class DownloadManager extends EventEmitter {
     let stateNeedsUrlMigration = false;
     for (const storedItem of state.items as StoredDownloadItem[]) {
       const { item, headers } = splitStoredDownload(storedItem);
-      if (headers) this.itemHeaders.set(item.id, headers);
+      if (headers && item.transferMode !== "ssh-distributed" && !item.sourceSecretStoredInVault) this.itemHeaders.set(item.id, headers);
       const sourceUrl = item.url;
       item.url = redactUrl(sourceUrl);
       if (sourceUrl !== item.url) {
         this.itemSourceUrls.set(item.id, sourceUrl);
         stateNeedsUrlMigration = true;
+      }
+      if (item.transferMode === "ssh-distributed") {
+        if (item.status === "completed" || item.status === "cancelled") {
+          // Completed/cancelled records must never reload a credentialed URL
+          // merely because a prior cleanup crashed.  Garbage-collect the
+          // opaque vault account without materialising its secret.
+          await this.credentialVault.removeDownloadSource(item.id).catch(() => {});
+        } else {
+          try {
+            const source = await this.credentialVault.loadDownloadSource(item.id);
+            if (source) {
+              this.distributedSources.set(item.id, source);
+              this.itemSourceUrls.set(item.id, source.url);
+            } else {
+              item.status = "error";
+              item.error = "The operating-system vault no longer contains this distributed download source.";
+            }
+          } catch {
+            item.status = "error";
+            item.error = "The stored distributed download source could not be read safely.";
+          }
+        }
+      }
+      if (item.sourceSecretStoredInVault && (item.status === "completed" || item.status === "cancelled") && item.transferMode !== "ssh-distributed") {
+        // A protected local fallback can leave a cancellation tombstone when
+        // removal is interrupted between vault cleanup and the final state
+        // save.  Remove the opaque account without loading its contents.
+        await this.credentialVault.removeDownloadSource(item.id).catch(() => {});
+      }
+      if (item.sourceSecretStoredInVault && item.status !== "completed" && item.status !== "cancelled") {
+        try {
+          const source = await this.credentialVault.loadDownloadSource(item.id);
+          if (source) {
+            this.itemHeaders.set(item.id, source.headers);
+            this.itemSourceUrls.set(item.id, source.url);
+          } else {
+            item.status = "error";
+            item.error = "The operating-system vault no longer contains this protected local download source.";
+          }
+        } catch {
+          item.status = "error";
+          item.error = "The protected local download source could not be read safely.";
+        }
       }
       this.sanitizeItem(item);
       item.fileName = sanitizeFileName(item.fileName);
@@ -250,7 +358,9 @@ export class DownloadManager extends EventEmitter {
     this.sanitizeItems();
     await this.store.save({
       items: Array.from(this.items.values()).map((item) =>
-        withStoredHeaders(item, this.itemHeaders.get(item.id))
+        item.transferMode === "ssh-distributed" || item.sourceSecretStoredInVault
+          ? item
+          : withStoredHeaders(item, this.itemHeaders.get(item.id))
       ),
       queues: Array.from(this.queues.values()),
       settings: this.settings,
@@ -274,6 +384,22 @@ export class DownloadManager extends EventEmitter {
       url,
       this.settings.autoOrganizeRules ?? []
     );
+  }
+
+  private resolveSelectedSshHosts(selection: DistributedDownloadSelection) {
+    if (!isDistributedDownloadSelection(selection)) throw new Error("Invalid distributed download selection");
+    const available = this.settings.sshHosts.filter((host) =>
+      host.enabled && host.provisionedAt !== null && host.workerHostKeySha256 !== null);
+    const selected = selection.hostIds
+      ? selection.hostIds.map((id) => available.find((host) => host.id === id))
+      : available.slice(0, selection.workerCount);
+    if (selected.length === 0 || selected.some((host) => !host)) {
+      throw new Error("Every selected SSH host must be enabled and successfully provisioned");
+    }
+    if (selection.workerCount !== undefined && selected.length !== selection.workerCount) {
+      throw new Error(`Only ${selected.length} provisioned SSH hosts are available for ${selection.workerCount} requested workers`);
+    }
+    return selected.map((host) => ({ ...host! }));
   }
 
   async addDownload(req: AddDownloadRequest): Promise<string> {
@@ -306,19 +432,105 @@ export class DownloadManager extends EventEmitter {
       error: null,
       parts: [],
       connections: 1,
+      transferMode: req.ssh ? "ssh-distributed" : "local",
     };
 
-    this.itemSourceUrls.set(id, req.url);
-    const headers = cloneRequestHeaders(req.headers);
-    if (headers) this.itemHeaders.set(id, headers);
-
-    try {
-      const info = await httpProbeUrl(req.url, headers ?? {});
-      item.totalSize = info.contentLength;
-      item.resumeSupport = info.resumeSupport;
-    } catch (e) {
-      item.error = redactErrorMessage(e, req.url);
+    let distributedFallback = false;
+    if (req.ssh) {
+      let selectedHosts: AppSettings["sshHosts"] = [];
+      let selectionError: Error | null = null;
+      try {
+        selectedHosts = this.resolveSelectedSshHosts(req.ssh);
+      } catch (error) {
+        selectionError = error instanceof Error ? error : new Error("The selected SSH hosts are unavailable");
+      }
+      const headers = normalizeDistributedHeaders(req.headers);
+      let probe: Awaited<ReturnType<StrictSourceProbe["probe"]>> | null = null;
+      try {
+        probe = await this.distributedSourceProbe.probe(req.url, headers);
+      } catch (error) {
+        if (!(error instanceof DistributedSourceCapabilityError)) throw error;
+        item.transferMode = "local";
+        item.connections = 1;
+        item.resumeSupport = false;
+        this.itemHeaders.set(id, headers);
+        try {
+          const info = await httpProbeUrl(req.url, headers);
+          item.totalSize = info.contentLength;
+          item.resumeSupport = info.resumeSupport;
+        } catch (localError) {
+          item.error = redactErrorMessage(localError, req.url);
+        }
+        item.transferNotice =
+          "SSH distribution was unavailable for this source, so the download was kept local.";
+        if (sourceRequiresTrustedSshHost(req.url, headers)) {
+          await this.credentialVault.storeDownloadSource(id, { url: req.url, headers });
+          item.sourceSecretStoredInVault = true;
+        }
+        distributedFallback = true;
+      }
+      const hasSecretBearingRequest = sourceRequiresTrustedSshHost(req.url, headers);
+      if (!distributedFallback && (!req.ssh.expectedSha256 || selectionError || (hasSecretBearingRequest && selectedHosts.some((host) => !host.trustedForSourceSecrets)))) {
+        item.transferMode = "local";
+        item.connections = 1;
+        item.resumeSupport = false;
+        this.itemHeaders.set(id, headers);
+        try {
+          const info = await httpProbeUrl(req.url, headers);
+          item.totalSize = info.contentLength;
+          item.resumeSupport = info.resumeSupport;
+        } catch (localError) {
+          item.error = redactErrorMessage(localError, req.url);
+        }
+        item.transferNotice = selectionError
+          ? "SSH distribution was kept local because the selected worker hosts are unavailable."
+          : !req.ssh.expectedSha256
+          ? "SSH distribution was kept local because this source has no trusted whole-file SHA-256 digest."
+          : "SSH distribution was kept local because the selected hosts are not trusted for source credentials.";
+        if (hasSecretBearingRequest) {
+          await this.credentialVault.storeDownloadSource(id, { url: req.url, headers });
+          item.sourceSecretStoredInVault = true;
+        }
+        distributedFallback = true;
+      }
+      if (!distributedFallback) {
+        if (!probe) throw new Error("The distributed source probe returned no identity");
+        const source: DistributedSourceSecret = { url: req.url, headers };
+        const resolvedSelection: DistributedDownloadSelection = {
+          mode: "ssh",
+          hostIds: selectedHosts.map((host) => host.id),
+          ...(req.ssh.expectedSha256 !== undefined ? { expectedSha256: req.ssh.expectedSha256 } : {}),
+        };
+        await this.credentialVault.storeDownloadSource(id, source);
+        this.distributedSources.set(id, source);
+        item.totalSize = probe.identity.length;
+        item.resumeSupport = true;
+        item.connections = selectedHosts.length;
+        item.sshHostIds = resolvedSelection.hostIds;
+        item.sshExpectedSha256 = resolvedSelection.expectedSha256 ?? null;
+        item.sshSourceIdentity = { ...probe.identity };
+        item.sshProgress = selectedHosts.map((host) => ({
+          hostId: host.id,
+          activePieces: 0,
+          completedPieces: 0,
+          failedPieces: 0,
+          state: "waiting" as const,
+          message: null,
+        }));
+      }
+    } else {
+      const headers = cloneRequestHeaders(req.headers);
+      if (headers) this.itemHeaders.set(id, headers);
+      try {
+        const info = await httpProbeUrl(req.url, headers ?? {});
+        item.totalSize = info.contentLength;
+        item.resumeSupport = info.resumeSupport;
+      } catch (e) {
+        item.error = redactErrorMessage(e, req.url);
+      }
     }
+
+    this.itemSourceUrls.set(id, req.url);
 
     this.items.set(id, item);
     this.itemOrder.unshift(id);
@@ -327,10 +539,21 @@ export class DownloadManager extends EventEmitter {
 
     if (req.startImmediately) {
       item.status = "queued";
-      this.processQueue(queue.id);
     }
 
-    await this.persist("created", `Created download ${fileName}`);
+    try {
+      await this.persist("created", `Created download ${fileName}`);
+    } catch (error) {
+      this.items.delete(id);
+      this.itemOrder = this.itemOrder.filter((candidate) => candidate !== id);
+      queue.itemIds = queue.itemIds.filter((candidate) => candidate !== id);
+      this.itemHeaders.delete(id);
+      this.itemSourceUrls.delete(id);
+      this.distributedSources.delete(id);
+      if (req.ssh || item.sourceSecretStoredInVault) await this.credentialVault.removeDownloadSource(id).catch(() => {});
+      throw error;
+    }
+    if (req.startImmediately) this.processQueue(queue.id);
     this.scheduleNotify();
     return id;
   }
@@ -355,19 +578,55 @@ export class DownloadManager extends EventEmitter {
 
   // ---- task lifecycle --------------------------------------------------------
 
-  private createTask(item: DownloadItem): DownloadTask {
-    const task = new DownloadTask(this.taskItem(item), {
-      maxConnections: this.settings.maxConnectionsPerDownload,
-      minPartSize: this.settings.minConnectionPartSize,
-      headers: this.itemHeaders.get(item.id),
-      speedLimiters: [this.globalSpeedLimiter],
-    });
+  private createTask(item: DownloadItem): ManagedDownloadTask {
+    let task: ManagedDownloadTask;
+    if (item.transferMode === "ssh-distributed") {
+      const source = this.distributedSources.get(item.id);
+      if (!source || !item.sshSourceIdentity || !item.sshHostIds?.length) {
+        throw new Error("The distributed download is missing its main-process source or host assignment");
+      }
+      const hosts = item.sshHostIds.map((id) => this.settings.sshHosts.find((host) => host.id === id));
+      if (hosts.some((host) => !host || !host.enabled || !host.workerHostKeySha256)) {
+        throw new Error("A selected SSH host is unavailable, disabled, or no longer provisioned");
+      }
+      if (!item.sshExpectedSha256) {
+        throw new Error("The distributed download has no trusted expected SHA-256 digest");
+      }
+      if (sourceRequiresTrustedSshHost(source.url, source.headers) && hosts.some((host) => !host!.trustedForSourceSecrets)) {
+        throw new Error("A selected SSH host is no longer trusted for this credentialed source");
+      }
+      task = new DistributedDownloadTask(item, {
+        workRoot: path.join(this.userDataPath, "distributed-downloads"),
+        source,
+        sourceIdentity: item.sshSourceIdentity,
+        selection: {
+          mode: "ssh",
+          hostIds: [...item.sshHostIds],
+          ...(item.sshExpectedSha256 ? { expectedSha256: item.sshExpectedSha256 } : {}),
+        },
+        hosts: hosts.map((host) => ({ ...host! })),
+        rangeFetcher: this.distributedRangeFetcher,
+        identityVerifier: this.distributedIdentityVerifier,
+      });
+    } else {
+      task = new DownloadTask(this.taskItem(item), {
+        maxConnections: this.settings.maxConnectionsPerDownload,
+        minPartSize: this.settings.minConnectionPartSize,
+        headers: this.itemHeaders.get(item.id),
+        speedLimiters: [this.globalSpeedLimiter],
+      });
+    }
     task.on("progress", () => this.scheduleNotify());
     task.on("completed", () => {
       this.trackOperation(
         (async () => {
           this.tasks.delete(item.id);
           await this.persist("updated", `Completed download ${item.fileName}`);
+          if (item.transferMode === "ssh-distributed" || item.sourceSecretStoredInVault) {
+            this.distributedSources.delete(item.id);
+            this.itemSourceUrls.delete(item.id);
+            await this.credentialVault.removeDownloadSource(item.id).catch(() => {});
+          }
           this.scheduleNotify();
           this.emit("itemCompleted", item);
           this.processAllQueues();
@@ -403,7 +662,16 @@ export class DownloadManager extends EventEmitter {
     if (this.tasks.has(item.id)) return;
     item.status = "downloading";
     item.error = null;
-    const task = this.createTask(item);
+    let task: ManagedDownloadTask;
+    try {
+      task = this.createTask(item);
+    } catch (error) {
+      item.status = "error";
+      item.error = error instanceof Error ? error.message : "The download task could not be created";
+      this.trackOperation(this.persist("updated", `Recorded download error for ${item.fileName}`));
+      this.scheduleNotify();
+      return;
+    }
     task.start().catch((e) => {
       this.trackOperation(
         (async () => {
@@ -514,6 +782,9 @@ export class DownloadManager extends EventEmitter {
     const item = this.items.get(id);
     if (!item) return;
     if (item.status === "completed") return;
+    if (item.status === "cancelled" && (item.transferMode === "ssh-distributed" || item.sourceSecretStoredInVault)) {
+      throw new Error("This protected download was cancelled permanently; add it again to resume safely.");
+    }
     item.status = "queued";
     await this.persist("updated", historySummary ?? `Resumed download ${item.fileName}`);
     this.scheduleNotify();
@@ -523,8 +794,11 @@ export class DownloadManager extends EventEmitter {
   async retry(id: string) {
     const item = this.items.get(id);
     if (!item) return;
+    if (item.status === "cancelled" && (item.transferMode === "ssh-distributed" || item.sourceSecretStoredInVault)) {
+      throw new Error("This protected download was cancelled permanently; add it again to retry safely.");
+    }
     item.error = null;
-    item.parts = [];
+    if (item.transferMode !== "ssh-distributed") item.parts = [];
     item.downloadedSize = 0;
     await this.resume(id, `Retried download ${item.fileName}`);
   }
@@ -537,9 +811,24 @@ export class DownloadManager extends EventEmitter {
       await task.cancel(false);
       this.tasks.delete(id);
     }
+    const protectedSource = Boolean(item?.transferMode === "ssh-distributed" || item?.sourceSecretStoredInVault);
     if (item) item.status = "cancelled";
     if (item) await this.persist("updated", `Cancelled download ${item.fileName}`);
     else await this.persist();
+    if (item && protectedSource) {
+      // Protected cancellation is terminal.  The durable cancelled record is
+      // written first; vault cleanup can be retried by startup GC if the
+      // process is interrupted, while no in-memory secret remains resumable.
+      this.itemHeaders.delete(id);
+      this.itemSourceUrls.delete(id);
+      this.distributedSources.delete(id);
+      try {
+        await this.credentialVault.removeDownloadSource(id);
+      } catch {
+        item.error = "The cancelled download source remains in the operating-system vault and will be retried safely.";
+        await this.persist().catch(() => {});
+      }
+    }
     this.scheduleNotify();
     this.processAllQueues();
   }
@@ -555,9 +844,24 @@ export class DownloadManager extends EventEmitter {
       const item = this.items.get(id);
       if (item) await fsp.rm(path.join(item.folder, item.fileName), { force: true });
     }
+    const protectedSource = Boolean(removedItem?.transferMode === "ssh-distributed" || removedItem?.sourceSecretStoredInVault);
+    if (protectedSource && removedItem) {
+      // Leave a durable terminal tombstone before touching the vault.  If the
+      // process dies after the secret is removed but before the final delete
+      // save, startup can still see this marker and retry cleanup safely.
+      removedItem.status = "cancelled";
+      removedItem.error = null;
+      await this.persist("updated", `Marked download ${removedItem.fileName} for protected-source cleanup`);
+      try {
+        await this.credentialVault.removeDownloadSource(id);
+      } catch {
+        removedItem.error = "The protected download source could not be removed from the operating-system vault.";
+        await this.persist().catch(() => {});
+        throw new Error("The protected download source could not be removed safely");
+      }
+    }
     this.items.delete(id);
     this.itemHeaders.delete(id);
-    this.itemSourceUrls.delete(id);
     this.itemOrder = this.itemOrder.filter((x) => x !== id);
     for (const queue of this.queues.values()) {
       queue.itemIds = queue.itemIds.filter((x) => x !== id);
@@ -568,6 +872,8 @@ export class DownloadManager extends EventEmitter {
         ? `Deleted download ${removedItem.fileName}${deleteFile ? " and its file" : " from the list"}`
         : "Deleted a download record"
     );
+    this.itemSourceUrls.delete(id);
+    this.distributedSources.delete(id);
     this.scheduleNotify();
     this.processAllQueues();
   }
@@ -591,7 +897,7 @@ export class DownloadManager extends EventEmitter {
   }
 
   async setSettings(partial: SettingsPatch, resetKeysInput: readonly SettingKey[] = []): Promise<AppSettings> {
-    const validated = validateSettingsPatch(partial);
+    const validated = validateSettingsPatch(partial, { allowManagedSshHosts: true });
     const resetKeys = validateSettingResetKeys(resetKeysInput);
     if (resetKeys.some((key) => Object.prototype.hasOwnProperty.call(validated, key))) {
       throw new Error("A setting cannot be changed and reset in the same mutation");
@@ -617,6 +923,22 @@ export class DownloadManager extends EventEmitter {
       this.writeLoginItemSettings(this.settings.startOnSystemStartup);
     }
     await this.persist("settings-changed", "Changed application settings");
+    this.scheduleNotify();
+    this.processAllQueues();
+    return this.settings;
+  }
+
+  /**
+   * Replace the SSH host inventory only after a main-process scan/provision
+   * operation has produced the new canonical values. Renderer settings patches
+   * are rejected at the IPC boundary and cannot author host pins or trust.
+   */
+  async setManagedSshHosts(hosts: readonly unknown[]): Promise<AppSettings> {
+    if (!isSshHostConfigs(hosts)) throw new Error("Invalid managed SSH host inventory");
+    const validated = { sshHosts: cloneSshHostConfigs(hosts) } satisfies SettingsPatch;
+    const provenance = { ...this.settings.settingProvenance, sshHosts: "persisted" as const };
+    this.settings = { ...this.settings, sshHosts: validated.sshHosts, settingProvenance: provenance };
+    await this.persist("settings-changed", "Updated managed SSH host inventory");
     this.scheduleNotify();
     this.processAllQueues();
     return this.settings;

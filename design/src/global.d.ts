@@ -18,6 +18,7 @@ import type {
 } from "@shared/types";
 import type { ChangelogView, ChangelogViewRequest } from "../electron/history/ChangelogStore";
 import type { RegexEvaluation } from "@shared/regex";
+import type { SshHostDraft, SshHostStatus } from "@shared/ssh";
 
 export interface MaterialDownloadManagerAPI {
   getState(): Promise<StateSnapshot>;
@@ -42,6 +43,12 @@ export interface MaterialDownloadManagerAPI {
   openFolder(id: string): Promise<void>;
   getSettings(): Promise<AppSettings>;
   setSettings(settings: SettingsPatch, resetKeys?: SettingKey[]): Promise<AppSettings>;
+  saveSshHost(draft: SshHostDraft): Promise<AppSettings>;
+  importSshBootstrapKey(hostId: string): Promise<AppSettings>;
+  provisionSshHost(hostId: string): Promise<AppSettings>;
+  verifySshHost(hostId: string): Promise<SshHostStatus>;
+  setSshHostSecretTrust(hostId: string, trusted: boolean): Promise<AppSettings>;
+  removeSshHost(hostId: string): Promise<AppSettings>;
   getHistoryView(filter?: HistoryFilter): Promise<HistoryView>;
   exportHistory(format: ExportFormat, filter?: HistoryFilter): Promise<ExportResult>;
   getChangelogView(request?: ChangelogViewRequest): Promise<ChangelogView>;

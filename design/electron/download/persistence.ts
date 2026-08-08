@@ -19,6 +19,7 @@ import {
   SETTINGS_SCHEMA_VERSION,
 } from "../../shared/settings";
 import { normalizeRegexFlags } from "../../shared/regex";
+import { cloneSshHostConfigs, isSshHostConfigs } from "../../shared/ssh";
 
 export interface PersistedState {
   items: DownloadItem[];
@@ -153,6 +154,16 @@ export function migrateSettings(input: unknown, defaultSaveFolder: string): AppS
       provenance.autoOrganizeRules = "persisted";
     }
   }
+  if (hasOwn(raw, "sshHosts") && isSshHostConfigs(raw.sshHosts)) {
+    const storedSource = storedProvenance?.sshHosts;
+    if (storedSource !== "compiled-in") {
+      settings.sshHosts = cloneSshHostConfigs(raw.sshHosts);
+      provenance.sshHosts = "persisted";
+    }
+  }
+  adopt("sshDefaultWorkerCount", (value): value is number =>
+    isBoundedNumber(value, 1, 16) && Number.isInteger(value)
+  );
 
   // A newer file is read conservatively: known keys are still validated, but
   // the in-memory schema is always the current one so the next save upgrades it.

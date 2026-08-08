@@ -9,7 +9,7 @@ import { migrateSettings, StateStore } from "../persistence";
 test("default settings are versioned and mark every value as compiled-in", () => {
   const settings = createDefaultSettings("C:/Downloads/MaterialDownloadManager");
 
-  assert.equal(SETTINGS_SCHEMA_VERSION, 3);
+  assert.equal(SETTINGS_SCHEMA_VERSION, 4);
   assert.equal(settings.settingsVersion, SETTINGS_SCHEMA_VERSION);
   assert.equal(settings.languageMode, "english");
   assert.equal(settings.funnyLevelEnglish, 1);

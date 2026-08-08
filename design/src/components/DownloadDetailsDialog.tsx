@@ -186,6 +186,29 @@ export default function DownloadDetailsDialog({ itemId }: { itemId: string }) {
           </div>
         </>
       )}
+      {item.sshProgress && item.sshProgress.length > 0 && (
+        <section className="field" aria-labelledby="ssh-transfer-progress-heading">
+          <h3 id="ssh-transfer-progress-heading">SSH worker progress</h3>
+          <div className="part-table-scroll">
+            <table className="part-table">
+              <thead><tr><th>Host</th><th>Range</th><th>Bytes</th><th>Rate</th><th>State</th></tr></thead>
+              <tbody>
+                {item.sshProgress.map((progress) => (
+                  <tr key={progress.hostId}>
+                    <td>{progress.hostId.slice(0, 8)}</td>
+                    <td>{progress.rangeStart !== null && progress.rangeStart !== undefined && progress.rangeEndExclusive !== null && progress.rangeEndExclusive !== undefined
+                      ? `${progress.rangeStart}–${progress.rangeEndExclusive - 1}`
+                      : "—"}</td>
+                    <td>{formatBytes(progress.transferredBytes ?? 0)}</td>
+                    <td>{formatBytes(progress.bytesPerSecond ?? 0)}/s</td>
+                    <td>{progress.state}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      )}
     </Dialog>
   );
 }
