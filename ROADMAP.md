@@ -43,13 +43,22 @@ unverified surface has shipped.
   record are the source of truth for remote CI, publication, and installer
   evidence; this roadmap never predicts an in-flight workflow result.
 
+## Distributed SSH downloads integrated
+
+- Opt-in Docker-backed SSH workers are selected by host count, split only after
+  an exact range/validator probe, and assembled locally from atomic verified
+  pieces.
+- The main process owns host pins, provisioning, vault-held source secrets,
+  trust consent, retry/quarantine state, and safe local fallback. Renderer
+  settings patches cannot author worker identity or trust state.
+- The restricted worker container, framed protocol, manifest, range planner,
+  vault, source probe, manager seam, settings controls, progress rows, and
+  focused hostile tests are shipped. Docker daemon runtime evidence remains an
+  external verification boundary when no daemon is available.
+
 ## Next global-memory implementation slices
 
-1. Add opt-in distributed SSH downloads: select one or more provisioned worker
-   hosts, split only range-capable downloads across them, verify returned parts,
-   assemble locally, and automate a least-privilege Docker worker lifecycle
-   without exposing credentials to the renderer or repository.
-2. Finish full per-element appearance editors, including the continuous color
+1. Finish full per-element appearance editors, including the continuous color
    translator and Word-depth typography controls.
 3. Complete persisted tab overflow, pinning, grouping, four discovery searches,
    and bulk-close review flows in the desktop app.

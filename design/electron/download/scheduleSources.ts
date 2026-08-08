@@ -21,7 +21,7 @@ export const MAX_SCHEDULE_RESPONSE_BYTES = 256 * 1024;
 export const MAX_SCHEDULE_TIMEOUT_MS = 10_000;
 export const MAX_SCHEDULE_TOKEN_LENGTH = 4_096;
 
-export type ScheduledSettings = Partial<Omit<AppSettings, "settingsVersion" | "settingProvenance">>;
+export type ScheduledSettings = Partial<Omit<AppSettings, "settingsVersion" | "settingProvenance" | "sshHosts">>;
 
 export interface LocalScheduleSource {
   kind: "local";
@@ -311,6 +311,13 @@ function validateScheduledSetting(key: string, value: unknown): void {
     case "autoOrganizeRules":
       if (!isAutoOrganizeRules(value)) throw new Error("Invalid scheduled autoOrganizeRules");
       return;
+    case "sshDefaultWorkerCount":
+      if (!isBoundedNumber(value, 1, 16) || !Number.isInteger(value)) {
+        throw new Error("Invalid scheduled sshDefaultWorkerCount");
+      }
+      return;
+    case "sshHosts":
+      throw new Error("SSH host inventory and pinned keys cannot be supplied by a scheduled settings source");
     case "theme":
       if (value !== "dark" && value !== "light" && value !== "system") throw new Error("Invalid scheduled theme");
       return;
@@ -437,7 +444,7 @@ async function defaultHostnameResolver(hostname: string): Promise<readonly Sched
   return resolved.map((entry) => ({ address: entry.address, family: entry.family === 6 ? 6 : 4 }));
 }
 
-async function resolveSafeScheduleAddresses(
+export async function resolveSafeScheduleAddresses(
   url: string,
   options: ScheduleSourceResolveOptions,
 ): Promise<readonly ScheduleResolvedAddress[]> {
@@ -468,7 +475,7 @@ async function resolveSafeScheduleAddresses(
   return normalized;
 }
 
-function pinnedLookup(address: ScheduleResolvedAddress, allowPrivate: boolean, loopbackOnly: boolean): LookupFunction {
+export function pinnedLookup(address: ScheduleResolvedAddress, allowPrivate: boolean, loopbackOnly: boolean): LookupFunction {
   return (_hostname, _options, callback) => {
     const classification = classifyNetworkAddress(address.address);
     const accepted = classification !== "invalid" &&

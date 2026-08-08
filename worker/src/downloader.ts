@@ -194,7 +194,13 @@ function singleHeader(response: http.IncomingMessage, name: string): string | un
 
 function validateRangeResponse(request: RangeRequest, response: http.IncomingMessage): void {
   if (response.statusCode !== 206) {
-    throw new ProtocolError("range-rejected", true);
+    // A conditional range that no longer yields 206 is not a transient
+    // capacity problem: the origin ignored If-Range or the immutable source
+    // identity no longer holds.  Do not send the same bytes to another host.
+    throw new ProtocolError(
+      request.source.etag || request.source.lastModified ? "source-changed" : "range-rejected",
+      !request.source.etag && !request.source.lastModified,
+    );
   }
   const contentEncodings = headerValues(response, "content-encoding");
   if (contentEncodings.length > 1
@@ -215,12 +221,12 @@ function validateRangeResponse(request: RangeRequest, response: http.IncomingMes
   }
   if (request.source.etag) {
     if (singleHeader(response, "etag") !== request.source.etag) {
-      throw new ProtocolError("source-changed", true);
+      throw new ProtocolError("source-changed");
     }
   }
   if (request.source.lastModified !== null
       && singleHeader(response, "last-modified") !== request.source.lastModified) {
-    throw new ProtocolError("source-changed", true);
+      throw new ProtocolError("source-changed");
   }
 }
 

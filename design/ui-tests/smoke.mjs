@@ -2142,6 +2142,30 @@ async function main(argv) {
       return { localizedSection, folders: evidence, customRules: rulesEvidence };
     });
 
+    await runCheck(result, "settings-ssh-workers-surface", async () => {
+      await clickByRole(cdp, "button", "Settings");
+      await waitForPage(cdp, `Boolean(document.querySelector(".dialog"))`, "Settings for SSH worker surface", options.timeoutMs);
+      const evidence = await cdp.evaluate(pageExpression(`
+        const section = document.getElementById("settings-ssh-workers");
+        const heading = document.getElementById("settings-ssh-workers-heading");
+        const helper = document.getElementById("settings-ssh-workers-helper");
+        const count = document.getElementById("settings-ssh-worker-count");
+        const hosts = section?.querySelector('[role="list"]');
+        if (!(section instanceof HTMLElement) || !(heading instanceof HTMLElement) || !(helper instanceof HTMLElement)) {
+          throw new Error("SSH worker settings section is missing its heading or explanation");
+        }
+        if (!(count instanceof HTMLInputElement) || count.min !== "1" || count.max !== "16") {
+          throw new Error("SSH worker count control is missing its bounded input contract");
+        }
+        if (!(hosts instanceof HTMLElement) || !hosts.getAttribute("aria-label")) throw new Error("SSH host inventory is not an accessible list");
+        if (!/pinned SSH|固定 SSH/.test(helper.textContent ?? "")) throw new Error("SSH worker explanation does not describe the pinned boundary");
+        return { heading: heading.textContent?.trim() ?? "", workerCount: count.value, hostListLabel: hosts.getAttribute("aria-label") ?? "", helper: helper.textContent?.trim() ?? "" };
+      `));
+      await dispatchEscape(cdp);
+      await waitForPage(cdp, `!document.querySelector(".dialog")`, "SSH worker Settings close", options.timeoutMs);
+      return evidence;
+    });
+
     await runCheck(result, "settings-auto-organize-preview-ipc", async () => {
       await clickByRole(cdp, "button", "Add URL");
       await waitForPage(cdp, `Boolean(document.querySelector('[role="dialog"] .add-dl-preview'))`, "Add download preview", options.timeoutMs);

@@ -46,20 +46,34 @@ function constantTimeMatch(input: Buffer, expected: Buffer): boolean {
   return timingSafeEqual(input, comparison) && sameLength;
 }
 
-function channelWrite(channel: Duplex, payload: Buffer): Promise<void> {
+function channelWrite(channel: Duplex, payload: Buffer, timeoutMs = 30_000): Promise<void> {
   return new Promise((resolve, reject) => {
-    const onError = (error: Error): void => {
+    let settled = false;
+    const timer = setTimeout(() => finish(new Error("SSH channel write timed out")), timeoutMs);
+    timer.unref();
+    const finish = (error?: Error): void => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
       channel.off("drain", onDrain);
-      reject(error);
+      channel.off("error", onError);
+      channel.off("close", onClose);
+      channel.off("aborted", onClose);
+      if (error) reject(error);
+      else resolve();
+    };
+    const onError = (error: Error): void => {
+      finish(error);
     };
     const onDrain = (): void => {
-      channel.off("error", onError);
-      resolve();
+      finish();
     };
+    const onClose = (): void => finish(new Error("SSH channel closed while writing"));
     channel.once("error", onError);
+    channel.once("close", onClose);
+    channel.once("aborted", onClose);
     if (channel.write(payload)) {
-      channel.off("error", onError);
-      resolve();
+      finish();
     } else {
       channel.once("drain", onDrain);
     }

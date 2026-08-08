@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { NewDownloadInfo } from "@shared/types";
+import type { DistributedDownloadSelection } from "@shared/distributedProtocol";
 import { detectCategory } from "@shared/categories";
 import { isValidDefaultSaveFolder } from "@shared/settings";
 import { useAppStore } from "../store/useAppStore";
@@ -36,6 +37,9 @@ export default function AddDownloadDialog() {
   const [showFolderMenu, setShowFolderMenu] = useState(false);
   const [showHeaders, setShowHeaders] = useState(false);
   const [headersText, setHeadersText] = useState("");
+  const [transferMode, setTransferMode] = useState<"local" | "ssh">("local");
+  const [workerCount, setWorkerCount] = useState(settings?.sshDefaultWorkerCount ?? 2);
+  const [expectedSha256, setExpectedSha256] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [category, setCategory] = useState(() => detectCategory("file"));
 
@@ -111,6 +115,13 @@ export default function AddDownloadDialog() {
     if (!url.trim() || submitting) return;
     setSubmitting(true);
     try {
+      const ssh: DistributedDownloadSelection | undefined = transferMode === "ssh"
+        ? {
+            mode: "ssh",
+            workerCount: Math.max(1, Math.min(16, Number(workerCount) || 1)),
+            ...(expectedSha256.trim() ? { expectedSha256: expectedSha256.trim().toLowerCase() } : {}),
+          }
+        : undefined;
       await addDownload({
         url: url.trim(),
         folder: effectiveFolder,
@@ -118,6 +129,7 @@ export default function AddDownloadDialog() {
         queueId: null,
         startImmediately,
         headers: parseHeaders(),
+        ssh,
       });
     } finally {
       setSubmitting(false);
@@ -256,6 +268,31 @@ export default function AddDownloadDialog() {
             </button>
           </div>
         </div>
+      </div>
+
+      <div className="add-dl-transfer" aria-label="Transfer route">
+        <div className="field-row">
+          <label className="field">
+            <span className="field-label">Transfer route</span>
+            <select className="input select" value={transferMode} onChange={(event) => setTransferMode(event.target.value as "local" | "ssh")}>
+              <option value="local">This computer</option>
+              <option value="ssh" disabled={!settings?.sshHosts.some((host) => host.enabled && host.provisionedAt && host.workerHostKeySha256)}>Docker SSH workers</option>
+            </select>
+          </label>
+          {transferMode === "ssh" && (
+            <label className="field">
+              <span className="field-label">Worker hosts</span>
+              <input className="input" type="number" min={1} max={16} value={workerCount} onChange={(event) => setWorkerCount(Number(event.target.value) || 1)} />
+            </label>
+          )}
+        </div>
+        {transferMode === "ssh" && (
+          <label className="field">
+            <span className="field-label">Trusted whole-file SHA-256 (optional; blank stays local)</span>
+            <input className="input" value={expectedSha256} onChange={(event) => setExpectedSha256(event.target.value)} placeholder="64 lowercase hexadecimal characters" maxLength={64} />
+            <span className="setting-helper">Distributed bytes require this trusted digest. Without it, the app keeps the download on this computer.</span>
+          </label>
+        )}
       </div>
 
       {showHeaders && (

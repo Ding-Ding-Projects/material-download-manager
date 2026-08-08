@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import type { AppSettings, AutoOrganizeRule, AutoOrganizeTargetCategory, SettingKey, SettingsPatch } from "@shared/types";
+import type { SshHostDraft } from "@shared/ssh";
 import {
   AUTO_ORGANIZE_FOLDERS,
   AUTO_ORGANIZE_RULE_LIMIT,
@@ -26,6 +27,7 @@ import {
 } from "../store/displayPreferences";
 import { settingSourceLabel } from "../store/settingsAppearance";
 import Dialog from "./Dialog";
+import DestructiveActionGate from "./DestructiveActionGate";
 import { FolderIcon, SettingsIcon } from "./icons";
 import RegexBuilder from "./RegexBuilder";
 
@@ -122,6 +124,12 @@ const SETTINGS_SEARCH_INDEX = [
     targetId: "settings-max-connections-per-download",
     tab: "downloads" as const,
     labels: ["Max connections per download max active downloads", "每個下載最多連線 同時下載上限"],
+  },
+  {
+    id: "settings-ssh-workers",
+    targetId: "settings-ssh-workers",
+    tab: "downloads" as const,
+    labels: ["SSH workers Docker hosts distributed downloads worker count host key trust", "SSH 工作器 Docker 主機 分流下載 工作器數量 主機金鑰 信任"],
   },
   {
     id: "settings-speed",
@@ -224,6 +232,20 @@ export default function SettingsDialog() {
   const autoOrganizeRuleMoveButtonRefs = useRef(new Map<string, HTMLButtonElement>());
   const autoOrganizeRuleNameRefs = useRef(new Map<string, HTMLInputElement>());
   const addAutoOrganizeRuleButtonRef = useRef<HTMLButtonElement>(null);
+  const [sshDraft, setSshDraft] = useState<SshHostDraft>(() => ({
+    id: window.crypto.randomUUID(),
+    name: "",
+    host: "",
+    sshPort: 22,
+    username: "docker",
+    hostKeySha256: "",
+    bootstrapAuthMode: "system-agent",
+    workerPort: 2222,
+    enabled: true,
+  }));
+  const [sshBusyId, setSshBusyId] = useState<string | null>(null);
+  const [sshNotice, setSshNotice] = useState<string | null>(null);
+  const [pendingSshRemovalId, setPendingSshRemovalId] = useState<string | null>(null);
 
   const copy = useMemo(() => getSettingsCopy(form.languageMode), [form.languageMode]);
   const ui = useMemo(() => getUiCopy(form), [form]);
@@ -556,6 +578,88 @@ export default function SettingsDialog() {
     if (picked) update("defaultSaveFolder", picked);
   }
 
+  function editSshHost(host: AppSettings["sshHosts"][number]) {
+    setSshDraft({
+      id: host.id,
+      name: host.name,
+      host: host.host,
+      sshPort: host.sshPort,
+      username: host.username,
+      hostKeySha256: host.hostKeySha256,
+      bootstrapAuthMode: host.bootstrapAuthMode,
+      workerPort: host.workerPort,
+      enabled: host.enabled,
+    });
+    setSshNotice(null);
+  }
+
+  function newSshHost() {
+    setSshDraft({
+      id: window.crypto.randomUUID(),
+      name: "",
+      host: "",
+      sshPort: 22,
+      username: "docker",
+      hostKeySha256: "",
+      bootstrapAuthMode: "system-agent",
+      workerPort: 2222,
+      enabled: true,
+    });
+    setSshNotice(null);
+  }
+
+  async function saveSshHostDraft() {
+    if (sshBusyId) return;
+    setSshBusyId(sshDraft.id);
+    setSshNotice(null);
+    try {
+      const next = await window.api.saveSshHost({ ...sshDraft, sshPort: Number(sshDraft.sshPort), workerPort: Number(sshDraft.workerPort) });
+      setForm(next);
+      setSshNotice(ui.text("Host saved after the main process verified its SSH key.", "主程序驗證 SSH 主機金鑰後，主機已儲存。"));
+    } catch (error) {
+      setSshNotice(error instanceof Error ? error.message : ui.text("The SSH host could not be saved.", "未能儲存 SSH 主機。"));
+    } finally {
+      setSshBusyId(null);
+    }
+  }
+
+  async function runSshHostAction(hostId: string, action: "import" | "provision" | "verify" | "trust" | "revoke" | "remove") {
+    if (sshBusyId) return;
+    const host = form.sshHosts.find((candidate) => candidate.id === hostId);
+    if (!host) return;
+    setSshBusyId(hostId);
+    setSshNotice(null);
+    try {
+      let actionNotice: string | null = null;
+      let next: AppSettings;
+      if (action === "import") {
+        next = await window.api.importSshBootstrapKey(hostId);
+      } else if (action === "provision") {
+        next = await window.api.provisionSshHost(hostId);
+      } else if (action === "verify") {
+        const status = await window.api.verifySshHost(hostId);
+        actionNotice = status.message;
+        if (status.state === "failed" || status.state === "degraded") throw new Error(status.message);
+        next = form;
+      } else if (action === "trust" || action === "revoke") {
+        next = await window.api.setSshHostSecretTrust(hostId, action === "trust");
+      } else {
+        next = await window.api.removeSshHost(hostId);
+      }
+      setForm(next);
+      setSshNotice(actionNotice ?? ui.text("SSH host action completed.", "SSH 主機操作完成。"));
+    } catch (error) {
+      setSshNotice(error instanceof Error ? error.message : ui.text("The SSH host action failed.", "SSH 主機操作失敗。"));
+    } finally {
+      setSshBusyId(null);
+    }
+  }
+
+  function requestSshHostRemoval(hostId: string) {
+    if (sshBusyId) return;
+    setPendingSshRemovalId(hostId);
+  }
+
   function jumpToSetting(id: string) {
     const entry = SETTINGS_SEARCH_INDEX.find((candidate) => candidate.targetId === id);
     if (entry && entry.tab !== activeSettingsTab) {
@@ -579,7 +683,9 @@ export default function SettingsDialog() {
 
   function resetAllSettings() {
     const defaults = createDefaultSettings(form.defaultSaveFolder);
-    const resetKeys = SETTING_KEYS.filter((key) => key !== "defaultSaveFolder");
+    // Managed SSH hosts are owned by the main-process lifecycle IPC, not the
+    // generic renderer settings patch/reset path.
+    const resetKeys = SETTING_KEYS.filter((key) => key !== "defaultSaveFolder" && key !== "sshHosts");
     setResetSettingKeys(new Set(resetKeys));
     setForm({
       ...defaults,
@@ -654,6 +760,7 @@ export default function SettingsDialog() {
       const persistedSettings = currentSettings ?? form;
       const settingsPatch: SettingsPatch = {};
       for (const key of SETTING_KEYS) {
+        if (key === "sshHosts") continue;
         if (resetSettingKeys.has(key)) continue;
         if (!settingValuesEqual(key, desiredSettings[key], persistedSettings[key])) {
           (settingsPatch as Record<string, unknown>)[key] = desiredSettings[key];
@@ -762,7 +869,7 @@ export default function SettingsDialog() {
     );
   }
 
-  return (
+  return (<>
     <Dialog
       title={ui.settings}
       icon={<SettingsIcon size={16} />}
@@ -1068,6 +1175,71 @@ export default function SettingsDialog() {
         {defaultSaveFolderError && <p id="settings-default-save-folder-error" className="field-error" role="alert">{defaultSaveFolderError}</p>}
         <span className="setting-source">{source("defaultSaveFolder", "the platform Downloads folder")}</span>
       </div>
+
+      <section className="field" id="settings-ssh-workers" tabIndex={-1} aria-labelledby="settings-ssh-workers-heading">
+        <div className="settings-section-heading" id="settings-ssh-workers-heading">
+          {ui.text("Docker-backed SSH workers", "Docker SSH 工作器")}
+        </div>
+        <p className="setting-helper" id="settings-ssh-workers-helper">
+          {ui.text(
+            "Provision non-root Docker workers over pinned SSH, then split a download across the number of healthy hosts you choose. Credentials stay in the main-process vault.",
+            "透過固定 SSH 金鑰自動配置非 root Docker 工作器，再按你揀嘅健康主機數量分流下載；憑證只會留喺主程序保險庫。"
+          )}
+        </p>
+        <div className="field-pair">
+          <label className="field">
+            <span className="field-label">{ui.text("Default worker count", "預設工作器數量")}</span>
+            <input
+              className="input"
+              id="settings-ssh-worker-count"
+              type="number"
+              min={1}
+              max={16}
+              value={form.sshDefaultWorkerCount}
+              onChange={(event) => update("sshDefaultWorkerCount", Math.max(1, Math.min(16, Number(event.target.value) || 1)))}
+            />
+            <span className="setting-source">{source("sshDefaultWorkerCount", "2")}</span>
+          </label>
+          <div className="field">
+            <span className="field-label">{ui.text("Managed hosts", "已管理主機")}</span>
+            <span className="setting-helper">{ui.text(`${form.sshHosts.length} configured`, `已設定 ${form.sshHosts.length} 部`)}</span>
+          </div>
+        </div>
+        <div className="field-pair" role="list" aria-label={ui.text("Managed SSH hosts", "已管理 SSH 主機")}>
+          {form.sshHosts.length === 0 && <div className="auto-organize-empty" role="listitem">{ui.text("No SSH hosts yet. Add one below to provision a worker.", "而家未有 SSH 主機；喺下面新增先可以配置工作器。")}</div>}
+          {form.sshHosts.map((host) => (
+            <article className="field" role="listitem" key={host.id}>
+              <strong>{host.name}</strong>
+              <code>{host.username}@{host.host}:{host.sshPort}</code>
+              <span className="setting-helper">
+                {host.provisionedAt ? ui.text("Provisioned", "已配置") : ui.text("Not provisioned", "未配置")}
+                {host.trustedForSourceSecrets ? ui.text(" · trusted for source credentials", " · 已信任來源憑證") : ""}
+              </span>
+              <div className="field-row">
+                <button type="button" className="btn btn-ghost btn-sm" onClick={() => editSshHost(host)}>{ui.text("Edit", "編輯")}</button>
+                <button type="button" className="btn btn-ghost btn-sm" disabled={sshBusyId === host.id} onClick={() => void runSshHostAction(host.id, "import")}>{ui.text("Import key", "匯入金鑰")}</button>
+                <button type="button" className="btn btn-ghost btn-sm" disabled={sshBusyId === host.id} onClick={() => void runSshHostAction(host.id, "provision")}>{ui.text("Provision", "配置")}</button>
+                <button type="button" className="btn btn-ghost btn-sm" disabled={sshBusyId === host.id} onClick={() => void runSshHostAction(host.id, "verify")}>{ui.text("Verify", "驗證")}</button>
+                <button type="button" className="btn btn-ghost btn-sm" disabled={sshBusyId === host.id || !host.provisionedAt} onClick={() => void runSshHostAction(host.id, host.trustedForSourceSecrets ? "revoke" : "trust")}>{host.trustedForSourceSecrets ? ui.text("Revoke trust", "撤銷信任") : ui.text("Trust source credentials", "信任來源憑證")}</button>
+                <button type="button" className="btn btn-ghost btn-sm text-danger" disabled={sshBusyId === host.id} onClick={() => requestSshHostRemoval(host.id)}>{ui.text("Remove", "移除")}</button>
+              </div>
+            </article>
+          ))}
+        </div>
+        <div className="field-pair">
+          <label className="field"><span className="field-label">{ui.text("Host name", "主機名稱")}</span><input className="input" value={sshDraft.name} onChange={(event) => setSshDraft((draft) => ({ ...draft, name: event.target.value }))} /></label>
+          <label className="field"><span className="field-label">{ui.text("Host", "主機")}</span><input className="input" value={sshDraft.host} onChange={(event) => setSshDraft((draft) => ({ ...draft, host: event.target.value }))} /></label>
+          <label className="field"><span className="field-label">{ui.text("SSH port", "SSH 連接埠")}</span><input className="input" type="number" min={1} max={65535} value={sshDraft.sshPort} onChange={(event) => setSshDraft((draft) => ({ ...draft, sshPort: Number(event.target.value) || 22 }))} /></label>
+          <label className="field"><span className="field-label">{ui.text("Username", "使用者名稱")}</span><input className="input" value={sshDraft.username} onChange={(event) => setSshDraft((draft) => ({ ...draft, username: event.target.value }))} /></label>
+          <label className="field"><span className="field-label">{ui.text("Pinned host key SHA256", "固定主機金鑰 SHA256")}</span><input className="input" value={sshDraft.hostKeySha256} onChange={(event) => setSshDraft((draft) => ({ ...draft, hostKeySha256: event.target.value }))} placeholder="SHA256:…" /></label>
+          <label className="field"><span className="field-label">{ui.text("Worker loopback port", "工作器 loopback 連接埠")}</span><input className="input" type="number" min={1024} max={65535} value={sshDraft.workerPort} onChange={(event) => setSshDraft((draft) => ({ ...draft, workerPort: Number(event.target.value) || 2222 }))} /></label>
+        </div>
+        <div className="field-row">
+          <button type="button" className="btn btn-primary" disabled={sshBusyId === sshDraft.id} onClick={() => void saveSshHostDraft()}>{ui.text("Save and verify host", "儲存並驗證主機")}</button>
+          <button type="button" className="btn btn-ghost" onClick={newSshHost}>{ui.text("New host", "新增主機")}</button>
+        </div>
+        {sshNotice && <p className="setting-helper" role="status" aria-live="polite">{sshNotice}</p>}
+      </section>
 
       <div className="auto-organize-settings field" id="settings-auto-organize" tabIndex={-1}>
         <div className="auto-organize-setting-heading">
@@ -1549,5 +1721,18 @@ export default function SettingsDialog() {
         </section>
       </div>}
     </Dialog>
-  );
+    {pendingSshRemovalId && (
+      <DestructiveActionGate
+        request={{ itemIds: [pendingSshRemovalId], deleteFile: false }}
+        actionName={ui.text("remove this managed SSH worker host", "移除呢部已管理 SSH 工作器主機")}
+        affectedLabel={ui.text("managed SSH worker host", "已管理 SSH 工作器主機")}
+        onCancel={() => setPendingSshRemovalId(null)}
+        onConfirm={() => {
+          const hostId = pendingSshRemovalId;
+          setPendingSshRemovalId(null);
+          void runSshHostAction(hostId, "remove");
+        }}
+      />
+    )}
+  </>);
 }

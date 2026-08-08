@@ -506,6 +506,34 @@ the line-count table validated, the dim-sum metadata resolved to
 the matching repository runner is registered and the current self-hosted
 release and Pages runs are verified above.
 
+## Distributed SSH worker handoff
+
+The current task branch adds opt-in distributed range downloads through pinned,
+least-privilege Docker-backed SSH workers. The main process owns host identity,
+provisioning, source-secret trust, vault records, range planning, retry and
+quarantine state; the renderer only chooses local versus SSH and a worker
+count. Exact source capability probing, framed worker responses, atomic piece
+manifests, local assembly, whole-file digest verification, and safe local
+fallback are covered in
+[`docs/features/download-engine/distributed-ssh-workers.md`](docs/features/download-engine/distributed-ssh-workers.md).
+
+The worker client enforces an idle deadline and an absolute range wall
+deadline. Protected local fallbacks and distributed sources use the operating-
+system vault; protected deletion writes a terminal cleanup tombstone before
+removing the vault record. SSH inventory mutations are serialized across all
+hosts, and the remote provisioner journals prepared/swapped/applied phases plus
+an idempotent removal entry point outside the versioned worker root.
+
+The implementation is verified locally by the focused manager/task/protocol,
+vault, probe, planner, manifest, and worker tests plus TypeScript/build gates:
+the compiled download-engine suite is 90/90, the Electron suite is 67/67, the
+worker suite is 48/48, and the built-artifact Herng Ha smoke is 39/39.
+The Docker daemon was unavailable on the development machine, so a live image
+launch is not claimed; the static Compose/resource contract and worker hostile
+tests remain separate evidence. Before any real host is provisioned, recheck
+reachability, capacity, active workloads, and the stored host-key pin. Do not
+replace an unrelated workload or bypass a pin mismatch.
+
 ## Known follow-up work
 
 These items remain open and are deliberately not hidden by the directory

@@ -9,6 +9,7 @@ import type {
   SettingKey,
   SettingsPatch,
   SettingsProvenance,
+  SshHostConfig,
   UIFontFamily,
   UIFontWeight,
 } from "./types";
@@ -19,8 +20,9 @@ import {
   SETTING_KEYS,
 } from "./types";
 import { normalizeRegexFlags, validateRegexPattern } from "./regex";
+import { cloneSshHostConfigs, isSshHostConfigs } from "./ssh";
 
-export const SETTINGS_SCHEMA_VERSION = 3;
+export const SETTINGS_SCHEMA_VERSION = 4;
 export const APP_DISPLAY_NAME_MAX_LENGTH = 64;
 
 export const COMPILED_IN_DEFAULTS = {
@@ -40,6 +42,7 @@ export const COMPILED_IN_DEFAULTS = {
   uiFontSize: 13,
   uiFontWeight: 400 as UIFontWeight,
   autoOrganizeEnabled: true,
+  sshDefaultWorkerCount: 2,
 };
 
 export function compiledInProvenance(): SettingsProvenance {
@@ -56,6 +59,7 @@ export function createDefaultSettings(defaultSaveFolder: string): AppSettings {
     // A fresh array per settings object so one profile's rules can never
     // alias another's through the shared compiled-in default.
     autoOrganizeRules: [],
+    sshHosts: [],
     settingProvenance: compiledInProvenance(),
   };
 }
@@ -166,7 +170,15 @@ export function isAutoOrganizeRules(value: unknown): value is AutoOrganizeRule[]
 }
 
 /** Validate a renderer-originated patch before it reaches live application state. */
-export function validateSettingsPatch(value: unknown): SettingsPatch {
+export interface SettingsPatchValidationOptions {
+  /** Internal main-process host lifecycle code may replace the canonical host list. */
+  allowManagedSshHosts?: boolean;
+}
+
+export function validateSettingsPatch(
+  value: unknown,
+  options: SettingsPatchValidationOptions = {},
+): SettingsPatch {
   if (typeof value !== "object" || value === null || Array.isArray(value)) {
     throw new Error("Invalid settings");
   }
@@ -210,6 +222,11 @@ export function validateSettingsPatch(value: unknown): SettingsPatch {
           return typeof settingValue === "boolean";
         case "autoOrganizeRules":
           return isAutoOrganizeRules(settingValue);
+        case "sshHosts":
+          if (options.allowManagedSshHosts !== true) return false;
+          return isSshHostConfigs(settingValue);
+        case "sshDefaultWorkerCount":
+          return isBoundedNumber(settingValue, 1, 16) && Number.isInteger(settingValue);
       }
     })();
     if (!valid) throw new Error(`Invalid value for setting: ${key}`);
@@ -221,6 +238,8 @@ export function validateSettingsPatch(value: unknown): SettingsPatch {
           flags: rule.flags,
           category: rule.category,
         }))
+      : key === "sshHosts"
+        ? cloneSshHostConfigs(settingValue as SshHostConfig[])
       : settingValue;
   }
   return normalizedPatch as SettingsPatch;

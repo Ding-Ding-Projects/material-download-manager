@@ -17,6 +17,8 @@ import type {
   HistoryFilter,
   HistoryView,
 } from "../shared/types";
+import type { SshHostDraft, SshHostStatus } from "../shared/ssh";
+import { isSshHostStatus } from "../shared/ssh";
 import { isExportResult } from "../shared/export";
 import { isHistoryView } from "../shared/history";
 import { isDownloadCategory } from "../shared/settings";
@@ -116,6 +118,21 @@ const api = {
   getSettings: (): Promise<AppSettings> => ipcRenderer.invoke(IPC.SETTINGS_GET),
   setSettings: (settings: SettingsPatch, resetKeys: SettingKey[] = []): Promise<AppSettings> =>
     ipcRenderer.invoke(IPC.SETTINGS_SET, settings, resetKeys),
+  saveSshHost: (draft: SshHostDraft): Promise<AppSettings> =>
+    ipcRenderer.invoke(IPC.SSH_HOST_SAVE, draft),
+  importSshBootstrapKey: (hostId: string): Promise<AppSettings> =>
+    ipcRenderer.invoke(IPC.SSH_HOST_IMPORT_KEY, hostId),
+  provisionSshHost: (hostId: string): Promise<AppSettings> =>
+    ipcRenderer.invoke(IPC.SSH_HOST_PROVISION, hostId),
+  verifySshHost: async (hostId: string): Promise<SshHostStatus> => {
+    const result: unknown = await ipcRenderer.invoke(IPC.SSH_HOST_VERIFY, hostId);
+    if (!isSshHostStatus(result)) throw new Error("Invalid SSH host status from main process");
+    return result;
+  },
+  setSshHostSecretTrust: (hostId: string, trusted: boolean): Promise<AppSettings> =>
+    ipcRenderer.invoke(IPC.SSH_HOST_TRUST, hostId, trusted),
+  removeSshHost: (hostId: string): Promise<AppSettings> =>
+    ipcRenderer.invoke(IPC.SSH_HOST_REMOVE, hostId),
 
   getHistoryView: async (filter?: HistoryFilter): Promise<HistoryView> => {
     const view: unknown = await ipcRenderer.invoke(IPC.HISTORY_GET_VIEW, filter);

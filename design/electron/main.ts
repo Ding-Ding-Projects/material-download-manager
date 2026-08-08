@@ -1,10 +1,21 @@
 import { app, autoUpdater, BrowserWindow, ipcMain, shell, dialog, Notification } from "electron";
+import fsp from "node:fs/promises";
 import path from "node:path";
 import { IPC, isUpdateUnsavedWorkState, type UpdateInstallResult, type UpdateState } from "../shared/types";
 import type { AddDownloadRequest, AppSettings, DownloadItem, DownloadQueue, SettingKey, SettingsPatch } from "../shared/types";
 import { isExportFormat } from "../shared/export";
 import { normalizeHistoryFilter } from "../shared/history";
 import { validateSettingResetKeys, validateSettingsPatch } from "../shared/settings";
+import {
+  isSshHostDraft,
+  isSshHostKeyScanResult,
+  isSshHostStatus,
+  isSshProvisionResult,
+  normalizeSshPrivateKeyCredential,
+  type SshHostDraft,
+} from "../shared/ssh";
+import type { SshHostConfig } from "../shared/types";
+import { isDistributedDownloadSelection, isDistributedRequestHeaders } from "../shared/distributedProtocol";
 import {
   normalizeRegexEvaluationRequest,
 } from "../shared/regex";
@@ -20,6 +31,9 @@ import {
   DEFAULT_CHANGELOG_ENTRIES,
 } from "./history/ChangelogStore";
 import { isDevelopmentLaunch, resolveRendererPath } from "./runtimePaths";
+import { CredentialVault } from "./download/distributed/CredentialVault";
+import { SshProvisioningService } from "./download/distributed/SshProvisioningService";
+import { SshWorkerClient } from "./download/distributed/SshWorkerClient";
 import {
   normalizeReleaseNotesUrl,
   readUpdateFeedUrl,
@@ -41,6 +55,9 @@ if (!gotSingleInstanceLock) {
 let mainWindow: BrowserWindow | null = null;
 let progressWindow: BrowserWindow | null = null;
 let manager: DownloadManager;
+let sshVault: CredentialVault;
+let sshWorkerClient: SshWorkerClient;
+let sshProvisioning: SshProvisioningService;
 let updater: UpdateService | null = null;
 let handoffServer: HandoffServer | null = null;
 let rendererWorkState: { hasUnsavedWork: boolean; reason: string; receivedAt: number } | null = null;
@@ -184,6 +201,12 @@ function assertAddDownloadRequest(value: unknown): asserts value is AddDownloadR
       assertString(headerValue, "header value", 8_192);
     }
   }
+  if (value.ssh !== undefined && value.ssh !== null && !isDistributedDownloadSelection(value.ssh)) {
+    throw new Error("Invalid distributed SSH selection");
+  }
+  if (value.ssh !== undefined && value.ssh !== null && value.headers !== undefined && !isDistributedRequestHeaders(value.headers)) {
+    throw new Error("Invalid distributed SSH headers");
+  }
 }
 
 function assertCategoryPreviewInput(fileName: unknown, url: unknown): asserts fileName is string {
@@ -261,6 +284,25 @@ function installGuardFailure(): string | null {
 }
 
 function registerIpcHandlers() {
+  // Inventory writes are whole-array read/modify/persist operations.  A
+  // per-host lock is not enough: a host A scan can otherwise overwrite a
+  // concurrent host B provision/remove with its stale snapshot.  Serialize
+  // the complete lifecycle boundary while the remote operation is in flight.
+  let sshHostMutationTail = Promise.resolve();
+  async function withSshHostMutation<T>(_hostId: string, operation: () => Promise<T>): Promise<T> {
+    const previous = sshHostMutationTail;
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => { release = resolve; });
+    const next = previous.then(() => gate);
+    sshHostMutationTail = next;
+    await previous;
+    try {
+      return await operation();
+    } finally {
+      release();
+    }
+  }
+
   ipcMain.handle(IPC.GET_STATE, (event) => {
     assertTrustedSender(event);
     return manager.getState();
@@ -339,10 +381,185 @@ function registerIpcHandlers() {
     assertTrustedSender(event);
     assertPartialSettings(settings);
     const validatedResetKeys: SettingKey[] = validateSettingResetKeys(resetKeys);
+    if (validatedResetKeys.includes("sshHosts")) {
+      throw new Error("The managed SSH host inventory has a dedicated lifecycle boundary");
+    }
     if (validatedResetKeys.some((key) => Object.prototype.hasOwnProperty.call(settings, key))) {
       throw new Error("A setting cannot be changed and reset in the same mutation");
     }
     return manager.setSettings(settings, validatedResetKeys);
+  });
+
+  ipcMain.handle(IPC.SSH_HOST_SAVE, async (event, draft: unknown) => {
+    assertTrustedSender(event);
+    if (!isSshHostDraft(draft)) throw new Error("Invalid SSH host draft");
+    return withSshHostMutation(draft.id, async () => {
+      const current = manager.getSettings().sshHosts;
+      const previous = current.find((host) => host.id === draft.id);
+      const identityChanged = previous !== undefined && (
+        previous.host !== draft.host ||
+        previous.sshPort !== draft.sshPort ||
+        previous.username !== draft.username ||
+        previous.hostKeySha256 !== draft.hostKeySha256 ||
+        previous.workerPort !== draft.workerPort ||
+        previous.bootstrapAuthMode !== draft.bootstrapAuthMode
+      );
+      if (previous?.provisionedAt !== null && identityChanged) {
+        throw new Error("Remove the provisioned SSH host before changing its connection identity");
+      }
+      const scan = await sshWorkerClient.scanHostKey(draft.host, draft.sshPort);
+      if (!isSshHostKeyScanResult(scan) || scan.algorithm !== "ssh-ed25519" || scan.hostKeySha256 !== draft.hostKeySha256) {
+        throw new Error("The configured SSH host key did not match the supplied pin");
+      }
+      const endpointUnchanged = previous && previous.host === draft.host && previous.sshPort === draft.sshPort &&
+        previous.username === draft.username && previous.hostKeySha256 === draft.hostKeySha256 &&
+        previous.workerPort === draft.workerPort;
+      const host: SshHostConfig = {
+        ...draft,
+        workerHostKeySha256: endpointUnchanged ? previous.workerHostKeySha256 : null,
+        trustedForSourceSecrets: endpointUnchanged ? previous.trustedForSourceSecrets : false,
+        provisionedAt: endpointUnchanged ? previous.provisionedAt : null,
+      };
+      const next = [...current.filter((candidate) => candidate.id !== host.id), host];
+      await manager.setManagedSshHosts(next);
+      return manager.getSettings();
+    });
+  });
+
+  ipcMain.handle(IPC.SSH_HOST_IMPORT_KEY, async (event, hostId: unknown) => {
+    assertTrustedSender(event);
+    assertId(hostId);
+    return withSshHostMutation(hostId, async () => {
+      const host = manager.getSettings().sshHosts.find((candidate) => candidate.id === hostId);
+      if (!host) throw new Error("Unknown SSH host");
+      if (!mainWindow) throw new Error("The SSH key picker is unavailable");
+      const result = await dialog.showOpenDialog(mainWindow, {
+        properties: ["openFile"],
+        filters: [{ name: "Ed25519 private key", extensions: ["*", "pem", "key"] }],
+      });
+      if (result.canceled || result.filePaths.length === 0) return manager.getSettings();
+      const bytes = await fsp.readFile(result.filePaths[0]);
+      if (bytes.byteLength < 1 || bytes.byteLength > 64 * 1024) {
+        bytes.fill(0);
+        throw new Error("The SSH private key is too large");
+      }
+      try {
+        const credential = normalizeSshPrivateKeyCredential({ privateKey: bytes.toString("utf8"), passphrase: null });
+        await sshVault.store(host.id, "bootstrap", credential);
+      } finally {
+        bytes.fill(0);
+      }
+      const updated = { ...host, bootstrapAuthMode: "stored-private-key" as const };
+      await manager.setManagedSshHosts(manager.getSettings().sshHosts.map((candidate) => candidate.id === host.id ? updated : candidate));
+      return manager.getSettings();
+    });
+  });
+
+  ipcMain.handle(IPC.SSH_HOST_PROVISION, async (event, hostId: unknown) => {
+    assertTrustedSender(event);
+    assertId(hostId);
+    return withSshHostMutation(hostId, async () => {
+      const host = manager.getSettings().sshHosts.find((candidate) => candidate.id === hostId);
+      if (!host) throw new Error("Unknown SSH host");
+      const result = await sshProvisioning.provision(host);
+      if (!isSshProvisionResult(result)) throw new Error("Invalid SSH provision result");
+      if (host.workerHostKeySha256 && host.workerHostKeySha256 !== result.workerHostKeySha256) {
+        throw new Error("The managed worker host key changed; provisioning was rejected");
+      }
+      const updated = {
+        ...host,
+        workerHostKeySha256: result.workerHostKeySha256,
+        provisionedAt: result.checkedAt,
+      };
+      await manager.setManagedSshHosts(manager.getSettings().sshHosts.map((candidate) => candidate.id === host.id ? updated : candidate));
+      return manager.getSettings();
+    });
+  });
+
+  ipcMain.handle(IPC.SSH_HOST_VERIFY, async (event, hostId: unknown) => {
+    assertTrustedSender(event);
+    assertId(hostId);
+    return withSshHostMutation(hostId, async () => {
+      const host = manager.getSettings().sshHosts.find((candidate) => candidate.id === hostId);
+      if (!host) throw new Error("Unknown SSH host");
+      const result = await sshProvisioning.verify(host);
+      if (!isSshHostStatus(result)) throw new Error("Invalid SSH host status");
+      return result;
+    });
+  });
+
+  ipcMain.handle(IPC.SSH_HOST_TRUST, async (event, hostId: unknown, trusted: unknown) => {
+    assertTrustedSender(event);
+    assertId(hostId);
+    if (typeof trusted !== "boolean") throw new Error("Invalid SSH source-secret trust state");
+    return withSshHostMutation(hostId, async () => {
+      const hosts = manager.getSettings().sshHosts;
+      const host = hosts.find((candidate) => candidate.id === hostId);
+      if (!host) throw new Error("Unknown SSH host");
+      if (trusted && (!host.workerHostKeySha256 || !host.provisionedAt)) {
+        throw new Error("Only a successfully provisioned worker can receive source credentials");
+      }
+      if (trusted) {
+        if (!mainWindow) throw new Error("The SSH trust confirmation surface is unavailable");
+        const confirmation = await dialog.showMessageBox(mainWindow, {
+          type: "warning",
+          buttons: ["Cancel", "Trust this host"],
+          defaultId: 0,
+          cancelId: 0,
+          message: `Trust ${host.name} for source credentials?`,
+          detail: "The managed worker may receive URL query parameters and selected request headers for distributed downloads.",
+        });
+        if (confirmation.response !== 1) throw new Error("SSH source-secret trust was not granted");
+      }
+      const currentHost = manager.getSettings().sshHosts.find((candidate) => candidate.id === hostId);
+      if (!currentHost || currentHost.host !== host.host || currentHost.sshPort !== host.sshPort ||
+        currentHost.username !== host.username || currentHost.hostKeySha256 !== host.hostKeySha256 ||
+        currentHost.workerPort !== host.workerPort || currentHost.workerHostKeySha256 !== host.workerHostKeySha256 ||
+        currentHost.provisionedAt !== host.provisionedAt) {
+        throw new Error("The SSH host changed while confirmation was open; trust was not applied");
+      }
+      await manager.setManagedSshHosts(manager.getSettings().sshHosts.map((candidate) => candidate.id === hostId
+        ? { ...candidate, trustedForSourceSecrets: trusted }
+        : candidate));
+      return manager.getSettings();
+    });
+  });
+
+  ipcMain.handle(IPC.SSH_HOST_REMOVE, async (event, hostId: unknown) => {
+    assertTrustedSender(event);
+    assertId(hostId);
+    return withSshHostMutation(hostId, async () => {
+      const host = manager.getSettings().sshHosts.find((candidate) => candidate.id === hostId);
+      if (!host) throw new Error("Unknown SSH host");
+      if (!mainWindow) throw new Error("The SSH removal confirmation surface is unavailable");
+      const confirmation = await dialog.showMessageBox(mainWindow, {
+        type: "warning",
+        buttons: ["Cancel", "Remove managed worker"],
+        defaultId: 0,
+        cancelId: 0,
+        message: `Remove ${host.name}?`,
+        detail: "This stops and removes only this managed worker, its relay credentials, and its host record. Existing downloaded files are not removed.",
+      });
+      if (confirmation.response !== 1) throw new Error("SSH worker removal was cancelled");
+      const currentHost = manager.getSettings().sshHosts.find((candidate) => candidate.id === hostId);
+      if (!currentHost || currentHost.host !== host.host || currentHost.sshPort !== host.sshPort ||
+        currentHost.username !== host.username || currentHost.hostKeySha256 !== host.hostKeySha256 ||
+        currentHost.workerPort !== host.workerPort || currentHost.workerHostKeySha256 !== host.workerHostKeySha256 ||
+        currentHost.provisionedAt !== host.provisionedAt) {
+        throw new Error("The SSH host changed while confirmation was open; removal was not applied");
+      }
+      // Persist a disabled, still-addressable intent before remote mutation.
+      // If the process dies or the final inventory save fails, the fallback
+      // removal entry point and bootstrap credential remain available for a
+      // retry instead of leaving an unrecoverable worker ghost.
+      await manager.setManagedSshHosts(manager.getSettings().sshHosts.map((candidate) =>
+        candidate.id === hostId ? { ...candidate, enabled: false } : candidate
+      ));
+      await sshProvisioning.remove(currentHost);
+      await manager.setManagedSshHosts(manager.getSettings().sshHosts.filter((candidate) => candidate.id !== host.id));
+      await sshProvisioning.finalizeRemoval(currentHost).catch(() => {});
+      return manager.getSettings();
+    });
   });
 
   ipcMain.handle(IPC.HISTORY_GET_VIEW, (event, filter: unknown) => {
@@ -498,7 +715,13 @@ app.on("second-instance", (_event, commandLine) => {
 });
 
 app.whenReady().then(async () => {
-  manager = new DownloadManager(app.getPath("userData"));
+  sshVault = new CredentialVault();
+  sshWorkerClient = new SshWorkerClient({ vault: sshVault });
+  const workerBundlePath = app.isPackaged
+    ? path.join(process.resourcesPath, "ssh-worker")
+    : path.resolve(__dirname, "../../../worker");
+  sshProvisioning = new SshProvisioningService({ bundlePath: workerBundlePath, vault: sshVault, client: sshWorkerClient });
+  manager = new DownloadManager(app.getPath("userData"), undefined, { credentialVault: sshVault });
   await manager.init();
   manager.on("stateChanged", broadcastState);
   manager.on("itemCompleted", notifyDownloadComplete);

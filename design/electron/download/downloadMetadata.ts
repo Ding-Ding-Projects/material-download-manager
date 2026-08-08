@@ -3,8 +3,9 @@ import { URL } from "node:url";
 
 /**
  * Headers are deliberately kept out of DownloadItem/StateSnapshot so they are
- * never sent to the renderer. They are still persisted beside the item in the
- * main-process state file, where the next transfer can reuse them.
+ * never sent to the renderer. Ordinary headers may be persisted beside the
+ * item; credential-bearing distributed fallbacks are stored in the main-process
+ * vault and marked on the item instead.
  */
 export type StoredDownloadItem = DownloadItem & {
   headers?: Record<string, string>;
@@ -71,6 +72,12 @@ function isCredentialLikeHeader(name: string): boolean {
   );
 }
 
+export function isSensitiveRequestHeader(name: string): boolean {
+  return CROSS_ORIGIN_SENSITIVE_HEADERS.has(name.toLowerCase()) ||
+    name.toLowerCase() === "referer" ||
+    isCredentialLikeHeader(name);
+}
+
 /** Clone only string header pairs; never log or stringify their values. */
 export function cloneRequestHeaders(input: unknown): Record<string, string> | undefined {
   if (!input || typeof input !== "object") return undefined;
@@ -116,7 +123,7 @@ export function headersForTarget(
   const filtered: Record<string, string> = {};
   for (const [name, value] of Object.entries(copy)) {
     const normalizedName = name.toLowerCase();
-    if (CROSS_ORIGIN_SENSITIVE_HEADERS.has(normalizedName) || isCredentialLikeHeader(name)) continue;
+    if (isSensitiveRequestHeader(normalizedName)) continue;
     Object.defineProperty(filtered, name, {
       configurable: true,
       enumerable: true,

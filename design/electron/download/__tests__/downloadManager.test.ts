@@ -4,11 +4,30 @@ import fsp from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
-import { assertQueueCreatePayload, DownloadManager } from "../DownloadManager";
+import { assertQueueCreatePayload, DownloadManager, type DownloadManagerDistributedDependencies } from "../DownloadManager";
 import type { DownloadQueue } from "../../../shared/types";
 import { SETTING_KEYS } from "../../../shared/types";
 import { startTestServer } from "./testServer";
 import { HistoryStore } from "../../history/HistoryStore";
+import { CredentialVault, type CredentialVaultAdapter } from "../distributed/CredentialVault";
+import { DistributedSourceCapabilityError, type StrictSourceProbe } from "../distributed/StrictSourceProbe";
+
+class MemoryVaultAdapter implements CredentialVaultAdapter {
+  private readonly records = new Map<string, Uint8Array>();
+
+  async read(account: string): Promise<Uint8Array | null> {
+    const value = this.records.get(account);
+    return value ? new Uint8Array(value) : null;
+  }
+
+  async write(account: string, value: Uint8Array): Promise<void> {
+    this.records.set(account, new Uint8Array(value));
+  }
+
+  async remove(account: string): Promise<void> {
+    this.records.delete(account);
+  }
+}
 
 /** Windows can release a just-completed Git child a moment after its promise resolves. */
 async function removeTestRoot(root: string): Promise<void> {
@@ -388,6 +407,160 @@ test("manager reloads persisted custom headers without exposing them in state", 
     );
     await secondManager.shutdown();
   } finally {
+    await server.close();
+    await removeTestRoot(root);
+    if (previousUserProfile === undefined) delete process.env.USERPROFILE;
+    else process.env.USERPROFILE = previousUserProfile;
+  }
+});
+
+test("distributed capability fallback keeps credentialed local sources in the vault", async () => {
+  const root = await fsp.mkdtemp(path.join(os.tmpdir(), "mdm-distributed-fallback-vault-test-"));
+  const secret = "fallback-secret-value";
+  const server = await startTestServer(32 * 1024, {
+    requiredHeader: { name: "authorization", value: `Bearer ${secret}` },
+  });
+  const previousUserProfile = process.env.USERPROFILE;
+  process.env.USERPROFILE = root;
+  const adapter = new MemoryVaultAdapter();
+  const sourceProbe = {
+    async probe(): Promise<never> {
+      throw new DistributedSourceCapabilityError("The source does not support immutable ranges");
+    },
+  } as unknown as StrictSourceProbe;
+  const dependencies: DownloadManagerDistributedDependencies = {
+    credentialVault: new CredentialVault(adapter),
+    sourceProbe,
+  };
+  let manager = new DownloadManager(root, undefined, dependencies);
+  let initialized = false;
+  try {
+    await manager.init();
+    initialized = true;
+    const sourceUrl = `${server.url}?access_token=${secret}`;
+    const id = await manager.addDownload({
+      url: sourceUrl,
+      folder: path.join(root, "download"),
+      fileName: "fallback.bin",
+      startImmediately: false,
+      headers: { Authorization: `Bearer ${secret}` },
+      ssh: { mode: "ssh", workerCount: 1 },
+    });
+    const added = manager.getState().items.find((item) => item.id === id);
+    assert.ok(added);
+    assert.equal(added.transferMode, "local");
+    assert.equal(added.sourceSecretStoredInVault, true);
+    await manager.shutdown();
+    initialized = false;
+
+    const stateJson = await fsp.readFile(path.join(root, "state.json"), "utf8");
+    assert.equal(stateJson.includes(secret), false, "fallback secrets must not enter state.json");
+    manager = new DownloadManager(root, undefined, dependencies);
+    await manager.init();
+    initialized = true;
+    const restored = manager.getState().items.find((item) => item.id === id);
+    assert.equal(restored?.sourceSecretStoredInVault, true);
+    const completed = new Promise<void>((resolve) => manager.once("itemCompleted", () => resolve()));
+    await manager.resume(id);
+    await completed;
+    assert.ok(server.requestHeaders.some((headers) => headers.authorization === `Bearer ${secret}`));
+    await manager.shutdown();
+    initialized = false;
+    const finalState = await fsp.readFile(path.join(root, "state.json"), "utf8");
+    assert.equal(finalState.includes(secret), false);
+  } finally {
+    if (initialized) await manager.shutdown();
+    await server.close();
+    await removeTestRoot(root);
+    if (previousUserProfile === undefined) delete process.env.USERPROFILE;
+    else process.env.USERPROFILE = previousUserProfile;
+  }
+});
+
+test("distributed selection loss falls back locally even with a trusted whole-file digest", async () => {
+  const root = await fsp.mkdtemp(path.join(os.tmpdir(), "mdm-distributed-selection-fallback-test-"));
+  const server = await startTestServer(32 * 1024);
+  const previousUserProfile = process.env.USERPROFILE;
+  process.env.USERPROFILE = root;
+  const sourceProbe = {
+    async probe(url: string): Promise<{ identity: { length: number; etag: string; lastModified: null }; finalUrl: string }> {
+      return { identity: { length: 32 * 1024, etag: '"stable"', lastModified: null }, finalUrl: url };
+    },
+  } as unknown as StrictSourceProbe;
+  const manager = new DownloadManager(root, undefined, { sourceProbe });
+  try {
+    await manager.init();
+    const id = await manager.addDownload({
+      url: server.url,
+      folder: path.join(root, "download"),
+      fileName: "selection-fallback.bin",
+      startImmediately: false,
+      ssh: { mode: "ssh", workerCount: 1, expectedSha256: "a".repeat(64) },
+    });
+    const item = manager.getState().items.find((candidate) => candidate.id === id);
+    assert.ok(item);
+    assert.equal(item.transferMode, "local");
+    assert.match(item.transferNotice ?? "", /selected worker hosts are unavailable/i);
+  } finally {
+    await manager.shutdown();
+    await server.close();
+    await removeTestRoot(root);
+    if (previousUserProfile === undefined) delete process.env.USERPROFILE;
+    else process.env.USERPROFILE = previousUserProfile;
+  }
+});
+
+test("protected cancellation is terminal before and after a restart", async () => {
+  const root = await fsp.mkdtemp(path.join(os.tmpdir(), "mdm-protected-cancel-terminal-test-"));
+  const server = await startTestServer(16 * 1024, {
+    requiredHeader: { name: "authorization", value: "Bearer cancellation-secret" },
+  });
+  const previousUserProfile = process.env.USERPROFILE;
+  process.env.USERPROFILE = root;
+  const adapter = new MemoryVaultAdapter();
+  const sourceProbe = {
+    async probe(): Promise<never> {
+      throw new DistributedSourceCapabilityError("The source does not support immutable ranges");
+    },
+  } as unknown as StrictSourceProbe;
+  const dependencies: DownloadManagerDistributedDependencies = {
+    credentialVault: new CredentialVault(adapter),
+    sourceProbe,
+  };
+  let manager = new DownloadManager(root, undefined, dependencies);
+  let initialized = false;
+  try {
+    await manager.init();
+    initialized = true;
+    const id = await manager.addDownload({
+      url: `${server.url}?access_token=cancellation-secret`,
+      folder: path.join(root, "download"),
+      fileName: "cancelled.bin",
+      startImmediately: false,
+      headers: { Authorization: "Bearer cancellation-secret" },
+      ssh: { mode: "ssh", workerCount: 1 },
+    });
+    assert.equal(manager.getState().items.find((item) => item.id === id)?.sourceSecretStoredInVault, true);
+
+    await manager.cancel(id);
+    const cancelled = manager.getState().items.find((item) => item.id === id);
+    assert.equal(cancelled?.status, "cancelled");
+    assert.equal(await adapter.read(`download-source:${id}`), null, "terminal cancellation removes the vault source");
+    await assert.rejects(() => manager.resume(id), /cancelled permanently/i);
+    await assert.rejects(() => manager.retry(id), /cancelled permanently/i);
+
+    await manager.shutdown();
+    initialized = false;
+    manager = new DownloadManager(root, undefined, dependencies);
+    await manager.init();
+    initialized = true;
+    assert.equal(manager.getState().items.find((item) => item.id === id)?.status, "cancelled");
+    await assert.rejects(() => manager.resume(id), /cancelled permanently/i);
+    await assert.rejects(() => manager.retry(id), /cancelled permanently/i);
+    const stateJson = await fsp.readFile(path.join(root, "state.json"), "utf8");
+    assert.equal(stateJson.includes("cancellation-secret"), false);
+  } finally {
+    if (initialized) await manager.shutdown();
     await server.close();
     await removeTestRoot(root);
     if (previousUserProfile === undefined) delete process.env.USERPROFILE;

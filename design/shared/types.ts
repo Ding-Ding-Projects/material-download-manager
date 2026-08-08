@@ -4,6 +4,7 @@
 
 import type { ExportFormat, ExportResult } from "./export";
 import type { HistoryFilter, HistoryView } from "./history";
+import type { DistributedDownloadSelection, SourceIdentity } from "./distributedProtocol";
 
 export type DownloadCategory =
   | "image"
@@ -83,8 +84,21 @@ export interface DownloadItem {
   dateAdded: number;
   dateCompleted: number | null;
   error: string | null;
+  /** Non-blocking truthful notice when a requested transport falls back locally. */
+  transferNotice?: string;
+  /** True when sensitive local-source headers/URL are held in the main-process vault. */
+  sourceSecretStoredInVault?: boolean;
   parts: PartInfo[];
   connections: number;
+  /** Missing on legacy records; new records always set one of these modes. */
+  transferMode?: "local" | "ssh-distributed";
+  /** Stable, non-secret identifiers only. Host addresses and keys remain in settings/vault state. */
+  sshHostIds?: string[];
+  /** Public validator metadata required to resume without persisting the raw credentialed URL. */
+  sshSourceIdentity?: SourceIdentity;
+  /** Optional user-supplied whole-file trust anchor. */
+  sshExpectedSha256?: string | null;
+  sshProgress?: SshHostTransferProgress[];
 }
 
 export interface DownloadQueue {
@@ -106,6 +120,43 @@ export type UIFontFamily = "segoe-ui" | "inter" | "cascadia-code" | "system";
 export type UIFontWeight = 400 | 500 | 600 | 700;
 export type SettingSource = "persisted" | "compiled-in";
 
+export type SshBootstrapAuthMode = "system-agent" | "stored-private-key";
+
+/**
+ * Public, non-secret metadata for one Docker-backed SSH download host.
+ * Private keys and passphrases are addressed by this stable identifier but
+ * live only in the operating-system credential vault owned by the main
+ * process.
+ */
+export interface SshHostConfig {
+  id: string;
+  name: string;
+  host: string;
+  sshPort: number;
+  username: string;
+  hostKeySha256: string;
+  bootstrapAuthMode: SshBootstrapAuthMode;
+  workerPort: number;
+  workerHostKeySha256: string | null;
+  enabled: boolean;
+  trustedForSourceSecrets: boolean;
+  provisionedAt: number | null;
+}
+
+export interface SshHostTransferProgress {
+  hostId: string;
+  pieceId?: string | null;
+  rangeStart?: number | null;
+  rangeEndExclusive?: number | null;
+  transferredBytes?: number;
+  bytesPerSecond?: number;
+  activePieces: number;
+  completedPieces: number;
+  failedPieces: number;
+  state: "waiting" | "connecting" | "downloading" | "completed" | "quarantined" | "error";
+  message: string | null;
+}
+
 export const SETTING_KEYS = [
   "defaultSaveFolder",
   "maxConnectionsPerDownload",
@@ -125,6 +176,8 @@ export const SETTING_KEYS = [
   "uiFontWeight",
   "autoOrganizeEnabled",
   "autoOrganizeRules",
+  "sshHosts",
+  "sshDefaultWorkerCount",
 ] as const;
 
 export type SettingKey = (typeof SETTING_KEYS)[number];
@@ -150,6 +203,8 @@ export interface AppSettings {
   uiFontWeight: UIFontWeight;
   autoOrganizeEnabled: boolean;
   autoOrganizeRules: AutoOrganizeRule[];
+  sshHosts: SshHostConfig[];
+  sshDefaultWorkerCount: number;
   settingProvenance: SettingsProvenance;
 }
 
@@ -163,6 +218,7 @@ export interface AddDownloadRequest {
   queueId?: string | null;
   startImmediately: boolean;
   headers?: Record<string, string>;
+  ssh?: DistributedDownloadSelection | null;
 }
 
 /**
@@ -170,7 +226,7 @@ export interface AddDownloadRequest {
  * add flow. The main process is the only owner of enqueueing, persistence,
  * and progress broadcasts; a handoff cannot create a second download store.
  */
-export type BrowserHandoffRequest = AddDownloadRequest;
+export type BrowserHandoffRequest = Omit<AddDownloadRequest, "ssh"> & { ssh?: never };
 
 export interface NewDownloadInfo {
   url: string;
@@ -333,6 +389,12 @@ export const IPC = {
   UPDATE_INSTALL: "update:install",
   UPDATE_OPEN_RELEASE_NOTES: "update:openReleaseNotes",
   UPDATE_SET_UNSAVED_WORK: "update:setUnsavedWork",
+  SSH_HOST_SAVE: "ssh:hostSave",
+  SSH_HOST_IMPORT_KEY: "ssh:hostImportKey",
+  SSH_HOST_PROVISION: "ssh:hostProvision",
+  SSH_HOST_VERIFY: "ssh:hostVerify",
+  SSH_HOST_REMOVE: "ssh:hostRemove",
+  SSH_HOST_TRUST: "ssh:hostTrust",
   HISTORY_GET_VIEW: "history:getView",
   HISTORY_EXPORT_VIEW: "history:exportView",
   CHANGELOG_GET_VIEW: "changelog:getView",

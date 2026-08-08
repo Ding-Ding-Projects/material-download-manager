@@ -187,7 +187,7 @@ test("pinned HTTPS lookup retains the original hostname for TLS verification", a
 
 test("status, content range, content length, encoding, and identity mismatches fail before DATA", async (t) => {
   const cases = [
-    ["status", (response) => response.writeHead(200, { "content-length": 6, etag: ETAG }), "range-rejected"],
+    ["status", (response) => response.writeHead(200, { "content-length": 6, etag: ETAG }), "source-changed"],
     ["content-range", (response) => response.writeHead(206, { "content-range": `bytes 3-8/${CONTENT.length}`, "content-length": 6, etag: ETAG }), "range-rejected"],
     ["content-length", (response) => response.writeHead(206, { "content-range": `bytes 2-7/${CONTENT.length}`, "content-length": 5, etag: ETAG }), "range-rejected"],
     ["content-encoding", (response) => response.writeHead(206, { "content-range": `bytes 2-7/${CONTENT.length}`, "content-length": 6, "content-encoding": "gzip", etag: ETAG }), "range-rejected"],
