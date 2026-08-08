@@ -18,7 +18,7 @@ concurrency:
 jobs:
   deploy:
     name: Build and deploy the local documentation site
-    runs-on: [self-hosted, windows, x64, material-download-manager-windows-x64]
+    runs-on: windows-latest
     timeout-minutes: 20
     environment:
       name: github-pages
@@ -31,10 +31,6 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 22.x
-
-      - name: Validate self-hosted bootstrap prerequisites
-        shell: pwsh
-        run: pwsh -NoProfile -File scripts/verify-self-hosted-bootstrap.ps1 -Phase preinstall
 
       - name: Validate site source
         shell: pwsh
@@ -71,7 +67,7 @@ jobs:
         run: |
           $tar = Get-Command tar.exe -ErrorAction SilentlyContinue
           if ($null -eq $tar) {
-            throw 'The self-hosted runner must provide tar.exe for the Pages archive.'
+            throw 'The runner must provide tar.exe for the Pages archive.'
           }
           $artifactPath = Join-Path $env:RUNNER_TEMP 'artifact.tar'
           if (Test-Path -LiteralPath $artifactPath -PathType Leaf) {

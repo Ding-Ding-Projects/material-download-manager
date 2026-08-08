@@ -1,42 +1,39 @@
 # CI and release contract
 
 This file is the repository-level contract for Windows validation and stable
-release automation. The workflows deliberately target a self-hosted runner;
-they do not fall back to a GitHub-hosted runner.
+release automation.
 
 ## Runner contract
 
-Every job matches all four labels below:
+Every job runs on a **GitHub-hosted** runner: `windows-latest` for the Windows
+verification and stable-release jobs (Squirrel packaging and the Electron
+`.exe` need Windows) and for the Pages build. This is a deliberate move away
+from the earlier self-hosted-only contract: the sole registered self-hosted
+runner went offline and blocked every push from verifying or releasing, so the
+project adopted GitHub-hosted runners on the explicit direction of the
+repository owner. Because this repository is public, hosted runners also remove
+the self-hosted-on-public-repo execution-surface risk. Issue #12 tracks this
+decision.
 
-```text
-self-hosted
-windows
-x64
-material-download-manager-windows-x64
-```
-
-The runner must be a reachable Windows x64 machine with the GitHub Actions
-runner service, Git, PowerShell 7, GitHub CLI, and network access to the
-canonical package and release services. The exact dependency inventory and
-bootstrap commands are committed in
-[`scripts/self-hosted-dependencies.json`](scripts/self-hosted-dependencies.json).
-
-The workflow checks `RUNNER_OS` and `RUNNER_ARCH` at runtime. It does not infer
-capacity, runner-group access, or network reachability from a label; those are
-operator-owned prerequisites that must be checked before dispatching a run.
+Node.js 22 is provisioned per run with `actions/setup-node@v4`; the hosted
+runner image supplies Git, PowerShell 7, GitHub CLI, and `tar.exe`. The
+retained self-hosted dependency inventory
+([`scripts/self-hosted-dependencies.json`](scripts/self-hosted-dependencies.json))
+and [`scripts/verify-self-hosted-bootstrap.ps1`](scripts/verify-self-hosted-bootstrap.ps1)
+are kept only as reference for anyone who later re-introduces a self-hosted
+runner; the active workflows no longer invoke the self-hosted bootstrap
+assertions.
 
 ## Fresh bootstrap
 
-Both workflows select Node.js 22 with `actions/setup-node@v4`, then run the
-pre-install check before `npm ci` and the post-install check afterward:
+Each workflow selects Node.js 22 with `actions/setup-node@v4`, installs locked
+dependencies, then completes the native binary bootstrap:
 
 ```powershell
-pwsh -NoProfile -File scripts/verify-self-hosted-bootstrap.ps1 -Phase preinstall
 Push-Location design
 npm ci --no-audit --no-fund
 Pop-Location
 pwsh -NoProfile -File scripts/complete-node-binary-bootstrap.ps1
-pwsh -NoProfile -File scripts/verify-self-hosted-bootstrap.ps1 -Phase postinstall
 ```
 
 The native bootstrap explicitly runs the declared Electron and esbuild install
@@ -64,11 +61,11 @@ for the same ref.
 ## GitHub Pages workflow
 
 `.github/workflows/pages.yml` runs on pushes to `main` and on
-`workflow_dispatch`. It uses the same four-label self-hosted runner contract,
-checks the dependency prerequisites, runs `site/check.mjs`, builds the checked
+`workflow_dispatch`. It runs on `windows-latest`,
+runs `site/check.mjs`, builds the checked
 site to an isolated runner-temporary directory, injects only the latest
 verified stable release record from `gh release view`, and deploys it through
-the official Pages deployment action. The contracted Windows runner cannot
+the official Pages deployment action. The Windows runner cannot
 execute the Bash wrapper in `actions/upload-pages-artifact@v3`, so the workflow
 archives the staged directory with PowerShell and `tar.exe`, uploads that
 `artifact.tar` as `github-pages` with `actions/upload-artifact@v4`, and then

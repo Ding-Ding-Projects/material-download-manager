@@ -13,7 +13,7 @@ permissions:
 jobs:
   release:
     name: Test, package, and publish the stable unsigned release
-    runs-on: [self-hosted, windows, x64, material-download-manager-windows-x64]
+    runs-on: windows-latest
     timeout-minutes: 45
     steps:
       - name: Check out exact source commit
@@ -31,10 +31,6 @@ jobs:
           cache: npm
           cache-dependency-path: design/package-lock.json
 
-      - name: Validate fresh bootstrap before dependencies
-        shell: pwsh
-        run: pwsh -NoProfile -File scripts/verify-self-hosted-bootstrap.ps1 -Phase preinstall
-
       - name: Install locked dependencies
         working-directory: design
         run: npm ci --no-audit --no-fund
@@ -42,10 +38,6 @@ jobs:
       - name: Complete native dependency bootstrap
         shell: pwsh
         run: pwsh -NoProfile -File scripts/complete-node-binary-bootstrap.ps1
-
-      - name: Validate dependency bootstrap after npm ci
-        shell: pwsh
-        run: pwsh -NoProfile -File scripts/verify-self-hosted-bootstrap.ps1 -Phase postinstall
 
       - name: Validate bundled documentation catalog
         working-directory: design
