@@ -3,9 +3,9 @@ import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import { evaluateRegex } from "../../shared/regex";
 import { exportRecords, type ExportFormat, type ExportResult } from "../../shared/export";
 import { HISTORY_ACTIONS, type HistoryAction, type HistoryFilter, type HistoryRevision } from "../../shared/history";
+import { evaluateRegexBatchIsolated } from "../regex/RegexWorkerClient";
 
 const execFileAsync = promisify(execFile);
 
@@ -75,7 +75,10 @@ export class HistoryStore {
   private initialization: Promise<void> | null = null;
   private mutationChain: Promise<unknown> = Promise.resolve();
 
-  constructor(userDataPath: string) {
+  constructor(
+    userDataPath: string,
+    private readonly evaluateRegexBatch = evaluateRegexBatchIsolated
+  ) {
     this.repositoryPath = path.join(path.resolve(userDataPath), "local-history");
     // Keep hooks outside the history checkout and point Git at a fresh path
     // that the app never creates. This also blocks post-commit hooks, which
@@ -236,7 +239,7 @@ export class HistoryStore {
     }
     const log = await this.git(["log", "--format=%H%x09%aI%x09%s"]);
 
-    return log.split(/\r?\n/).filter(Boolean).flatMap((line) => {
+    const revisions = log.split(/\r?\n/).filter(Boolean).flatMap((line) => {
       const [id, timestamp, subject] = line.split("\t");
       if (!id || !timestamp || !subject?.startsWith("history: ")) return [];
       const body = subject.slice("history: ".length);
@@ -251,15 +254,21 @@ export class HistoryStore {
       if (filter.actions?.length && !filter.actions.includes(actionText)) return [];
       if (filter.text) {
         const haystack = `${actionText} ${summary}`;
-        if (filter.regex) {
-          const result = evaluateRegex(filter.text, filter.flags ?? "gi", haystack);
-          if (result.error || result.matches.length === 0) return [];
-        } else if (!haystack.toLocaleLowerCase().includes(filter.text.toLocaleLowerCase())) {
+        if (!filter.regex && !haystack.toLocaleLowerCase().includes(filter.text.toLocaleLowerCase())) {
           return [];
         }
       }
       return [{ id, action: actionText, summary, timestamp }];
     });
+    if (!filter.text || !filter.regex || revisions.length === 0) return revisions;
+    const evaluations = await this.evaluateRegexBatch(
+      filter.text,
+      filter.flags ?? "gi",
+      revisions.map((revision) => `${revision.action} ${revision.summary}`)
+    );
+    const evaluationError = evaluations.find((evaluation) => evaluation.error)?.error;
+    if (evaluationError) throw new Error(`History regular expression evaluation failed: ${evaluationError}`);
+    return revisions.filter((_, index) => (evaluations[index]?.matches.length ?? 0) > 0);
   }
 
   /** Counts only actions actually present in history; empty hard-coded buckets are omitted. */

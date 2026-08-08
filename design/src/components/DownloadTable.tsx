@@ -1,7 +1,6 @@
 import { useState } from "react";
 import type { DownloadItem, DownloadStatus } from "@shared/types";
 import { useAppStore, type SortKey } from "../store/useAppStore";
-import { useFilteredItems } from "../hooks/useFilteredItems";
 import { CATEGORY_LABELS } from "../utils/category";
 import { formatBytes, formatEta, formatRelativeTime, formatSpeed, percentOf } from "../utils/format";
 import {
@@ -18,6 +17,8 @@ import {
   TrashIcon,
 } from "./icons";
 import ContextMenu, { ContextMenuItem, ContextMenuSeparator } from "./ContextMenu";
+import { getUiCopy } from "../i18n/ui";
+import { localizedRegexEvaluationError } from "../hooks/useIsolatedRegex";
 
 const STATUS_LABEL: Record<DownloadStatus, string> = {
   added: "Added",
@@ -46,8 +47,15 @@ const COLUMNS: ColumnDef[] = [
 
 type MenuState = { x: number; y: number; ids: string[]; mode: "menu" | "confirmRemove" };
 
-export default function DownloadTable() {
-  const filteredItems = useFilteredItems();
+interface DownloadTableProps {
+  filteredItems: DownloadItem[];
+  regexError: string | null;
+  regexPending: boolean;
+}
+
+export default function DownloadTable({ filteredItems, regexError, regexPending }: DownloadTableProps) {
+  const settings = useAppStore((s) => s.settings);
+  const copy = getUiCopy(settings);
   const sort = useAppStore((s) => s.sort);
   const setSort = useAppStore((s) => s.setSort);
   const selectedIds = useAppStore((s) => s.selectedIds);
@@ -157,7 +165,13 @@ export default function DownloadTable() {
           ))}
           {filteredItems.length === 0 && (
             <tr className="empty-row">
-              <td colSpan={COLUMNS.length + 1}>No downloads to show.</td>
+              <td colSpan={COLUMNS.length + 1}>
+                {regexPending ? (
+                  <span role="status">{copy.text("Evaluating safely…", "安全評估緊…")}</span>
+                ) : regexError ? (
+                  <span role="alert">{localizedRegexEvaluationError(regexError, copy.text)}</span>
+                ) : copy.text("No downloads to show.", "冇下載項目可以顯示。")}
+              </td>
             </tr>
           )}
         </tbody>

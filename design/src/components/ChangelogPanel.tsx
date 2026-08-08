@@ -3,6 +3,7 @@ import type { ExportFormat } from "@shared/export";
 import { createDefaultRegexBuilderState, type RegexBuilderState } from "@shared/regex";
 import type { ChangelogView, ChangelogViewRequest } from "../../electron/history/ChangelogStore";
 import { getUiCopy } from "../i18n/ui";
+import { localizedPrefixedRegexEvaluationError } from "../hooks/useIsolatedRegex";
 import { useAppStore } from "../store/useAppStore";
 import RegexBuilder from "./RegexBuilder";
 import { HistoryIcon } from "./icons";
@@ -28,6 +29,26 @@ function releaseSummary(view: ChangelogView, copy: ReturnType<typeof getUiCopy>)
   );
 }
 
+function changelogActionError(
+  kind: "copy" | "export",
+  message: string,
+  copy: ReturnType<typeof getUiCopy>
+): string {
+  const regexFailure = localizedPrefixedRegexEvaluationError(
+    message,
+    "Changelog regular expression evaluation failed: ",
+    kind === "copy" ? "Changelog regex copy failed" : "Changelog regex export failed",
+    kind === "copy" ? "更新日誌正則複製失敗" : "更新日誌正則匯出失敗",
+    copy.text
+  );
+  return regexFailure === message
+    ? copy.text(
+      `${kind === "copy" ? "Changelog copy" : "Changelog export"} failed: ${message}`,
+      `${kind === "copy" ? "複製更新日誌" : "匯出更新日誌"}失敗：${message}`
+    )
+    : regexFailure;
+}
+
 export default function ChangelogPanel() {
   const settings = useAppStore((state) => state.settings);
   const copy = useMemo(
@@ -42,7 +63,9 @@ export default function ChangelogPanel() {
   const [toDate, setToDate] = useState("");
   const [view, setView] = useState<ChangelogView | null>(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [filterError, setFilterError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<{ kind: "copy" | "export"; message: string } | null>(null);
+  const [reloadGeneration, setReloadGeneration] = useState(0);
   const [format, setFormat] = useState<ExportFormat>("markdown");
   const [busyAction, setBusyAction] = useState<"export" | "copy" | null>(null);
   const [actionMessage, setActionMessage] = useState<string | null>(null);
@@ -63,7 +86,7 @@ export default function ChangelogPanel() {
   useEffect(() => {
     let current = true;
     setLoading(true);
-    setError(null);
+    setFilterError(null);
     window.api.getChangelogView(request).then((next) => {
       if (!current) return;
       setView(next);
@@ -79,17 +102,25 @@ export default function ChangelogPanel() {
     }).catch((reason: unknown) => {
       if (!current) return;
       setView(null);
-      setError(reason instanceof Error ? reason.message : copy.text("The changelog could not be loaded.", "載入更新日誌失敗。"));
+      const message = reason instanceof Error ? reason.message : copy.text("The changelog could not be loaded.", "載入更新日誌失敗。");
+      setFilterError(localizedPrefixedRegexEvaluationError(
+        message,
+        "Changelog regular expression evaluation failed: ",
+        "Changelog regex filter failed",
+        "更新日誌正則篩選失敗",
+        copy.text
+      ));
       setLoading(false);
     });
     return () => {
       current = false;
     };
-  }, [copy, request]);
+  }, [copy, reloadGeneration, request]);
 
   async function exportFiltered() {
     setBusyAction("export");
     setActionMessage(null);
+    setActionError(null);
     try {
       const result = await window.api.exportChangelog(format, request);
       downloadText("material-download-manager-changelog." + result.extension, result.content, result.mimeType);
@@ -98,7 +129,11 @@ export default function ChangelogPanel() {
         "已匯出 " + result.metadata.recordCount + " 條篩選後版本紀錄，格式係 " + format.toUpperCase() + "。"
       ));
     } catch (reason: unknown) {
-      setError(reason instanceof Error ? reason.message : copy.text("The filtered changelog could not be exported.", "匯出篩選後更新日誌失敗。"));
+      const message = reason instanceof Error ? reason.message : copy.text("The filtered changelog could not be exported.", "匯出篩選後更新日誌失敗。");
+      setActionError({
+        kind: "export",
+        message: changelogActionError("export", message, copy),
+      });
     } finally {
       setBusyAction(null);
     }
@@ -107,6 +142,7 @@ export default function ChangelogPanel() {
   async function copyFiltered() {
     setBusyAction("copy");
     setActionMessage(null);
+    setActionError(null);
     try {
       const result = await window.api.exportChangelog("markdown", request);
       if (!navigator.clipboard?.writeText) throw new Error(copy.text("Clipboard access is unavailable.", "剪貼簿存取未有提供。"));
@@ -116,7 +152,11 @@ export default function ChangelogPanel() {
         "已複製 " + result.metadata.recordCount + " 條篩選後版本紀錄（Markdown）。"
       ));
     } catch (reason: unknown) {
-      setError(reason instanceof Error ? reason.message : copy.text("The filtered changelog could not be copied.", "複製篩選後更新日誌失敗。"));
+      const message = reason instanceof Error ? reason.message : copy.text("The filtered changelog could not be copied.", "複製篩選後更新日誌失敗。");
+      setActionError({
+        kind: "copy",
+        message: changelogActionError("copy", message, copy),
+      });
     } finally {
       setBusyAction(null);
     }
@@ -195,6 +235,8 @@ export default function ChangelogPanel() {
               placeholder={copy.text("Search versions, release names, and changes", "搜尋版本、版本名稱同變更")}
               onChange={(event) => setBuilder((state) => ({ ...state, pattern: event.target.value }))}
               aria-label={copy.text("Search changelog", "搜尋更新日誌")}
+              aria-invalid={filterError ? true : undefined}
+              aria-describedby={filterError ? "changelog-filter-error" : undefined}
             />
             <button ref={regexButtonRef} type="button" className="btn btn-ghost btn-sm" aria-expanded={regexOpen} aria-controls="changelog-search-builder" onClick={() => setRegexOpen((open) => !open)}>
               {copy.text("Regex", "正則")}
@@ -202,7 +244,7 @@ export default function ChangelogPanel() {
           </div>
           {regexOpen && (
             <div id="changelog-search-builder" className="changelog-search-builder">
-              <RegexBuilder title={copy.text("Changelog regex builder", "更新日誌正則建立器")} value={builder} onChange={setBuilder} />
+              <RegexBuilder title={copy.text("Changelog regex builder", "更新日誌正則建立器")} value={builder} onChange={setBuilder} text={copy.text} />
             </div>
           )}
         </div>
@@ -219,29 +261,42 @@ export default function ChangelogPanel() {
         </div>
       </div>
 
-      {error && <div className="changelog-status changelog-status-error" role="alert">{copy.funny(
+      {filterError && <div id="changelog-filter-error" className="changelog-status changelog-status-error" role="alert"><span>{copy.funny(
         [
-          "The changelog could not be loaded or processed: " + error,
-          "The changelog reported an exact problem: " + error,
-          "The changelog hit an error: " + error,
-          "The changelog ledger stopped at this exact report: " + error,
-          "The changelog cupboard filed this exact complaint: " + error,
+          "The changelog could not be loaded or processed: " + filterError,
+          "The changelog reported an exact problem: " + filterError,
+          "The changelog hit an error: " + filterError,
+          "The changelog ledger stopped at this exact report: " + filterError,
+          "The changelog cupboard filed this exact complaint: " + filterError,
         ],
         [
-          "更新日誌載入或處理失敗：" + error,
-          "更新日誌回報咗一個準確問題：" + error,
-          "更新日誌撞到一個錯誤：" + error,
-          "更新日誌紀錄簿停喺呢份準確報告：" + error,
-          "更新日誌櫃提交咗呢份準確投訴：" + error,
+          "更新日誌載入或處理失敗：" + filterError,
+          "更新日誌回報咗一個準確問題：" + filterError,
+          "更新日誌撞到一個錯誤：" + filterError,
+          "更新日誌紀錄簿停喺呢份準確報告：" + filterError,
+          "更新日誌櫃提交咗呢份準確投訴：" + filterError,
         ]
-      )}</div>}
+      )}</span><button type="button" className="btn btn-ghost btn-sm" onClick={() => setReloadGeneration((value) => value + 1)}>{copy.text("Retry changelog filter", "重試更新日誌篩選")}</button></div>}
+      {actionError && <div id="changelog-action-error" className="changelog-status changelog-status-error" role="alert">
+        <span>{actionError.message}</span>
+        <button
+          type="button"
+          className="btn btn-ghost btn-sm"
+          disabled={busyAction !== null}
+          onClick={() => void (actionError.kind === "copy" ? copyFiltered() : exportFiltered())}
+        >
+          {actionError.kind === "copy"
+            ? copy.text("Retry changelog copy", "重試複製更新日誌")
+            : copy.text("Retry changelog export", "重試匯出更新日誌")}
+        </button>
+      </div>}
       {actionMessage && <div className="changelog-status" role="status">{actionMessage}</div>}
       {loading && <div className="changelog-empty" role="status">{copy.funny(
         ["Loading the embedded changelog…", "Loading the embedded changelog; the release ledger is unfolding.", "Loading the embedded changelog — the tiny ledger is stretching.", "Loading the embedded changelog; the version shelf is doing its paperwork.", "Loading the embedded changelog — the release cupboard is putting on its spectacles."],
         ["載入緊嵌入嘅更新日誌…", "載入緊嵌入嘅更新日誌，版本紀錄簿攤開緊。", "載入緊嵌入嘅更新日誌，細細本紀錄簿伸緊懶腰。", "載入緊嵌入嘅更新日誌，版本架做緊文書工作。", "載入緊嵌入嘅更新日誌，版本櫃戴緊眼鏡。"]
       )}</div>}
-      {!loading && !error && view?.entries.length === 0 && <div className="changelog-empty" role="status">{emptyMessage}</div>}
-      {!loading && !error && view && view.entries.length > 0 && (
+      {!loading && !filterError && view?.entries.length === 0 && <div className="changelog-empty" role="status">{emptyMessage}</div>}
+      {!loading && !filterError && view && view.entries.length > 0 && (
         <div className="changelog-results">
           <div className="changelog-results-summary" aria-live="polite">{releaseSummary(view, copy)}</div>
           <ol className="changelog-list" aria-label={copy.text("Published stable releases", "已發布穩定版本")}>

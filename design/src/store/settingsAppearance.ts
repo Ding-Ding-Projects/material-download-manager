@@ -1,6 +1,4 @@
 import type { AppSettings, UIFontFamily, SettingKey } from "@shared/types";
-import { compiledInProvenance } from "@shared/settings";
-import { SETTING_KEYS } from "@shared/types";
 
 export const UI_FONT_STACKS: Record<UIFontFamily, string> = {
   "segoe-ui": '"Segoe UI", "Inter", system-ui, sans-serif',
@@ -18,23 +16,6 @@ export function applyAppearanceSettings(settings: AppSettings): void {
   root.style.setProperty("--ui-font-family", UI_FONT_STACKS[settings.uiFontFamily]);
   root.style.setProperty("--ui-font-size", `${settings.uiFontSize}px`);
   root.style.setProperty("--ui-font-weight", String(settings.uiFontWeight));
-}
-
-export function withPersistedProvenance(
-  current: AppSettings | null,
-  partial: Partial<AppSettings>
-): Partial<AppSettings> {
-  const provenance = {
-    ...(current?.settingProvenance ?? compiledInProvenance()),
-  };
-
-  for (const key of SETTING_KEYS) {
-    if (Object.prototype.hasOwnProperty.call(partial, key)) {
-      provenance[key as SettingKey] = "persisted";
-    }
-  }
-
-  return { ...partial, settingProvenance: provenance };
 }
 
 export function settingSourceLabel(settings: AppSettings, key: SettingKey, compiledValue: string): string {

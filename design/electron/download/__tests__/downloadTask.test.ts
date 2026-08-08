@@ -5,15 +5,19 @@ import fsp from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import crypto from "node:crypto";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
 
 import { startTestServer } from "./testServer";
 import { probeUrl, redactErrorMessage, redactUrl, sanitizeFileName } from "../HttpProbe";
 import { DownloadTask } from "../DownloadTask";
 import { SpeedLimiter } from "../SpeedLimiter";
-import { detectCategory, resolveCategory, resolveDownloadFolder } from "../categories";
+import { detectCategory, resolveCategory, resolveCategoryIsolated, resolveDownloadFolder } from "../categories";
 import { headersForTarget, splitStoredDownload, withStoredHeaders } from "../downloadMetadata";
 import { isQueueScheduleActive, QueueScheduleClock } from "../queueSchedule";
 import type { DownloadItem } from "../../../shared/types";
+
+const execFileAsync = promisify(execFile);
 
 function tmpDir() {
   return fsp.mkdtemp(path.join(os.tmpdir(), "mdm-test-"));
@@ -524,6 +528,52 @@ test("custom regex filters outrank the extension mapping and fall back safely", 
   assert.equal(resolveCategory("movie.mp4", "https://example.test/d", broken), "video");
 });
 
+test("conflicting auto-organize rules use stable first-match order", () => {
+  const appsFirst = [
+    { id: "apps-first", name: "Apps first", pattern: "report", flags: "i", category: "apps" as const },
+    { id: "documents-second", name: "Documents second", pattern: "report", flags: "i", category: "document" as const },
+  ];
+  assert.equal(resolveCategory("report.pdf", "https://example.test/report", appsFirst), "apps");
+  assert.equal(resolveCategory("report.pdf", "https://example.test/report", [...appsFirst].reverse()), "document");
+});
+
+test("isolated category worker falls back on its deadline and recovers for the next request", async () => {
+  const rules = [{
+    id: "archives-as-documents",
+    name: "Archives as documents",
+    pattern: "archive",
+    flags: "i",
+    category: "document" as const,
+  }];
+  const startedAt = Date.now();
+
+  assert.equal(
+    await resolveCategoryIsolated("archive.zip", "https://example.test/archive", rules, 0),
+    "compressed"
+  );
+  assert.ok(Date.now() - startedAt < 1_000, "timed-out category evaluation must return a bounded extension fallback");
+  assert.equal(
+    await resolveCategoryIsolated("archive.zip", "https://example.test/archive", rules, 2_000),
+    "document"
+  );
+});
+
+test("production category deadline starts after a fresh worker reports ready", async () => {
+  const categoriesModule = path.resolve(__dirname, "..", "categories.js");
+  const script = [
+    "const { resolveCategoryIsolated } = require(process.argv[1]);",
+    "const rules = [{ id: 'cold-start', name: 'Cold start', pattern: 'archive', flags: 'i', category: 'document' }];",
+    "resolveCategoryIsolated('archive.zip', 'https://example.test/archive', rules)",
+    "  .then((category) => process.stdout.write(category))",
+    "  .catch((error) => { process.stderr.write(String(error)); process.exitCode = 1; });",
+  ].join("\n");
+  const { stdout } = await execFileAsync(process.execPath, ["-e", script, categoriesModule], {
+    timeout: 20_000,
+    windowsHide: true,
+  });
+  assert.equal(stdout, "document");
+});
+
 test("auto-organize routes default-folder downloads into the six category folders", () => {
   const base = process.platform === "win32" ? "C:\\Users\\someone\\Downloads" : "/home/someone/Downloads";
   const join = (name: string) => path.join(base, name);
@@ -541,6 +591,15 @@ test("auto-organize routes default-folder downloads into the six category folder
   const custom = process.platform === "win32" ? "D:\\Archive" : "/srv/archive";
   assert.equal(resolveDownloadFolder(custom, base, "video", true), custom);
   assert.equal(resolveDownloadFolder("", base, "video", false), base);
+});
+
+test("auto-organize rejects invalid default-folder boundaries before routing", () => {
+  for (const invalidDefault of ["", "Downloads", ".\\Downloads", "C:Downloads"]) {
+    assert.throws(
+      () => resolveDownloadFolder("", invalidDefault, "document", true),
+      /absolute path/i
+    );
+  }
 });
 
 test("SpeedLimiter throttles throughput close to the configured cap", async () => {

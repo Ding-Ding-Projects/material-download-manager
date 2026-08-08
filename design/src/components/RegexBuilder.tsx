@@ -1,11 +1,12 @@
 import { useEffect, useId, useMemo, useState } from "react";
 import {
   createDefaultRegexBuilderState,
-  evaluateRegex,
   guidedTokenToPattern,
+  normalizeRegexFlags,
   REGEX_FLAGS,
   type RegexBuilderState,
 } from "@shared/regex";
+import { localizedRegexEvaluationError, useIsolatedRegexBatch } from "../hooks/useIsolatedRegex";
 import "../styles/regex.css";
 
 interface RegexBuilderProps {
@@ -13,30 +14,56 @@ interface RegexBuilderProps {
   onChange?: (value: RegexBuilderState) => void;
   title?: string;
   className?: string;
+  fixedRegex?: boolean;
+  patternMaxLength?: number;
+  text?: (english: string, cantonese: string) => string;
 }
 
-const FLAG_LABELS: Record<string, string> = {
-  g: "Global",
-  i: "Case insensitive",
-  m: "Multiline",
-  s: "Dot matches newline",
-  u: "Unicode",
-  y: "Sticky",
+const FLAG_LABELS: Record<string, readonly [string, string]> = {
+  g: ["Global", "全域"],
+  i: ["Case insensitive", "不分大小寫"],
+  m: ["Multiline", "多行"],
+  s: ["Dot matches newline", "句點包括換行"],
+  u: ["Unicode", "Unicode"],
+  y: ["Sticky", "黏附模式"],
 };
 
 /**
  * Full local builder used by search fields. It intentionally advertises the
  * actual JavaScript RegExp dialect and keeps plain-text mode as the default.
  */
-export default function RegexBuilder({ value, onChange, title = "Regex builder", className }: RegexBuilderProps) {
+export default function RegexBuilder({
+  value,
+  onChange,
+  title = "Regex builder",
+  className,
+  fixedRegex = false,
+  patternMaxLength = 2048,
+  text,
+}: RegexBuilderProps) {
   const [local, setLocal] = useState<RegexBuilderState>(value ?? createDefaultRegexBuilderState());
+  const [guidedError, setGuidedError] = useState(false);
   const modeGroupId = useId();
   const dialectId = useId();
+  const guidedErrorId = useId();
   const state = value ?? local;
-  const evaluation = useMemo(
-    () => (state.mode === "regex" ? evaluateRegex(state.pattern, state.flags, state.sample) : null),
-    [state.flags, state.mode, state.pattern, state.sample]
+  const activeMode = fixedRegex ? "regex" : state.mode;
+  const t = text ?? ((english: string) => english);
+  const contextualName = (english: string, cantonese: string) => `${title}: ${t(english, cantonese)}`;
+  const evaluationSamples = useMemo(() => [state.sample], [state.sample]);
+  const isolatedEvaluation = useIsolatedRegexBatch(
+    state.pattern,
+    state.flags,
+    evaluationSamples,
+    activeMode === "regex" && state.pattern.length > 0,
+    true
   );
+  const evaluation = isolatedEvaluation.evaluations?.[0] ?? null;
+  const evaluationError = fixedRegex && state.pattern.length === 0
+    ? t("Enter a regular expression pattern.", "請輸入正規表示式模式。")
+    : evaluation?.error
+      ? localizedRegexEvaluationError(evaluation.error, t)
+      : null;
 
   useEffect(() => {
     if (
@@ -48,7 +75,7 @@ export default function RegexBuilder({ value, onChange, title = "Regex builder",
   }, [local.flags, local.mode, local.pattern, local.sample, value]);
 
   function update(patch: Partial<RegexBuilderState>) {
-    const next = { ...state, ...patch };
+    const next = { ...state, ...patch, ...(fixedRegex ? { mode: "regex" as const } : {}) };
     if (!value) setLocal(next);
     onChange?.(next);
   }
@@ -57,10 +84,15 @@ export default function RegexBuilder({ value, onChange, title = "Regex builder",
     const nextFlags = state.flags.includes(flag)
       ? state.flags.replace(flag, "")
       : `${state.flags}${flag}`;
-    update({ flags: nextFlags });
+    update({ flags: normalizeRegexFlags(nextFlags) });
   }
 
   function insertGuided(pattern: string) {
+    if (state.pattern.length + pattern.length > patternMaxLength) {
+      setGuidedError(true);
+      return;
+    }
+    setGuidedError(false);
     update({ mode: "regex", pattern: `${state.pattern}${pattern}` });
   }
 
@@ -80,85 +112,123 @@ export default function RegexBuilder({ value, onChange, title = "Regex builder",
   }
 
   return (
-    <section className={`regex-builder${className ? ` ${className}` : ""}`} aria-label={title}>
+    <section
+      className={`regex-builder${className ? ` ${className}` : ""}`}
+      aria-label={title}
+      aria-busy={isolatedEvaluation.pending || undefined}
+    >
       <div className="regex-builder-header">
         <div>
           <h3>{title}</h3>
-          <p>JavaScript RegExp · plain text stays the default · bounded local evaluation</p>
+          <p>
+            {fixedRegex
+              ? t("JavaScript RegExp · this rule always uses regex · bounded local evaluation", "JavaScript RegExp · 呢條規則固定用 regex · 有界本機評估")
+              : t("JavaScript RegExp · plain text stays the default · bounded local evaluation", "JavaScript RegExp · 預設保持純文字 · 有界本機評估")}
+          </p>
         </div>
         <div className="regex-builder-actions">
-          <button type="button" className="btn btn-ghost btn-sm" onClick={() => void copyPattern()} disabled={!state.pattern}>
-            Copy
+          <button
+            type="button"
+            className="btn btn-ghost btn-sm"
+            onClick={() => void copyPattern()}
+            disabled={!state.pattern}
+            aria-label={contextualName("Copy", "複製")}
+            aria-describedby={!state.pattern ? dialectId : undefined}
+            title={!state.pattern ? t("Enter a pattern before copying.", "請先輸入模式先可以複製。") : undefined}
+          >
+            {t("Copy", "複製")}
           </button>
-          <button type="button" className="btn btn-ghost btn-sm" onClick={exportPattern} disabled={!state.pattern}>
-            Export
+          <button
+            type="button"
+            className="btn btn-ghost btn-sm"
+            onClick={exportPattern}
+            disabled={!state.pattern}
+            aria-label={contextualName("Export", "匯出")}
+            aria-describedby={!state.pattern ? dialectId : undefined}
+            title={!state.pattern ? t("Enter a pattern before exporting.", "請先輸入模式先可以匯出。") : undefined}
+          >
+            {t("Export", "匯出")}
           </button>
         </div>
       </div>
 
-      <div className="regex-mode" role="radiogroup" aria-label="Search mode">
+      {!fixedRegex && <div className="regex-mode" role="radiogroup" aria-label={contextualName("Search mode", "搜尋模式")}>
         <label>
-          <input type="radio" name={`${modeGroupId}-regex-mode`} checked={state.mode === "text"} onChange={() => update({ mode: "text" })} />
-          Plain text
+          <input aria-label={contextualName("Plain text", "純文字")} type="radio" name={`${modeGroupId}-regex-mode`} checked={state.mode === "text"} onChange={() => update({ mode: "text" })} />
+          {t("Plain text", "純文字")}
         </label>
         <label>
-          <input type="radio" name={`${modeGroupId}-regex-mode`} checked={state.mode === "regex"} onChange={() => update({ mode: "regex" })} />
-          Regular expression
+          <input aria-label={contextualName("Regular expression", "正規表示式")} type="radio" name={`${modeGroupId}-regex-mode`} checked={state.mode === "regex"} onChange={() => update({ mode: "regex" })} />
+          {t("Regular expression", "正規表示式")}
         </label>
-      </div>
+      </div>}
 
       <label className="field">
-        <span className="field-label">Pattern</span>
+        <span className="field-label">{t("Pattern", "模式")}</span>
         <input
           className="input regex-pattern"
+          aria-label={contextualName("Pattern", "模式")}
           value={state.pattern}
-          onChange={(event) => update({ pattern: event.target.value, mode: "regex" })}
-          maxLength={2048}
+          onChange={(event) => {
+            setGuidedError(false);
+            update({ pattern: event.target.value, mode: "regex" });
+          }}
+          maxLength={patternMaxLength}
           spellCheck={false}
-          aria-describedby={dialectId}
+          aria-invalid={evaluationError ? true : undefined}
+          aria-describedby={`${dialectId}${guidedError ? ` ${guidedErrorId}` : ""}`}
         />
       </label>
 
-      <div className="regex-guided" aria-label="Guided construction">
-        <span className="field-label">Build</span>
-        <button type="button" className="btn btn-ghost btn-sm" onClick={() => insertGuided(guidedTokenToPattern({ kind: "literal", value: "text" }))}>
-          Literal
+      <div className="regex-guided" role="group" aria-label={contextualName("Guided construction", "引導式建立")}>
+        <span className="field-label">{t("Build", "引導建立")}</span>
+        <button aria-label={contextualName("Literal", "字面文字")} type="button" className="btn btn-ghost btn-sm" onClick={() => insertGuided(guidedTokenToPattern({ kind: "literal", value: "text" }))}>
+          {t("Literal", "字面文字")}
         </button>
-        <button type="button" className="btn btn-ghost btn-sm" onClick={() => insertGuided(guidedTokenToPattern({ kind: "characterClass", value: "a-z" }))}>
-          Character class
+        <button aria-label={contextualName("Character class", "字元類別")} type="button" className="btn btn-ghost btn-sm" onClick={() => insertGuided(guidedTokenToPattern({ kind: "characterClass", value: "a-z" }))}>
+          {t("Character class", "字元類別")}
         </button>
-        <button type="button" className="btn btn-ghost btn-sm" onClick={() => insertGuided("^")}>
-          Start anchor
+        <button aria-label={contextualName("Start anchor", "開頭錨點")} type="button" className="btn btn-ghost btn-sm" onClick={() => insertGuided("^")}>
+          {t("Start anchor", "開頭錨點")}
         </button>
-        <button type="button" className="btn btn-ghost btn-sm" onClick={() => insertGuided("$")}>
-          End anchor
+        <button aria-label={contextualName("End anchor", "結尾錨點")} type="button" className="btn btn-ghost btn-sm" onClick={() => insertGuided("$")}>
+          {t("End anchor", "結尾錨點")}
         </button>
-        <button type="button" className="btn btn-ghost btn-sm" onClick={() => insertGuided("(?:group)")}>
-          Group
+        <button aria-label={contextualName("Group", "群組")} type="button" className="btn btn-ghost btn-sm" onClick={() => insertGuided("(?:group)")}>
+          {t("Group", "群組")}
         </button>
-        <button type="button" className="btn btn-ghost btn-sm" onClick={() => insertGuided("(?:one|two)")}>
-          Alternation
+        <button aria-label={contextualName("Alternation", "或選項")} type="button" className="btn btn-ghost btn-sm" onClick={() => insertGuided("(?:one|two)")}>
+          {t("Alternation", "或選項")}
         </button>
-        <button type="button" className="btn btn-ghost btn-sm" onClick={() => insertGuided("atom{1,3}")}>
-          Quantifier
+        <button aria-label={contextualName("Quantifier", "數量詞")} type="button" className="btn btn-ghost btn-sm" onClick={() => insertGuided("atom{1,3}")}>
+          {t("Quantifier", "數量詞")}
         </button>
       </div>
+      {guidedError && (
+        <p id={guidedErrorId} className="field-error" role="status">
+          {t(
+            `That guided fragment would exceed the ${patternMaxLength}-character pattern limit and was not added.`,
+            `嗰段引導式內容會超過 ${patternMaxLength} 個字元上限，所以冇加入。`
+          )}
+        </p>
+      )}
 
-      <div className="regex-flags" aria-label="Regular expression flags">
-        <span className="field-label">Flags</span>
+      <div className="regex-flags" role="group" aria-label={contextualName("Regular expression flags", "正規表示式旗標")}>
+        <span className="field-label">{t("Flags", "旗標")}</span>
         {REGEX_FLAGS.map((flag) => (
-          <label key={flag} title={FLAG_LABELS[flag]}>
-            <input type="checkbox" checked={state.flags.includes(flag)} onChange={() => toggleFlag(flag)} />
+          <label key={flag} title={t(...FLAG_LABELS[flag])}>
+            <input aria-label={`${title}: ${t(...FLAG_LABELS[flag])}`} type="checkbox" checked={state.flags.includes(flag)} onChange={() => toggleFlag(flag)} />
             <code>{flag}</code>
-            <span>{FLAG_LABELS[flag]}</span>
+            <span>{t(...FLAG_LABELS[flag])}</span>
           </label>
         ))}
       </div>
 
       <label className="field">
-        <span className="field-label">Sample text</span>
+        <span className="field-label">{t("Sample text", "範例文字")}</span>
         <textarea
           className="input textarea regex-sample"
+          aria-label={contextualName("Sample text", "範例文字")}
           value={state.sample}
           onChange={(event) => update({ sample: event.target.value })}
           maxLength={100000}
@@ -166,24 +236,36 @@ export default function RegexBuilder({ value, onChange, title = "Regex builder",
         />
       </label>
 
-      <div id={dialectId} className="regex-dialect-note">
-        {evaluation?.error ? <span className="text-danger">{evaluation.error}</span> : "The pattern runs locally in the JavaScript RegExp engine."}
+      <div
+        id={dialectId}
+        className="regex-dialect-note"
+        role={evaluationError ? "alert" : "status"}
+        aria-live={evaluationError ? "assertive" : "polite"}
+        aria-atomic="true"
+      >
+        {isolatedEvaluation.pending ? (
+          t("Evaluating safely…", "安全評估緊…")
+        ) : evaluationError ? (
+          <span className="text-danger">{evaluationError}</span>
+        ) : (
+          t("The pattern runs locally in the JavaScript RegExp engine.", "模式只會喺本機 JavaScript RegExp 引擎執行。")
+        )}
       </div>
 
       {evaluation && !evaluation.error && (
         <div className="regex-results" aria-live="polite">
           <div className="regex-results-header">
-            <span>{evaluation.matches.length} match{evaluation.matches.length === 1 ? "" : "es"}</span>
-            {evaluation.truncated && <span className="text-danger">Result list or sample was bounded.</span>}
+            <span>{evaluation.matches.length} {t(evaluation.matches.length === 1 ? "match" : "matches", "個相符結果")}</span>
+            {evaluation.truncated && <span className="text-danger">{t("Result list or sample was bounded.", "結果清單或範例已按上限截短。")}</span>}
           </div>
           {evaluation.matches.length === 0 ? (
-            <div className="regex-empty">No matches in the sample.</div>
+            <div className="regex-empty">{t("No matches in the sample.", "範例冇相符結果。")}</div>
           ) : (
             <ol>
               {evaluation.matches.map((match, index) => (
                 <li key={`${match.index}-${index}`}>
-                  <code>{match.text || "(zero-width)"}</code> at {match.index}
-                  {match.captures.length > 0 && <span className="regex-captures">captures: {JSON.stringify(match.captures)}</span>}
+                  <code>{match.text || t("(zero-width)", "（零寬度）")}</code> {t("at", "位置")} {match.index}
+                  {match.captures.length > 0 && <span className="regex-captures">{t("captures", "擷取群組")}: {JSON.stringify(match.captures)}</span>}
                 </li>
               ))}
             </ol>

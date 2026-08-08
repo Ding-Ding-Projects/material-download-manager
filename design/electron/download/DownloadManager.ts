@@ -6,16 +6,20 @@ import { app, shell } from "electron";
 import type {
   AddDownloadRequest,
   AppSettings,
+  DownloadCategory,
   DownloadItem,
   DownloadQueue,
   NewDownloadInfo,
+  SettingKey,
+  SettingsPatch,
   StateSnapshot,
 } from "../../shared/types";
 import type { ExportFormat, ExportResult } from "../../shared/export";
 import { historyFilterRequest, normalizeHistoryFilter, type HistoryFilter, type HistoryView } from "../../shared/history";
-import { DEFAULT_QUEUE_ID } from "../../shared/types";
+import { createDefaultSettings, validateSettingResetKeys, validateSettingsPatch } from "../../shared/settings";
+import { DEFAULT_QUEUE_ID, SETTING_KEYS } from "../../shared/types";
 import { StateStore } from "./persistence";
-import { resolveCategory, resolveDownloadFolder } from "./categories";
+import { resolveCategoryIsolated, resolveDownloadFolder } from "./categories";
 import { probeUrl as httpProbeUrl, redactErrorMessage, redactUrl, sanitizeFileName } from "./HttpProbe";
 import { DownloadTask } from "./DownloadTask";
 import { SpeedLimiter } from "./SpeedLimiter";
@@ -31,6 +35,13 @@ import { HistoryStore, type HistoryAction } from "../history/HistoryStore";
 const MAX_QUEUE_NAME_LENGTH = 512;
 const MAX_QUEUE_ID_LENGTH = 256;
 const MAX_QUEUE_ITEM_IDS = 10_000;
+
+export type LoginItemSettingsWriter = (openAtLogin: boolean) => void;
+
+function writeElectronLoginItemSettings(openAtLogin: boolean): void {
+  if (!app || typeof app.setLoginItemSettings !== "function") throw new Error("Electron login-item settings are unavailable");
+  app.setLoginItemSettings({ openAtLogin });
+}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -84,6 +95,7 @@ export class DownloadManager extends EventEmitter {
   private items: Map<string, DownloadItem> = new Map();
   private queues: Map<string, DownloadQueue> = new Map();
   private settings!: AppSettings;
+  private compiledSettings!: AppSettings;
   private tasks: Map<string, DownloadTask> = new Map();
   private itemHeaders: Map<string, Record<string, string>> = new Map();
   /** Raw source URLs stay in memory only so active credentialed transfers work. */
@@ -96,7 +108,10 @@ export class DownloadManager extends EventEmitter {
   private pendingOperations = new Set<Promise<void>>();
   private scheduleClock = new QueueScheduleClock(() => this.processAllQueues());
 
-  constructor(private userDataPath: string) {
+  constructor(
+    private userDataPath: string,
+    private readonly writeLoginItemSettings: LoginItemSettingsWriter = writeElectronLoginItemSettings,
+  ) {
     super();
     this.store = new StateStore(userDataPath);
     this.history = new HistoryStore(userDataPath);
@@ -140,6 +155,7 @@ export class DownloadManager extends EventEmitter {
       "Downloads",
       "MaterialDownloadManager"
     );
+    this.compiledSettings = createDefaultSettings(defaultSaveFolder);
     const state = await this.store.load(defaultSaveFolder);
     this.settings = state.settings;
     this.globalSpeedLimiter = new SpeedLimiter(this.settings.globalSpeedLimitBytes);
@@ -252,10 +268,18 @@ export class DownloadManager extends EventEmitter {
     }
   }
 
+  async previewCategory(fileName: string, url: string): Promise<DownloadCategory> {
+    return resolveCategoryIsolated(
+      sanitizeFileName(fileName || "download"),
+      url,
+      this.settings.autoOrganizeRules ?? []
+    );
+  }
+
   async addDownload(req: AddDownloadRequest): Promise<string> {
     const id = crypto.randomUUID();
     let fileName = sanitizeFileName(req.fileName || "download");
-    const category = resolveCategory(fileName, req.url, this.settings.autoOrganizeRules ?? []);
+    const category = await this.previewCategory(fileName, req.url);
     const folder = resolveDownloadFolder(
       req.folder,
       this.settings.defaultSaveFolder,
@@ -566,11 +590,31 @@ export class DownloadManager extends EventEmitter {
     return this.settings;
   }
 
-  async setSettings(partial: Partial<AppSettings>): Promise<AppSettings> {
-    this.settings = { ...this.settings, ...partial };
+  async setSettings(partial: SettingsPatch, resetKeysInput: readonly SettingKey[] = []): Promise<AppSettings> {
+    const validated = validateSettingsPatch(partial);
+    const resetKeys = validateSettingResetKeys(resetKeysInput);
+    if (resetKeys.some((key) => Object.prototype.hasOwnProperty.call(validated, key))) {
+      throw new Error("A setting cannot be changed and reset in the same mutation");
+    }
+    if (Object.keys(validated).length === 0 && resetKeys.length === 0) return this.settings;
+
+    const provenance = { ...this.settings.settingProvenance };
+    const nextSettings = { ...this.settings, ...validated } as AppSettings;
+    for (const key of SETTING_KEYS) {
+      if (Object.prototype.hasOwnProperty.call(validated, key)) provenance[key] = "persisted";
+    }
+    for (const key of resetKeys) {
+      (nextSettings as unknown as Record<SettingKey, AppSettings[SettingKey]>)[key] = this.compiledSettings[key];
+      provenance[key] = "compiled-in";
+    }
+    this.settings = {
+      ...nextSettings,
+      settingsVersion: this.settings.settingsVersion,
+      settingProvenance: provenance,
+    };
     this.globalSpeedLimiter.setLimit(this.settings.globalSpeedLimitBytes);
-    if (partial.startOnSystemStartup !== undefined && process.platform !== "linux") {
-      app.setLoginItemSettings({ openAtLogin: partial.startOnSystemStartup });
+    if ((validated.startOnSystemStartup !== undefined || resetKeys.includes("startOnSystemStartup")) && process.platform !== "linux") {
+      this.writeLoginItemSettings(this.settings.startOnSystemStartup);
     }
     await this.persist("settings-changed", "Changed application settings");
     this.scheduleNotify();

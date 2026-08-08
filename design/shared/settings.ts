@@ -1,11 +1,13 @@
 import type {
   AppSettings,
   AutoOrganizeRule,
+  AutoOrganizeTargetCategory,
   DensityMode,
   DownloadCategory,
   FunnyLevel,
   LanguageMode,
   SettingKey,
+  SettingsPatch,
   SettingsProvenance,
   UIFontFamily,
   UIFontWeight,
@@ -18,7 +20,7 @@ import {
 } from "./types";
 import { normalizeRegexFlags, validateRegexPattern } from "./regex";
 
-export const SETTINGS_SCHEMA_VERSION = 2;
+export const SETTINGS_SCHEMA_VERSION = 3;
 export const APP_DISPLAY_NAME_MAX_LENGTH = 64;
 
 export const COMPILED_IN_DEFAULTS = {
@@ -86,8 +88,32 @@ export function isBoundedNumber(value: unknown, min: number, max: number): value
   return typeof value === "number" && Number.isFinite(value) && value >= min && value <= max;
 }
 
+export function isValidDefaultSaveFolder(value: unknown): value is string {
+  if (typeof value !== "string" || value.length === 0 || value.length > 32_768 || value.trim() !== value || value.includes("\0")) {
+    return false;
+  }
+  return /^[a-zA-Z]:[\\/]/u.test(value) || /^\\\\[^\\/]+[\\/][^\\/]+/u.test(value);
+}
+
 export function isSettingKey(value: string): value is SettingKey {
   return (SETTING_KEYS as readonly string[]).includes(value);
+}
+
+/** Validate the trusted reset intent separately from renderer-authored values. */
+export function validateSettingResetKeys(value: unknown): SettingKey[] {
+  if (!Array.isArray(value) || value.length > SETTING_KEYS.length) {
+    throw new Error("Invalid setting reset keys");
+  }
+  const keys: SettingKey[] = [];
+  const seen = new Set<SettingKey>();
+  for (const candidate of value) {
+    if (typeof candidate !== "string" || !isSettingKey(candidate) || seen.has(candidate)) {
+      throw new Error("Invalid setting reset keys");
+    }
+    seen.add(candidate);
+    keys.push(candidate);
+  }
+  return keys;
 }
 
 export function isDownloadCategory(value: unknown): value is DownloadCategory {
@@ -102,12 +128,26 @@ export function isDownloadCategory(value: unknown): value is DownloadCategory {
   );
 }
 
+export function isAutoOrganizeTargetCategory(value: unknown): value is AutoOrganizeTargetCategory {
+  return isDownloadCategory(value) && value !== "image";
+}
+
 /** Validate one auto-organize rule with the same bounds the editor enforces. */
 export function isAutoOrganizeRule(value: unknown): value is AutoOrganizeRule {
   if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
   const rule = value as Record<string, unknown>;
+  const ownKeys = Reflect.ownKeys(rule);
+  const expectedKeys = new Set(["id", "name", "pattern", "flags", "category"]);
+  if (ownKeys.length !== expectedKeys.size || ownKeys.some((key) => typeof key !== "string" || !expectedKeys.has(key))) return false;
   if (typeof rule.id !== "string" || rule.id.length === 0 || rule.id.length > 64) return false;
-  if (typeof rule.name !== "string" || rule.name.length > AUTO_ORGANIZE_RULE_NAME_MAX_LENGTH) return false;
+  if (rule.id in Object.prototype) return false;
+  if (
+    typeof rule.name !== "string" ||
+    rule.name.trim().length === 0 ||
+    rule.name.length > AUTO_ORGANIZE_RULE_NAME_MAX_LENGTH
+  ) {
+    return false;
+  }
   if (
     typeof rule.pattern !== "string" ||
     rule.pattern.length === 0 ||
@@ -117,26 +157,28 @@ export function isAutoOrganizeRule(value: unknown): value is AutoOrganizeRule {
   }
   if (typeof rule.flags !== "string" || normalizeRegexFlags(rule.flags) !== rule.flags) return false;
   if (validateRegexPattern(rule.pattern, rule.flags) !== null) return false;
-  return isDownloadCategory(rule.category);
+  return isAutoOrganizeTargetCategory(rule.category);
 }
 
 export function isAutoOrganizeRules(value: unknown): value is AutoOrganizeRule[] {
-  return Array.isArray(value) && value.length <= AUTO_ORGANIZE_RULE_LIMIT && value.every(isAutoOrganizeRule);
+  if (!Array.isArray(value) || value.length > AUTO_ORGANIZE_RULE_LIMIT || !value.every(isAutoOrganizeRule)) return false;
+  return new Set(value.map((rule) => rule.id)).size === value.length;
 }
 
 /** Validate a renderer-originated patch before it reaches live application state. */
-export function validateSettingsPatch(value: unknown): Partial<AppSettings> {
+export function validateSettingsPatch(value: unknown): SettingsPatch {
   if (typeof value !== "object" || value === null || Array.isArray(value)) {
     throw new Error("Invalid settings");
   }
 
   const patch = value as Record<string, unknown>;
+  const normalizedPatch: Record<string, unknown> = {};
   for (const [key, settingValue] of Object.entries(patch)) {
     if (!isSettingKey(key)) throw new Error(`Invalid setting key: ${key}`);
     const valid = (() => {
       switch (key) {
         case "defaultSaveFolder":
-          return typeof settingValue === "string" && settingValue.length <= 32_768;
+          return isValidDefaultSaveFolder(settingValue);
         case "maxConnectionsPerDownload":
         case "maxActiveDownloads":
           return isBoundedNumber(settingValue, 1, 32) && Number.isInteger(settingValue);
@@ -171,6 +213,15 @@ export function validateSettingsPatch(value: unknown): Partial<AppSettings> {
       }
     })();
     if (!valid) throw new Error(`Invalid value for setting: ${key}`);
+    normalizedPatch[key] = key === "autoOrganizeRules"
+      ? (settingValue as AutoOrganizeRule[]).map((rule) => ({
+          id: rule.id,
+          name: rule.name,
+          pattern: rule.pattern,
+          flags: rule.flags,
+          category: rule.category,
+        }))
+      : settingValue;
   }
-  return patch as Partial<AppSettings>;
+  return normalizedPatch as SettingsPatch;
 }

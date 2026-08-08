@@ -125,7 +125,7 @@ test("language exports do not rewrite string values while converting booleans", 
   assert.match(python.content, /"empty": None/);
 });
 
-test("changelog view data validates commit links, filters entries, and stays IPC-serializable", () => {
+test("changelog view data validates commit links, filters entries, and stays IPC-serializable", async () => {
   assert.deepEqual(CHANGELOG_IPC_CHANNELS, {
     GET_VIEW: "changelog:getView",
     EXPORT_VIEW: "changelog:exportView",
@@ -149,21 +149,21 @@ test("changelog view data validates commit links, filters entries, and stays IPC
     },
   ], "https://github.com/Ding-Ding-Projects/material-download-manager");
   const handlers = createChangelogIpcHandlers(store);
-  const view = handlers.getView({ search: "security", regex: false, flags: "" });
+  const view = await handlers.getView({ search: "security", regex: false, flags: "" });
   assert.equal(view.totalEntries, 2);
   assert.equal(view.matchingEntries, 1);
   assert.equal(isChangelogView(view), true);
   assert.equal(view.entries[0].commitUrl, `https://github.com/Ding-Ding-Projects/material-download-manager/commit/${COMMIT_B}`);
   assert.equal(JSON.parse(JSON.stringify(view)).entries[0].commitSha, COMMIT_B);
 
-  const dated = handlers.getView({ dateFrom: "2026-08-05", dateTo: "2026-08-06" });
+  const dated = await handlers.getView({ dateFrom: "2026-08-05", dateTo: "2026-08-06" });
   assert.deepEqual(dated.entries.map((entry) => entry.id), ["v0.2.0-downloads"]);
-  const exported = handlers.exportView({ search: "bounded" }, "json");
+  const exported = await handlers.exportView({ search: "bounded" }, "json");
   assert.equal(exported.metadata.recordCount, 1);
   assert.match(exported.content, new RegExp(COMMIT_A));
 });
 
-test("changelog rejects missing commit identity, unsafe repository URLs, and invalid regex requests", () => {
+test("changelog rejects missing commit identity, unsafe repository URLs, and invalid regex requests", async () => {
   assert.throws(() => new ChangelogStore([{
     id: "missing-sha",
     version: "0.2.0",
@@ -174,6 +174,6 @@ test("changelog rejects missing commit identity, unsafe repository URLs, and inv
   }], "https://github.com/Ding-Ding-Projects/material-download-manager"), /commit SHA/i);
   assert.throws(() => new ChangelogStore([], "https://github.com/owner/repo?token=secret"), /credential-free/i);
   const store = new ChangelogStore([], "https://github.com/owner/repo");
-  assert.throws(() => store.getView({ search: "(", regex: true, flags: "g" }), /regular expression/i);
-  assert.throws(() => store.getView({ dateFrom: "2026-02-30" }), /start date/i);
+  await assert.rejects(() => store.getView({ search: "(", regex: true, flags: "g" }), /regular expression/i);
+  await assert.rejects(() => store.getView({ dateFrom: "2026-02-30" }), /start date/i);
 });

@@ -1098,6 +1098,240 @@ textarea {
   grid-template-columns: 1fr 1fr;
   gap: calc(12px * var(--density-scale, 1));
 }
+.settings-search-results .setting-helper {
+  color: var(--text-secondary);
+}
+
+.auto-organize-settings,
+.auto-organize-rules {
+  min-width: 0;
+  padding: calc(12px * var(--density-scale, 1));
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius);
+  background: var(--bg-input);
+}
+
+.auto-organize-setting-heading,
+.auto-organize-rule-card-heading,
+.auto-organize-rule-builder-toolbar,
+.auto-organize-rule-actions,
+.auto-organize-rule-presets,
+.auto-organize-flags-summary {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+}
+
+.auto-organize-setting-heading,
+.auto-organize-rule-card-heading,
+.auto-organize-rule-builder-toolbar {
+  justify-content: space-between;
+  align-items: flex-start;
+}
+
+.auto-organize-setting-heading > div,
+.auto-organize-rule-card-heading > strong,
+.auto-organize-rule-builder-toolbar > div {
+  min-width: 0;
+}
+
+.auto-organize-rule-builder-toolbar > div {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.auto-organize-rule-builder-toolbar > div > span {
+  overflow-wrap: anywhere;
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.auto-organize-setting-heading .setting-helper {
+  max-width: 42ch;
+  margin: 4px 0 0;
+}
+
+.switch-control {
+  position: relative;
+  width: 64px;
+  min-width: 64px;
+  height: 40px;
+  padding: 0;
+  border: 2px solid var(--border-color-strong);
+  border-radius: 999px;
+  background: var(--bg-dialog);
+  cursor: pointer;
+  transition: background 140ms ease, border-color 140ms ease;
+}
+
+.switch-control > span {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--text-secondary);
+  transition: transform 140ms ease, background 140ms ease;
+}
+
+.switch-control.checked {
+  border-color: var(--accent-purple);
+  background: var(--accent-solid);
+}
+
+.switch-control.checked > span {
+  background: #fff;
+  transform: translateX(24px);
+}
+
+.switch-control:hover {
+  border-color: var(--accent-purple);
+}
+
+.switch-control:focus-visible {
+  outline: 2px solid var(--accent-purple);
+  outline-offset: 2px;
+}
+
+.auto-organize-settings .input,
+.auto-organize-rules .input {
+  min-height: 40px;
+}
+
+.auto-organize-folder-map,
+.auto-organize-rule-list {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.auto-organize-folder-map {
+  max-height: 230px;
+  overflow: auto;
+  padding: 8px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  background: var(--bg-dialog);
+}
+
+.auto-organize-folder-row {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: minmax(90px, 0.35fr) minmax(0, 1fr);
+  gap: 10px;
+  align-items: start;
+}
+
+.auto-organize-folder-row strong {
+  font-size: 12px;
+}
+
+.auto-organize-folder-row code,
+.auto-organize-flags-summary code {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: var(--text-secondary);
+  font-family: "Cascadia Code", "Consolas", monospace;
+  font-size: 11px;
+}
+
+.auto-organize-rule-presets,
+.auto-organize-rule-actions {
+  flex-wrap: wrap;
+}
+
+.auto-organize-empty {
+  padding: 14px;
+  border: 1px dashed var(--border-color-strong);
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  text-align: center;
+}
+
+.auto-organize-rule-list {
+  max-height: min(56vh, 560px);
+  overflow: auto;
+  padding: 2px;
+}
+
+.auto-organize-rule-card {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius);
+  background: var(--bg-dialog);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 10%);
+}
+
+.auto-organize-rule-card.invalid {
+  border-color: var(--status-error);
+}
+
+.auto-organize-rule-card-heading > span {
+  color: var(--text-secondary);
+  font-size: 12px;
+  text-align: right;
+}
+
+.auto-organize-settings .setting-helper,
+.auto-organize-settings .setting-source,
+.auto-organize-rules .setting-helper,
+.auto-organize-rules .setting-source {
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.auto-organize-rules .btn-sm {
+  min-height: 40px;
+}
+
+.auto-organize-rule-grid {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: minmax(0, 1fr) minmax(150px, 0.7fr);
+  gap: 10px;
+}
+
+.auto-organize-pattern-field .field-row > .input {
+  min-width: 0;
+  flex: 1;
+}
+
+.auto-organize-flags-summary {
+  flex-wrap: wrap;
+}
+
+.auto-organize-flags-summary .setting-helper {
+  flex: 1 1 220px;
+}
+
+.auto-organize-rule-builder {
+  min-width: 0;
+  max-height: min(58vh, 620px);
+  overflow: auto;
+  padding: 10px;
+  border: 1px solid var(--border-color-strong);
+  border-radius: var(--radius);
+  background: var(--bg-app);
+  box-shadow: var(--shadow-menu);
+}
+
+.auto-organize-rule-builder-toolbar {
+  position: sticky;
+  top: -10px;
+  z-index: 2;
+  margin: -10px -10px 8px;
+  padding: 10px;
+  border-bottom: 1px solid var(--border-color);
+  background: var(--bg-dialog);
+}
 .history-panel {
   display: flex;
   min-width: 0;
@@ -2631,8 +2865,26 @@ textarea {
 
 @media (max-width: 520px) {
   .field-pair,
-  .settings-level-grid {
+  .settings-level-grid,
+  .auto-organize-rule-grid,
+  .auto-organize-folder-row {
     grid-template-columns: 1fr;
+  }
+  .auto-organize-setting-heading,
+  .auto-organize-rule-card-heading,
+  .auto-organize-rule-builder-toolbar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .auto-organize-rule-card-heading > span {
+    text-align: left;
+  }
+  .auto-organize-pattern-field .field-row {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .auto-organize-pattern-field .field-row > .btn {
+    align-self: flex-start;
   }
   .history-panel-header {
     flex-direction: column;

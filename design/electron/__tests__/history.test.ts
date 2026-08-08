@@ -46,6 +46,21 @@ test("history filters support bounded local regex and export", async () => {
   assert.match(exported.content, /action/);
 });
 
+test("history regex worker errors remain errors for views and exports", async () => {
+  const root = await fsp.mkdtemp(path.join(os.tmpdir(), "mdm-history-regex-error-"));
+  const failedEvaluator = async (_pattern: string, _flags: string, samples: readonly string[]) => samples.map((sample) => ({
+    error: "Regular expression evaluation timed out.",
+    matches: [],
+    truncated: true,
+    normalizedSample: sample,
+  }));
+  const history = new HistoryStore(root, failedEvaluator);
+  await history.appendSnapshot("{\"value\":1}", "created", "Created a searchable record");
+  const filter = { text: "created", regex: true, flags: "i" } as const;
+  await assert.rejects(() => history.listRevisions(filter), /History regular expression evaluation failed:.*timed out/);
+  await assert.rejects(() => history.exportRevisions("jsonl", filter), /History regular expression evaluation failed:.*timed out/);
+});
+
 test("history filter normalization bounds the renderer boundary", () => {
   assert.deepEqual(
     normalizeHistoryFilter({

@@ -12,7 +12,14 @@ Theme, density, accent seed color, UI font family, font size, and weight are
 validated at the persistence boundary, applied live through CSS variables, and
 shown with provenance indicating persisted or compiled-in values. Each listed
 setting has a reset control; the schema is versioned and legacy state migrates
-without spreading invalid values.
+without spreading invalid values. Schema version 3 starts every untouched
+default as compiled-in, marks only an accepted mutation key as persisted, and
+preserves a valid per-key provenance map across reloads.
+Reset uses a separate allowlisted key list: the main process supplies the
+compiled value and compiled-in provenance itself. Resetting a value that already
+equals the default still clears a prior persisted override; Reset all preserves
+the current default save folder and restores every other setting in one local
+history revision.
 
 The Settings dialog has its own local search field. Plain text is the default;
 the adjacent Regex button opens the shared bounded JavaScript RegExp builder.
@@ -25,6 +32,20 @@ nested builder consumes Escape to close only itself and returns focus to the
 Regex button, leaving Settings open. Custom checkbox buttons expose their
 checked state through `role="checkbox"` and `aria-checked`.
 
+The Downloads tab also exposes future category-folder paths and an ordered
+custom-classification rule editor. Each rule owns an anchored regex-only
+builder, keyboard Move up/Move down actions, inline validation, and Escape
+focus restoration. The Settings search index includes live folder, switch,
+derived-path, and rule values rather than only static labels. Invalid rules
+disable Save; each error describes only the name, pattern, destination, or
+whole rule that owns it.
+
+Rule cards form a named ordered list. Inputs, destination selectors, builder
+buttons, move controls, and remove controls include their rule number in the
+accessible name. Reordering keeps focus on a valid move control for the moved
+rule and announces its new position; removal returns focus to the next or
+previous rule, or to Add when the list becomes empty.
+
 The dialog's outer layout uses non-interactive containers around reset and
 action controls, so controls are never nested inside a form label. At a 520
 CSS-pixel viewport the field and funny-level grids collapse to one column and
@@ -32,27 +53,35 @@ the smoke check rejects horizontal overflow.
 
 ## Configuration
 
-The authoritative defaults and validators are in design/shared/settings.ts.
-StateStore migrates state.json, and useAppStore marks changed keys persisted
-before the main process saves them. Font stacks use safe installed/bundled
+The authoritative defaults and validators are in `design/shared/settings.ts`.
+`StateStore` migrates `state.json`. The renderer sends only editable setting
+keys, the main process validates and clones accepted values, and persistence
+updates provenance per accepted key. The default save folder must be an
+absolute Windows drive or UNC path. Font stacks use safe installed/bundled
 fallbacks and do not fetch remote assets.
+
+Schema-v2 settings preserve valid provenance while migrating to v3. Recoverable
+legacy auto-organize rules are canonicalized one by one, including deterministic
+name/identifier repair and `image` to General mapping, so one old rule cannot
+erase unrelated valid rules.
 
 ## Failure modes and security
 
-Invalid enum, number, or color values fall back to the compiled-in value.
-Unknown persisted keys are ignored. Migration never executes persisted text as
-code and does not send settings over the network.
+Invalid enum, number, color, folder, or exact-shape rule values fail validation
+or fall back safely during migration. Unknown persisted keys are ignored.
+Migration never executes persisted text as code and does not send settings over
+the network. User-authored settings-search and rule-builder expressions run in
+terminable main-process workers rather than on the renderer event loop.
 
 ## Verification
 
-design/electron/download/__tests__/persistence.test.ts covers defaults,
-provenance, legacy migration, malformed input, and round-trip persistence.
-The built-artifact UI smoke covers the four Settings tabs, tab keyboard
-navigation, per-tab search, the anchored regex builder, Escape focus
-restoration, interactive-label structure, and the narrow layout. The Electron
-suite also rejects unknown and non-finite renderer settings patches. Run npm
-run test:engine, npm run build, npm run test:electron, and npm run test:ui from
-design/.
+The verification gate covers defaults, per-key provenance, legacy migration,
+malformed input, exact rule shape, absolute folder paths, dynamic plain-text
+and regex search, the anchored worker-backed builder, native keyboard reorder,
+move/remove focus, field-specific error association, interactive-label
+structure, contrast, and narrow bilingual layout. Run `npm run test:engine`,
+`npm run build`, `npm run test:electron`, and `npm run test:ui` from `design/`.
+Final command results and remote evidence belong in the project handoff.
 
 The remaining product-level work is explicit: apply localized/funny copy to
 every renderer message and replace the current color input with the full
@@ -63,3 +92,4 @@ continuous translator/editor required by the product policy.
 - Regex builder: ../search/regex-builder.md
 - Tabbed navigation: ../navigation/tabbed-navigation.md
 - Renderer accessibility: ../accessibility/renderer-accessibility.md
+- Auto-organize downloads: ../download-engine/auto-organize-downloads.md

@@ -1,5 +1,6 @@
-import { evaluateRegex, validateRegexPattern } from "../../shared/regex";
+import { validateRegexPattern } from "../../shared/regex";
 import { exportRecords, isExportFormat, type ExportFormat, type ExportResult } from "../../shared/export";
+import { evaluateRegexBatchIsolated } from "../regex/RegexWorkerClient";
 
 export const CHANGELOG_SCHEMA_VERSION = 1 as const;
 export const CHANGELOG_IPC_CHANNELS = {
@@ -16,6 +17,71 @@ export const CHANGELOG_REPOSITORY_URL = "https://github.com/Ding-Ding-Projects/m
  * the store derives the credential-free commit URL.
  */
 export const DEFAULT_CHANGELOG_ENTRIES: readonly ChangelogEntry[] = [
+  {
+    id: "v0.1.44",
+    version: "0.1.44",
+    releaseDate: "2026-08-07",
+    title: "v0.1.44 — Steamed Squid with Garlic Vermicelli · 蒜蓉粉絲蒸魷魚",
+    changes: [
+      { category: "Release", text: "Published as a stable, non-draft, non-prerelease release with intentionally unsigned Squirrel.Windows artifacts." },
+      { category: "Code name", text: "Steamed Squid with Garlic Vermicelli · 蒜蓉粉絲蒸魷魚" },
+      { category: "Handoff", text: "Recorded the verified auto-organize engine branch and its remaining Settings UI, documentation, and screenshot work in issue #11." },
+      { category: "Source", text: "Release metadata identifies commit 58477373899251d2c9c569559961badb28b94243." },
+    ],
+    commitSha: "58477373899251d2c9c569559961badb28b94243",
+  },
+  {
+    id: "v0.1.43",
+    version: "0.1.43",
+    releaseDate: "2026-08-07",
+    title: "v0.1.43 — Steamed Tofu with Dried Scallop · 瑤柱蒸豆腐",
+    changes: [
+      { category: "Release", text: "Published as a stable, non-draft, non-prerelease release with intentionally unsigned Squirrel.Windows artifacts." },
+      { category: "Code name", text: "Steamed Tofu with Dried Scallop · 瑤柱蒸豆腐" },
+      { category: "Engine", text: "Added the auto-organize engine for six category folders and bounded custom regular-expression rules, with the Settings UI explicitly left for the recorded handoff." },
+      { category: "Source", text: "Release metadata identifies commit faf94df12007b205ceb30cf8d05a9d3adbb37a74." },
+    ],
+    commitSha: "faf94df12007b205ceb30cf8d05a9d3adbb37a74",
+  },
+  {
+    id: "v0.1.42",
+    version: "0.1.42",
+    releaseDate: "2026-08-07",
+    title: "v0.1.42 — Steamed Egg with Dried Scallop · 瑤柱蒸水蛋",
+    changes: [
+      { category: "Release", text: "Published as a stable, non-draft, non-prerelease release with intentionally unsigned Squirrel.Windows artifacts." },
+      { category: "Code name", text: "Steamed Egg with Dried Scallop · 瑤柱蒸水蛋" },
+      { category: "Build", text: "Default-branch release of the narrow-site tab-rail correction that keeps mobile layouts within the viewport." },
+      { category: "Source", text: "Release metadata identifies commit a5a78b9bf896e4c63398977681281d60c6764d4b." },
+    ],
+    commitSha: "a5a78b9bf896e4c63398977681281d60c6764d4b",
+  },
+  {
+    id: "v0.1.41",
+    version: "0.1.41",
+    releaseDate: "2026-08-07",
+    title: "v0.1.41 — Steamed Beef Patty with Tangerine Peel · 陳皮蒸牛肉餅",
+    changes: [
+      { category: "Release", text: "Published as a stable, non-draft, non-prerelease release with intentionally unsigned Squirrel.Windows artifacts." },
+      { category: "Code name", text: "Steamed Beef Patty with Tangerine Peel · 陳皮蒸牛肉餅" },
+      { category: "Layout", text: "Made the mobile site tab rail stretch to the viewport and scroll internally instead of inflating narrow pages to roughly 700 pixels." },
+      { category: "Source", text: "Release metadata identifies commit a5a78b9bf896e4c63398977681281d60c6764d4b." },
+    ],
+    commitSha: "a5a78b9bf896e4c63398977681281d60c6764d4b",
+  },
+  {
+    id: "v0.1.40",
+    version: "0.1.40",
+    releaseDate: "2026-08-07",
+    title: "v0.1.40 — Steamed Pork Patty with Salted Egg · 鹹蛋蒸肉餅",
+    changes: [
+      { category: "Release", text: "Published as a stable, non-draft, non-prerelease release with intentionally unsigned Squirrel.Windows artifacts." },
+      { category: "Code name", text: "Steamed Pork Patty with Salted Egg · 鹹蛋蒸肉餅" },
+      { category: "Changelog", text: "Brought the offline changelog through v0.1.39 and recorded the self-healing Electron bootstrap verification evidence." },
+      { category: "Source", text: "Release metadata identifies commit 28a821167fb4f9c88393e2d9540e2b3f9a068152." },
+    ],
+    commitSha: "28a821167fb4f9c88393e2d9540e2b3f9a068152",
+  },
   {
     id: "v0.1.39",
     version: "0.1.39",
@@ -672,9 +738,7 @@ function matches(entry: ChangelogEntry, request: ChangelogViewRequest): boolean 
   if (request.dateTo && entry.releaseDate > request.dateTo) return false;
   if (!request.search) return true;
   const haystack = entrySearchText(entry);
-  if (!request.regex) return haystack.toLocaleLowerCase().includes(request.search.toLocaleLowerCase());
-  const result = evaluateRegex(request.search, request.flags || "gi", haystack);
-  return !result.error && result.matches.length > 0;
+  return request.regex || haystack.toLocaleLowerCase().includes(request.search.toLocaleLowerCase());
 }
 
 function cloneEntry(entry: ChangelogEntry, repositoryUrl: string): ChangelogViewEntry {
@@ -689,7 +753,11 @@ export class ChangelogStore {
   private readonly entries: ChangelogEntry[];
   private readonly repositoryUrl: string;
 
-  constructor(entries: unknown, repositoryUrl: string) {
+  constructor(
+    entries: unknown,
+    repositoryUrl: string,
+    private readonly evaluateRegexBatch = evaluateRegexBatchIsolated
+  ) {
     this.entries = parseChangelogEntries(entries);
     this.repositoryUrl = normalizeRepositoryUrl(repositoryUrl);
   }
@@ -698,9 +766,19 @@ export class ChangelogStore {
     return this.entries.map((entry) => cloneEntry(entry, this.repositoryUrl));
   }
 
-  getView(request: unknown = undefined): ChangelogView {
+  async getView(request: unknown = undefined): Promise<ChangelogView> {
     const normalized = normalizeChangelogViewRequest(request);
-    const entries = this.entries.filter((entry) => matches(entry, normalized));
+    let entries = this.entries.filter((entry) => matches(entry, normalized));
+    if (normalized.regex && normalized.search && entries.length > 0) {
+      const evaluations = await this.evaluateRegexBatch(
+        normalized.search,
+        normalized.flags,
+        entries.map(entrySearchText)
+      );
+      const evaluationError = evaluations.find((evaluation) => evaluation.error)?.error;
+      if (evaluationError) throw new Error(`Changelog regular expression evaluation failed: ${evaluationError}`);
+      entries = entries.filter((_, index) => (evaluations[index]?.matches.length ?? 0) > 0);
+    }
     return {
       schemaVersion: CHANGELOG_SCHEMA_VERSION,
       entries: entries.map((entry) => cloneEntry(entry, this.repositoryUrl)),
@@ -715,9 +793,9 @@ export class ChangelogStore {
     };
   }
 
-  exportView(format: ExportFormat, request: unknown = undefined): ExportResult {
+  async exportView(format: ExportFormat, request: unknown = undefined): Promise<ExportResult> {
     if (!isExportFormat(format)) throw new Error("Invalid changelog export format");
-    const view = this.getView(request);
+    const view = await this.getView(request);
     return exportRecords(view.entries.map((entry) => ({
       id: entry.id,
       version: entry.version,
@@ -731,8 +809,8 @@ export class ChangelogStore {
 }
 
 export interface ChangelogIpcHandlers {
-  getView(request: unknown): ChangelogView;
-  exportView(request: unknown, format: unknown): ExportResult;
+  getView(request: unknown): Promise<ChangelogView>;
+  exportView(request: unknown, format: unknown): Promise<ExportResult>;
 }
 
 /**

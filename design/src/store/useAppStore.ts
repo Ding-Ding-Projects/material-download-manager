@@ -6,8 +6,10 @@ import type {
   DownloadItem,
   DownloadQueue,
   NewDownloadInfo,
+  SettingKey,
+  SettingsPatch,
 } from "@shared/types";
-import { applyAppearanceSettings, withPersistedProvenance } from "./settingsAppearance";
+import { applyAppearanceSettings } from "./settingsAppearance";
 
 export type SidebarFilter =
   | { kind: "all" }
@@ -29,7 +31,7 @@ interface DialogsState {
   detailsItemId: string | null;
 }
 
-export type SettingsFocus = "language" | "appearance" | null;
+export type SettingsFocus = "language" | "appearance" | "downloads" | "auto-organize" | "auto-organize-rules" | "advanced" | null;
 
 interface AppState {
   // live data, mirrored from the main process
@@ -74,6 +76,7 @@ interface AppState {
   // window.api action wrappers
   addDownload: (req: AddDownloadRequest) => Promise<string>;
   probeUrl: (url: string) => Promise<NewDownloadInfo>;
+  previewCategory: (fileName: string, url: string) => Promise<DownloadCategory>;
   pauseDownload: (id: string) => Promise<void>;
   resumeDownload: (id: string) => Promise<void>;
   cancelDownload: (id: string) => Promise<void>;
@@ -82,7 +85,7 @@ interface AppState {
   openFile: (id: string) => Promise<void>;
   openFolder: (id: string) => Promise<void>;
   getSettings: () => Promise<AppSettings>;
-  setSettings: (settings: Partial<AppSettings>) => Promise<AppSettings>;
+  setSettings: (settings: SettingsPatch, resetKeys?: SettingKey[]) => Promise<AppSettings>;
   createQueue: (queue: Partial<DownloadQueue>) => Promise<DownloadQueue>;
   updateQueue: (queue: DownloadQueue) => Promise<void>;
   deleteQueue: (id: string) => Promise<void>;
@@ -175,6 +178,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     return id;
   },
   probeUrl: (url) => window.api.probeUrl(url),
+  previewCategory: (fileName, url) => window.api.previewCategory(fileName, url),
   pauseDownload: (id) => window.api.pauseDownload(id),
   resumeDownload: (id) => window.api.resumeDownload(id),
   cancelDownload: (id) => window.api.cancelDownload(id),
@@ -183,10 +187,8 @@ export const useAppStore = create<AppState>((set, get) => ({
   openFile: (id) => window.api.openFile(id),
   openFolder: (id) => window.api.openFolder(id),
   getSettings: () => window.api.getSettings(),
-  setSettings: async (settings) => {
-    const updated = await window.api.setSettings(
-      withPersistedProvenance(get().settings, settings)
-    );
+  setSettings: async (settings, resetKeys = []) => {
+    const updated = await window.api.setSettings(settings, resetKeys);
     applyAppearanceSettings(updated);
     set({ settings: updated });
     return updated;

@@ -97,10 +97,10 @@
   --status-downloading: #3f7ae0;
   --status-paused: #b9760f;
   --status-finished: #1c1d25;
-  --status-error: #d5453f;
+  --status-error: #b3261e;
   --status-added: #63667a;
 
-  --danger: #d5453f;
+  --danger: #b3261e;
   --success: #1e9e53;
 
   --radius-sm: 4px;
@@ -155,9 +155,9 @@
     --status-downloading: #3f7ae0;
     --status-paused: #b9760f;
     --status-finished: #1c1d25;
-    --status-error: #d5453f;
+    --status-error: #b3261e;
     --status-added: #63667a;
-    --danger: #d5453f;
+    --danger: #b3261e;
     --success: #1e9e53;
   }
 }

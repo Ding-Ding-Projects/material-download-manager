@@ -7,6 +7,9 @@ import net from "node:net";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { promisify } from "node:util";
+
+const execFileAsync = promisify(execFile);
 
 const SCRIPT_DIRECTORY = path.dirname(fileURLToPath(import.meta.url));
 const DEFAULT_APP_DIRECTORY = path.resolve(SCRIPT_DIRECTORY, "..");
@@ -17,17 +20,31 @@ const RUNTIME_CHECK_IDS = [
   "cdp-connected",
   "renderer-root-mounted",
   "feature-surface-mounted",
+  "tab-strip-no-overlap",
+  "tab-search-builders",
   "history-panel",
+  "history-action-error-separation",
+  "changelog-action-error-separation",
   "progress-window",
   "settings-open",
   "settings-dialog-a11y",
+  "settings-auto-organize-ui",
+  "settings-auto-organize-regex-focus",
+  "settings-auto-organize-contrast",
+  "settings-auto-organize-invalid-save",
+  "settings-auto-organize-save-persistence",
+  "settings-auto-organize-search-targets",
   "settings-narrow-layout",
+  "settings-auto-organize-narrow-bilingual",
   "settings-tabs",
   "settings-search-control",
   "settings-search-interaction",
   "settings-regex-builder",
   "escape-closes-builder-and-restores-focus",
   "settings-dialog-escape",
+  "settings-auto-organize-command-palette",
+  "settings-auto-organize-preview-ipc",
+  "settings-reset-provenance",
 ];
 
 function usage() {
@@ -687,14 +704,14 @@ async function waitForPage(client, expression, label, timeoutMs) {
 
 const PAGE_A11Y_HELPERS = String.raw`
   function normalise(value) {
-    return String(value ?? "").replace(/\\s+/g, " ").trim();
+    return String(value ?? "").replace(/\s+/g, " ").trim();
   }
   function accessibleName(element) {
     const ariaLabel = element.getAttribute("aria-label");
     if (ariaLabel) return normalise(ariaLabel);
     const labelledBy = element.getAttribute("aria-labelledby");
     if (labelledBy) {
-      const labelledText = labelledBy.split(/\\s+/).map((id) => document.getElementById(id)?.textContent ?? "").join(" ");
+      const labelledText = labelledBy.split(/\s+/).map((id) => document.getElementById(id)?.textContent ?? "").join(" ");
       if (normalise(labelledText)) return normalise(labelledText);
     }
     if (element instanceof HTMLInputElement || element instanceof HTMLTextAreaElement || element instanceof HTMLSelectElement) {
@@ -712,6 +729,23 @@ const PAGE_A11Y_HELPERS = String.raw`
   function findByRole(role, name, root = document) {
     const selector = role === "button" ? "button,[role=button]" : "[role=\"" + role + "\"]";
     return [...root.querySelectorAll(selector)].find((element) => isVisible(element) && accessibleName(element) === name) ?? null;
+  }
+  function contrastRatio(foreground, background) {
+    function channels(value) {
+      const parts = String(value).match(/[0-9.]+/g)?.slice(0, 3).map(Number);
+      if (!parts || parts.length !== 3) throw new Error("Cannot parse computed color " + JSON.stringify(value));
+      return parts.map((part) => {
+        const channel = part / 255;
+        return channel <= 0.04045 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4;
+      });
+    }
+    const foregroundChannels = channels(foreground);
+    const backgroundChannels = channels(background);
+    const foregroundLuminance = 0.2126 * foregroundChannels[0] + 0.7152 * foregroundChannels[1] + 0.0722 * foregroundChannels[2];
+    const backgroundLuminance = 0.2126 * backgroundChannels[0] + 0.7152 * backgroundChannels[1] + 0.0722 * backgroundChannels[2];
+    const lighter = Math.max(foregroundLuminance, backgroundLuminance);
+    const darker = Math.min(foregroundLuminance, backgroundLuminance);
+    return (lighter + 0.05) / (darker + 0.05);
   }
 `;
 
@@ -752,21 +786,42 @@ async function setInputValue(client, selector, value) {
   })()`);
 }
 
-async function dispatchEscape(client) {
+async function setSelectValue(client, selector, value) {
+  await client.evaluate(`(() => {
+    const element = document.querySelector(${pageSelector(selector)});
+    if (!(element instanceof HTMLSelectElement)) throw new Error("Select control was not found");
+    const setter = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value")?.set;
+    if (!setter) throw new Error("Select value setter is unavailable");
+    setter.call(element, ${JSON.stringify(value)});
+    element.dispatchEvent(new Event("input", { bubbles: true }));
+    element.dispatchEvent(new Event("change", { bubbles: true }));
+    element.focus();
+    return element.value;
+  })()`);
+}
+
+async function dispatchKey(client, key, code, virtualKeyCode) {
+  const text = key === "Enter" ? "\r" : key === " " ? " " : "";
   await client.send("Input.dispatchKeyEvent", {
-    type: "keyDown",
-    key: "Escape",
-    code: "Escape",
-    windowsVirtualKeyCode: 27,
-    nativeVirtualKeyCode: 27,
+    type: text ? "keyDown" : "rawKeyDown",
+    key,
+    code,
+    text,
+    unmodifiedText: text,
+    windowsVirtualKeyCode: virtualKeyCode,
+    nativeVirtualKeyCode: virtualKeyCode,
   });
   await client.send("Input.dispatchKeyEvent", {
     type: "keyUp",
-    key: "Escape",
-    code: "Escape",
-    windowsVirtualKeyCode: 27,
-    nativeVirtualKeyCode: 27,
+    key,
+    code,
+    windowsVirtualKeyCode: virtualKeyCode,
+    nativeVirtualKeyCode: virtualKeyCode,
   });
+}
+
+async function dispatchEscape(client) {
+  await dispatchKey(client, "Escape", "Escape", 27);
 }
 
 async function captureScreenshot(client, screenshotPath) {
@@ -832,8 +887,88 @@ function makeSummary(result) {
   return `${result.status.toUpperCase()}: ${passed} passed, ${failed} failed; ${result.checks.length} required checks recorded`;
 }
 
-async function stopProcess(launch, timeoutMs) {
+async function listWindowsProcessesByMarker(marker) {
+  const script = [
+    "$marker = $env:MDM_SMOKE_PROCESS_MARKER",
+    "$processes = @(Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -and $_.CommandLine.IndexOf($marker, [System.StringComparison]::OrdinalIgnoreCase) -ge 0 } | Select-Object ProcessId, ParentProcessId, Name)",
+    "$processes | ConvertTo-Json -Compress",
+  ].join("; ");
+  const { stdout } = await execFileAsync("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", script], {
+    env: { ...process.env, MDM_SMOKE_PROCESS_MARKER: marker },
+    windowsHide: true,
+    timeout: 10_000,
+    maxBuffer: 1024 * 1024,
+  });
+  const trimmed = stdout.trim();
+  if (!trimmed) return [];
+  const parsed = JSON.parse(trimmed);
+  const rows = Array.isArray(parsed) ? parsed : [parsed];
+  return rows.map((row) => ({
+    pid: Number(row.ProcessId),
+    parentPid: Number(row.ParentProcessId),
+    name: String(row.Name ?? ""),
+  })).filter((row) => Number.isSafeInteger(row.pid) && row.pid > 0);
+}
+
+async function terminateWindowsProcessTree(pid) {
+  await new Promise((resolve) => {
+    execFile("taskkill", ["/PID", String(pid), "/T", "/F"], { windowsHide: true }, () => resolve());
+  });
+}
+
+async function waitForWindowsMarkerExit(marker, timeoutMs) {
+  const deadline = Date.now() + timeoutMs;
+  let processes = await listWindowsProcessesByMarker(marker);
+  while (processes.length > 0 && Date.now() < deadline) {
+    await sleep(100);
+    processes = await listWindowsProcessesByMarker(marker);
+  }
+  return processes;
+}
+
+async function stopProcess(launch, timeoutMs, processMarker) {
   if (!launch) return { terminated: true, method: "not-started", exit: null };
+
+  if (process.platform === "win32" && processMarker) {
+    try {
+      const observed = await listWindowsProcessesByMarker(processMarker);
+      const mainPid = launch.child.pid ?? null;
+      if (mainPid && launch.child.exitCode === null && launch.child.signalCode === null) {
+        await terminateWindowsProcessTree(mainPid);
+      } else {
+        for (const processInfo of observed) await terminateWindowsProcessTree(processInfo.pid);
+      }
+      const exited = await Promise.race([
+        launch.exit.then((value) => ({ done: true, value })),
+        sleep(Math.min(timeoutMs, 3_000)).then(() => ({ done: false })),
+      ]);
+      let survivors = await waitForWindowsMarkerExit(processMarker, Math.min(timeoutMs, 3_000));
+      if (survivors.length > 0) {
+        for (const processInfo of survivors) await terminateWindowsProcessTree(processInfo.pid);
+        survivors = await waitForWindowsMarkerExit(processMarker, Math.min(timeoutMs, 3_000));
+      }
+      return {
+        terminated: survivors.length === 0,
+        method: "verified-tree",
+        exit: exited.done ? exited.value : null,
+        evidence: {
+          mainPid,
+          childExitObserved: exited.done,
+          observedProcessIds: observed.map((processInfo) => processInfo.pid),
+          survivingProcessIds: survivors.map((processInfo) => processInfo.pid),
+          marker: processMarker,
+        },
+      };
+    } catch (error) {
+      return {
+        terminated: false,
+        method: "tree-verification-failed",
+        exit: null,
+        evidence: { marker: processMarker, error: formatError(error) },
+      };
+    }
+  }
+
   const alreadyExited = launch.child.exitCode !== null || launch.child.signalCode !== null;
   if (alreadyExited) return { terminated: true, method: "already-exited", exit: await launch.exit };
 
@@ -1039,6 +1174,110 @@ async function main(argv) {
       return { tabStripMounted: Boolean(tabList), tabs, fallbackSurface: tabList ? null : "toolbar + Settings" };
     `)));
 
+    await runCheck(result, "tab-strip-no-overlap", async () => cdp.evaluate(pageExpression(`
+      const strip = document.querySelector('[role="tablist"][aria-label="Open tabs"]');
+      if (!strip) throw new Error("Open tabs strip is missing");
+      const controls = [...strip.querySelectorAll(".app-tab,.tab-search-toggle,.tab-group-toggle,.tab-group-action")]
+        .filter(isVisible)
+        .map((control) => ({ control, name: accessibleName(control), box: control.getBoundingClientRect() }));
+      const overlaps = [];
+      for (let left = 0; left < controls.length; left += 1) {
+        for (let right = left + 1; right < controls.length; right += 1) {
+          const a = controls[left];
+          const b = controls[right];
+          const width = Math.min(a.box.right, b.box.right) - Math.max(a.box.left, b.box.left);
+          const height = Math.min(a.box.bottom, b.box.bottom) - Math.max(a.box.top, b.box.top);
+          if (width > 1 && height > 1) overlaps.push({ first: a.name, second: b.name, width, height });
+        }
+      }
+      if (overlaps.length > 0) throw new Error("tab strip controls overlap: " + JSON.stringify(overlaps.slice(0, 8)));
+      return { controls: controls.length, overlaps: 0, scrollable: strip.scrollWidth > strip.clientWidth };
+    `)));
+
+    await runCheck(result, "tab-search-builders", async () => {
+      await clickByRole(cdp, "button", "Search tabs", '[role="tablist"][aria-label="Open tabs"]');
+      await waitForPage(cdp, `document.querySelectorAll(".tab-search-control").length === 4`, "four tab discovery searches", options.timeoutMs);
+      const toggles = await cdp.evaluate(pageExpression(`
+        const buttons = [...document.querySelectorAll(".tab-search-control .tab-search-input-row button")].filter(isVisible);
+        const names = buttons.map(accessibleName);
+        if (buttons.length !== 4 || new Set(names).size !== 4) throw new Error("tab discovery Regex toggles are not four unique controls: " + JSON.stringify(names));
+        return names;
+      `));
+
+      await clickByRole(cdp, "button", "Current tab strip regex builder", ".tab-search-control");
+      await waitForPage(cdp, `Boolean(document.querySelector(".tab-search-control .regex-builder"))`, "current-strip regex builder", options.timeoutMs);
+      await cdp.evaluate(pageExpression(`
+        const control = document.querySelectorAll(".tab-search-control")[0];
+        const regexMode = [...control.querySelectorAll('.regex-builder input[type="radio"]')].find((input) => /Regular expression/.test(accessibleName(input)));
+        if (!(regexMode instanceof HTMLInputElement)) throw new Error("current-strip builder has no Regex mode");
+        regexMode.click();
+      `));
+      await setInputValue(cdp, 'input[aria-label="Current tab strip search"]', "[");
+      await waitForPage(cdp, `Boolean(document.querySelectorAll(".tab-search-control")[0]?.querySelector('.field-error[role="alert"]'))`, "tab-search invalid-regex alert", options.timeoutMs);
+      await setInputValue(cdp, 'input[aria-label="Current tab strip search"]', "zzzz-no-tab-result");
+      await waitForPage(cdp, `Boolean(document.querySelectorAll(".tab-search-control")[0]?.querySelector('.tab-search-empty[role="status"]'))`, "tab-search settled no-match status", options.timeoutMs);
+      const states = await cdp.evaluate(pageExpression(`
+        const control = document.querySelectorAll(".tab-search-control")[0];
+        const empty = control?.querySelector('.tab-search-empty[role="status"]');
+        if (!(empty instanceof HTMLElement) || !/No current tab strip results match/.test(empty.textContent ?? "")) throw new Error("tab-search no-match status is missing or vague");
+        return { invalidAlert: true, noMatch: empty.textContent?.trim() ?? "" };
+      `));
+      await dispatchEscape(cdp);
+      await waitForPage(cdp, `!document.querySelectorAll(".tab-search-control")[0]?.querySelector(".regex-builder") && document.activeElement?.getAttribute("aria-label") === "Current tab strip regex builder"`, "tab builder Escape focus", options.timeoutMs);
+
+      await clickByRole(cdp, "button", "Current tab strip regex builder", ".tab-search-panel");
+      await clickByRole(cdp, "button", "Current tab group regex builder", ".tab-search-panel");
+      await waitForPage(cdp, `document.querySelectorAll(".tab-search-control .regex-builder").length === 2`, "two independently open tab builders", options.timeoutMs);
+      const uniqueness = await cdp.evaluate(pageExpression(`
+        const controls = [...document.querySelectorAll(".tab-search-control .regex-builder input,.tab-search-control .regex-builder textarea,.tab-search-control .regex-builder button")].filter(isVisible);
+        const names = controls.map(accessibleName);
+        const blanks = names.filter((name) => !name);
+        const duplicates = [...new Set(names.filter((name, index) => names.indexOf(name) !== index))];
+        if (blanks.length || duplicates.length) throw new Error("simultaneous tab builders have blank/duplicate control names: " + JSON.stringify({ blanks, duplicates }));
+        return { visibleBuilders: 2, interactiveControls: names.length, uniqueNames: names.length };
+      `));
+      await cdp.evaluate(`document.querySelectorAll(".tab-search-control")[1]?.querySelector(".regex-pattern")?.focus()`);
+      await dispatchEscape(cdp);
+      await waitForPage(
+        cdp,
+        `document.querySelectorAll(".tab-search-control .regex-builder").length === 1 && document.activeElement?.getAttribute("aria-label") === "Current tab group regex builder"`,
+        "close second simultaneous tab builder and restore focus",
+        options.timeoutMs
+      );
+      await cdp.evaluate(`document.querySelectorAll(".tab-search-control")[0]?.querySelector(".regex-pattern")?.focus()`);
+      await dispatchEscape(cdp);
+      await waitForPage(
+        cdp,
+        `document.querySelectorAll(".tab-search-control .regex-builder").length === 0 && document.activeElement?.getAttribute("aria-label") === "Current tab strip regex builder"`,
+        "close simultaneous tab builders",
+        options.timeoutMs
+      );
+
+      await clickByRole(cdp, "button", "New group", '[role="tablist"][aria-label="Open tabs"]');
+      await waitForPage(cdp, `Boolean(document.querySelector('.tab-group-picker[role="dialog"]'))`, "tab group picker", options.timeoutMs);
+      await clickByRole(cdp, "button", "Search groups regex builder", ".tab-group-picker");
+      await waitForPage(cdp, `Boolean(document.querySelector(".tab-group-picker .regex-builder"))`, "group-picker regex builder", options.timeoutMs);
+      await dispatchEscape(cdp);
+      await waitForPage(cdp, `!document.querySelector(".tab-group-picker .regex-builder") && document.activeElement?.getAttribute("aria-label") === "Search groups regex builder"`, "group-picker builder Escape focus", options.timeoutMs);
+      await clickByRole(cdp, "button", "Close", ".tab-group-picker");
+
+      await cdp.evaluate(pageExpression(`
+        const tab = findByRole("tab", "Downloads", document.querySelector('[role="tablist"][aria-label="Open tabs"]'));
+        if (!(tab instanceof HTMLElement)) throw new Error("Downloads tab is unavailable for context-menu search");
+        tab.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true, clientX: 180, clientY: 40 }));
+      `));
+      await waitForPage(cdp, `Boolean(document.querySelector('.tab-context-menu[role="menu"]'))`, "tab context menu", options.timeoutMs);
+      await clickByRole(cdp, "button", "Search tab actions regex builder", ".tab-context-menu");
+      await waitForPage(cdp, `Boolean(document.querySelector(".tab-context-menu .regex-builder"))`, "tab-context regex builder", options.timeoutMs);
+      await dispatchEscape(cdp);
+      await waitForPage(cdp, `!document.querySelector(".tab-context-menu .regex-builder") && document.activeElement?.getAttribute("aria-label") === "Search tab actions regex builder"`, "tab-context builder Escape focus", options.timeoutMs);
+      await clickByRole(cdp, "button", "Close", ".tab-context-menu");
+
+      await clickByRole(cdp, "button", "Search tabs", '[role="tablist"][aria-label="Open tabs"]');
+      await waitForPage(cdp, `!document.querySelector(".tab-search-panel")`, "close tab discovery searches", options.timeoutMs);
+      return { toggles, states, uniqueness, groupPickerBuilder: true, contextMenuBuilder: true, escapeFocus: true };
+    });
+
     await runCheck(result, "documentation-panel", async () => {
       await clickByRole(cdp, "tab", "Documentation");
       await waitForPage(cdp, `Boolean(document.querySelector("#documentation-panel-heading"))`, "Documentation tab surface", options.timeoutMs);
@@ -1135,6 +1374,64 @@ async function main(argv) {
       return evidence;
     });
 
+    await runCheck(result, "history-action-error-separation", async () => {
+      await clickByRole(cdp, "tab", "History");
+      await waitForPage(cdp, `Boolean(document.querySelector("#history-panel-heading")) && !document.querySelector(".history-empty[role=status]")`, "loaded History action surface", options.timeoutMs);
+      await setSelectValue(cdp, ".history-format-field select", "");
+      await clickByRole(cdp, "button", "Export filtered history");
+      await waitForPage(cdp, `Boolean(document.querySelector("#history-export-error"))`, "History export action error", options.timeoutMs);
+      const failure = await cdp.evaluate(pageExpression(`
+        const search = document.querySelector('input[aria-label="Search history"]');
+        const actionError = document.getElementById("history-export-error");
+        const filterError = document.getElementById("history-filter-error");
+        const retry = findByRole("button", "Retry history export", actionError ?? document);
+        if (!(search instanceof HTMLInputElement) || !actionError || !retry) throw new Error("History action error or retry control is missing");
+        if (search.getAttribute("aria-invalid") === "true") throw new Error("History export failure incorrectly marks search invalid");
+        if (search.getAttribute("aria-describedby") === "history-export-error") throw new Error("History search is described by an action failure");
+        if (filterError) throw new Error("History export failure incorrectly rendered as a filter failure");
+        return { searchInvalid: false, actionAlert: actionError.textContent?.replace(/\\s+/g, " ").trim(), retry: accessibleName(retry) };
+      `));
+      await setSelectValue(cdp, ".history-format-field select", "jsonl");
+      await clickByRole(cdp, "button", "Retry history export", "#history-export-error");
+      await waitForPage(cdp, `!document.querySelector("#history-export-error") && /Exported .* revision records/i.test(document.querySelector('.history-status[role="status"]')?.textContent ?? "")`, "successful History export retry", options.timeoutMs);
+      const recovery = await cdp.evaluate(pageExpression(`
+        const status = document.querySelector('.history-status[role="status"]');
+        if (!status) throw new Error("History export success status is missing after retry");
+        return status.textContent?.replace(/\\s+/g, " ").trim() ?? "";
+      `));
+      await clickByRole(cdp, "tab", "Downloads");
+      return { failure, recovery };
+    });
+
+    await runCheck(result, "changelog-action-error-separation", async () => {
+      await clickByRole(cdp, "tab", "Changelog");
+      await waitForPage(cdp, `Boolean(document.querySelector("#changelog-panel-heading")) && !document.querySelector(".changelog-empty[role=status]")`, "loaded Changelog action surface", options.timeoutMs);
+      await setSelectValue(cdp, 'select[aria-label="Changelog export format"]', "");
+      await clickByRole(cdp, "button", "Export filtered");
+      await waitForPage(cdp, `Boolean(document.querySelector("#changelog-action-error"))`, "Changelog export action error", options.timeoutMs);
+      const failure = await cdp.evaluate(pageExpression(`
+        const search = document.querySelector('input[aria-label="Search changelog"]');
+        const actionError = document.getElementById("changelog-action-error");
+        const filterError = document.getElementById("changelog-filter-error");
+        const retry = findByRole("button", "Retry changelog export", actionError ?? document);
+        if (!(search instanceof HTMLInputElement) || !actionError || !retry) throw new Error("Changelog action error or retry control is missing");
+        if (search.getAttribute("aria-invalid") === "true") throw new Error("Changelog export failure incorrectly marks search invalid");
+        if (search.getAttribute("aria-describedby") === "changelog-action-error") throw new Error("Changelog search is described by an action failure");
+        if (filterError) throw new Error("Changelog export failure incorrectly rendered as a filter failure");
+        return { searchInvalid: false, actionAlert: actionError.textContent?.replace(/\\s+/g, " ").trim(), retry: accessibleName(retry) };
+      `));
+      await setSelectValue(cdp, 'select[aria-label="Changelog export format"]', "markdown");
+      await clickByRole(cdp, "button", "Retry changelog export", "#changelog-action-error");
+      await waitForPage(cdp, `!document.querySelector("#changelog-action-error") && /Exported .* filtered release records/i.test(document.querySelector('.changelog-status[role="status"]')?.textContent ?? "")`, "successful Changelog export retry", options.timeoutMs);
+      const recovery = await cdp.evaluate(pageExpression(`
+        const status = document.querySelector('.changelog-status[role="status"]');
+        if (!status) throw new Error("Changelog export success status is missing after retry");
+        return status.textContent?.replace(/\\s+/g, " ").trim() ?? "";
+      `));
+      await clickByRole(cdp, "tab", "Downloads");
+      return { failure, recovery };
+    });
+
     await runCheck(result, "settings-open", async () => {
       await clickByRole(cdp, "button", "Settings");
       await waitForPage(cdp, `Boolean(document.querySelector(".dialog"))`, "Settings dialog surface", options.timeoutMs);
@@ -1162,6 +1459,341 @@ async function main(argv) {
       if (unnamedControls.length > 0) throw new Error("Settings contains unnamed interactive controls: " + JSON.stringify(unnamedControls));
       return { role: "dialog", name, nestedInteractiveLabels: 0, unnamedControls: 0 };
     `)));
+
+    await runCheck(result, "settings-auto-organize-ui", async () => {
+      await clickByRole(cdp, "tab", "Downloads", '[role="dialog"]');
+      await waitForPage(cdp, `Boolean(document.querySelector("#settings-auto-organize-toggle"))`, "auto-organize settings surface", options.timeoutMs);
+      const initial = await cdp.evaluate(pageExpression(`
+        const panel = document.getElementById("settings-panel-downloads");
+        const toggle = document.getElementById("settings-auto-organize-toggle");
+        const paths = panel?.querySelectorAll(".auto-organize-folder-row") ?? [];
+        const list = panel?.querySelector(".auto-organize-rule-list");
+        if (!panel || !isVisible(panel)) throw new Error("Downloads settings panel is not visible");
+        if (!toggle || toggle.getAttribute("role") !== "switch" || toggle.getAttribute("aria-checked") !== "true") throw new Error("auto-organize toggle is missing its checked switch semantics");
+        if (paths.length !== 6) throw new Error("auto-organize must expose exactly six destination paths");
+        if (list) throw new Error("fresh profile unexpectedly contains custom rules");
+        return { pathRows: paths.length, toggle: accessibleName(toggle), checked: true };
+      `));
+      await clickByRole(cdp, "button", "Add document preset", ".auto-organize-rule-presets");
+      await waitForPage(cdp, `document.querySelectorAll(".auto-organize-rule-card").length === 1`, "first auto-organize rule", options.timeoutMs);
+      await clickByRole(cdp, "button", "Add archive preset", ".auto-organize-rule-presets");
+      await waitForPage(cdp, `document.querySelectorAll(".auto-organize-rule-card").length === 2`, "second auto-organize rule", options.timeoutMs);
+      const semantics = await cdp.evaluate(pageExpression(`
+        const list = document.querySelector('.auto-organize-rule-list[role="list"]');
+        if (!(list instanceof HTMLElement) || accessibleName(list) !== "Ordered custom rules") throw new Error("custom rules are not exposed as a named list");
+        const cards = [...list.children];
+        if (cards.length !== 2 || cards.some((card) => card.getAttribute("role") !== "listitem")) throw new Error("custom rules are not exposed as two list items");
+        const controls = cards.flatMap((card) => [...card.querySelectorAll("input,select,textarea,button")].filter(isVisible));
+        const names = controls.map((control) => accessibleName(control));
+        const unnamed = names.filter((name) => !name);
+        const duplicates = [...new Set(names.filter((name, index) => names.indexOf(name) !== index))];
+        if (unnamed.length > 0) throw new Error("custom-rule controls contain blank accessible names");
+        if (duplicates.length > 0) throw new Error("custom-rule controls reuse accessible names: " + JSON.stringify(duplicates));
+        for (const ruleNumber of [1, 2]) {
+          const cardNames = [...cards[ruleNumber - 1].querySelectorAll("input,select,textarea,button")].filter(isVisible).map(accessibleName);
+          if (cardNames.some((name) => !name.includes("Rule " + ruleNumber))) throw new Error("Rule " + ruleNumber + " has a control whose accessible name does not identify its rule: " + JSON.stringify(cardNames));
+        }
+        const measured = [...document.querySelectorAll([
+          ".auto-organize-settings .switch-control",
+          ".auto-organize-rules button",
+          ".auto-organize-rule-grid input",
+          ".auto-organize-rule-grid select",
+          ".auto-organize-pattern-field > .field-row > input",
+        ].join(","))].filter(isVisible).map((control) => {
+          const box = control.getBoundingClientRect();
+          return { name: accessibleName(control), width: box.width, height: box.height };
+        });
+        const undersized = measured.filter((control) => control.width < 39.5 || control.height < 39.5);
+        if (undersized.length > 0) throw new Error("custom-rule controls are smaller than 40 CSS pixels: " + JSON.stringify(undersized));
+        return { list: accessibleName(list), listItems: cards.length, uniqueControlNames: names.length, minimumControlSize: 40, measuredControls: measured.length };
+      `));
+      await cdp.evaluate(pageExpression(`
+        const moveUp = findByRole("button", "Rule 2: Move up", document.querySelectorAll(".auto-organize-rule-card")[1]);
+        if (!(moveUp instanceof HTMLButtonElement) || moveUp.disabled) throw new Error("second rule has no enabled keyboard-operable Move up action");
+        moveUp.focus();
+      `));
+      await dispatchKey(cdp, "Enter", "Enter", 13);
+      await waitForPage(cdp, `(() => {
+        const first = document.querySelector(".auto-organize-rule-card input")?.value;
+        return first === "Archive URLs" && document.activeElement?.getAttribute("aria-label") === "Rule 1: Move down";
+      })()`, "Enter rule reorder and focus retention", options.timeoutMs);
+      await dispatchKey(cdp, " ", "Space", 32);
+      await waitForPage(cdp, `(() => {
+        const names = [...document.querySelectorAll(".auto-organize-rule-card")].map((card) => card.querySelector("input")?.value ?? "");
+        return names.join("|") === "Document filenames|Archive URLs" && document.activeElement?.getAttribute("aria-label") === "Rule 2: Move up";
+      })()`, "Space rule reorder and focus retention", options.timeoutMs);
+      await dispatchKey(cdp, "Enter", "Enter", 13);
+      await waitForPage(cdp, `(() => {
+        const names = [...document.querySelectorAll(".auto-organize-rule-card")].map((card) => card.querySelector("input")?.value ?? "");
+        return names.join("|") === "Archive URLs|Document filenames" && document.activeElement?.getAttribute("aria-label") === "Rule 1: Move down";
+      })()`, "restored first-match order through keyboard", options.timeoutMs);
+      const ordered = await cdp.evaluate(pageExpression(`
+        const cards = [...document.querySelectorAll(".auto-organize-rule-card")];
+        const names = cards.map((card) => card.querySelector("input")?.value ?? "");
+        const selects = cards.map((card) => card.querySelector("select")?.value ?? "");
+        if (names.join("|") !== "Archive URLs|Document filenames") throw new Error("Move up did not change first-match order: " + names.join("|"));
+        if (selects.join("|") !== "compressed|document") throw new Error("preset destinations do not match the six-category contract");
+        const focusedCard = document.activeElement?.closest(".auto-organize-rule-card");
+        if (focusedCard?.querySelector("input")?.value !== "Archive URLs") throw new Error("keyboard reorder did not retain focus in the moved rule");
+        return { names, destinations: selects, keyboardReorder: ["Enter", "Space", "Enter"], focusedRule: "Archive URLs" };
+      `));
+      return { ...initial, ...semantics, ...ordered };
+    });
+
+    await runCheck(result, "settings-auto-organize-regex-focus", async () => {
+      await clickByRole(cdp, "button", "Open regex builder for Rule 1", ".auto-organize-rule-card");
+      await waitForPage(cdp, `Boolean(document.querySelector(".auto-organize-rule-builder .regex-builder"))`, "rule regex builder", options.timeoutMs);
+      const fixedMode = await cdp.evaluate(pageExpression(`
+        const builder = document.querySelector(".auto-organize-rule-builder .regex-builder");
+        const toggle = document.getElementById("settings-auto-rule-1-builder-toggle");
+        const pattern = builder?.querySelector("input.regex-pattern");
+        const radios = builder?.querySelectorAll('input[type="radio"]') ?? [];
+        if (!builder || !isVisible(builder)) throw new Error("rule regex builder is hidden");
+        if (!(pattern instanceof HTMLInputElement) || pattern.maxLength !== 512) throw new Error("rule pattern editor is not bounded to 512 characters");
+        if (radios.length !== 0) throw new Error("classification rule builder must stay in fixed regex mode");
+        const controlledId = toggle?.getAttribute("aria-controls");
+        const controlled = controlledId ? document.getElementById(controlledId) : null;
+        if (!(toggle instanceof HTMLButtonElement) || toggle.getAttribute("aria-expanded") !== "true") throw new Error("rule Regex toggle is not expanded");
+        if (!controlledId || !controlled || !controlled.contains(builder)) throw new Error("rule Regex toggle does not control the visible builder");
+        const measured = [...builder.querySelectorAll("button,input:not([type=checkbox]):not([type=radio]),textarea,.regex-flags label")].filter(isVisible).map((control) => {
+          const box = control.getBoundingClientRect();
+          return { name: accessibleName(control), width: box.width, height: box.height };
+        });
+        const undersized = measured.filter((control) => control.width < 39.5 || control.height < 39.5);
+        if (undersized.length > 0) throw new Error("rule builder controls are smaller than 40 CSS pixels: " + JSON.stringify(undersized));
+        return { fixedRegex: true, patternMaxLength: pattern.maxLength, radioCount: radios.length, originalPattern: pattern.value, controlledId, minimumBuilderControlSize: 40, measuredBuilderControls: measured.length };
+      `));
+      await setInputValue(cdp, ".auto-organize-rule-builder input.regex-pattern", "a".repeat(511));
+      await clickByRole(cdp, "button", "Rule 1 classification regex builder: End anchor", ".auto-organize-rule-builder .regex-guided");
+      await waitForPage(cdp, `document.querySelector(".auto-organize-rule-builder input.regex-pattern")?.value.length === 512`, "guided insertion reaches the 512-character boundary", options.timeoutMs);
+      const guided511 = await cdp.evaluate(pageExpression(`
+        const pattern = document.querySelector(".auto-organize-rule-builder input.regex-pattern");
+        const status = document.querySelector(".auto-organize-rule-builder .field-error[role=status]");
+        if (!(pattern instanceof HTMLInputElement) || pattern.value.length !== 512 || !pattern.value.endsWith("$")) throw new Error("a one-character guided fragment was not accepted from 511 to 512 characters");
+        if (status) throw new Error("a valid guided insertion at the exact 512-character boundary reported an error");
+        return { startingLength: 511, resultingLength: pattern.value.length, accepted: true };
+      `));
+      await clickByRole(cdp, "button", "Rule 1 classification regex builder: End anchor", ".auto-organize-rule-builder .regex-guided");
+      await waitForPage(cdp, `Boolean(document.querySelector(".auto-organize-rule-builder .field-error[role=status]"))`, "guided insertion refusal at 512 characters", options.timeoutMs);
+      const guided512 = await cdp.evaluate(pageExpression(`
+        const pattern = document.querySelector(".auto-organize-rule-builder input.regex-pattern");
+        const status = document.querySelector(".auto-organize-rule-builder .field-error[role=status]");
+        if (!(pattern instanceof HTMLInputElement) || pattern.value.length !== 512) throw new Error("guided insertion exceeded or changed the 512-character pattern");
+        if (!(status instanceof HTMLElement) || !/was not added/.test(status.textContent ?? "")) throw new Error("512-character refusal has no actionable status");
+        if (!(pattern.getAttribute("aria-describedby") ?? "").split(/\\s+/).includes(status.id)) throw new Error("512-character refusal status is not associated with the pattern field");
+        return { length: pattern.value.length, status: status.textContent?.trim() ?? "" };
+      `));
+      await setInputValue(cdp, ".auto-organize-rule-builder input.regex-pattern", fixedMode.originalPattern);
+      await waitForPage(cdp, `document.querySelector("#settings-auto-rule-1-pattern")?.value === ${JSON.stringify(fixedMode.originalPattern)}`, "restored preset regex after boundary checks", options.timeoutMs);
+      async function clickRuleFlag(flag) {
+        await cdp.evaluate(pageExpression(`
+          const label = [...document.querySelectorAll(".auto-organize-rule-builder .regex-flags label")]
+            .find((candidate) => candidate.querySelector("code")?.textContent === ${JSON.stringify(flag)});
+          const input = label?.querySelector('input[type="checkbox"]');
+          if (!(input instanceof HTMLInputElement)) throw new Error("missing rule flag " + ${JSON.stringify(flag)});
+          input.click();
+        `));
+      }
+      await clickRuleFlag("u");
+      await waitForPage(cdp, `document.querySelector(".auto-organize-flags-summary code")?.textContent === "iu"`, "normalized i+u flags", options.timeoutMs);
+      await clickRuleFlag("i");
+      await waitForPage(cdp, `document.querySelector(".auto-organize-flags-summary code")?.textContent === "u"`, "remove i flag", options.timeoutMs);
+      await clickRuleFlag("i");
+      await waitForPage(cdp, `document.querySelector(".auto-organize-flags-summary code")?.textContent === "iu"`, "canonical flag order after out-of-order clicks", options.timeoutMs);
+      await dispatchEscape(cdp);
+      await waitForPage(cdp, pageExpression(`
+        const toggle = document.getElementById("settings-auto-rule-1-builder-toggle");
+        const controlledId = toggle?.getAttribute("aria-controls");
+        return !document.querySelector(".auto-organize-rule-builder") && !!toggle && accessibleName(toggle) === "Open regex builder for Rule 1" && toggle.getAttribute("aria-expanded") === "false" && !document.getElementById(controlledId ?? "") && document.activeElement === toggle;
+      `), "rule builder Escape focus restoration", options.timeoutMs);
+      return { ...fixedMode, guided511, guided512, flags: "iu", escapeClosed: true, focusRestored: true };
+    });
+
+    await runCheck(result, "settings-auto-organize-contrast", async () => {
+      await clickByRole(cdp, "button", "Open regex builder for Rule 1", ".auto-organize-rule-card");
+      await waitForPage(cdp, `Boolean(document.querySelector(".auto-organize-rule-builder .regex-builder"))`, "rule builder for contrast sampling", options.timeoutMs);
+      await setInputValue(cdp, 'input[aria-label="Search settings"]', "auto");
+      await waitForPage(cdp, `Boolean(document.querySelector(".settings-search-results .setting-helper"))`, "Settings result helper for contrast sampling", options.timeoutMs);
+      try {
+        return await cdp.evaluate(pageExpression(`
+          const root = document.documentElement;
+          const originalTheme = root.getAttribute("data-theme");
+          function inspectTheme(theme) {
+            root.setAttribute("data-theme", theme);
+            const samples = [
+              { label: "folder path", text: document.querySelector(".auto-organize-folder-row code"), surface: document.querySelector(".auto-organize-folder-map") },
+              { label: "rules helper", text: document.querySelector(".auto-organize-rules > .setting-helper"), surface: document.querySelector(".auto-organize-rules") },
+              { label: "rules source", text: document.querySelector(".auto-organize-rules > .setting-source"), surface: document.querySelector(".auto-organize-rules") },
+              { label: "rule heading helper", text: document.querySelector(".auto-organize-rule-card-heading > span"), surface: document.querySelector(".auto-organize-rule-card") },
+              { label: "flags helper", text: document.querySelector(".auto-organize-flags-summary .setting-helper"), surface: document.querySelector(".auto-organize-rule-card") },
+              { label: "regex header", text: document.querySelector(".auto-organize-rule-builder .regex-builder-header p"), surface: document.querySelector(".auto-organize-rule-builder .regex-builder") },
+              { label: "regex dialect", text: document.querySelector(".auto-organize-rule-builder .regex-dialect-note"), surface: document.querySelector(".auto-organize-rule-builder .regex-builder") },
+              { label: "settings result helper", text: document.querySelector(".settings-search-results .setting-helper"), surface: document.querySelector(".settings-search-results") },
+            ];
+            const missing = samples.filter(({ text, surface }) => !(text instanceof HTMLElement) || !(surface instanceof HTMLElement));
+            if (missing.length > 0) throw new Error(theme + " contrast samples are missing: " + missing.map(({ label }) => label).join(", "));
+            const measured = samples.map(({ label, text, surface }) => {
+              const foreground = getComputedStyle(text).color;
+              const background = getComputedStyle(surface).backgroundColor;
+              return { label, foreground, background, ratio: contrastRatio(foreground, background) };
+            });
+            const failures = measured.filter(({ ratio }) => ratio < 4.5);
+            if (failures.length > 0) throw new Error(theme + " auto-organize text falls below 4.5:1: " + JSON.stringify(failures));
+            return measured.map(({ label, ratio }) => ({ label, ratio: Number(ratio.toFixed(2)) }));
+          }
+          try {
+            return { dark: inspectTheme("dark"), light: inspectTheme("light"), minimum: 4.5 };
+          } finally {
+            if (originalTheme === null) root.removeAttribute("data-theme");
+            else root.setAttribute("data-theme", originalTheme);
+          }
+        `));
+      } finally {
+        await dispatchEscape(cdp);
+        await waitForPage(cdp, `!document.querySelector(".auto-organize-rule-builder")`, "close rule builder after contrast sampling", options.timeoutMs).catch(() => undefined);
+        await setInputValue(cdp, 'input[aria-label="Search settings"]', "").catch(() => undefined);
+      }
+    });
+
+    await runCheck(result, "settings-auto-organize-invalid-save", async () => {
+      await clickByRole(cdp, "button", "Add blank rule", ".auto-organize-rule-presets");
+      await waitForPage(cdp, `document.querySelectorAll(".auto-organize-rule-card").length === 3`, "blank auto-organize rule", options.timeoutMs);
+      await waitForPage(cdp, `Boolean(document.querySelectorAll(".auto-organize-rule-card")[2]?.querySelector(".regex-builder"))`, "blank rule fixed regex builder", options.timeoutMs);
+      const blankBuilder = await cdp.evaluate(pageExpression(`
+        const builder = document.querySelectorAll(".auto-organize-rule-card")[2]?.querySelector(".regex-builder");
+        const pattern = builder?.querySelector("input.regex-pattern");
+        const alert = builder?.querySelector('.regex-dialect-note[role="alert"]');
+        const copy = builder ? findByRole("button", "Rule 3 classification regex builder: Copy", builder) : null;
+        const exportButton = builder ? findByRole("button", "Rule 3 classification regex builder: Export", builder) : null;
+        if (!(pattern instanceof HTMLInputElement) || pattern.getAttribute("aria-invalid") !== "true") throw new Error("blank fixed-regex builder Pattern is not invalid");
+        if (!(alert instanceof HTMLElement) || !/Enter a regular expression pattern/.test(alert.textContent ?? "")) throw new Error("blank fixed-regex builder has no live actionable error");
+        if (!(pattern.getAttribute("aria-describedby") ?? "").split(/\\s+/).includes(alert.id)) throw new Error("blank builder error is not associated with Pattern");
+        for (const control of [copy, exportButton]) {
+          if (!(control instanceof HTMLButtonElement) || !control.disabled || !control.title || !(control.getAttribute("aria-describedby") ?? "").split(/\\s+/).includes(alert.id)) {
+            throw new Error("blank builder Copy/Export has no accessible disabled explanation");
+          }
+        }
+        return { patternInvalid: true, alert: alert.textContent?.trim() ?? "", disabledActionsExplained: 2 };
+      `));
+      await setInputValue(cdp, "#settings-auto-rule-3-pattern", "temporary");
+      await setInputValue(cdp, "#settings-auto-rule-3-name", "");
+      await waitForPage(cdp, `document.querySelector("#settings-auto-rule-3-name")?.getAttribute("aria-invalid") === "true"`, "blank rule-name validation", options.timeoutMs);
+      const blankName = await cdp.evaluate(pageExpression(`
+        const card = document.querySelectorAll(".auto-organize-rule-card")[2];
+        const name = document.getElementById("settings-auto-rule-3-name");
+        const pattern = document.getElementById("settings-auto-rule-3-pattern");
+        const errorId = name?.getAttribute("aria-describedby");
+        const error = errorId ? document.getElementById(errorId) : null;
+        const save = findByRole("button", "Save", document.querySelector('[role="dialog"]'));
+        if (!card?.classList.contains("invalid")) throw new Error("blank-name rule is not marked invalid");
+        if (!(name instanceof HTMLInputElement) || name.getAttribute("aria-invalid") !== "true") throw new Error("blank-name error is not attached to the name field");
+        if (!(error instanceof HTMLElement) || error.getAttribute("role") !== "alert" || error.textContent?.trim() !== "Enter a rule name.") throw new Error("blank-name field does not reference its exact inline alert");
+        if (pattern?.getAttribute("aria-invalid") === "true" || pattern?.hasAttribute("aria-describedby")) throw new Error("blank-name error leaked onto the pattern field");
+        if (!(save instanceof HTMLButtonElement) || !save.disabled || !save.getAttribute("aria-describedby") || !save.title) throw new Error("Save has no accessible explanation while the blank name blocks it");
+        return { field: "name", error: error.textContent.trim(), saveBlocked: true, saveExplanation: save.title };
+      `));
+      await setInputValue(cdp, "#settings-auto-rule-3-name", "Temporary rule");
+      await setInputValue(cdp, "#settings-auto-rule-3-pattern", "(");
+      await waitForPage(cdp, `document.querySelector("#settings-auto-rule-3-pattern")?.getAttribute("aria-invalid") === "true"`, "bad-pattern validation", options.timeoutMs);
+      const badPattern = await cdp.evaluate(pageExpression(`
+        const root = document.documentElement;
+        const originalTheme = root.getAttribute("data-theme");
+        const card = document.querySelectorAll(".auto-organize-rule-card")[2];
+        const name = document.getElementById("settings-auto-rule-3-name");
+        const pattern = document.getElementById("settings-auto-rule-3-pattern");
+        const errorId = pattern?.getAttribute("aria-describedby");
+        const error = errorId ? document.getElementById(errorId) : null;
+        if (!(pattern instanceof HTMLInputElement) || pattern.getAttribute("aria-invalid") !== "true") throw new Error("bad-pattern error is not attached to the pattern field");
+        if (!(error instanceof HTMLElement) || error.getAttribute("role") !== "alert" || !/^Invalid regex:/.test(error.textContent?.trim() ?? "")) throw new Error("bad-pattern field does not reference its exact inline alert");
+        if (name?.getAttribute("aria-invalid") === "true" || name?.hasAttribute("aria-describedby")) throw new Error("bad-pattern error leaked onto the name field");
+        const ratios = {};
+        try {
+          for (const theme of ["dark", "light"]) {
+            root.setAttribute("data-theme", theme);
+            const ratio = contrastRatio(getComputedStyle(error).color, getComputedStyle(card).backgroundColor);
+            if (ratio < 4.5) throw new Error(theme + " inline rule error contrast is " + ratio.toFixed(2) + ":1");
+            ratios[theme] = Number(ratio.toFixed(2));
+          }
+        } finally {
+          if (originalTheme === null) root.removeAttribute("data-theme");
+          else root.setAttribute("data-theme", originalTheme);
+        }
+        return { field: "pattern", error: error.textContent.trim(), contrast: ratios };
+      `));
+      await cdp.evaluate(pageExpression(`
+        const remove = findByRole("button", "Rule 3: Remove rule", document.querySelectorAll(".auto-organize-rule-card")[2]);
+        if (!(remove instanceof HTMLButtonElement)) throw new Error("invalid rule has no specifically named Remove rule action");
+        remove.focus();
+      `));
+      await dispatchKey(cdp, "Enter", "Enter", 13);
+      await waitForPage(cdp, `(() => {
+        const save = [...document.querySelectorAll('[role="dialog"] button')].find((button) => button.textContent?.trim() === "Save");
+        const successor = document.getElementById("settings-auto-rule-2-name");
+        return document.querySelectorAll(".auto-organize-rule-card").length === 2 && !!save && !save.disabled && successor?.value === "Document filenames" && document.activeElement === successor;
+      })()`, "rule removal restores Save and focuses its successor", options.timeoutMs);
+      return { blankBuilder, blankName, badPattern, removalFocus: { target: "settings-auto-rule-2-name", value: "Document filenames" } };
+    });
+
+    await runCheck(result, "settings-auto-organize-save-persistence", async () => {
+      await clickByRole(cdp, "button", "Save", '[role="dialog"]');
+      await waitForPage(cdp, `!document.querySelector(".dialog")`, "settings Save through preload and IPC", options.timeoutMs);
+      await clickByRole(cdp, "button", "Settings");
+      await waitForPage(cdp, `Boolean(document.querySelector(".dialog"))`, "reopened Settings dialog", options.timeoutMs);
+      await clickByRole(cdp, "tab", "Downloads", '[role="dialog"]');
+      await waitForPage(cdp, `document.querySelectorAll(".auto-organize-rule-card").length === 2`, "persisted auto-organize rules", options.timeoutMs);
+      const dom = await cdp.evaluate(pageExpression(`
+        const names = [...document.querySelectorAll(".auto-organize-rule-card")]
+          .map((card) => card.querySelector("input")?.value ?? "");
+        const paths = document.querySelectorAll(".auto-organize-folder-row").length;
+        if (names.join("|") !== "Archive URLs|Document filenames") throw new Error("saved first-match order did not survive reopening");
+        if (paths !== 6) throw new Error("reopened Downloads settings lost the six destination paths");
+        return { names, paths };
+      `));
+      const settings = await cdp.evaluate("window.api.getSettings()");
+      if (settings.autoOrganizeRules?.length !== 2 || settings.autoOrganizeRules[0]?.flags !== "iu") throw new Error("real preload/settings IPC did not persist canonical custom rules");
+      if (settings.settingProvenance?.autoOrganizeRules !== "persisted") throw new Error("main process did not stamp custom-rule provenance");
+      if (settings.settingProvenance?.autoOrganizeEnabled !== "compiled-in") throw new Error("unchanged auto-organize toggle was falsely marked persisted by Settings Save");
+      return {
+        ...dom,
+        persistedRules: settings.autoOrganizeRules.length,
+        flags: settings.autoOrganizeRules[0].flags,
+        provenance: settings.settingProvenance.autoOrganizeRules,
+        untouchedToggleProvenance: settings.settingProvenance.autoOrganizeEnabled,
+      };
+    });
+
+    await runCheck(result, "settings-auto-organize-search-targets", async () => {
+      const values = await cdp.evaluate(pageExpression(`
+        const name = document.getElementById("settings-auto-rule-1-name");
+        const pattern = document.getElementById("settings-auto-rule-1-pattern");
+        const path = document.querySelector(".auto-organize-folder-row code");
+        if (!(name instanceof HTMLInputElement) || !(pattern instanceof HTMLInputElement) || !(path instanceof HTMLElement)) throw new Error("dynamic auto-organize search values are unavailable");
+        return { name: name.value, pattern: pattern.value, path: path.textContent?.trim() ?? "" };
+      `));
+      async function searchAndFocus(query, resultName, targetId, label) {
+        await setInputValue(cdp, 'input[aria-label="Search settings"]', query);
+        await waitForPage(cdp, pageExpression(`
+          const results = document.querySelector(".settings-search-results");
+          return !!results && !!findByRole("button", ${JSON.stringify(resultName)}, results);
+        `), label + " search result", options.timeoutMs);
+        await clickByRole(cdp, "button", resultName, ".settings-search-results");
+        await waitForPage(cdp, `document.activeElement?.id === ${JSON.stringify(targetId)}`, label + " exact target focus", options.timeoutMs);
+        return cdp.evaluate(pageExpression(`
+          const target = document.getElementById(${JSON.stringify(targetId)});
+          if (!(target instanceof HTMLElement) || document.activeElement !== target) throw new Error(${JSON.stringify(label + " result did not focus " + targetId)});
+          return { query: ${JSON.stringify(query)}, result: ${JSON.stringify(resultName)}, target: target.id, targetName: accessibleName(target) };
+        `));
+      }
+      const ruleName = await searchAndFocus(values.name, "Rule 1 name", "settings-auto-rule-1-name", "dynamic rule-name");
+      const rulePattern = await searchAndFocus(values.pattern, "Rule 1 regex pattern and flags", "settings-auto-rule-1-pattern", "dynamic rule-pattern");
+      const destinationPath = await searchAndFocus(
+        values.path,
+        "General destination path",
+        "settings-auto-organize-path-other",
+        "dynamic destination-path"
+      );
+      return { ruleName, rulePattern, destinationPath };
+    });
 
     await runCheck(result, "settings-narrow-layout", async () => {
       await cdp.send("Emulation.setDeviceMetricsOverride", { width: 520, height: 720, deviceScaleFactor: 2, mobile: false });
@@ -1209,7 +1841,7 @@ async function main(argv) {
                 .slice(0, 8);
               throw new Error("narrow Settings viewport overflows horizontally: " + JSON.stringify({ panel: panel.id, innerWidth: window.innerWidth, overflowValues, dialog: { clientWidth: dialog.clientWidth, scrollWidth: dialog.scrollWidth }, panelBox: { clientWidth: panel.clientWidth, scrollWidth: panel.scrollWidth }, offenders }));
             }
-            const visibleGrids = [...panel.querySelectorAll(".field-pair,.settings-level-grid")].filter(isVisible);
+            const visibleGrids = [...panel.querySelectorAll(".field-pair,.settings-level-grid,.auto-organize-rule-grid,.auto-organize-folder-row")].filter(isVisible);
             const wideGrids = visibleGrids.filter((grid) => getComputedStyle(grid).gridTemplateColumns.trim().split(/\\s+/).length > 1);
             if (wideGrids.length > 0) throw new Error("narrow Settings viewport kept a multi-column grid: " + wideGrids.map((grid) => grid.className).join(", "));
             const unnamedControls = [...panel.querySelectorAll("input,select,textarea,button")]
@@ -1226,6 +1858,72 @@ async function main(argv) {
       } finally {
         await cdp.send("Emulation.clearDeviceMetricsOverride").catch(() => undefined);
       }
+    });
+
+    await runCheck(result, "settings-auto-organize-narrow-bilingual", async () => {
+      let evidence;
+      await cdp.send("Emulation.setDeviceMetricsOverride", { width: 520, height: 760, deviceScaleFactor: 2, mobile: false });
+      try {
+        await setSelectValue(cdp, "#settings-language-mode", "bilingual");
+        await waitForPage(cdp, `document.getElementById("settings-language-mode")?.value === "bilingual" && /語言/.test(document.getElementById("settings-tab-language")?.textContent ?? "")`, "bilingual Settings mode at 520px", options.timeoutMs);
+        await cdp.evaluate(`document.getElementById("settings-tab-downloads")?.click()`);
+        await waitForPage(cdp, `document.getElementById("settings-tab-downloads")?.getAttribute("aria-selected") === "true"`, "bilingual Downloads settings tab", options.timeoutMs);
+        await setInputValue(cdp, '.settings-search input[type="search"]', "rule");
+        await waitForPage(cdp, `(() => {
+          const text = document.querySelector(".settings-search-results .setting-helper")?.textContent ?? "";
+          return /matching settings/.test(text) && /個相符設定/.test(text);
+        })()`, "localized plural Settings result", options.timeoutMs);
+        await cdp.evaluate(`document.getElementById("settings-auto-rule-1-builder-toggle")?.click()`);
+        await waitForPage(cdp, `Boolean(document.querySelector(".auto-organize-rule-builder .regex-builder"))`, "bilingual rule builder at 520px", options.timeoutMs);
+        evidence = await cdp.evaluate(pageExpression(`
+          const dialog = document.querySelector('[role="dialog"]');
+          const panel = document.getElementById("settings-panel-downloads");
+          if (!(dialog instanceof HTMLElement) || !(panel instanceof HTMLElement) || !isVisible(panel)) throw new Error("bilingual Downloads settings is not visible at 520px");
+          const overflowValues = {
+            document: document.documentElement.scrollWidth - window.innerWidth,
+            body: document.body.scrollWidth - window.innerWidth,
+            dialog: dialog.scrollWidth - dialog.clientWidth,
+            panel: panel.scrollWidth - panel.clientWidth,
+          };
+          if (Math.max(...Object.values(overflowValues)) > 1) throw new Error("520px bilingual auto-organize layout overflows horizontally: " + JSON.stringify(overflowValues));
+          const dialogBox = dialog.getBoundingClientRect();
+          const builder = panel.querySelector(".auto-organize-rule-builder .regex-builder");
+          if (!(builder instanceof HTMLElement) || !isVisible(builder)) throw new Error("bilingual rule builder is not visible at 520px");
+          const builderBox = builder.getBoundingClientRect();
+          if (builderBox.left < dialogBox.left - 1 || builderBox.right > dialogBox.right + 1 || builder.scrollWidth > builder.clientWidth + 1) {
+            throw new Error("520px bilingual rule builder escapes or clips inside the dialog: " + JSON.stringify({ dialogBox, builderBox, clientWidth: builder.clientWidth, scrollWidth: builder.scrollWidth }));
+          }
+          const controls = [...panel.querySelectorAll(".auto-organize-settings input,.auto-organize-settings select,.auto-organize-settings button,.auto-organize-rules input,.auto-organize-rules select,.auto-organize-rules textarea,.auto-organize-rules button")].filter(isVisible);
+          const outside = controls.map((control) => ({ name: accessibleName(control), box: control.getBoundingClientRect() })).filter(({ box }) => box.left < dialogBox.left - 1 || box.right > dialogBox.right + 1);
+          if (outside.length > 0) throw new Error("520px bilingual auto-organize controls escape the dialog: " + JSON.stringify(outside.slice(0, 8)));
+          const textNodes = [...panel.querySelectorAll(".auto-organize-settings .setting-helper,.auto-organize-settings .setting-source,.auto-organize-folder-row strong,.auto-organize-folder-row code,.auto-organize-rules > .setting-helper,.auto-organize-rules > .setting-source,.auto-organize-rule-card-heading > strong,.auto-organize-rule-card-heading > span,.auto-organize-flags-summary .setting-helper,.auto-organize-rule-builder .regex-builder-header h3,.auto-organize-rule-builder .regex-builder-header p,.auto-organize-rule-builder .regex-dialect-note,.auto-organize-rule-builder .regex-guided .field-label,.auto-organize-rule-builder .regex-flags .field-label,.auto-organize-rule-builder .regex-results-header,.auto-organize-rule-builder .regex-empty")].filter(isVisible);
+          const clipped = textNodes.map((element) => ({
+            text: normalise(element.textContent),
+            clientWidth: element.clientWidth,
+            scrollWidth: element.scrollWidth,
+            overflowX: getComputedStyle(element).overflowX,
+          })).filter((item) => item.clientWidth > 0 && item.scrollWidth > item.clientWidth + 1);
+          if (clipped.length > 0) throw new Error("520px bilingual auto-organize text is clipped: " + JSON.stringify(clipped.slice(0, 8)));
+          const list = panel.querySelector('.auto-organize-rule-list[role="list"]');
+          if (!list || list.querySelectorAll('[role="listitem"]').length !== 2) throw new Error("bilingual narrow layout lost custom-rule list semantics");
+          const resultCountText = panel.querySelector(".settings-search-results .setting-helper")?.textContent?.replace(/\\s+/g, " ").trim() ?? "";
+          const resultCount = Number(resultCountText.match(/^(\\d+)/)?.[1] ?? "0");
+          if (resultCount < 2 || !/matching settings/.test(resultCountText) || !/個相符設定/.test(resultCountText) || /設定s/.test(resultCountText)) {
+            throw new Error("bilingual Settings count is not fully localized: " + JSON.stringify(resultCountText));
+          }
+          return { innerWidth: window.innerWidth, language: "bilingual", horizontalOverflow: overflowValues, controlsInsideDialog: controls.length, clippedText: 0, ruleItems: 2, openRuleBuilder: true, localizedResultCount: resultCountText };
+        `));
+        await dispatchEscape(cdp);
+        await waitForPage(cdp, `!document.querySelector(".auto-organize-rule-builder") && document.activeElement?.id === "settings-auto-rule-1-builder-toggle"`, "bilingual narrow builder Escape focus", options.timeoutMs);
+        evidence.builderEscapeFocus = true;
+      } finally {
+        await cdp.evaluate(`document.getElementById("settings-tab-language")?.click()`).catch(() => undefined);
+        await waitForPage(cdp, `document.getElementById("settings-tab-language")?.getAttribute("aria-selected") === "true"`, "restore Language tab after bilingual narrow check", options.timeoutMs).catch(() => undefined);
+        await setSelectValue(cdp, "#settings-language-mode", "english").catch(() => undefined);
+        await waitForPage(cdp, `document.getElementById("settings-language-mode")?.value === "english"`, "restore English after bilingual narrow check", options.timeoutMs).catch(() => undefined);
+        await cdp.send("Emulation.clearDeviceMetricsOverride").catch(() => undefined);
+      }
+      return evidence;
     });
 
     await runCheck(result, "settings-tabs", async () => {
@@ -1288,19 +1986,22 @@ async function main(argv) {
 
     await runCheck(result, "settings-regex-builder", async () => {
       await clickByRole(cdp, "button", "Regex", ".settings-search-row");
-      await waitForPage(cdp, `Boolean(document.querySelector('section[aria-label$="regex builder"]'))`, "Settings regex builder", options.timeoutMs);
+      await waitForPage(cdp, `Boolean(document.querySelector('.settings-search-builder section[aria-label$="regex builder"]'))`, "Settings regex builder", options.timeoutMs);
       return cdp.evaluate(pageExpression(`
-        const builder = document.querySelector('section[aria-label$="regex builder"]');
+        const builder = document.querySelector('.settings-search-builder section[aria-label$="regex builder"]');
         const row = document.querySelector(".settings-search-row");
         const toggle = row ? findByRole("button", "Regex", row) : null;
-        const modeGroup = builder?.querySelector('[role="radiogroup"][aria-label="Search mode"]');
+        const modeGroup = builder?.querySelector('[role="radiogroup"]');
         const radios = builder ? builder.querySelectorAll('input[type="radio"]') : [];
         const pattern = builder?.querySelector('input.regex-pattern');
         if (!builder || !isVisible(builder)) throw new Error("Settings regex builder is missing or hidden");
-        if (!modeGroup || radios.length < 2) throw new Error("Settings regex builder is missing its accessible search-mode radio group");
+        if (!modeGroup || !/Search mode$/.test(accessibleName(modeGroup)) || radios.length < 2) throw new Error("Settings regex builder is missing its contextual accessible search-mode radio group");
         if (!(pattern instanceof HTMLInputElement)) throw new Error("Settings regex builder is missing its pattern editor");
         if (!toggle || toggle.getAttribute("aria-expanded") !== "true") throw new Error("Settings Regex toggle did not expose aria-expanded=true");
-        return { visible: true, modeGroup: accessibleName(modeGroup), radioCount: radios.length, patternInput: true, expanded: true };
+        const controlledId = toggle.getAttribute("aria-controls");
+        const controlled = controlledId ? document.getElementById(controlledId) : null;
+        if (!controlledId || !(controlled instanceof HTMLElement) || !controlled.contains(builder)) throw new Error("Settings Regex toggle aria-controls does not identify the visible builder");
+        return { visible: true, modeGroup: accessibleName(modeGroup), radioCount: radios.length, patternInput: true, expanded: true, controlledId };
       `));
     });
 
@@ -1319,7 +2020,7 @@ async function main(argv) {
       await waitForPage(
         cdp,
         `(() => {
-          const builderClosed = !document.querySelector('section[aria-label$="regex builder"]');
+          const builderClosed = !document.querySelector('.settings-search-builder section[aria-label$="regex builder"]');
           const row = document.querySelector(".settings-search-row");
           const toggle = row?.querySelector("button[aria-expanded]");
           return builderClosed && !!toggle && toggle.getAttribute("aria-expanded") === "false" && document.activeElement === toggle;
@@ -1333,7 +2034,9 @@ async function main(argv) {
         if (!toggle) throw new Error("Settings Regex toggle disappeared after Escape");
         if (toggle.getAttribute("aria-expanded") !== "false") throw new Error("Settings Regex toggle did not expose aria-expanded=false after Escape");
         if (document.activeElement !== toggle) throw new Error("Escape did not restore focus to the Settings Regex toggle");
-        return { expanded: false, focusRestored: true };
+        const controlledId = toggle.getAttribute("aria-controls");
+        if (!controlledId || document.getElementById(controlledId)) throw new Error("Settings Regex controlled panel remained mounted after Escape");
+        return { expanded: false, focusRestored: true, controlledId, controlledPanelRemoved: true };
       `));
     });
 
@@ -1342,19 +2045,168 @@ async function main(argv) {
       await waitForPage(cdp, `!document.querySelector(".dialog")`, "Settings dialog to close on its outer Escape path", options.timeoutMs);
       return { closed: true };
     });
+
+    await runCheck(result, "settings-auto-organize-command-palette", async () => {
+      await clickByRole(cdp, "button", "Settings");
+      await waitForPage(cdp, `Boolean(document.querySelector(".dialog"))`, "Settings for Cantonese command section", options.timeoutMs);
+      await cdp.evaluate(`document.getElementById("settings-tab-language")?.click()`);
+      await setSelectValue(cdp, "#settings-language-mode", "cantonese");
+      await waitForPage(cdp, `/設定/.test(document.querySelector(".dialog-header-title")?.textContent ?? "")`, "Cantonese Settings copy", options.timeoutMs);
+      await cdp.evaluate(pageExpression(`
+        const save = document.querySelector('.dialog-footer .btn-primary');
+        if (!(save instanceof HTMLButtonElement)) throw new Error("Cantonese Settings Save action is missing");
+        save.click();
+      `));
+      await waitForPage(cdp, `!document.querySelector(".dialog")`, "persist Cantonese command section", options.timeoutMs);
+      await cdp.evaluate(pageExpression(`
+        document.dispatchEvent(new KeyboardEvent("keydown", { key: "f", code: "KeyF", ctrlKey: true, shiftKey: true, bubbles: true }));
+      `));
+      await waitForPage(cdp, `Boolean(document.querySelector('[role="dialog"].command-palette'))`, "Cantonese command palette", options.timeoutMs);
+      await setInputValue(cdp, ".command-palette-input", "自動分類資料夾");
+      await waitForPage(cdp, `Boolean([...document.querySelectorAll(".command-palette-row")].find((row) => /設定 · 自動分類資料夾/.test(row.textContent ?? "")))`, "Cantonese auto-organize command", options.timeoutMs);
+      const localizedSection = await cdp.evaluate(pageExpression(`
+        const row = [...document.querySelectorAll(".command-palette-row")].find((candidate) => /設定 · 自動分類資料夾/.test(candidate.textContent ?? ""));
+        const section = row?.querySelector("em")?.textContent?.trim() ?? "";
+        if (section !== "設定") throw new Error("auto-organize command section is not localized in Cantonese: " + JSON.stringify(section));
+        if (!(row instanceof HTMLButtonElement)) throw new Error("Cantonese auto-organize command is not operable");
+        const label = row.querySelector("strong")?.textContent?.trim() ?? "";
+        row.click();
+        return { label, section };
+      `));
+      await waitForPage(cdp, `Boolean(document.querySelector(".dialog"))`, "Cantonese command teleport for language restore", options.timeoutMs);
+      await cdp.evaluate(`document.getElementById("settings-tab-language")?.click()`);
+      await setSelectValue(cdp, "#settings-language-mode", "english");
+      await waitForPage(cdp, `document.querySelector(".dialog-header-title")?.textContent?.trim() === "Settings"`, "English Settings copy restored", options.timeoutMs);
+      await clickByRole(cdp, "button", "Save", '[role="dialog"]');
+      await waitForPage(cdp, `!document.querySelector(".dialog")`, "persist English language restore", options.timeoutMs);
+      await waitForPage(cdp, `[...document.querySelectorAll("button")].some((button) => button.textContent?.trim() === "Settings")`, "English global Settings action restored", options.timeoutMs);
+
+      await cdp.evaluate(pageExpression(`
+        document.dispatchEvent(new KeyboardEvent("keydown", { key: "f", code: "KeyF", ctrlKey: true, shiftKey: true, bubbles: true }));
+      `));
+      await waitForPage(cdp, `Boolean(document.querySelector('[role="dialog"].command-palette'))`, "command palette for auto-organize destination", options.timeoutMs);
+      await setInputValue(cdp, 'input[aria-label="Command palette search"]', "Auto-organize folders");
+      await waitForPage(cdp, `Boolean([...document.querySelectorAll(".command-palette-row")].find((row) => /Settings · Auto-organize folders/.test(row.textContent ?? "")))`, "auto-organize command-palette result", options.timeoutMs);
+      await cdp.evaluate(pageExpression(`
+        const row = [...document.querySelectorAll(".command-palette-row")]
+          .find((candidate) => /Settings · Auto-organize folders/.test(candidate.textContent ?? ""));
+        if (!(row instanceof HTMLButtonElement)) throw new Error("auto-organize command-palette result is missing");
+        row.click();
+      `));
+      await waitForPage(cdp, `(() => {
+        const selected = document.querySelector('[role="tablist"][aria-label="Settings sections"] [role="tab"][aria-selected="true"]');
+        return Boolean(document.querySelector('[role="dialog"]')) && selected?.textContent?.trim() === "Downloads" && document.activeElement?.id === "settings-auto-organize-toggle";
+      })()`, "exact auto-organize settings teleport and focus", options.timeoutMs);
+      const evidence = await cdp.evaluate(pageExpression(`
+        const selected = document.querySelector('[role="tablist"][aria-label="Settings sections"] [role="tab"][aria-selected="true"]');
+        const target = document.getElementById("settings-auto-organize-toggle");
+        if (!target || document.activeElement !== target) throw new Error("auto-organize palette destination did not focus the exact switch");
+        const describedIds = (target.getAttribute("aria-describedby") ?? "").split(/\\s+/).filter(Boolean);
+        const description = describedIds.map((id) => document.getElementById(id)?.textContent ?? "").join(" ").replace(/\\s+/g, " ").trim();
+        if (!/Existing files are never moved/.test(description) || !/Source: compiled-in value/.test(description)) throw new Error("auto-organize switch lacks its helper/provenance accessible description: " + JSON.stringify(description));
+        return { tab: selected?.textContent?.trim() ?? "", target: target.id, focused: true, description };
+      `));
+      await dispatchEscape(cdp);
+      await waitForPage(cdp, `!document.querySelector(".dialog")`, "auto-organize destination Settings close", options.timeoutMs);
+      await cdp.evaluate(pageExpression(`
+        document.dispatchEvent(new KeyboardEvent("keydown", { key: "f", code: "KeyF", ctrlKey: true, shiftKey: true, bubbles: true }));
+      `));
+      await waitForPage(cdp, `Boolean(document.querySelector('[role="dialog"].command-palette'))`, "command palette for custom-rule destination", options.timeoutMs);
+      await setInputValue(cdp, 'input[aria-label="Command palette search"]', "Custom classification rules");
+      await waitForPage(cdp, `Boolean([...document.querySelectorAll(".command-palette-row")].find((row) => /Settings · Custom classification rules/.test(row.textContent ?? "")))`, "custom-rule command-palette result", options.timeoutMs);
+      await cdp.evaluate(pageExpression(`
+        const row = [...document.querySelectorAll(".command-palette-row")]
+          .find((candidate) => /Settings · Custom classification rules/.test(candidate.textContent ?? ""));
+        if (!(row instanceof HTMLButtonElement)) throw new Error("custom-rule command-palette result is missing");
+        row.click();
+      `));
+      await waitForPage(cdp, `(() => {
+        const region = document.getElementById("settings-auto-organize-rules");
+        return region?.getAttribute("role") === "region" && document.activeElement === region;
+      })()`, "named custom-rule region teleport and focus", options.timeoutMs);
+      const rulesEvidence = await cdp.evaluate(pageExpression(`
+        const selected = document.querySelector('[role="tablist"][aria-label="Settings sections"] [role="tab"][aria-selected="true"]');
+        const region = document.getElementById("settings-auto-organize-rules");
+        if (!(region instanceof HTMLElement) || region.getAttribute("role") !== "region") throw new Error("custom-rule destination is not a region");
+        const name = accessibleName(region);
+        if (name !== "Custom regex classification rules") throw new Error("custom-rule region accessible name is " + JSON.stringify(name));
+        if (document.activeElement !== region) throw new Error("custom-rule palette destination did not focus the named region");
+        if (selected?.textContent?.trim() !== "Downloads") throw new Error("custom-rule palette destination did not select Downloads");
+        const describedIds = (region.getAttribute("aria-describedby") ?? "").split(/\\s+/).filter(Boolean);
+        const description = describedIds.map((id) => document.getElementById(id)?.textContent ?? "").join(" ").replace(/\\s+/g, " ").trim();
+        if (!/first match wins/i.test(description) || !/Source: persisted value/.test(description)) throw new Error("custom-rule region lacks its helper/provenance accessible description: " + JSON.stringify(description));
+        return { tab: "Downloads", target: region.id, role: region.getAttribute("role"), name, focused: true, description };
+      `));
+      await dispatchEscape(cdp);
+      await waitForPage(cdp, `!document.querySelector(".dialog")`, "custom-rule destination Settings close", options.timeoutMs);
+      return { localizedSection, folders: evidence, customRules: rulesEvidence };
+    });
+
+    await runCheck(result, "settings-auto-organize-preview-ipc", async () => {
+      await clickByRole(cdp, "button", "Add URL");
+      await waitForPage(cdp, `Boolean(document.querySelector('[role="dialog"] .add-dl-preview'))`, "Add download preview", options.timeoutMs);
+      const url = "https://example.test/releases/archive.zip?token=preview-only";
+      const fileName = "podcast.mp3";
+      await setInputValue(cdp, 'input[aria-label="Download URL"]', url);
+      await setInputValue(cdp, 'input[aria-label="File name"]', fileName);
+      await waitForPage(cdp, `document.querySelector(".add-dl-preview")?.getAttribute("data-category") === "compressed"`, "worker-backed custom-rule preview", options.timeoutMs);
+      const evidence = await cdp.evaluate(pageExpression(`
+        const preview = document.querySelector(".add-dl-preview");
+        if (!(preview instanceof HTMLElement)) throw new Error("Add download category preview is missing");
+        if (preview.getAttribute("data-category") !== "compressed") throw new Error("custom URL rule did not override the .mp3 extension in the preview");
+        if (accessibleName(preview) !== "Predicted category: compressed") throw new Error("category preview has no truthful accessible name");
+        return window.api.previewCategory(${JSON.stringify(fileName)}, ${JSON.stringify(url)}).then((category) => {
+          if (category !== "compressed") throw new Error("real preview IPC disagrees with the rendered category");
+          return { extensionCategory: "music", customRuleCategory: category, renderedCategory: preview.getAttribute("data-category") };
+        });
+      `));
+      await dispatchEscape(cdp);
+      await waitForPage(cdp, `!document.querySelector(".dialog")`, "Add download preview close", options.timeoutMs);
+      return evidence;
+    });
+
+    await runCheck(result, "settings-reset-provenance", async () => {
+      const before = await cdp.evaluate("window.api.getSettings()");
+      if (before.autoOrganizeRules?.length !== 2 || before.settingProvenance?.autoOrganizeRules !== "persisted") {
+        throw new Error("reset seam requires the two persisted custom rules created earlier in the smoke");
+      }
+      await clickByRole(cdp, "button", "Settings");
+      await waitForPage(cdp, `Boolean(document.querySelector(".dialog"))`, "Settings for trusted reset", options.timeoutMs);
+      await clickByRole(cdp, "tab", "Downloads", '[role="dialog"]');
+      await clickByRole(cdp, "button", "Reset custom classification rules", ".auto-organize-rules");
+      await waitForPage(cdp, `document.querySelectorAll(".auto-organize-rule-card").length === 0 && /Source: compiled-in value/.test(document.getElementById("settings-auto-organize-rules-source")?.textContent ?? "")`, "local reset provenance preview", options.timeoutMs);
+      await clickByRole(cdp, "button", "Save", '[role="dialog"]');
+      await waitForPage(cdp, `!document.querySelector(".dialog")`, "trusted reset Save", options.timeoutMs);
+
+      await clickByRole(cdp, "button", "Settings");
+      await waitForPage(cdp, `Boolean(document.querySelector(".dialog"))`, "reopen Settings after trusted reset", options.timeoutMs);
+      await clickByRole(cdp, "tab", "Downloads", '[role="dialog"]');
+      const after = await cdp.evaluate("window.api.getSettings()");
+      const evidence = await cdp.evaluate(pageExpression(`
+        const cards = document.querySelectorAll(".auto-organize-rule-card").length;
+        const source = document.getElementById("settings-auto-organize-rules-source")?.textContent?.replace(/\\s+/g, " ").trim() ?? "";
+        if (cards !== 0 || source !== "Source: compiled-in value (no custom rules)") throw new Error("custom-rule reset did not survive reopen with exact compiled provenance copy");
+        return { cards, source };
+      `));
+      if (after.autoOrganizeRules?.length !== 0 || after.settingProvenance?.autoOrganizeRules !== "compiled-in") throw new Error("main-process reset boundary did not clear value and provenance");
+      if (after.defaultSaveFolder !== before.defaultSaveFolder) throw new Error("custom-rule reset changed the default folder");
+      await dispatchEscape(cdp);
+      await waitForPage(cdp, `!document.querySelector(".dialog")`, "close Settings after reset proof", options.timeoutMs);
+      return { ...evidence, provenance: after.settingProvenance.autoOrganizeRules, defaultFolderPreserved: true };
+    });
   } catch (error) {
     result.fatalError = result.fatalError ?? formatError(error);
     if (!cdp) markRuntimeChecksFailed(result, formatError(error));
   } finally {
     if (cdp) await cdp.close();
-    const termination = await stopProcess(launch, options.timeoutMs);
+    const termination = await stopProcess(launch, options.timeoutMs, userDataDirectory);
     result.cleanup.processTerminated = termination.terminated;
     recordCheck(
       result,
       "process-terminated",
       termination.terminated ? "passed" : "failed",
       termination.terminated ? `terminated via ${termination.method}` : "Electron process did not terminate within the cleanup timeout",
-      termination.exit
+      termination.evidence ?? termination.exit
     );
     if (result.launch && launch) {
       result.launch.processExit = termination.exit;

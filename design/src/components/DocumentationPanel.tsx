@@ -1,11 +1,13 @@
 import { useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createDefaultRegexBuilderState, type RegexBuilderState } from "@shared/regex";
 import {
+  documentationSearchText,
   resolveDocumentationArticleId,
   searchDocumentation,
   validateDocumentationQuery,
   type DocumentationQuery,
 } from "@shared/documentation";
+import { localizedRegexEvaluationError, useIsolatedRegexBatch } from "../hooks/useIsolatedRegex";
 import { DOCUMENTATION_ARTICLES } from "../generated/documentationArticles";
 import { getUiCopy } from "../i18n/ui";
 import { useAppStore } from "../store/useAppStore";
@@ -36,10 +38,30 @@ export default function DocumentationPanel() {
     pattern: builder.pattern,
     flags: builder.flags,
   }), [builder.flags, builder.mode, builder.pattern]);
-  const queryError = validateDocumentationQuery(query);
+  const documentationSamples = useMemo(
+    () => DOCUMENTATION_ARTICLES.map(documentationSearchText),
+    []
+  );
+  const regexBatch = useIsolatedRegexBatch(
+    query.pattern,
+    query.flags,
+    documentationSamples,
+    query.mode === "regex" && query.pattern.length > 0,
+  );
+  const queryError = validateDocumentationQuery(query) ?? (regexBatch.pending ? null : regexBatch.error);
+  const queryErrorText = queryError ? localizedRegexEvaluationError(queryError, copy.text) : null;
   const results = useMemo(
-    () => queryError ? [] : searchDocumentation(DOCUMENTATION_ARTICLES, query),
-    [query, queryError],
+    () => {
+      if (queryError) return [];
+      if (query.mode !== "regex" || query.pattern.length === 0) {
+        return searchDocumentation(DOCUMENTATION_ARTICLES, query);
+      }
+      if (!regexBatch.evaluations) return [];
+      return DOCUMENTATION_ARTICLES.filter(
+        (_, index) => (regexBatch.evaluations?.[index]?.matches.length ?? 0) > 0
+      );
+    },
+    [query, queryError, regexBatch.evaluations],
   );
   const selectedArticle = DOCUMENTATION_ARTICLES.find((article) => article.id === selectedId) ?? DOCUMENTATION_ARTICLES[0] ?? null;
 
@@ -56,12 +78,21 @@ export default function DocumentationPanel() {
     return true;
   }
 
-  const resultSummary = query.pattern
+  const resultSummary = regexBatch.pending
+    ? copy.text("Evaluating safely…", "安全評估緊…")
+    : query.pattern
     ? copy.text(`${results.length} matching bundled article${results.length === 1 ? "" : "s"}`, `${results.length} 篇內置文章相符`)
     : copy.text(`${DOCUMENTATION_ARTICLES.length} bundled articles`, `內置 ${DOCUMENTATION_ARTICLES.length} 篇文章`);
 
+  function handlePanelKeyDown(event: React.KeyboardEvent<HTMLElement>) {
+    if (event.key !== "Escape" || !builderOpen) return;
+    event.preventDefault();
+    event.stopPropagation();
+    setBuilderOpen(false);
+  }
+
   return (
-    <section className="documentation-panel" aria-labelledby="documentation-panel-heading">
+    <section className="documentation-panel" aria-labelledby="documentation-panel-heading" onKeyDown={handlePanelKeyDown}>
       <header className="documentation-panel-header">
         <div className="documentation-panel-title">
           <DocumentIcon size={18} />
@@ -83,6 +114,9 @@ export default function DocumentationPanel() {
             value={builder.pattern}
             placeholder={copy.text("Search article titles and content", "搜尋文章標題同內容")}
             aria-label={copy.text("Search documentation articles", "搜尋文件文章")}
+            aria-busy={regexBatch.pending || undefined}
+            aria-invalid={queryErrorText ? true : undefined}
+            aria-describedby={queryErrorText ? "documentation-search-error" : regexBatch.pending ? "documentation-search-pending" : undefined}
             onChange={(event) => setBuilder((state) => ({ ...state, pattern: event.target.value }))}
           />
           <button
@@ -102,19 +136,27 @@ export default function DocumentationPanel() {
               title={copy.text("Documentation regex builder", "文件正則建立器")}
               value={{ ...builder, sample: selectedArticle?.body ?? "" }}
               onChange={setBuilder}
+              text={copy.text}
             />
           </div>
         )}
-        {queryError && <p className="field-error documentation-search-error" role="alert">{queryError}</p>}
+        {queryErrorText && <p id="documentation-search-error" className="field-error documentation-search-error" role="alert">{queryErrorText}</p>}
+        {!queryErrorText && regexBatch.pending && (
+          <p id="documentation-search-pending" className="setting-helper documentation-search-error" role="status">
+            {copy.text("Evaluating safely…", "安全評估緊…")}
+          </p>
+        )}
       </div>
 
       <div className="documentation-layout">
-        <aside className="documentation-index" aria-label={copy.text("Documentation article index", "文件文章索引")}>
+        <aside className="documentation-index" aria-label={copy.text("Documentation article index", "文件文章索引")} aria-busy={regexBatch.pending || undefined}>
           <div className="documentation-index-heading">
             <strong>{copy.text("Articles", "文章")}</strong>
             <span>{results.length}/{DOCUMENTATION_ARTICLES.length}</span>
           </div>
-          {results.length === 0 ? (
+          {regexBatch.pending ? (
+            <p className="documentation-empty" role="status">{copy.text("Evaluating safely…", "安全評估緊…")}</p>
+          ) : results.length === 0 ? (
             <p className="documentation-empty" role="status">{copy.funny(
               ["No bundled articles match the active search.", "No bundled articles match; the shelf is being picky.", "No bundled articles match — the article shelf has gone quiet.", "No bundled articles match; even the index found no alibi.", "No bundled articles match — the documentation cupboard is theatrically empty."],
               ["目前搜尋搵唔到相符嘅內置文章。", "目前搵唔到相符文章，個架揀得幾嚴喎。", "目前搵唔到相符文章，文章架靜晒喇。", "目前搵唔到相符文章，連索引都冇口供。", "目前搵唔到相符文章，文件櫃隆重咁空空如也。"],

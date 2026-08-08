@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import {
   closeTab,
   createTab,
@@ -14,13 +14,15 @@ import {
   type TabGroup,
   type TabRecord,
   type TabSearchQuery,
+  type TabSearchResult,
   type TabSearchScope,
   type TabState,
 } from "@shared/tabModel";
-import type { RegexBuilderState } from "@shared/regex";
+import { createDefaultRegexBuilderState, type RegexBuilderState } from "@shared/regex";
 import { useAppStore } from "../store/useAppStore";
 import { getUiCopy } from "../i18n/ui";
 import RegexBuilder from "./RegexBuilder";
+import { localizedRegexEvaluationError, useIsolatedRegexBatch } from "../hooks/useIsolatedRegex";
 import "../styles/tabs.css";
 
 interface TabStripProps {
@@ -29,7 +31,7 @@ interface TabStripProps {
   onActivate: (tabId: string) => void;
 }
 
-type ContextMenuState = { tabId: string; x: number; y: number; search: string } | null;
+type ContextMenuState = { tabId: string; x: number; y: number } | null;
 
 const MAX_VISIBLE_TABS = 6;
 
@@ -44,7 +46,7 @@ export default function TabStrip({ state, onChange, onActivate }: TabStripProps)
   const [overflowOpen, setOverflowOpen] = useState(false);
   const [contextMenu, setContextMenu] = useState<ContextMenuState>(null);
   const [groupPickerTabId, setGroupPickerTabId] = useState<string | null>(null);
-  const [groupSearch, setGroupSearch] = useState("");
+  const [groupSearchQuery, setGroupSearchQuery] = useState<RegexBuilderState>(createDefaultRegexBuilderState);
   const [newGroupName, setNewGroupName] = useState("");
   const [queries, setQueries] = useState<Record<TabSearchScope, TabSearchQuery>>({
     strip: defaultTabSearchQuery(),
@@ -67,6 +69,9 @@ export default function TabStrip({ state, onChange, onActivate }: TabStripProps)
   const overflowTabs = [...ordinaryTabs.slice(visibleOrdinaryTabs.length), ...state.tabs.filter((tab) => tab.groupId && collapsedGroupIds.has(tab.groupId))];
   const displayedTabs = [...pinnedTabs, ...visibleOrdinaryTabs];
   const activeTab = state.tabs.find((tab) => tab.id === state.activeTabId) ?? null;
+  const contextTab = contextMenu
+    ? state.tabs.find((candidate) => candidate.id === contextMenu.tabId) ?? null
+    : null;
 
   useEffect(() => {
     function closeMenus(event: MouseEvent) {
@@ -114,7 +119,7 @@ export default function TabStrip({ state, onChange, onActivate }: TabStripProps)
     event.preventDefault();
     setOverflowOpen(false);
     setGroupPickerTabId(null);
-    setContextMenu({ tabId: tab.id, x: event.clientX, y: event.clientY, search: "" });
+    setContextMenu({ tabId: tab.id, x: event.clientX, y: event.clientY });
   }
 
   function updateTab(tabId: string, action: (current: TabState) => TabState) {
@@ -150,7 +155,7 @@ export default function TabStrip({ state, onChange, onActivate }: TabStripProps)
     if (!groupPickerTabId) return;
     onChange(moveTabToGroup(state, groupPickerTabId, groupId));
     setGroupPickerTabId(null);
-    setGroupSearch("");
+    setGroupSearchQuery(createDefaultRegexBuilderState());
   }
 
   const groupsById = useMemo(() => new Map(state.groups.map((group) => [group.id, group])), [state.groups]);
@@ -163,6 +168,7 @@ export default function TabStrip({ state, onChange, onActivate }: TabStripProps)
     return grouped;
   }, [groupsById, visibleOrdinaryTabs]);
   const ungroupedTabs = visibleOrdinaryTabs.filter((tab) => !tab.groupId || !groupsById.has(tab.groupId));
+  const groupFilterSamples = useMemo(() => state.groups.map((group) => `${group.name} ${group.tabIds.length}`), [state.groups]);
 
   return (
     <div className="tab-strip-shell" ref={stripRef}>
@@ -247,15 +253,14 @@ export default function TabStrip({ state, onChange, onActivate }: TabStripProps)
         <button type="button" className="tab-search-toggle tab-new-button" onClick={addTab} aria-label={copy.text("New tab", "新分頁")} title={copy.text("New tab", "新分頁")}>+</button>
       </div>
 
-      {contextMenu && (
+      {contextMenu && contextTab && (
         <TabContextMenu
+          key={contextMenu.tabId}
           state={state}
-          tab={state.tabs.find((candidate) => candidate.id === contextMenu.tabId) ?? null}
+          tab={contextTab}
           copy={copy}
           x={contextMenu.x}
           y={contextMenu.y}
-          search={contextMenu.search}
-          onSearch={(search) => setContextMenu((current) => current ? { ...current, search } : current)}
           onClose={() => setContextMenu(null)}
           onPin={() => updateTab(contextMenu.tabId, (current) => setTabPinned(current, contextMenu.tabId, !state.tabs.find((tab) => tab.id === contextMenu.tabId)?.pinned))}
           onMove={(direction) => {
@@ -276,31 +281,35 @@ export default function TabStrip({ state, onChange, onActivate }: TabStripProps)
             <strong>{groupPickerTabId === "__new__" ? copy.newGroup : copy.moveIntoGroup}</strong>
             <button type="button" className="notification-dismiss" onClick={() => setGroupPickerTabId(null)} aria-label={copy.close}>×</button>
           </div>
-          <input
-            className="input"
+          <RegexFilterControl
+            label={copy.text("Search groups", "搜尋群組")}
+            query={groupSearchQuery}
+            onQuery={setGroupSearchQuery}
+            samples={groupFilterSamples}
+            copy={copy}
             autoFocus
-            value={groupSearch}
-            placeholder={copy.text("Search groups", "搜尋群組")}
-            aria-label={copy.text("Search groups", "搜尋群組")}
-            onChange={(event) => setGroupSearch(event.target.value)}
-          />
-          {groupPickerTabId === "__new__" ? (
-            <div className="tab-group-create">
-              <input className="input" value={newGroupName} placeholder={copy.groupName} aria-label={copy.groupName} onChange={(event) => setNewGroupName(event.target.value)} />
-              <button type="button" className="btn btn-primary btn-sm" onClick={createGroup}>{copy.text("Create", "建立")}</button>
-            </div>
-          ) : (
-            <div className="tab-group-picker-list" role="listbox" aria-label={copy.text("Available tab groups", "可用分頁群組")}>
-              {state.groups.filter((group) => group.name.toLocaleLowerCase().includes(groupSearch.toLocaleLowerCase())).map((group) => (
-                <button type="button" role="option" key={group.id} onClick={() => moveIntoGroup(group.id)}>
-                  <span className="tab-group-color" style={{ backgroundColor: group.color }} aria-hidden="true" />
-                  <span>{group.name}</span>
-                  <small>{group.tabIds.length}</small>
-                </button>
-              ))}
-              <button type="button" className="btn btn-ghost btn-sm" onClick={() => setGroupPickerTabId("__new__")}>{copy.newGroup}</button>
-            </div>
-          )}
+          >
+            {({ matchIndexes, pending, error }) => groupPickerTabId === "__new__" ? (
+              <div className="tab-group-create">
+                <input className="input" value={newGroupName} placeholder={copy.groupName} aria-label={copy.groupName} onChange={(event) => setNewGroupName(event.target.value)} />
+                <button type="button" className="btn btn-primary btn-sm" onClick={createGroup}>{copy.text("Create", "建立")}</button>
+              </div>
+            ) : (
+              <div className="tab-group-picker-list" role="listbox" aria-label={copy.text("Available tab groups", "可用分頁群組")}>
+                {!pending && !error && state.groups.map((group, index) => matchIndexes.has(index) ? (
+                  <button type="button" role="option" key={group.id} onClick={() => moveIntoGroup(group.id)}>
+                    <span className="tab-group-color" style={{ backgroundColor: group.color }} aria-hidden="true" />
+                    <span>{group.name}</span>
+                    <small>{group.tabIds.length}</small>
+                  </button>
+                ) : null)}
+                {!pending && !error && groupSearchQuery.pattern && matchIndexes.size === 0 && (
+                  <span className="tab-context-empty" role="status">{copy.text("No matching groups.", "搵唔到相符群組。")}</span>
+                )}
+                <button type="button" className="btn btn-ghost btn-sm" onClick={() => setGroupPickerTabId("__new__")}>{copy.newGroup}</button>
+              </div>
+            )}
+          </RegexFilterControl>
         </div>
       )}
 
@@ -360,8 +369,6 @@ function TabContextMenu({
   copy,
   x,
   y,
-  search,
-  onSearch,
   onClose,
   onPin,
   onMove,
@@ -369,33 +376,168 @@ function TabContextMenu({
   onCloseTab,
 }: {
   state: TabState;
-  tab: TabRecord | null;
+  tab: TabRecord;
   copy: ReturnType<typeof getUiCopy>;
   x: number;
   y: number;
-  search: string;
-  onSearch: (value: string) => void;
   onClose: () => void;
   onPin: () => void;
   onMove: (direction: -1 | 1) => void;
   onMoveIntoGroup: () => void;
   onCloseTab: () => void;
 }) {
-  if (!tab) return null;
-  const items = [
+  const [query, setQuery] = useState<RegexBuilderState>(createDefaultRegexBuilderState);
+  const items = useMemo(() => [
     { id: "pin", label: tab.pinned ? copy.text("Unpin tab", "取消釘選分頁") : copy.text("Pin tab", "釘選分頁"), action: onPin },
     { id: "left", label: copy.text("Move tab left", "分頁向左移"), action: () => onMove(-1) },
     { id: "right", label: copy.text("Move tab right", "分頁向右移"), action: () => onMove(1) },
     { id: "group", label: copy.moveIntoGroup, action: onMoveIntoGroup },
     { id: "close", label: copy.text("Close tab", "關閉分頁"), action: onCloseTab },
-  ].filter((item) => item.label.toLocaleLowerCase().includes(search.toLocaleLowerCase()));
+  ], [copy, onCloseTab, onMove, onMoveIntoGroup, onPin, tab.pinned]);
+  const samples = useMemo(() => items.map((item) => item.label), [items]);
   return (
-    <div className="tab-context-menu" role="menu" aria-label={copy.text("Tab actions", "分頁操作")} style={{ left: `${Math.max(8, x)}px`, top: `${Math.max(8, y)}px` }}>
-      <input className="input" autoFocus value={search} placeholder={copy.text("Search tab actions", "搜尋分頁操作")} aria-label={copy.text("Search tab actions", "搜尋分頁操作")} onChange={(event) => onSearch(event.target.value)} />
-      {items.map((item) => <button type="button" role="menuitem" key={item.id} onClick={item.action}>{item.label}</button>)}
-      {items.length === 0 && <span className="tab-context-empty">{copy.text("No matching actions.", "搵唔到相符操作。")}</span>}
+    <div
+      className="tab-context-menu"
+      role="menu"
+      aria-label={copy.text("Tab actions", "分頁操作")}
+      style={{ left: `${Math.max(8, x)}px`, top: `${Math.max(8, y)}px` }}
+      onKeyDown={(event) => {
+        if (event.key === "Escape") onClose();
+      }}
+    >
+      <RegexFilterControl
+        label={copy.text("Search tab actions", "搜尋分頁操作")}
+        query={query}
+        onQuery={setQuery}
+        samples={samples}
+        copy={copy}
+        autoFocus
+      >
+        {({ matchIndexes, pending, error }) => (
+          <div className="tab-context-items">
+            {!pending && !error && items.map((item, index) => matchIndexes.has(index) ? (
+              <button type="button" role="menuitem" key={item.id} onClick={item.action}>{item.label}</button>
+            ) : null)}
+            {!pending && !error && query.pattern && matchIndexes.size === 0 && (
+              <span className="tab-context-empty" role="status">{copy.text("No matching actions.", "搵唔到相符操作。")}</span>
+            )}
+          </div>
+        )}
+      </RegexFilterControl>
       <small>{state.groups.find((group) => group.id === tab.groupId)?.name ?? copy.text("Ungrouped", "未分組")}</small>
       <button type="button" className="btn btn-ghost btn-sm" onClick={onClose}>{copy.close}</button>
+    </div>
+  );
+}
+
+interface RegexFilterResult {
+  matchIndexes: ReadonlySet<number>;
+  pending: boolean;
+  error: string | null;
+}
+
+function RegexFilterControl({
+  label,
+  query,
+  onQuery,
+  samples,
+  copy,
+  autoFocus = false,
+  children,
+}: {
+  label: string;
+  query: RegexBuilderState;
+  onQuery: (query: RegexBuilderState) => void;
+  samples: readonly string[];
+  copy: ReturnType<typeof getUiCopy>;
+  autoFocus?: boolean;
+  children: (result: RegexFilterResult) => React.ReactNode;
+}) {
+  const [builderOpen, setBuilderOpen] = useState(false);
+  const [builderSample, setBuilderSample] = useState<string | null>(null);
+  const builderId = useId();
+  const builderButtonRef = useRef<HTMLButtonElement>(null);
+  const regexBatch = useIsolatedRegexBatch(
+    query.pattern,
+    query.flags,
+    samples,
+    query.mode === "regex" && query.pattern.length > 0,
+  );
+  const error = query.mode === "regex" && !regexBatch.pending && regexBatch.error
+    ? localizedRegexEvaluationError(regexBatch.error, copy.text)
+    : null;
+  const matchIndexes = useMemo(() => {
+    if (!query.pattern) return new Set(samples.map((_, index) => index));
+    if (query.mode === "text") {
+      const needle = query.pattern.toLocaleLowerCase();
+      return new Set(samples.flatMap((sample, index) => sample.toLocaleLowerCase().includes(needle) ? [index] : []));
+    }
+    if (!regexBatch.evaluations) return new Set<number>();
+    return new Set(regexBatch.evaluations.flatMap((evaluation, index) => !evaluation.error && evaluation.matches.length > 0 ? [index] : []));
+  }, [query.mode, query.pattern, regexBatch.evaluations, samples]);
+  const builderValue: RegexBuilderState = {
+    mode: query.mode,
+    pattern: query.pattern,
+    flags: query.flags,
+    sample: builderSample ?? samples.join("\n"),
+  };
+
+  function closeBuilder() {
+    setBuilderOpen(false);
+    window.requestAnimationFrame(() => builderButtonRef.current?.focus({ preventScroll: true }));
+  }
+
+  return (
+    <div
+      className="tab-filter-control"
+      onKeyDown={(event) => {
+        if (event.key !== "Escape" || !builderOpen) return;
+        event.preventDefault();
+        event.stopPropagation();
+        closeBuilder();
+      }}
+    >
+      <div className="tab-search-input-row">
+        <input
+          className="input"
+          type="search"
+          autoFocus={autoFocus}
+          value={query.pattern}
+          placeholder={label}
+          aria-label={label}
+          aria-busy={regexBatch.pending || undefined}
+          aria-invalid={error ? true : undefined}
+          aria-describedby={error ? `${builderId}-error` : regexBatch.pending ? `${builderId}-pending` : undefined}
+          onChange={(event) => onQuery({ ...query, pattern: event.target.value })}
+        />
+        <button
+          ref={builderButtonRef}
+          type="button"
+          className="btn btn-ghost btn-sm"
+          onClick={() => builderOpen ? closeBuilder() : setBuilderOpen(true)}
+          aria-expanded={builderOpen}
+          aria-controls={builderId}
+          aria-label={`${label} ${copy.text("regex builder", "正則建立器")}`}
+        >
+          {copy.text("Regex", "正則")}
+        </button>
+      </div>
+      {builderOpen && (
+        <div id={builderId}>
+          <RegexBuilder
+            value={builderValue}
+            onChange={(next) => {
+              if (next.sample !== builderValue.sample) setBuilderSample(next.sample);
+              onQuery({ ...query, mode: next.mode, pattern: next.pattern, flags: next.flags });
+            }}
+            title={`${label} ${copy.text("regex builder", "正則建立器")}`}
+            text={copy.text}
+          />
+        </div>
+      )}
+      {error && <p id={`${builderId}-error`} className="field-error" role="alert">{error}</p>}
+      {!error && regexBatch.pending && <p id={`${builderId}-pending`} className="setting-helper" role="status">{copy.text("Evaluating safely…", "安全評估緊…")}</p>}
+      {children({ matchIndexes, pending: regexBatch.pending, error })}
     </div>
   );
 }
@@ -418,20 +560,102 @@ function TabSearchControl({
   copy: ReturnType<typeof getUiCopy>;
 }) {
   const [builderOpen, setBuilderOpen] = useState(false);
-  const results = useMemo(() => searchTabs(state, scope, query), [query, scope, state]);
-  const builderValue: RegexBuilderState = { mode: query.mode, pattern: query.pattern, flags: query.flags, sample: "" };
+  const [builderSample, setBuilderSample] = useState<string | null>(null);
+  const builderId = useId();
+  const builderButtonRef = useRef<HTMLButtonElement>(null);
+  const regexCandidates = useMemo<Array<{ tab: TabRecord | null; group: TabGroup | null; text: string }>>(() => {
+    if (scope === "groups") {
+      return state.groups.map((group) => ({ tab: null, group, text: `${group.name} ${group.id}` }));
+    }
+    return state.tabs
+      .filter((tab) => scope !== "strip" || tab.stripId === state.activeStripId)
+      .filter((tab) => scope !== "group" || tab.groupId === state.activeGroupId)
+      .map((tab) => ({
+        tab,
+        group: tab.groupId ? state.groups.find((group) => group.id === tab.groupId) ?? null : null,
+        text: `${tab.label} ${tab.title ?? ""}`,
+      }));
+  }, [scope, state]);
+  const regexSamples = useMemo(() => regexCandidates.map((candidate) => candidate.text), [regexCandidates]);
+  const regexBatch = useIsolatedRegexBatch(
+    query.pattern,
+    query.flags,
+    regexSamples,
+    query.mode === "regex" && query.pattern.length > 0,
+  );
+  const queryError = query.mode === "regex" && !regexBatch.pending && regexBatch.error
+    ? localizedRegexEvaluationError(regexBatch.error, copy.text)
+    : null;
+  const results = useMemo<TabSearchResult[]>(() => {
+    if (query.mode !== "regex") return searchTabs(state, scope, query);
+    if (!query.pattern || !regexBatch.evaluations) return [];
+    return regexCandidates.flatMap((candidate, index) => {
+      const match = regexBatch.evaluations?.[index]?.matches[0];
+      if (!match) return [];
+      return [{
+        tab: candidate.tab,
+        group: candidate.group,
+        location: candidate.tab,
+        matchedText: match.text,
+      }];
+    });
+  }, [query, regexBatch.evaluations, regexCandidates, scope, state]);
+  const defaultBuilderSample = regexSamples.join("\n");
+  const builderValue: RegexBuilderState = {
+    mode: query.mode,
+    pattern: query.pattern,
+    flags: query.flags,
+    sample: builderSample ?? defaultBuilderSample,
+  };
+
+  function closeBuilder() {
+    setBuilderOpen(false);
+    window.requestAnimationFrame(() => builderButtonRef.current?.focus({ preventScroll: true }));
+  }
+
+  function handleKeyDown(event: React.KeyboardEvent<HTMLDivElement>) {
+    if (event.key !== "Escape" || !builderOpen) return;
+    event.preventDefault();
+    event.stopPropagation();
+    closeBuilder();
+  }
 
   return (
-    <div className="tab-search-control">
+    <div className="tab-search-control" onKeyDown={handleKeyDown}>
       <div>
         <span className="tab-search-label">{label}</span>
         <div className="tab-search-input-row">
-          <input className="input" type="search" value={query.pattern} placeholder={copy.text("Search visible tab labels", "搜尋分頁標籤")} onChange={(event) => onQuery({ pattern: event.target.value })} aria-label={`${label} search`} />
-          <button type="button" className="btn btn-ghost btn-sm" onClick={() => setBuilderOpen((open) => !open)} aria-expanded={builderOpen}>{copy.text("Regex", "正則")}</button>
+          <input
+            className="input"
+            type="search"
+            value={query.pattern}
+            placeholder={copy.text("Search visible tab labels", "搜尋分頁標籤")}
+            onChange={(event) => onQuery({ pattern: event.target.value })}
+            aria-label={`${label} search`}
+            aria-busy={regexBatch.pending || undefined}
+            aria-invalid={queryError ? true : undefined}
+            aria-describedby={queryError ? `${builderId}-error` : regexBatch.pending ? `${builderId}-pending` : undefined}
+          />
+          <button
+            ref={builderButtonRef}
+            type="button"
+            className="btn btn-ghost btn-sm"
+            onClick={() => builderOpen ? closeBuilder() : setBuilderOpen(true)}
+            aria-expanded={builderOpen}
+            aria-controls={builderId}
+            aria-label={`${label} ${copy.text("regex builder", "正則建立器")}`}
+          >
+            {copy.text("Regex", "正則")}
+          </button>
         </div>
       </div>
-      {builderOpen && <RegexBuilder value={builderValue} onChange={(next) => onQuery({ mode: next.mode, pattern: next.pattern, flags: next.flags })} title={`${label} regex builder`} />}
-      {results.length > 0 && (
+      {builderOpen && <div id={builderId}><RegexBuilder value={builderValue} onChange={(next) => {
+        if (next.sample !== builderValue.sample) setBuilderSample(next.sample);
+        onQuery({ mode: next.mode, pattern: next.pattern, flags: next.flags });
+      }} title={`${label} ${copy.text("regex builder", "正則建立器")}`} text={copy.text} /></div>}
+      {queryError && <p id={`${builderId}-error`} className="field-error" role="alert">{queryError}</p>}
+      {!queryError && regexBatch.pending && <p id={`${builderId}-pending`} className="setting-helper" role="status">{copy.text("Evaluating safely…", "安全評估緊…")}</p>}
+      {!regexBatch.pending && !queryError && results.length > 0 && (
         <ul className="tab-search-results" aria-live="polite">
           {results.slice(0, 8).map((result) => (
             <li key={result.tab?.id ?? result.group?.id}>
@@ -443,6 +667,11 @@ function TabSearchControl({
             </li>
           ))}
         </ul>
+      )}
+      {!regexBatch.pending && !queryError && query.pattern.length > 0 && results.length === 0 && (
+        <p className="tab-search-empty" role="status">
+          {copy.text(`No ${label.toLocaleLowerCase()} results match.`, `冇相符嘅${label}結果。`)}
+        </p>
       )}
     </div>
   );

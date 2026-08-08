@@ -7,9 +7,38 @@
 export const REGEX_MAX_PATTERN_LENGTH = 2_048;
 export const REGEX_MAX_SAMPLE_LENGTH = 100_000;
 export const REGEX_MAX_MATCHES = 200;
+export const REGEX_MAX_CAPTURE_COUNT = 100;
+export const REGEX_MAX_CAPTURE_CODE_UNITS = 64_000;
 
 export const REGEX_FLAGS = ["g", "i", "m", "s", "u", "y"] as const;
 export type RegexFlag = (typeof REGEX_FLAGS)[number];
+
+export function localizedRegexEvaluationError(
+  error: string,
+  text: (english: string, cantonese: string) => string
+): string {
+  if (error === "Regular expression evaluation timed out.") {
+    return text(error, "正規表示式評估逾時，請簡化模式再試。");
+  }
+  if (/^Regular expression (?:evaluation|worker)/u.test(error)) {
+    return text(error, "正規表示式評估失敗，請再試。");
+  }
+  return error;
+}
+
+export function localizedPrefixedRegexEvaluationError(
+  error: string,
+  prefix: string,
+  englishContext: string,
+  cantoneseContext: string,
+  text: (english: string, cantonese: string) => string
+): string {
+  if (!error.startsWith(prefix)) return error;
+  const detail = error.slice(prefix.length);
+  const englishDetail = localizedRegexEvaluationError(detail, (english) => english);
+  const cantoneseDetail = localizedRegexEvaluationError(detail, (_english, cantonese) => cantonese);
+  return text(`${englishContext}: ${englishDetail}`, `${cantoneseContext}：${cantoneseDetail}`);
+}
 
 export interface RegexBuilderState {
   mode: "text" | "regex";
@@ -29,6 +58,68 @@ export interface RegexEvaluation {
   matches: RegexMatch[];
   truncated: boolean;
   normalizedSample: string;
+}
+
+export interface RegexEvaluationRequest {
+  pattern: string;
+  flags: string;
+  samples: string[];
+  includeMatches: boolean;
+}
+
+function isRegexRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+export function isRegexEvaluation(value: unknown): value is RegexEvaluation {
+  if (!isRegexRecord(value) || (typeof value.error !== "string" && value.error !== null) || (typeof value.error === "string" && value.error.length > 4_096)) return false;
+  if (typeof value.truncated !== "boolean" || typeof value.normalizedSample !== "string" || value.normalizedSample.length > REGEX_MAX_SAMPLE_LENGTH) return false;
+  if (!Array.isArray(value.matches) || value.matches.length > REGEX_MAX_MATCHES) return false;
+  let textCodeUnits = 0;
+  let captureCodeUnits = 0;
+  return value.matches.every((match) => {
+    if (
+      !isRegexRecord(match) || typeof match.index !== "number" || !Number.isSafeInteger(match.index) ||
+      match.index < 0 || match.index > REGEX_MAX_SAMPLE_LENGTH || typeof match.text !== "string" ||
+      !Array.isArray(match.captures) || match.captures.length > REGEX_MAX_CAPTURE_COUNT
+    ) return false;
+    textCodeUnits += match.text.length;
+    if (textCodeUnits > REGEX_MAX_SAMPLE_LENGTH) return false;
+    for (const capture of match.captures) {
+      if (capture !== undefined && typeof capture !== "string") return false;
+      if (typeof capture === "string") {
+        captureCodeUnits += capture.length;
+        if (captureCodeUnits > REGEX_MAX_CAPTURE_CODE_UNITS) return false;
+      }
+    }
+    return true;
+  });
+}
+
+export function normalizeRegexEvaluationRequest(
+  pattern: unknown,
+  flags: unknown,
+  samples: unknown,
+  includeMatches: unknown,
+): RegexEvaluationRequest {
+  if (typeof pattern !== "string" || pattern.length > REGEX_MAX_PATTERN_LENGTH) throw new Error("Invalid regular expression pattern");
+  if (typeof flags !== "string" || flags.length > REGEX_FLAGS.length || normalizeRegexFlags(flags) !== flags) {
+    throw new Error("Invalid regular expression flags");
+  }
+  if (validateRegexPattern(pattern, flags)) throw new Error("Invalid regular expression pattern");
+  if (!Array.isArray(samples) || samples.length > 50_000 || typeof includeMatches !== "boolean") {
+    throw new Error("Invalid regular expression evaluation request");
+  }
+  if (includeMatches && samples.length !== 1) {
+    throw new Error("Full regular expression match details require exactly one bounded sample");
+  }
+  let totalLength = 0;
+  for (const sample of samples) {
+    if (typeof sample !== "string" || sample.length > REGEX_MAX_SAMPLE_LENGTH) throw new Error("Invalid regular expression sample");
+    totalLength += sample.length;
+    if (totalLength > 5_000_000) throw new Error("Regular expression samples exceed the aggregate limit");
+  }
+  return { pattern, flags, samples: [...samples], includeMatches };
 }
 
 export function createDefaultRegexBuilderState(): RegexBuilderState {
@@ -170,6 +261,88 @@ function hasUnsafeSequentialOptionalQuantifier(pattern: string): boolean {
   return false;
 }
 
+function isVariableQuantifier(pattern: string, start: number, end: number): boolean {
+  const tokenEnd = end > start && pattern[end] === "?" ? end - 1 : end;
+  const token = pattern.slice(start, tokenEnd + 1);
+  if (token === "*" || token === "+" || token === "?") return true;
+  const body = token.slice(1, -1);
+  const [minimum, maximum] = body.split(",");
+  return maximum !== undefined && (maximum === "" || maximum !== minimum);
+}
+
+function hasUnsafeOverlappingSequentialQuantifiers(pattern: string, flags: string): boolean {
+  // Adjacent variable-length atoms that can consume the same character create
+  // many equivalent partitions (`a+a+a+…`). JavaScript's backtracking engine
+  // can spend exponential time proving a later suffix does not match. Track
+  // the last quantified atom independently at every group depth and reject
+  // unless the two character sets are provably disjoint.
+  const previousByDepth: Array<RegexCharacterSet | null> = [null];
+  let depth = 0;
+
+  for (let index = 0; index < pattern.length;) {
+    const character = pattern[index];
+    if (character === "(") {
+      depth += 1;
+      previousByDepth[depth] = null;
+      index = readGroupContentStart(pattern, index);
+      continue;
+    }
+    if (character === ")") {
+      previousByDepth[depth] = null;
+      depth = Math.max(0, depth - 1);
+      previousByDepth[depth] = null;
+      index += 1;
+      continue;
+    }
+    if (character === "|" || character === "^" || character === "$") {
+      previousByDepth[depth] = null;
+      index += 1;
+      continue;
+    }
+    if (character === "*" || character === "+" || character === "?" || character === "{") {
+      previousByDepth[depth] = null;
+      index += 1;
+      continue;
+    }
+
+    let atomEnd = index;
+    let characters: RegexCharacterSet;
+    if (character === "\\") {
+      const escaped = readSafetyEscape(pattern, index);
+      atomEnd = escaped.end;
+      characters = escaped.token.characters;
+    } else if (character === "[") {
+      const characterClass = readCharacterClass(pattern, index);
+      if (characterClass === null) return false;
+      atomEnd = characterClass.end;
+      characters = characterClass.token.characters;
+    } else if (character === ".") {
+      characters = UNKNOWN_REGEX_CHARACTER_SET;
+    } else {
+      characters = literalCharacterSet(character);
+    }
+
+    const quantifierStart = atomEnd + 1;
+    const quantifierEnd = readQuantifierEndIncludingLazy(pattern, quantifierStart);
+    if (
+      quantifierEnd !== null &&
+      isVariableQuantifier(pattern, quantifierStart, quantifierEnd) &&
+      readOptionalQuantifierEnd(pattern, quantifierStart) === null
+    ) {
+      const previous = previousByDepth[depth];
+      if (previous && !areCharacterSetsDisjoint(previous, characters, flags.includes("i"))) return true;
+      previousByDepth[depth] = characters;
+      index = quantifierEnd + 1;
+      continue;
+    }
+
+    previousByDepth[depth] = null;
+    index = quantifierEnd === null ? atomEnd + 1 : quantifierEnd + 1;
+  }
+
+  return false;
+}
+
 function hasUnsafeNestedQuantifier(pattern: string): boolean {
   // JavaScript has no portable regex timeout. Walk groups instead of relying
   // on one shallow expression: `(a|a?)+`, `((a+)+)` and the same shapes with
@@ -241,6 +414,24 @@ function literalCharacterSet(value: string): RegexCharacterSet {
   return { kind: "exact", values: new Set([value]) };
 }
 
+const DIGIT_CHARACTERS = "0123456789";
+const WORD_CHARACTERS = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ_abcdefghijklmnopqrstuvwxyz";
+const WHITESPACE_CHARACTERS = "\t\n\v\f\r \u00a0\u1680\u2000\u2001\u2002\u2003\u2004\u2005\u2006\u2007\u2008\u2009\u200a\u2028\u2029\u202f\u205f\u3000\ufeff";
+
+function shorthandCharacterSet(escaped: string): RegexCharacterSet | null {
+  const lower = escaped.toLowerCase();
+  const values = lower === "d"
+    ? DIGIT_CHARACTERS
+    : lower === "w"
+      ? WORD_CHARACTERS
+      : lower === "s"
+        ? WHITESPACE_CHARACTERS
+        : null;
+  if (values === null) return null;
+  const set = new Set(values);
+  return escaped === lower ? { kind: "exact", values: set } : { kind: "negated", excluded: set };
+}
+
 function readGroupContentStart(pattern: string, start: number): number {
   if (pattern[start + 1] !== "?") return start + 1;
 
@@ -262,6 +453,8 @@ function readGroupContentStart(pattern: string, start: number): number {
 function readSafetyEscape(pattern: string, start: number): { end: number; token: RegexSafetyToken } {
   const escaped = pattern[start + 1];
   const end = readRegexEscapeEnd(pattern, start);
+  const shorthand = escaped ? shorthandCharacterSet(escaped) : null;
+  if (shorthand) return { end, token: { characters: shorthand } };
   if (escaped === "n") return { end, token: { characters: literalCharacterSet("\n") } };
   if (escaped === "r") return { end, token: { characters: literalCharacterSet("\r") } };
   if (escaped === "t") return { end, token: { characters: literalCharacterSet("\t") } };
@@ -419,8 +612,19 @@ function normalizeCharacterSet(values: Set<string>, caseInsensitive: boolean): S
   return normalized;
 }
 
+function characterSetsEqual(left: Set<string>, right: Set<string>): boolean {
+  if (left.size !== right.size) return false;
+  for (const value of left) if (!right.has(value)) return false;
+  return true;
+}
+
 function areCharacterSetsDisjoint(left: RegexCharacterSet, right: RegexCharacterSet, caseInsensitive: boolean): boolean {
   if (left.kind === "unknown" || right.kind === "unknown") return false;
+  // A set and its exact complement stay disjoint under the same JavaScript
+  // case folding. Prove this before normalization so non-letter shorthand
+  // sets such as \s/\S are not rejected merely for containing Unicode space.
+  if (left.kind === "exact" && right.kind === "negated" && characterSetsEqual(left.values, right.excluded)) return true;
+  if (left.kind === "negated" && right.kind === "exact" && characterSetsEqual(left.excluded, right.values)) return true;
   const leftValues = left.kind === "exact" ? normalizeCharacterSet(left.values, caseInsensitive) : normalizeCharacterSet(left.excluded, caseInsensitive);
   const rightValues = right.kind === "exact" ? normalizeCharacterSet(right.values, caseInsensitive) : normalizeCharacterSet(right.excluded, caseInsensitive);
   if (leftValues === null || rightValues === null) return false;
@@ -521,6 +725,9 @@ export function validateRegexPattern(pattern: string, flags: string): string | n
   if (hasUnsafeSequentialOptionalQuantifier(pattern)) {
     return "This pattern contains too many sequential optional quantifiers that may cause catastrophic backtracking.";
   }
+  if (hasUnsafeOverlappingSequentialQuantifiers(pattern, flags)) {
+    return "This pattern contains overlapping sequential quantifiers that may cause catastrophic backtracking.";
+  }
   if (hasUnsafeQuantifiedAlternation(pattern, flags)) {
     return "This pattern contains ambiguous alternatives inside a repetition that may cause catastrophic backtracking.";
   }
@@ -537,7 +744,12 @@ export function validateRegexPattern(pattern: string, flags: string): string | n
   }
 }
 
-export function evaluateRegex(pattern: string, flags: string, sample: string): RegexEvaluation {
+export function evaluateRegex(
+  pattern: string,
+  flags: string,
+  sample: string,
+  matchLimit = REGEX_MAX_MATCHES
+): RegexEvaluation {
   const normalizedSample = sample.slice(0, REGEX_MAX_SAMPLE_LENGTH);
   const validationError = validateRegexPattern(pattern, flags);
   if (validationError) {
@@ -552,16 +764,55 @@ export function evaluateRegex(pattern: string, flags: string, sample: string): R
     : `${normalizeRegexFlags(flags)}g`;
   const regex = new RegExp(pattern, evaluationFlags);
   const matches: RegexMatch[] = [];
+  let remainingCaptureCodeUnits = REGEX_MAX_CAPTURE_CODE_UNITS;
+  let captureOutputTruncated = false;
   let result: RegExpExecArray | null;
   while ((result = regex.exec(normalizedSample)) !== null) {
-    matches.push({ index: result.index, text: result[0], captures: result.slice(1) });
-    if (matches.length >= REGEX_MAX_MATCHES) {
+    const captures: Array<string | undefined> = [];
+    for (const capture of result.slice(1, REGEX_MAX_CAPTURE_COUNT + 1)) {
+      if (capture === undefined) {
+        captures.push(undefined);
+        continue;
+      }
+      if (remainingCaptureCodeUnits <= 0) {
+        captureOutputTruncated = true;
+        break;
+      }
+      const boundedCapture = capture.slice(0, remainingCaptureCodeUnits);
+      captures.push(boundedCapture);
+      remainingCaptureCodeUnits -= boundedCapture.length;
+      if (boundedCapture.length !== capture.length) {
+        captureOutputTruncated = true;
+        break;
+      }
+    }
+    if (result.length - 1 > captures.length) captureOutputTruncated = true;
+    matches.push({ index: result.index, text: result[0], captures });
+    if (matches.length >= Math.max(1, Math.min(REGEX_MAX_MATCHES, matchLimit))) {
       return { error: null, matches, truncated: true, normalizedSample };
     }
     // A zero-width global match otherwise repeats forever at the same index.
     if (result[0].length === 0) regex.lastIndex += 1;
   }
-  return { error: null, matches, truncated: sample.length > REGEX_MAX_SAMPLE_LENGTH, normalizedSample };
+  return { error: null, matches, truncated: captureOutputTruncated || sample.length > REGEX_MAX_SAMPLE_LENGTH, normalizedSample };
+}
+
+/**
+ * Match-only evaluation for collection filters. It never materializes match
+ * text, capture groups, or the normalized sample across the IPC boundary.
+ */
+export function evaluateRegexPredicate(pattern: string, flags: string, sample: string): RegexEvaluation {
+  const validationError = validateRegexPattern(pattern, flags);
+  if (validationError) return { error: validationError, matches: [], truncated: false, normalizedSample: "" };
+  if (pattern.length === 0) return { error: null, matches: [], truncated: false, normalizedSample: "" };
+  const normalizedSample = sample.slice(0, REGEX_MAX_SAMPLE_LENGTH);
+  const matched = new RegExp(pattern, normalizeRegexFlags(flags)).test(normalizedSample);
+  return {
+    error: null,
+    matches: matched ? [{ index: 0, text: "", captures: [] }] : [],
+    truncated: sample.length > REGEX_MAX_SAMPLE_LENGTH,
+    normalizedSample: "",
+  };
 }
 
 export type RegexGuidedToken =

@@ -43,7 +43,7 @@ export function searchDocumentation(
       if (haystack.toLocaleLowerCase().includes(query.pattern.toLocaleLowerCase())) result.push(article);
       continue;
     }
-    const evaluated = evaluateRegex(query.pattern, query.flags || "gi", haystack);
+    const evaluated = evaluateRegex(query.pattern, query.flags, haystack);
     if (!evaluated.error && evaluated.matches.length > 0) result.push(article);
   }
   return result;

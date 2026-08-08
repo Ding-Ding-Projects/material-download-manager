@@ -39,6 +39,41 @@ window.MDM_SITE_CONTENT = {
       suggested: ["local-history", "notification-center", "destructive-action-gate"]
     },
     {
+      id: "auto-organize-downloads",
+      category: "Download engine",
+      title: "Auto-organize downloads",
+      summary: "Six future category paths plus ordered, worker-isolated custom regex rules that preserve explicit folders and never move existing files.",
+      docsPath: "../docs/features/download-engine/auto-organize-downloads.md",
+      tags: ["downloads", "categories", "folders", "regex", "settings"],
+      sections: {
+        behavior: [
+          "Downloads using the current default folder can be routed to General, Documents, Videos, Music, Programs, or Compressed. Images and uncategorized files share General, while explicit non-default folders are preserved.",
+          "Custom JavaScript RegExp rules run from top to bottom before extension detection. Each rule checks the sanitized file name and then the source URL; the first matching rule wins.",
+          "Turning folder routing off keeps new default-folder downloads flat but leaves custom classification active for sidebar categories. The switch never moves or rewrites an existing download."
+        ],
+        configuration: [
+          "The Downloads settings tab requires an absolute Windows drive or UNC default folder, derives all six path previews from it, and explains that directories are created only when a matching task starts.",
+          "Preset and blank-rule actions create ordered cards with a name, one of six destinations, keyboard reorder controls, field-specific inline validation, and an anchored regex-only builder bounded to 512 characters.",
+          "Settings use schema version 3. Each rule is an exact five-field record with bounded name, pattern, flags, category, and unique ID values. The renderer sends only editable setting keys; the main process validates and clones accepted values, marks only accepted mutation keys persisted, and preserves untouched provenance across reloads.",
+          "Settings search includes the current folder and switch state, all six derived paths, and every rule's number, name, pattern, flags, and destination. Results focus the exact matching target."
+        ],
+        failureModes: [
+          "Save is disabled for a blank or relative default folder, blank names or patterns, invalid or unsafe expressions, duplicate or reserved IDs, extra rule fields, non-canonical flags, and targets outside the six-category contract.",
+          "An invalid default folder produces an honest preview prompt. No path is fabricated and no folder is created merely by opening Settings.",
+          "Malformed persisted or scheduled rules fail validation instead of executing or silently changing destination."
+        ],
+        security: [
+          "Patterns and samples remain local and bounded. Static checks reject known unsafe forms; every desktop user expression then runs in a terminable main-process worker with a 250 ms deadline.",
+          "The Add download preview reaches the isolated classifier through bounded trusted-sender IPC, generation-checks its result, and final routing evaluates again in the main process. Timeout or worker failure falls back to built-in extension detection.",
+          "Raw source URLs are not logged, and renderer-authored schema or provenance metadata is rejected at the trusted boundary."
+        ],
+        verification: [
+          "The required verification matrix covers exact schema bounds, absolute paths, provenance, worker timeout recovery, first-match ordering, preview/final-routing agreement, native-keyboard reorder, focus and accessible names, field-specific errors, dynamic search, guided-builder limits, real IPC persistence, and narrow bilingual layout. Final results are recorded in the project handoff."
+        ]
+      },
+      suggested: ["reliable-transfers", "regex-builder", "language-appearance"]
+    },
+    {
       id: "record-export",
       category: "Export",
       title: "Record export",
@@ -227,21 +262,22 @@ window.MDM_SITE_CONTENT = {
       tags: ["accessibility", "aria", "focus", "keyboard"],
       sections: {
         behavior: [
-          "RendererAccessibilityBridge decorates visible shared surfaces with dialog and alert-dialog roles, modal labelling, focus containment and restoration, menu semantics, keyboard navigation/typeahead, sidebar activation, and visible shortcut metadata. The smoke rejects interactive controls nested inside labels and checks the narrow Settings layout for clipping.",
+          "RendererAccessibilityBridge decorates visible shared surfaces with dialog and alert-dialog roles, modal labelling, focus containment and restoration, menu semantics, keyboard navigation/typeahead, sidebar activation, and visible shortcut metadata.",
+          "Auto-organize rule cards form a named ordered list. Every control includes its rule position, errors describe only their owning field or card, focus follows reorder/removal, and live status announces the change.",
           "Download-table sort headers are real keyboard targets: Enter and Space apply the same action as a click, while aria-sort reports ascending, descending, or none."
         ],
         configuration: [
           "The bridge observes the real renderer DOM and applies only to visible shared surfaces. New dialogs and menus retain class hooks or add equivalent semantic hooks before shipping."
         ],
         failureModes: [
-          "Focus is returned only to a still-connected originating control. Nested surfaces can consume Escape before shared dialog handling runs.",
+          "Focus is returned only to a still-connected originating control. Reorder and removal choose a valid surviving target. Nested surfaces can consume Escape before shared dialog handling runs.",
           "The current renderer does not yet have a dedicated DOM test harness; that gap is recorded rather than treated as a pass. The built-artifact smoke supplies the real-process accessibility and narrow-layout evidence."
         ],
         security: [
           "The bridge grants no new IPC privileges and never copies provider-authored text into an executable context."
         ],
         verification: [
-          "Typecheck, renderer build, engine tests, Electron tests, and the documented hidden-desktop smoke are the required checks for the bridge."
+          "The required gate covers typecheck, renderer build, engine and Electron tests, plus hidden-desktop smoke with real key events, unique names, field-specific error wiring, focus after reorder/removal, contrast, control sizing, and narrow bilingual layout. Final results are recorded in the project handoff."
         ]
       },
       suggested: ["notification-center", "destructive-action-gate", "command-palette"]
@@ -257,7 +293,8 @@ window.MDM_SITE_CONTENT = {
         behavior: [
           "The builder uses the JavaScript RegExp dialect supplied by Chromium/Electron. Plain text remains the default; regex mode is explicit.",
           "It provides raw pattern editing, supported g/i/m/s/u/y flags, guided insertion for literals, character classes, anchors, groups, alternation, and quantifiers, sample text, live matches, capture groups, copy, and JSON export.",
-          "Patterns are limited to 2,048 characters, samples to 100,000 characters, and displayed results to 200 matches. Zero-width matches advance safely."
+          "Patterns are limited to 2,048 characters, each sample to 100,000 characters, each local IPC batch to 2,000 samples and 5,000,000 aggregate sample characters, and displayed results to 200 matches. Zero-width matches advance safely.",
+          "Every desktop user-authored expression runs in a terminable main-process worker with a 250 ms deadline. Generation checks keep a late response from replacing a newer query."
         ],
         configuration: [
           "Each search surface keeps its own builder state and applies its pattern and flags only to that field.",
@@ -265,13 +302,13 @@ window.MDM_SITE_CONTENT = {
         ],
         failureModes: [
           "Invalid syntax and unsupported flags are reported inline without evaluating the sample.",
-          "A conservative nested-quantifier guard rejects risky expressions before synchronous evaluation because JavaScript RegExp has no portable timeout."
+          "Conservative static checks reject known unsafe repeated forms. A timeout or worker failure terminates the worker, returns a bounded failure, and starts the next request in a fresh worker."
         ],
         security: [
-          "Evaluation is local and bounded. Patterns and sample text are not sent to a server or written to logs."
+          "Evaluation is local and bounded. Patterns and sample text cross only the context-isolated preload/main-process boundary; they are not sent to a network service, persisted, or written to logs."
         ],
         verification: [
-          "Regex tests cover literal escaping, captures, zero-width matches, invalid and adversarial patterns, result bounds, and valid guided fragments."
+          "The required regex matrix covers literal escaping, captures, zero-width matches, invalid and adversarial patterns, IPC and result bounds, timeout termination, post-timeout recovery, stale-result rejection, and guided fragments."
         ]
       },
       suggested: ["tabbed-navigation", "command-palette", "local-history"]
@@ -286,22 +323,22 @@ window.MDM_SITE_CONTENT = {
       sections: {
         behavior: [
           "The settings schema provides English, playful Hong Kong-style Cantonese, and compact bilingual modes. English and Cantonese each have an independent funny-level slider from 1 through 5.",
-          "Theme, density, accent seed color, UI font family, font size, and weight are validated at the persistence boundary and applied live through CSS variables. Provenance states whether a value was persisted or compiled in.",
-          "The Settings dialog has four browser-style tabs—Language, Appearance, Downloads, and Advanced—with one persisted active tab and one independent search/regex-builder state per tab. Results focus the actual control and open closed sections before focus moves; outer action rows use non-interactive containers so buttons are not nested inside labels."
+          "Theme, density, accent seed color, UI font family, font size, and weight are validated at the persistence boundary and applied live through CSS variables. Schema-v3 provenance starts untouched defaults as compiled in, marks accepted mutation keys persisted, and survives reload per key.",
+          "The Settings dialog has four browser-style tabs—Language, Appearance, Downloads, and Advanced—with one persisted active tab and one independent search/regex-builder state per tab. Dynamic results include live folder, path, switch, and rule values, focus the actual control, and open closed sections before focus moves; outer action rows use non-interactive containers so buttons are not nested inside labels."
         ],
         configuration: [
-          "Authoritative defaults and validators live in the shared settings schema. StateStore migrates state.json and persists changed settings before the main process saves them.",
+          "Authoritative defaults and validators live in the shared settings schema. StateStore migrates state.json, requires an absolute Windows drive or UNC default folder, validates exact-shape rules, and persists per-key provenance.",
           "Font stacks use safe installed/bundled fallbacks and do not fetch remote assets."
         ],
         failureModes: [
-          "Invalid enum, number, or color values fall back to the compiled-in value. Unknown persisted keys are ignored.",
+          "Invalid enum, number, color, folder, or exact-shape rule values fail validation or fall back safely during migration. Unknown persisted keys are ignored.",
           "Migration does not execute persisted text as code or send settings over the network."
         ],
         security: [
           "Settings are local state. The site mirrors the same privacy boundary: preferences stay in localStorage and no analytics or third-party assets are loaded."
         ],
         verification: [
-          "Persistence tests cover defaults, provenance, legacy migration, malformed input, and round trips. The built-artifact UI smoke checks tab keyboard navigation, independent search, regex construction, Escape focus restoration, label structure, and narrow layout. Product-level gaps remain explicit: localized/funny copy across every renderer message and the full continuous color translator."
+          "The required settings matrix covers defaults, per-key provenance, legacy migration, malformed input, exact rule shape, absolute folders, dynamic plain-text and regex search, native-keyboard reorder, focus and error association, contrast, and narrow bilingual layout. Product-level gaps remain explicit: localized/funny copy across every renderer message and the full continuous color translator."
         ]
       },
       suggested: ["regex-builder", "tabbed-navigation", "renderer-accessibility"]

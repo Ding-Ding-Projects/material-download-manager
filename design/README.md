@@ -13,7 +13,9 @@ the prototype's simulated engine is not part of the production download path.
 - `electron/` — main process: window management, IPC handlers, and the
   download engine (`electron/download/`): segmented multi-connection HTTP
   downloads with resume support, speed limiting, queue scheduling, category
-  detection, and JSON-file persistence — a TypeScript port of the concepts in
+  detection, category-folder routing, ordered custom regex rules evaluated in
+  terminable workers, and schema-v3 JSON persistence with per-key provenance —
+  a TypeScript port of the concepts in
   `downloader/core` from the original Kotlin codebase.
 - `electron/preload.ts` — contextBridge-exposed `window.api`, the only surface
   the renderer can use to reach the main process.
@@ -21,6 +23,19 @@ the prototype's simulated engine is not part of the production download path.
 - `src/` — React renderer: title bar, sidebar (categories/queues), download
   list, add-download / details / settings dialogs, styled to match the
   original app's dark/light UI (see `vendor/ab-download-manager/assets/screenshots`).
+- `src/components/SettingsDialog.tsx` — the tabbed settings surface, including
+  six future auto-organize paths, dynamic settings search, and an accessible
+  ordered rule list whose cards each have an anchored regex-only builder.
+- `electron/regex/` and `electron/download/categoryRegexWorker.ts` — bounded,
+  terminable main-process workers used for every desktop user-authored regular
+  expression, including Add download previews and final category routing.
+  Cold-start readiness is timed independently from bounded evaluation, filter
+  batches omit captures, and full match details accept one sample only.
+- `shared/settings.ts` — the exact settings and rule contract, including the
+  absolute Windows default-folder requirement and versioned provenance rules.
+- `electron/download/scheduleSources.ts` — bounded local/API/Home Assistant
+  setting-source validation with nested rule cloning, private-address policy,
+  per-request DNS resolution, and connection-time address pinning.
 - `src/components/DocumentationPanel.tsx` and `src/generated/` — the offline
   Documentation tab and its checked-in catalog generated from every
   `docs/features/**/*.md` article. `MarkdownRenderer.tsx` renders provider

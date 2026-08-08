@@ -1,8 +1,8 @@
 import { useMemo } from "react";
 import { useAppStore } from "../store/useAppStore";
-import { useFilteredItems } from "../hooks/useFilteredItems";
 import { formatSpeed } from "../utils/format";
 import { GridIcon } from "./icons";
+import { getUiCopy } from "../i18n/ui";
 
 function CloudDownloadIcon({ size = 14 }: { size?: number }) {
   return (
@@ -22,9 +22,10 @@ function CloudDownloadIcon({ size = 14 }: { size?: number }) {
   );
 }
 
-export default function StatusBar() {
+export default function StatusBar({ filteredCount, regexPending }: { filteredCount: number; regexPending: boolean }) {
   const items = useAppStore((s) => s.items);
-  const filtered = useFilteredItems();
+  const settings = useAppStore((s) => s.settings);
+  const copy = getUiCopy(settings);
 
   const totalSpeed = useMemo(
     () => items.filter((i) => i.status === "downloading").reduce((sum, i) => sum + i.speed, 0),
@@ -35,7 +36,9 @@ export default function StatusBar() {
     <div className="status-bar">
       <div className="status-bar-left">
         <GridIcon size={13} />
-        <span>{filtered.length}</span>
+        {regexPending
+          ? <span role="status" aria-label={copy.text("Evaluating safely", "安全評估緊")}>…</span>
+          : <span>{filteredCount}</span>}
       </div>
       <div className="status-bar-right">
         <CloudDownloadIcon size={14} />

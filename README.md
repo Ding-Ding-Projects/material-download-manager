@@ -29,7 +29,53 @@ AB Download Manager codebase.
 - Download engine docs: docs/features/download-engine/
 - Browser handoff docs: [`docs/features/integrations/browser-extension.md`](docs/features/integrations/browser-extension.md)
 - Progress-window docs: [`docs/features/download-engine/progress-window.md`](docs/features/download-engine/progress-window.md)
+- Auto-organize docs: [`docs/features/download-engine/auto-organize-downloads.md`](docs/features/download-engine/auto-organize-downloads.md)
 - In-app documentation docs: [`docs/features/documentation/in-app-documentation-browser.md`](docs/features/documentation/in-app-documentation-browser.md)
+
+<details>
+<summary>Auto-organize screenshot gallery</summary>
+
+These captures come from the real built Electron renderer on a disposable
+off-screen desktop. The displayed base path was deliberately set to the generic
+`C:\Downloads` before capture. They were recorded from the 2026-08-07 21:36 EDT
+renderer build between 21:39:33 and 21:39:36 EDT. That build emitted
+`index-DYxCKsvA.js` (SHA-256
+`101F7631C949CE6999E89C241559ED5BE42F3FBD9CF7A7A933495672644C39F0`)
+and `index-DLDpdm-j.css` (SHA-256
+`F5A85852CA48644BAE56C3B25926D11A1B231E803DD8FBD61773E61BA5FD7E04`).
+The final built-application smoke passed all 38 required checks against those
+artifacts. Every image decodes as a 24-bit PNG with a unique SHA-256 hash, and
+the exact disposable process tree, profile, and headless desktop were removed.
+
+### Six future category paths
+
+![Downloads settings showing the enabled auto-organize switch and six category paths](docs/screenshots/auto-organize/01-six-category-paths.png)
+
+### Ordered custom-rule editor
+
+![Two custom regex classification rules with destination selectors and move controls](docs/screenshots/auto-organize/02-ordered-rule-editor.png)
+
+### Anchored regex-only builder
+
+![The rule card's anchored JavaScript regular-expression builder](docs/screenshots/auto-organize/03-anchored-regex-builder.png)
+
+### Inline validation and blocked Save
+
+![A blank custom rule showing its inline error and disabled Save action](docs/screenshots/auto-organize/04-inline-invalid-rule.png)
+
+### Narrow 520 CSS-pixel anchored builder
+
+![The anchored rule regex builder reflowed without horizontal clipping at a 520 CSS-pixel viewport](docs/screenshots/auto-organize/05-narrow-rule-layout.png)
+
+### Bilingual mode
+
+![Auto-organize settings rendered in compact English and Cantonese bilingual mode](docs/screenshots/auto-organize/06-bilingual-category-settings.png)
+
+### Exact command-palette destination
+
+![Command palette result that opens and focuses the auto-organize folder switch](docs/screenshots/auto-organize/07-command-palette-destination.png)
+
+</details>
 
 <details>
 <summary>Build and test</summary>
@@ -49,9 +95,9 @@ npm run test:ui
 ```
 
 The Windows packaging command is `npm run dist:win`; the committed application
-manifest still describes the application target, while the stable release
-workflow uses the dedicated unsigned packaging helper because code signing is
-prohibited. The helper restores the source manifest byte-for-byte and the
+manifest still describes the application target. The stable release workflow
+uses the dedicated unsigned packaging helper because code signing is
+prohibited. The helper restores the source manifest byte-for-byte, and the
 artifact validator requires an intentionally unsigned `Setup.exe`,
 `RELEASES`, every full and delta `.nupkg`, and matching package references.
 
@@ -108,7 +154,16 @@ pause/resume, persistence, queue, schedule-clock, header, timeout, settings,
 notification, accessibility, safety, search, navigation, export, a browsable
 local-history tab, loopback browser handoff, and a separate progress window.
 The Settings dialog now has four persisted browser-style tabs with independent
-search builders. The Chromium extension sends validated page or link URLs
+search builders. Its Downloads tab requires an absolute Windows default folder,
+previews six category paths, and manages an accessible first-match rule list
+without moving existing files or overriding an explicitly selected folder.
+Turning folder routing off keeps future default-folder downloads flat while the
+rules continue to classify sidebar items. Every user-authored regular
+expression—including Add download category preview and final routing—runs
+through bounded IPC in a terminable main-process worker; timeouts fail safely
+instead of blocking the renderer or Electron event loop. Settings schema v3
+validates exact bounded rule records and preserves truthful per-key provenance.
+The Chromium extension sends validated page or link URLs
 through the loopback protocol; a live accepted handoff joins the same queue the
 progress window displays. The prototype is never presented as the download
 path. The app also ships an offline Documentation tab that bundles every

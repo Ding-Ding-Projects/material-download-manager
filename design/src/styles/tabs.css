@@ -31,6 +31,7 @@
 .tab-group {
   display: flex;
   align-items: stretch;
+  flex: 0 0 auto;
   min-width: 0;
   border-right: 1px solid var(--border-color);
 }
@@ -173,7 +174,8 @@
 }
 
 .tab-overflow-menu button,
-.tab-context-menu button,
+.tab-context-menu > button,
+.tab-context-items > button,
 .tab-group-picker-list button {
   display: flex;
   align-items: center;
@@ -190,8 +192,10 @@
 
 .tab-overflow-menu button:hover,
 .tab-overflow-menu button:focus-visible,
-.tab-context-menu button:hover,
-.tab-context-menu button:focus-visible,
+.tab-context-menu > button:hover,
+.tab-context-menu > button:focus-visible,
+.tab-context-items > button:hover,
+.tab-context-items > button:focus-visible,
 .tab-group-picker-list button:hover,
 .tab-group-picker-list button:focus-visible {
   background: var(--bg-row-hover);
@@ -215,6 +219,20 @@
 
 .tab-context-menu {
   position: fixed;
+}
+
+.tab-filter-control,
+.tab-context-items {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+}
+
+.tab-filter-control .regex-builder {
+  width: 100%;
+  max-height: min(50vh, 420px);
+  overflow: auto;
 }
 
 .tab-group-picker {

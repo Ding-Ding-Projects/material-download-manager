@@ -25,8 +25,13 @@ to the serializer, keeping the file aligned with the visible result.
 An unavailable local history repository becomes an explicit non-blocking panel
 state and exposes no revision data. Invalid date ranges, oversized searches,
 unknown actions, invalid flags, and unsafe regular expressions are rejected at
-the IPC boundary. Export failures remain visible as an error state and never
-claim that a file was written.
+the IPC boundary. A regex worker timeout or rejection is preserved as a typed,
+localized filter error, associated with the search field, announced in an
+accessible alert, and offered a filter Retry action. It never becomes an
+ordinary zero-revision result. Export failures use a separate action alert and
+their own Retry export action, never mark the search field invalid, and never
+claim that a file was written. A successful retry clears only the action error;
+the filter and export paths cannot overwrite one another's state.
 
 ## Security considerations
 
@@ -42,6 +47,10 @@ history repository remains isolated from user projects and GitHub remotes.
 the History tab, two native date controls, search, export, tab activation, and
 the separate Settings-tab checks. A cheap Lowlevel hidden-desktop capture also
 verified the real application shell after the tab was added.
+Injected-evaluator tests separately prove genuine zero matches and worker
+failures for both views and exports. The built-application smoke also forces an
+export validation failure, proves that search remains valid, corrects the
+format, retries the exact action, and observes successful recovery.
 
 ## Suggested articles
 

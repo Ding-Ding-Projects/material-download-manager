@@ -185,20 +185,91 @@ That release run published stable
 release `v0.1.38` from `0aed1d2` and the sibling records `v0.1.36`/`v0.1.37`
 are captured in the offline changelog, which is current through v0.1.39.
 
-## Open handoff: auto-organize downloads (engine landed, UI pending)
+## Current slice: auto-organize downloads
 
-Branch `claude/auto-organize-downloads` at `faf94dfe` carries the complete,
-verified engine layer for category auto-organization (General, Documents,
-Videos, Music, Programs, Compressed) with user-defined regex filters that
-outrank the extension mapping. Settings schema, migration, IPC-edge
-validation, folder routing, and tests are in: engine 40/40, Electron 54/54,
-typecheck clean. The Settings tab UI (toggle, folder table, rule editor with
-its anchored regex builder), the documentation article, and the bundle regen
-remain. Issue #11 records the full handoff, the decided semantics, and the
-still-unstarted request for extensive README screenshots. The site
-narrow-width fix `a5a78b9` (mobile tab rail no longer inflates the layout
-viewport to 700px) is on the default branch; its CI cycle was queued at
-handoff time and its verdict belongs to the runs for that commit.
+The engine branch `claude/auto-organize-downloads` at
+`faf94df12007b205ceb30cf8d05a9d3adbb37a74` is merged into the local task
+branch through `a3f9ce2607fadc0b42e0bf59660299f010f0385d`. The Settings surface now
+provides the default-enabled folder switch, six derived destination paths,
+an accessible ordered custom-rule list, keyboard-operable first-match
+precedence, field-specific inline validation, dynamic search over live path and
+rule values, and one adjacent regex-only JavaScript builder per rule. General
+is stored as `other`; `image` remains an internal built-in classification that
+routes to General and is not exposed as a duplicate destination. Turning
+folder organization off keeps new default-folder downloads flat but does not
+disable classification rules, and existing downloads or files are never moved
+retroactively. The default save folder must be an absolute Windows drive or UNC
+path; an explicitly selected absolute non-default destination remains intact.
+
+The renderer sends only allowlisted setting keys. The main process validates
+and clones accepted values instead of trusting renderer-authored schema or
+provenance metadata. Settings schema v3 requires an exact five-field rule
+shape, unique non-reserved identifiers, bounded names and patterns, canonical
+flags, one of six visible targets, and no extra keys. A fresh profile keeps
+compiled-in provenance, an accepted mutation marks only its own keys persisted,
+and a valid provenance map survives reload.
+Per-setting Reset actions now cross a separate allowlisted key boundary. The
+main process supplies compiled values and compiled-in provenance itself; Reset
+all preserves the default save folder and restores every other setting in one
+history mutation. Schema-v2 migration canonicalizes recoverable rules one by
+one (including `image` to General, blank names, reserved or duplicate IDs, and
+unknown fields) instead of allowing one legacy record to erase its neighbors.
+
+Every desktop user-authored regular expression now executes in a terminable
+main-process worker. Worker startup has an independent 10-second readiness
+allowance; evaluation starts only after the ready handshake. Search and builder
+requests use a 500 ms evaluation deadline. Classification uses a separate
+one-second deadline and falls back to built-in extension detection on timeout
+or failure; a zero deadline returns that fallback without starting worker work.
+The Add download preview uses bounded IPC, preload result validation,
+sanitized filename parity, and generation checks, while final `addDownload()`
+routing evaluates independently at the trusted boundary. Collection-filter
+responses never return sample, match, or capture text; full match details accept
+exactly one sample and cap capture output at 100 groups and 64,000 code units.
+A timed-out worker is terminated so a poisoned request cannot block the
+Electron event loop or the next request.
+
+Scheduled auto-organize values use the same exact validator and independent
+nested clones. Generic API refreshes resolve every DNS answer, reject private,
+loopback, link-local, mapped, mixed, and non-routable addresses, and pin the
+accepted address into the real connection while retaining TLS hostname
+verification. Resolution repeats per connection to reject DNS rebinding. Only
+the explicit Home Assistant route may target a configured private HTTPS host.
+
+The latest correctness/security finder and its independent refuter both
+returned dry. Final local compiled verification is green: renderer and Electron
+typechecks passed, the renderer and main process rebuilt from current sources,
+`npm run test:engine` passed 57/57 in 28.4 seconds, and
+`npm run test:electron` passed 67/67 in 6.3 seconds. Those suites include
+trusted reset provenance, schema-v2 migration, DNS pinning/rebinding, nested
+schedule cloning, concurrent cold-worker startup, deterministic zero-deadline
+fallback, timeout recovery, bounded match-only/full-result IPC, first-match
+manager routing, preview/final parity, raw-URL redaction, and History/Changelog
+worker-error propagation.
+
+The final pre-commit built-artifact smoke passed all 38 required checks in 10.528
+seconds. It covers native-keyboard reorder, move/remove focus, unique contextual
+names, field-specific error wiring, dynamic Settings search, guided-builder
+limits, real IPC save/reopen and trusted reset boundaries, preview/final parity,
+contrast, 40-pixel controls, four tab-search builders, separate History and
+Changelog action errors, command-palette localization and exact destinations,
+and combined 520-pixel bilingual layout. Cleanup observed the main process and
+four descendants, received the child exit, verified zero exact-profile
+survivors, removed the temporary profile, and was followed by a zero-process
+external inventory. The independent accessibility/localization pass is dry and
+separately passed 38/38 in 11.043 seconds with the same zero-survivor proof.
+Documentation bundle checks passed 2/2, the Pages source passed 43/43, and the
+Chromium extension passed 12/12.
+
+The final documentation-only renderer rebuild emitted
+`index-DYxCKsvA.js` and `index-DLDpdm-j.css`. A seven-image gallery refresh
+against those exact assets completed between 2026-08-08T01:39:33Z and
+2026-08-08T01:39:36Z. All seven files decode as 24-bit PNGs, have unique
+SHA-256 hashes, and use the documented 1100×900 or 520×760 dimensions. The
+capture finished with zero same-checkout Electron processes, zero disposable
+profiles, and zero headless capture desktops. Remote CI/release/Pages evidence,
+default-branch publication, and issue #11 closure remain pending; this section
+does not claim any of them early.
 
 ## Current implementation slice verified and published
 

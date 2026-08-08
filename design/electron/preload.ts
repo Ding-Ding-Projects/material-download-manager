@@ -7,6 +7,8 @@ import type {
   DownloadQueue,
   StateSnapshot,
   NewDownloadInfo,
+  SettingKey,
+  SettingsPatch,
   UpdateInstallResult,
   UpdateState,
   UpdateUnsavedWorkState,
@@ -17,6 +19,8 @@ import type {
 } from "../shared/types";
 import { isExportResult } from "../shared/export";
 import { isHistoryView } from "../shared/history";
+import { isDownloadCategory } from "../shared/settings";
+import { isRegexEvaluation, type RegexEvaluation } from "../shared/regex";
 import { isUpdateInstallResult, isUpdateState, isUpdateUnsavedWorkState } from "../shared/types";
 import {
   isChangelogView,
@@ -75,6 +79,25 @@ const api = {
   probeUrl: (url: string): Promise<NewDownloadInfo> =>
     ipcRenderer.invoke(IPC.PROBE_URL, url),
 
+  previewCategory: async (fileName: string, url: string) => {
+    const category: unknown = await ipcRenderer.invoke(IPC.PREVIEW_CATEGORY, fileName, url);
+    if (!isDownloadCategory(category)) throw new Error("Invalid category preview from main process");
+    return category;
+  },
+
+  evaluateRegexBatch: async (
+    pattern: string,
+    flags: string,
+    samples: string[],
+    includeMatches = false
+  ): Promise<RegexEvaluation[]> => {
+    const evaluations: unknown = await ipcRenderer.invoke(IPC.EVALUATE_REGEX, pattern, flags, samples, includeMatches);
+    if (!Array.isArray(evaluations) || evaluations.length !== samples.length || !evaluations.every(isRegexEvaluation)) {
+      throw new Error("Invalid regular expression evaluations from main process");
+    }
+    return evaluations;
+  },
+
   addDownload: (req: AddDownloadRequest): Promise<string> =>
     ipcRenderer.invoke(IPC.ADD_DOWNLOAD, req),
 
@@ -91,8 +114,8 @@ const api = {
   openFolder: (id: string): Promise<void> => ipcRenderer.invoke(IPC.OPEN_FOLDER, id),
 
   getSettings: (): Promise<AppSettings> => ipcRenderer.invoke(IPC.SETTINGS_GET),
-  setSettings: (settings: Partial<AppSettings>): Promise<AppSettings> =>
-    ipcRenderer.invoke(IPC.SETTINGS_SET, settings),
+  setSettings: (settings: SettingsPatch, resetKeys: SettingKey[] = []): Promise<AppSettings> =>
+    ipcRenderer.invoke(IPC.SETTINGS_SET, settings, resetKeys),
 
   getHistoryView: async (filter?: HistoryFilter): Promise<HistoryView> => {
     const view: unknown = await ipcRenderer.invoke(IPC.HISTORY_GET_VIEW, filter);

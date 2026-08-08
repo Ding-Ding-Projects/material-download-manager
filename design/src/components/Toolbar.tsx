@@ -14,10 +14,16 @@ import {
 } from "./icons";
 import RegexBuilder from "./RegexBuilder";
 import { getSearchValidationError } from "../hooks/useFilteredItems";
+import { localizedRegexEvaluationError } from "../hooks/useIsolatedRegex";
 
 const MENU_ITEMS = ["File", "Tasks", "Tools", "Help"];
 
-export default function Toolbar() {
+interface ToolbarProps {
+  searchEvaluationError?: string | null;
+  searchEvaluationPending?: boolean;
+}
+
+export default function Toolbar({ searchEvaluationError = null, searchEvaluationPending = false }: ToolbarProps) {
   const filter = useAppStore((s) => s.filter);
   const queues = useAppStore((s) => s.queues);
   const items = useAppStore((s) => s.items);
@@ -49,7 +55,14 @@ export default function Toolbar() {
     flags: searchFlags,
     sample: sampleText,
   };
-  const searchError = getSearchValidationError(searchText, searchMode, searchFlags);
+  const rawSearchError = getSearchValidationError(searchText, searchMode, searchFlags)
+    ?? (searchEvaluationPending ? null : searchEvaluationError);
+  const searchError = rawSearchError ? localizedRegexEvaluationError(rawSearchError, copy.text) : null;
+  const searchStatusId = searchError
+    ? "toolbar-search-error"
+    : searchEvaluationPending
+      ? "toolbar-search-pending"
+      : undefined;
 
   useEffect(() => {
     if (!regexOpen) return;
@@ -99,7 +112,8 @@ export default function Toolbar() {
               onChange={(e) => setSearchText(e.target.value)}
               aria-label={copy.searchDownloads}
               aria-invalid={searchError !== null}
-              aria-describedby={searchError ? "toolbar-search-error" : undefined}
+              aria-describedby={searchStatusId}
+              aria-busy={searchEvaluationPending || undefined}
             />
             <button
               ref={regexToggleRef}
@@ -116,6 +130,11 @@ export default function Toolbar() {
           {searchError && (
             <p id="toolbar-search-error" className="field-error search-builder-error" role="alert">
               {searchError}
+            </p>
+          )}
+          {!searchError && searchEvaluationPending && (
+            <p id="toolbar-search-pending" className="search-builder-error" role="status">
+              {copy.text("Evaluating safely…", "安全評估緊…")}
             </p>
           )}
           {regexOpen && (

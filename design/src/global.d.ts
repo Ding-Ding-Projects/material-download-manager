@@ -2,8 +2,11 @@ import type {
   AddDownloadRequest,
   AppSettings,
   BrowserHandoffRequest,
+  DownloadCategory,
   DownloadQueue,
   NewDownloadInfo,
+  SettingKey,
+  SettingsPatch,
   StateSnapshot,
   UpdateInstallResult,
   UpdateState,
@@ -14,6 +17,7 @@ import type {
   HistoryView,
 } from "@shared/types";
 import type { ChangelogView, ChangelogViewRequest } from "../electron/history/ChangelogStore";
+import type { RegexEvaluation } from "@shared/regex";
 
 export interface MaterialDownloadManagerAPI {
   getState(): Promise<StateSnapshot>;
@@ -25,6 +29,8 @@ export interface MaterialDownloadManagerAPI {
   openUpdateReleaseNotes(): Promise<boolean>;
   setUnsavedWorkState(state: UpdateUnsavedWorkState): Promise<void>;
   probeUrl(url: string): Promise<NewDownloadInfo>;
+  previewCategory(fileName: string, url: string): Promise<DownloadCategory>;
+  evaluateRegexBatch(pattern: string, flags: string, samples: string[], includeMatches?: boolean): Promise<RegexEvaluation[]>;
   addDownload(req: AddDownloadRequest): Promise<string>;
   enqueueCapturedDownload(req: BrowserHandoffRequest): Promise<string>;
   pauseDownload(id: string): Promise<void>;
@@ -35,7 +41,7 @@ export interface MaterialDownloadManagerAPI {
   openFile(id: string): Promise<void>;
   openFolder(id: string): Promise<void>;
   getSettings(): Promise<AppSettings>;
-  setSettings(settings: Partial<AppSettings>): Promise<AppSettings>;
+  setSettings(settings: SettingsPatch, resetKeys?: SettingKey[]): Promise<AppSettings>;
   getHistoryView(filter?: HistoryFilter): Promise<HistoryView>;
   exportHistory(format: ExportFormat, filter?: HistoryFilter): Promise<ExportResult>;
   getChangelogView(request?: ChangelogViewRequest): Promise<ChangelogView>;

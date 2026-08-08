@@ -30,6 +30,8 @@ test("the generated offline documentation bundle is complete and current", async
   assert.match(bundle, /DOCUMENTATION_ARTICLES/);
   assert.match(bundle, /features\/site\/landing-and-documentation-site\.md/);
   assert.match(bundle, /features\/documentation\/in-app-documentation-browser\.md/);
+  assert.match(bundle, /features\/download-engine\/auto-organize-downloads\.md/);
+  assert.match(bundle, /# Auto-organize downloads/);
 });
 
 test("the generated bundle lives inside the renderer source and is present", async () => {

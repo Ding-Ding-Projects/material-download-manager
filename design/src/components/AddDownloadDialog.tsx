@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import type { NewDownloadInfo } from "@shared/types";
+import { detectCategory } from "@shared/categories";
+import { isValidDefaultSaveFolder } from "@shared/settings";
 import { useAppStore } from "../store/useAppStore";
-import { detectCategory } from "../utils/category";
 import { formatBytes } from "../utils/format";
 import Dialog from "./Dialog";
 import {
@@ -21,6 +22,7 @@ export default function AddDownloadDialog() {
   const prefillUrl = useAppStore((s) => s.addDownloadPrefillUrl);
   const closeAddDownload = useAppStore((s) => s.closeAddDownload);
   const probeUrl = useAppStore((s) => s.probeUrl);
+  const previewCategory = useAppStore((s) => s.previewCategory);
   const addDownload = useAppStore((s) => s.addDownload);
   const pickFolder = useAppStore((s) => s.pickFolder);
 
@@ -35,8 +37,10 @@ export default function AddDownloadDialog() {
   const [showHeaders, setShowHeaders] = useState(false);
   const [headersText, setHeadersText] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [category, setCategory] = useState(() => detectCategory("file"));
 
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const categoryPreviewGenerationRef = useRef(0);
 
   async function doProbe(target: string) {
     if (!/^https?:\/\//i.test(target)) {
@@ -68,7 +72,26 @@ export default function AddDownloadDialog() {
   }, [url]);
 
   const effectiveFileName = fileName || probeResult?.suggestedFileName || "";
-  const category = detectCategory(effectiveFileName || "file");
+  const effectiveFolder = folder || settings?.defaultSaveFolder || "";
+  const folderError = isValidDefaultSaveFolder(effectiveFolder)
+    ? null
+    : "Choose an absolute Windows save folder.";
+
+  useEffect(() => {
+    const previewFileName = effectiveFileName || "file";
+    const generation = ++categoryPreviewGenerationRef.current;
+    setCategory(detectCategory(previewFileName));
+    const timer = setTimeout(() => {
+      void previewCategory(previewFileName, url)
+        .then((nextCategory) => {
+          if (categoryPreviewGenerationRef.current === generation) setCategory(nextCategory);
+        })
+        .catch(() => {
+          // The built-in extension result remains an honest, responsive fallback.
+        });
+    }, 75);
+    return () => clearTimeout(timer);
+  }, [effectiveFileName, previewCategory, url]);
 
   function parseHeaders(): Record<string, string> | undefined {
     const lines = headersText.split("\n").map((l) => l.trim()).filter(Boolean);
@@ -90,7 +113,7 @@ export default function AddDownloadDialog() {
     try {
       await addDownload({
         url: url.trim(),
-        folder: folder.trim() || settings?.defaultSaveFolder || "",
+        folder: effectiveFolder,
         fileName: effectiveFileName || "download",
         queueId: null,
         startImmediately,
@@ -123,10 +146,10 @@ export default function AddDownloadDialog() {
       width={520}
       footer={
         <>
-          <button type="button" className="btn btn-secondary" onClick={() => void handleSubmit(false)} disabled={!url.trim() || submitting}>
+          <button type="button" className="btn btn-secondary" onClick={() => void handleSubmit(false)} disabled={!url.trim() || submitting || Boolean(folderError)}>
             Add
           </button>
-          <button type="button" className="btn btn-primary" onClick={() => void handleSubmit(true)} disabled={!url.trim() || submitting}>
+          <button type="button" className="btn btn-primary" onClick={() => void handleSubmit(true)} disabled={!url.trim() || submitting || Boolean(folderError)}>
             Download
           </button>
           <div className="spacer" />
@@ -141,6 +164,7 @@ export default function AddDownloadDialog() {
           className="input"
           type="text"
           placeholder="https://example.com/file.zip"
+          aria-label="Download URL"
           value={url}
           onChange={(e) => setUrl(e.target.value)}
           autoFocus
@@ -153,7 +177,16 @@ export default function AddDownloadDialog() {
       <div className="add-dl-main-row">
         <div className="add-dl-fields">
           <div className="field-row">
-            <input className="input" type="text" placeholder="Save folder" value={folder} onChange={(e) => setFolder(e.target.value)} />
+            <input
+              className="input"
+              type="text"
+              placeholder="Save folder"
+              value={folder}
+              aria-label="Save folder"
+              aria-invalid={folderError ? true : undefined}
+              aria-describedby={folderError ? "add-download-folder-error" : undefined}
+              onChange={(e) => setFolder(e.target.value)}
+            />
             <button type="button" className="icon-btn" title="Choose folder" onClick={() => void handlePickFolder()}>
               <FolderIcon size={15} />
             </button>
@@ -179,11 +212,13 @@ export default function AddDownloadDialog() {
               </div>
             )}
           </div>
+          {folderError && <p className="field-error" id="add-download-folder-error" role="alert">{folderError}</p>}
           <div className="field-row">
             <input
               className="input"
               type="text"
               placeholder="File name"
+              aria-label="File name"
               value={effectiveFileName}
               onChange={(e) => {
                 setFileName(e.target.value);
@@ -194,7 +229,7 @@ export default function AddDownloadDialog() {
         </div>
 
         <div className="add-dl-side">
-          <div className="add-dl-preview">
+          <div className="add-dl-preview" data-category={category} aria-label={`Predicted category: ${category}`}>
             <CategoryIcon category={category} size={22} />
             <span className="add-dl-size">
               {probing ? "Probing…" : probeResult ? formatBytes(probeResult.contentLength) : probeError ? "Unknown" : "—"}

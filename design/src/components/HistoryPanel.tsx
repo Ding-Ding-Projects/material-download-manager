@@ -3,6 +3,7 @@ import type { ExportFormat } from "@shared/export";
 import { createDefaultRegexBuilderState, type RegexBuilderState } from "@shared/regex";
 import { HISTORY_ACTIONS, type HistoryAction, type HistoryFilter, type HistoryView } from "@shared/history";
 import { getUiCopy } from "../i18n/ui";
+import { localizedPrefixedRegexEvaluationError } from "../hooks/useIsolatedRegex";
 import { useAppStore } from "../store/useAppStore";
 import RegexBuilder from "./RegexBuilder";
 import { HistoryIcon } from "./icons";
@@ -39,6 +40,19 @@ function actionLabel(action: string, copy: ReturnType<typeof getUiCopy>): string
   return labels[action as HistoryAction] ?? action;
 }
 
+function historyExportError(message: string, copy: ReturnType<typeof getUiCopy>): string {
+  const regexFailure = localizedPrefixedRegexEvaluationError(
+    message,
+    "History regular expression evaluation failed: ",
+    "History regex export failed",
+    "紀錄正則匯出失敗",
+    copy.text
+  );
+  return regexFailure === message
+    ? copy.text(`History export failed: ${message}`, `匯出紀錄失敗：${message}`)
+    : regexFailure;
+}
+
 export default function HistoryPanel() {
   const settings = useAppStore((state) => state.settings);
   const copy = useMemo(
@@ -54,7 +68,9 @@ export default function HistoryPanel() {
   const [selectedActions, setSelectedActions] = useState<HistoryAction[]>([]);
   const [view, setView] = useState<HistoryView | null>(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [filterError, setFilterError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [reloadGeneration, setReloadGeneration] = useState(0);
   const [format, setFormat] = useState<ExportFormat>("jsonl");
   const [exporting, setExporting] = useState(false);
   const [exportMessage, setExportMessage] = useState<string | null>(null);
@@ -83,7 +99,7 @@ export default function HistoryPanel() {
   useEffect(() => {
     let current = true;
     setLoading(true);
-    setError(null);
+    setFilterError(null);
     window.api.getHistoryView(filter).then((next) => {
       if (!current) return;
       setView(next);
@@ -95,13 +111,20 @@ export default function HistoryPanel() {
     }).catch((reason: unknown) => {
       if (!current) return;
       setView(null);
-      setError(reason instanceof Error ? reason.message : copy.text("History could not be loaded.", "載入紀錄失敗。"));
+      const message = reason instanceof Error ? reason.message : copy.text("History could not be loaded.", "載入紀錄失敗。");
+      setFilterError(localizedPrefixedRegexEvaluationError(
+        message,
+        "History regular expression evaluation failed: ",
+        "History regex filter failed",
+        "紀錄正則篩選失敗",
+        copy.text
+      ));
       setLoading(false);
     });
     return () => {
       current = false;
     };
-  }, [copy, filter]);
+  }, [copy, filter, reloadGeneration]);
 
   function toggleAction(action: HistoryAction) {
     setSelectedActions((current) => current.includes(action) ? current.filter((item) => item !== action) : [...current, action]);
@@ -110,6 +133,7 @@ export default function HistoryPanel() {
   async function exportFiltered() {
     setExporting(true);
     setExportMessage(null);
+    setActionError(null);
     try {
       const result = await window.api.exportHistory(format, filter);
       downloadText(`material-download-manager-history.${result.extension}`, result.content, result.mimeType);
@@ -121,7 +145,8 @@ export default function HistoryPanel() {
         `已匯出 ${result.metadata.recordCount} 條修訂紀錄，格式 ${format.toUpperCase()}（${result.metadata.encoding}、${result.metadata.lineEnding}）；往返狀態：${result.roundTrip.status}。${result.warnings.length > 0 ? `提示：${result.warnings.join(" ")}` : ""}`
       ));
     } catch (reason: unknown) {
-      setError(reason instanceof Error ? reason.message : copy.text("History export failed.", "匯出紀錄失敗。"));
+      const message = reason instanceof Error ? reason.message : copy.text("History export failed.", "匯出紀錄失敗。");
+      setActionError(historyExportError(message, copy));
     } finally {
       setExporting(false);
     }
@@ -166,6 +191,8 @@ export default function HistoryPanel() {
               placeholder={copy.text("Search revision actions and summaries", "搜尋修訂操作同摘要")}
               onChange={(event) => setBuilder((state) => ({ ...state, pattern: event.target.value }))}
               aria-label={copy.text("Search history", "搜尋紀錄")}
+              aria-invalid={filterError ? true : undefined}
+              aria-describedby={filterError ? "history-filter-error" : undefined}
             />
             <button ref={regexButtonRef} type="button" className="btn btn-ghost btn-sm" aria-expanded={regexOpen} aria-controls="history-search-builder" onClick={() => setRegexOpen((open) => !open)}>
               {copy.text("Regex", "正則")}
@@ -173,7 +200,7 @@ export default function HistoryPanel() {
           </div>
           {regexOpen && (
             <div id="history-search-builder" className="history-search-builder">
-              <RegexBuilder title={copy.text("History regex builder", "紀錄正則建立器")} value={builder} onChange={setBuilder} />
+              <RegexBuilder title={copy.text("History regex builder", "紀錄正則建立器")} value={builder} onChange={setBuilder} text={copy.text} />
             </div>
           )}
         </div>
@@ -200,7 +227,18 @@ export default function HistoryPanel() {
         )}
       </div>
 
-      {error && <div className="history-status history-status-error" role="alert">{error}</div>}
+      {filterError && <div id="history-filter-error" className="history-status history-status-error" role="alert">
+        <span>{filterError}</span>
+        <button type="button" className="btn btn-ghost btn-sm" onClick={() => setReloadGeneration((value) => value + 1)}>
+          {copy.text("Retry history filter", "重試紀錄篩選")}
+        </button>
+      </div>}
+      {actionError && <div id="history-export-error" className="history-status history-status-error" role="alert">
+        <span>{actionError}</span>
+        <button type="button" className="btn btn-ghost btn-sm" disabled={exporting} onClick={() => void exportFiltered()}>
+          {copy.text("Retry history export", "重試匯出紀錄")}
+        </button>
+      </div>}
       {exportMessage && <div className="history-status" role="status">{exportMessage}</div>}
       {loading && <div className="history-empty" role="status">{copy.text("Loading local history…", "載入緊本機紀錄…")}</div>}
       {!loading && view && !view.available && <div className="history-empty history-status-error" role="alert">{view.emptyReason}</div>}

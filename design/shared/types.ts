@@ -14,6 +14,9 @@ export type DownloadCategory =
   | "compressed"
   | "other";
 
+/** The six user-selectable folder targets. Images remain an internal detected category that routes to General. */
+export type AutoOrganizeTargetCategory = Exclude<DownloadCategory, "image">;
+
 /**
  * Auto-organize folder names, keyed by detected category. The six visible
  * folders are General, Documents, Videos, Music, Programs, and Compressed;
@@ -44,7 +47,7 @@ export interface AutoOrganizeRule {
   name: string;
   pattern: string;
   flags: string;
-  category: DownloadCategory;
+  category: AutoOrganizeTargetCategory;
 }
 
 export type DownloadStatus =
@@ -149,6 +152,9 @@ export interface AppSettings {
   autoOrganizeRules: AutoOrganizeRule[];
   settingProvenance: SettingsProvenance;
 }
+
+/** Renderer/main mutations may contain only user-editable setting keys. */
+export type SettingsPatch = Partial<Pick<AppSettings, SettingKey>>;
 
 export interface AddDownloadRequest {
   url: string;
@@ -294,6 +300,8 @@ export function isUpdateInstallResult(value: unknown): value is UpdateInstallRes
 export const IPC = {
   ADD_DOWNLOAD: "download:add",
   PROBE_URL: "download:probe",
+  PREVIEW_CATEGORY: "download:previewCategory",
+  EVALUATE_REGEX: "regex:evaluate",
   PAUSE: "download:pause",
   RESUME: "download:resume",
   CANCEL: "download:cancel",

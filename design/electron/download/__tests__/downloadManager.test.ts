@@ -6,6 +6,7 @@ import path from "node:path";
 
 import { assertQueueCreatePayload, DownloadManager } from "../DownloadManager";
 import type { DownloadQueue } from "../../../shared/types";
+import { SETTING_KEYS } from "../../../shared/types";
 import { startTestServer } from "./testServer";
 import { HistoryStore } from "../../history/HistoryStore";
 
@@ -13,6 +14,232 @@ import { HistoryStore } from "../../history/HistoryStore";
 async function removeTestRoot(root: string): Promise<void> {
   await fsp.rm(root, { recursive: true, force: true, maxRetries: 20, retryDelay: 100 });
 }
+
+test("manager applies ordered auto-organize rules without rewriting explicit target folders", async () => {
+  const root = await fsp.mkdtemp(path.join(os.tmpdir(), "mdm-auto-organize-manager-test-"));
+  const server = await startTestServer(1024);
+  const previousUserProfile = process.env.USERPROFILE;
+  process.env.USERPROFILE = root;
+  const manager = new DownloadManager(root);
+  const defaultFolder = path.join(root, "Downloads");
+  try {
+    await manager.init();
+    const saved = await manager.setSettings({
+      defaultSaveFolder: defaultFolder,
+      autoOrganizeEnabled: true,
+      autoOrganizeRules: [{
+        id: "documents",
+        name: "Document names",
+        pattern: "\\.pdf$",
+        flags: "i",
+        category: "document",
+      }],
+    });
+    assert.equal(saved.settingProvenance.autoOrganizeEnabled, "persisted");
+    assert.equal(saved.settingProvenance.autoOrganizeRules, "persisted");
+
+    const organizedId = await manager.addDownload({
+      url: server.url,
+      folder: defaultFolder,
+      fileName: "quarterly-report.PDF",
+      startImmediately: false,
+    });
+    let item = manager.getState().items.find((candidate) => candidate.id === organizedId);
+    assert.equal(item?.category, "document");
+    assert.equal(item?.folder, path.join(defaultFolder, "Documents"));
+
+    await manager.setSettings({ autoOrganizeEnabled: false });
+    const flatId = await manager.addDownload({
+      url: server.url,
+      folder: defaultFolder,
+      fileName: "flat-report.pdf",
+      startImmediately: false,
+    });
+    item = manager.getState().items.find((candidate) => candidate.id === flatId);
+    assert.equal(item?.category, "document", "rules continue to classify the sidebar while folder routing is off");
+    assert.equal(item?.folder, defaultFolder);
+
+    const explicitFolder = path.join(root, "Hand-picked");
+    await manager.setSettings({ autoOrganizeEnabled: true });
+    const explicitId = await manager.addDownload({
+      url: server.url,
+      folder: explicitFolder,
+      fileName: "explicit-report.pdf",
+      startImmediately: false,
+    });
+    item = manager.getState().items.find((candidate) => candidate.id === explicitId);
+    assert.equal(item?.category, "document");
+    assert.equal(item?.folder, explicitFolder);
+  } finally {
+    await manager.shutdown();
+    await server.close();
+    await removeTestRoot(root);
+    if (previousUserProfile === undefined) delete process.env.USERPROFILE;
+    else process.env.USERPROFILE = previousUserProfile;
+  }
+});
+
+test("manager marks only the explicitly patched setting as persisted and ignores an empty patch", async () => {
+  const root = await fsp.mkdtemp(path.join(os.tmpdir(), "mdm-one-setting-provenance-test-"));
+  const previousUserProfile = process.env.USERPROFILE;
+  process.env.USERPROFILE = root;
+  const manager = new DownloadManager(root);
+  try {
+    await manager.init();
+    const before = manager.getSettings();
+    const unchanged = await manager.setSettings({});
+    assert.strictEqual(unchanged, before, "an empty renderer patch must be a no-op");
+    const updated = await manager.setSettings({ theme: before.theme === "light" ? "dark" : "light" });
+
+    for (const key of SETTING_KEYS) {
+      assert.equal(
+        updated.settingProvenance[key],
+        key === "theme" ? "persisted" : before.settingProvenance[key],
+        `${key} provenance changed without a patch`
+      );
+    }
+  } finally {
+    await manager.shutdown();
+    await removeTestRoot(root);
+    if (previousUserProfile === undefined) delete process.env.USERPROFILE;
+    else process.env.USERPROFILE = previousUserProfile;
+  }
+});
+
+test("manager resets values and provenance atomically through the trusted reset boundary", async () => {
+  const root = await fsp.mkdtemp(path.join(os.tmpdir(), "mdm-settings-reset-provenance-test-"));
+  const previousUserProfile = process.env.USERPROFILE;
+  process.env.USERPROFILE = root;
+  const loginItemSettings: boolean[] = [];
+  const writeLoginItemSettings = (openAtLogin: boolean) => loginItemSettings.push(openAtLogin);
+  let manager = new DownloadManager(root, writeLoginItemSettings);
+  try {
+    await manager.init();
+    const compiled = manager.getSettings();
+    const defaultFolder = compiled.defaultSaveFolder;
+
+    let updated = await manager.setSettings({ theme: compiled.theme });
+    assert.equal(updated.theme, compiled.theme);
+    assert.equal(updated.settingProvenance.theme, "persisted", "saving the compiled value still records explicit persistence");
+
+    updated = await manager.setSettings({ languageMode: "bilingual" }, ["theme"]);
+    assert.equal(updated.theme, compiled.theme);
+    assert.equal(updated.settingProvenance.theme, "compiled-in");
+    assert.equal(updated.languageMode, "bilingual");
+    assert.equal(updated.settingProvenance.languageMode, "persisted");
+    assert.equal(updated.defaultSaveFolder, defaultFolder);
+
+    await manager.shutdown();
+    manager = new DownloadManager(root, writeLoginItemSettings);
+    await manager.init();
+    const reloaded = manager.getSettings();
+    assert.equal(reloaded.theme, compiled.theme);
+    assert.equal(reloaded.settingProvenance.theme, "compiled-in");
+    assert.equal(reloaded.languageMode, "bilingual");
+    assert.equal(reloaded.settingProvenance.languageMode, "persisted");
+
+    const resetAllExceptFolder = SETTING_KEYS.filter((key) => key !== "defaultSaveFolder");
+    const reset = await manager.setSettings({}, resetAllExceptFolder);
+    assert.equal(reset.defaultSaveFolder, defaultFolder);
+    assert.equal(reset.settingProvenance.defaultSaveFolder, compiled.settingProvenance.defaultSaveFolder);
+    for (const key of resetAllExceptFolder) {
+      assert.equal(reset.settingProvenance[key], "compiled-in", `${key} did not reset to compiled-in provenance`);
+    }
+    if (process.platform !== "linux") assert.equal(loginItemSettings.at(-1), reset.startOnSystemStartup);
+    await assert.rejects(
+      () => manager.setSettings({ theme: "light" }, ["theme"]),
+      /cannot be changed and reset/
+    );
+  } finally {
+    await manager.shutdown();
+    await removeTestRoot(root);
+    if (previousUserProfile === undefined) delete process.env.USERPROFILE;
+    else process.env.USERPROFILE = previousUserProfile;
+  }
+});
+
+test("manager preview matches the final category while raw query values stay redacted", async () => {
+  const root = await fsp.mkdtemp(path.join(os.tmpdir(), "mdm-category-preview-redaction-test-"));
+  const server = await startTestServer(1_024);
+  const previousUserProfile = process.env.USERPROFILE;
+  process.env.USERPROFILE = root;
+  const manager = new DownloadManager(root);
+  let initialized = false;
+  try {
+    await manager.init();
+    initialized = true;
+    const defaultFolder = path.join(root, "Downloads");
+    await manager.setSettings({
+      defaultSaveFolder: defaultFolder,
+      autoOrganizeEnabled: true,
+      autoOrganizeRules: [{
+        id: "long-query-values",
+        name: "Long query values",
+        pattern: "access_token=[^&#]{20,30}(?:[&#]|$)",
+        flags: "i",
+        category: "document",
+      }],
+    });
+
+    const secret = "opaque-route-value-12345";
+    const sourceUrl = `${server.url}?access_token=${secret}`;
+    const preview = await manager.previewCategory("archive.zip", sourceUrl);
+    assert.equal(preview, "document", "the raw query must be available to custom category rules");
+
+    const id = await manager.addDownload({
+      url: sourceUrl,
+      folder: defaultFolder,
+      fileName: "archive.zip",
+      startImmediately: false,
+    });
+    const added = manager.getState().items.find((item) => item.id === id);
+    assert.ok(added);
+    assert.equal(added.category, preview);
+    assert.equal(added.folder, path.join(defaultFolder, "Documents"));
+    assert.equal(added.url.includes(secret), false);
+    assert.match(added.url, /access_token=\[REDACTED\]/);
+
+    await manager.setSettings({
+      autoOrganizeRules: [{
+        id: "invalid-windows-character",
+        name: "Raw pipe character",
+        pattern: "\\|",
+        flags: "",
+        category: "document",
+      }],
+    });
+    const unsafeName = "archive|copy.zip";
+    const sanitizedPreview = await manager.previewCategory(unsafeName, server.url);
+    assert.equal(
+      sanitizedPreview,
+      "compressed",
+      "preview must classify the same sanitized filename that addDownload persists"
+    );
+    const sanitizedId = await manager.addDownload({
+      url: server.url,
+      folder: defaultFolder,
+      fileName: unsafeName,
+      startImmediately: false,
+    });
+    const sanitizedItem = manager.getState().items.find((item) => item.id === sanitizedId);
+    assert.ok(sanitizedItem);
+    assert.equal(sanitizedItem.fileName, "archive_copy.zip");
+    assert.equal(sanitizedItem.category, sanitizedPreview);
+
+    await manager.shutdown();
+    initialized = false;
+    const stateJson = await fsp.readFile(path.join(root, "state.json"), "utf8");
+    const historySnapshot = await new HistoryStore(root).readSnapshot();
+    assert.equal(stateJson.includes(secret), false);
+    assert.equal(historySnapshot?.includes(secret), false);
+  } finally {
+    if (initialized) await manager.shutdown();
+    await server.close();
+    await removeTestRoot(root);
+    if (previousUserProfile === undefined) delete process.env.USERPROFILE;
+    else process.env.USERPROFILE = previousUserProfile;
+  }
+});
 
 test("queue creation rejects malformed item IDs before persistence and processQueue fails closed", async () => {
   const root = await fsp.mkdtemp(path.join(os.tmpdir(), "mdm-queue-validation-test-"));

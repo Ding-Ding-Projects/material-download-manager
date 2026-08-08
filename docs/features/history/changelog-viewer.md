@@ -3,7 +3,7 @@
 The Windows Electron app exposes a first-class Changelog tab beside the local
 revision History tab. It is an in-app release browser, not a browser-only link.
 The panel embeds the currently published stable release records from v0.1.2
-through v0.1.39, including each release date, release identity, stable
+through v0.1.44, including each release date, release identity, stable
 distribution status, full source commit SHA, and a credential-free link to that
 commit in the repository.
 
@@ -22,8 +22,10 @@ commit in the repository.
 - Copy filtered copies the current filtered view as Markdown. Export filtered
   writes the current filtered view in the selected supported coding format and
   reports the exact record count.
-- Empty, loading, validation, IPC, export, and clipboard failures are shown in
-  honest accessible status regions. They do not invent release data.
+- Empty, loading, validation, and IPC failures are shown in an accessible filter
+  status region. Export and clipboard failures use a separate action alert with
+  the exact failed action and a matching Retry control. They do not invent
+  release data or mark a valid search field invalid.
 - Surrounding labels and status copy use the existing English, playful
   Hong Kong-style Cantonese, and bilingual settings. Version names, dates,
   SHAs, URLs, and failure facts remain unchanged.
@@ -55,19 +57,31 @@ or direct ipcRenderer capability.
   exact copy failure.
 - A filter with no matches shows a localized no-match empty state; it is not
   confused with a missing embedded catalog.
+- A regex worker timeout or rejection remains a typed filter error. The search
+  field becomes invalid, a localized accessible alert names the failure, and
+  Retry starts a new bounded evaluation; the panel never relabels that failure
+  as zero matching releases. Copy and export preserve the same worker-failure
+  facts in their localized action alerts, but their failures remain separate
+  from filter state. A successful copy or export clears the stale action error.
 
 ## Verification
 
-Focused tests in electron/__tests__/changelog.test.ts cover the 34 embedded
+Focused tests in electron/__tests__/changelog.test.ts cover the 43 embedded
 stable releases, verify every referenced commit exists in the full repository
 history, and cover full commit URL construction, search/date composition,
 validation failures, filtered Markdown export, and the store's IPC-safe
-adapter. Run them after building the Electron TypeScript output with:
+adapter. An injected evaluator regression distinguishes worker failure from a
+genuine zero-match result for both view and export. Run them after building the
+Electron TypeScript output with:
 
 ~~~~powershell
 npm run build:electron
 npm run test:electron -- --test-name-pattern=changelog
 ~~~~
+
+The built-application smoke separately forces an export validation failure,
+proves the search field remains valid, retries after selecting a valid format,
+and observes the action alert clear on success.
 
 The full renderer and Electron typecheck/build remain the preferred final gate.
 

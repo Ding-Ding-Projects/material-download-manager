@@ -1,7 +1,8 @@
 import { useMemo } from "react";
 import type { DownloadItem } from "@shared/types";
-import { normalizeRegexFlags, validateRegexPattern } from "@shared/regex";
+import { validateRegexPattern } from "@shared/regex";
 import { useAppStore, type SidebarFilter } from "../store/useAppStore";
+import { useIsolatedRegexBatch } from "./useIsolatedRegex";
 
 function matchesFilter(item: DownloadItem, filter: SidebarFilter): boolean {
   switch (filter.kind) {
@@ -23,17 +24,37 @@ export function getSearchValidationError(searchText: string, searchMode: "text" 
   return validateRegexPattern(searchText, searchFlags);
 }
 
+export interface FilteredItemsState {
+  items: DownloadItem[];
+  regexError: string | null;
+  regexPending: boolean;
+}
+
 /** Applies the active sidebar filter, search text/regex, and sort to `items`. */
-export function useFilteredItems(): DownloadItem[] {
+export function useFilteredItems(): FilteredItemsState {
   const items = useAppStore((s) => s.items);
   const filter = useAppStore((s) => s.filter);
   const searchText = useAppStore((s) => s.searchText);
   const searchMode = useAppStore((s) => s.searchMode);
   const searchFlags = useAppStore((s) => s.searchFlags);
   const sort = useAppStore((s) => s.sort);
+  const filteredBySidebar = useMemo(
+    () => items.filter((item) => matchesFilter(item, filter)),
+    [filter, items]
+  );
+  const regexSamples = useMemo(
+    () => filteredBySidebar.map((item) => `${item.fileName}\n${item.url}`),
+    [filteredBySidebar]
+  );
+  const regexBatch = useIsolatedRegexBatch(
+    searchText,
+    searchFlags,
+    regexSamples,
+    searchMode === "regex" && searchText.length > 0,
+  );
 
-  return useMemo(() => {
-    let result = items.filter((item) => matchesFilter(item, filter));
+  const filteredItems = useMemo(() => {
+    let result = filteredBySidebar;
     if (searchText.length > 0) {
       if (searchMode === "text") {
         const normalizedQuery = searchText.toLocaleLowerCase();
@@ -44,14 +65,10 @@ export function useFilteredItems(): DownloadItem[] {
         const validationError = getSearchValidationError(searchText, searchMode, searchFlags);
         if (validationError) {
           result = [];
+        } else if (!regexBatch.evaluations) {
+          result = [];
         } else {
-          // Search uses the same JavaScript RegExp dialect and flags as the
-          // builder, while removing only `g` so each item starts fresh.
-          const matcher = new RegExp(searchText, normalizeRegexFlags(searchFlags).replace("g", ""));
-          result = result.filter((item) => {
-            matcher.lastIndex = 0;
-            return matcher.test(`${item.fileName}\n${item.url}`);
-          });
+          result = result.filter((_, index) => (regexBatch.evaluations?.[index]?.matches.length ?? 0) > 0);
         }
       }
     }
@@ -77,5 +94,12 @@ export function useFilteredItems(): DownloadItem[] {
     });
 
     return result;
-  }, [items, filter, searchText, searchMode, searchFlags, sort]);
+  }, [filteredBySidebar, regexBatch.evaluations, searchFlags, searchMode, searchText, sort]);
+
+  const regexActive = searchMode === "regex" && searchText.length > 0;
+  return {
+    items: filteredItems,
+    regexError: regexActive && !regexBatch.pending ? regexBatch.error : null,
+    regexPending: regexActive && regexBatch.pending,
+  };
 }

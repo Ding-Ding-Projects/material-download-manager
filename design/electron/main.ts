@@ -1,14 +1,18 @@
 import { app, autoUpdater, BrowserWindow, ipcMain, shell, dialog, Notification } from "electron";
 import path from "node:path";
 import { IPC, isUpdateUnsavedWorkState, type UpdateInstallResult, type UpdateState } from "../shared/types";
-import type { AddDownloadRequest, AppSettings, DownloadItem, DownloadQueue } from "../shared/types";
+import type { AddDownloadRequest, AppSettings, DownloadItem, DownloadQueue, SettingKey, SettingsPatch } from "../shared/types";
 import { isExportFormat } from "../shared/export";
 import { normalizeHistoryFilter } from "../shared/history";
-import { validateSettingsPatch } from "../shared/settings";
+import { validateSettingResetKeys, validateSettingsPatch } from "../shared/settings";
+import {
+  normalizeRegexEvaluationRequest,
+} from "../shared/regex";
 import { notifyDownloadComplete as showCompletionNotification, type CompletionNotificationPort } from "./completionNotification";
 import { extractBrowserHandoffRequests } from "./download/browserHandoff";
 import { assertQueueCreatePayload, DownloadManager } from "./download/DownloadManager";
 import { HandoffServer } from "./extension/HandoffServer";
+import { evaluateRegexBatchIsolated } from "./regex/RegexWorkerClient";
 import {
   CHANGELOG_REPOSITORY_URL,
   ChangelogStore,
@@ -182,7 +186,12 @@ function assertAddDownloadRequest(value: unknown): asserts value is AddDownloadR
   }
 }
 
-function assertPartialSettings(value: unknown): asserts value is Partial<AppSettings> {
+function assertCategoryPreviewInput(fileName: unknown, url: unknown): asserts fileName is string {
+  assertString(fileName, "category preview file name", 512);
+  if (typeof url !== "string" || url.length > 8_192) throw new Error("Invalid category preview URL");
+}
+
+function assertPartialSettings(value: unknown): asserts value is SettingsPatch {
   validateSettingsPatch(value);
 }
 
@@ -263,6 +272,21 @@ function registerIpcHandlers() {
     return manager.probeUrl(url);
   });
 
+  ipcMain.handle(IPC.PREVIEW_CATEGORY, (event, fileName: unknown, url: unknown) => {
+    assertTrustedSender(event);
+    assertCategoryPreviewInput(fileName, url);
+    return manager.previewCategory(fileName, url as string);
+  });
+
+  ipcMain.handle(
+    IPC.EVALUATE_REGEX,
+    (event, pattern: unknown, flags: unknown, samples: unknown, includeMatches: unknown) => {
+      assertTrustedSender(event);
+      const request = normalizeRegexEvaluationRequest(pattern, flags, samples, includeMatches);
+      return evaluateRegexBatchIsolated(request.pattern, request.flags, request.samples, request.includeMatches);
+    }
+  );
+
   ipcMain.handle(IPC.ADD_DOWNLOAD, (event, req: unknown) => {
     assertTrustedSender(event);
     assertAddDownloadRequest(req);
@@ -311,10 +335,14 @@ function registerIpcHandlers() {
     assertTrustedSender(event);
     return manager.getSettings();
   });
-  ipcMain.handle(IPC.SETTINGS_SET, (event, settings: unknown) => {
+  ipcMain.handle(IPC.SETTINGS_SET, (event, settings: unknown, resetKeys: unknown = []) => {
     assertTrustedSender(event);
     assertPartialSettings(settings);
-    return manager.setSettings(settings);
+    const validatedResetKeys: SettingKey[] = validateSettingResetKeys(resetKeys);
+    if (validatedResetKeys.some((key) => Object.prototype.hasOwnProperty.call(settings, key))) {
+      throw new Error("A setting cannot be changed and reset in the same mutation");
+    }
+    return manager.setSettings(settings, validatedResetKeys);
   });
 
   ipcMain.handle(IPC.HISTORY_GET_VIEW, (event, filter: unknown) => {

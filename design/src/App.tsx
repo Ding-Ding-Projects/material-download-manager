@@ -28,6 +28,7 @@ import HistoryPanel from "./components/HistoryPanel";
 import ChangelogPanel from "./components/ChangelogPanel";
 import DocumentationPanel from "./components/DocumentationPanel";
 import { setActiveTab } from "@shared/tabModel";
+import { useFilteredItems } from "./hooks/useFilteredItems";
 
 const DESTRUCTIVE_REQUEST_EVENT = "mdm:request-destructive-action";
 const CLOSE_CONTEXT_MENU_EVENT = "mdm:close-context-menus";
@@ -40,6 +41,7 @@ export default function App() {
   const ready = useAppStore((s) => s.ready);
   const theme = useAppStore((s) => s.settings?.theme ?? "system");
   const settings = useAppStore((s) => s.settings);
+  const filteredItems = useFilteredItems();
   const dialogs = useAppStore((s) => s.dialogs);
   const items = useAppStore((s) => s.items);
   const queues = useAppStore((s) => s.queues);
@@ -181,6 +183,22 @@ export default function App() {
         keywords: ["theme", "dark", "light", "density", "font", "accent"],
         section: "Settings",
         onSelect: () => openSettings("appearance"),
+      },
+      {
+        id: "settings.auto-organize",
+        label: copy.text("Settings · Auto-organize folders", "設定 · 自動分類資料夾"),
+        description: copy.text("Open the exact category-folder routing switch and six path previews", "直接開啟分類資料夾開關同六個路徑預覽"),
+        keywords: ["downloads", "folders", "general", "documents", "videos", "music", "programs", "compressed"],
+        section: copy.text("Settings", "設定"),
+        onSelect: () => openSettings("auto-organize"),
+      },
+      {
+        id: "settings.auto-organize-rules",
+        label: copy.text("Settings · Custom classification rules", "設定 · 自訂分類規則"),
+        description: copy.text("Open the ordered regex-rule editor for download classification", "直接開啟下載分類嘅已排序 regex 規則編輯器"),
+        keywords: ["downloads", "regex", "rules", "classification", "filename", "url", "reorder"],
+        section: copy.text("Settings", "設定"),
+        onSelect: () => openSettings("auto-organize-rules"),
       },
       {
         id: "destination.all-downloads",
@@ -370,9 +388,16 @@ export default function App() {
             <DocumentationPanel />
           ) : (
             <>
-              <Toolbar />
-              <DownloadTable />
-              <StatusBar />
+              <Toolbar
+                searchEvaluationError={filteredItems.regexError}
+                searchEvaluationPending={filteredItems.regexPending}
+              />
+              <DownloadTable
+                filteredItems={filteredItems.items}
+                regexError={filteredItems.regexError}
+                regexPending={filteredItems.regexPending}
+              />
+              <StatusBar filteredCount={filteredItems.items.length} regexPending={filteredItems.regexPending} />
             </>
           )}
         </main>

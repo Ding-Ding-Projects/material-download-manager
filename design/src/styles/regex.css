@@ -25,7 +25,7 @@
 .regex-dialect-note,
 .regex-empty {
   margin: 4px 0 0;
-  color: var(--text-tertiary);
+  color: var(--text-secondary);
   font-size: 11.5px;
 }
 
@@ -87,5 +87,11 @@
 
 .regex-captures {
   display: block;
-  color: var(--text-tertiary);
+  color: var(--text-secondary);
+}
+
+.auto-organize-rule-builder .regex-flags label,
+.auto-organize-rule-builder .regex-mode label {
+  min-height: 40px;
+  padding: 6px 8px;
 }

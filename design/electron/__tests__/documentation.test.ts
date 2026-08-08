@@ -48,6 +48,15 @@ test("documentation search is plain-text-first and supports bounded regex", () =
     searchDocumentation(articles, { mode: "regex", pattern: "RegExp|Markdown", flags: "gi" }).map((article) => article.id),
     articles.map((article) => article.id),
   );
+  assert.deepEqual(
+    searchDocumentation(articles, { mode: "regex", pattern: "markdown", flags: "" }),
+    [],
+    "explicit empty flags must remain case-sensitive",
+  );
+  assert.deepEqual(
+    searchDocumentation(articles, { mode: "regex", pattern: "markdown", flags: "i" }).map((article) => article.id),
+    ["features/documentation/in-app-documentation-browser.md"],
+  );
   assert.equal(validateDocumentationQuery({ mode: "regex", pattern: "(", flags: "g" }) !== null, true);
   assert.deepEqual(searchDocumentation(articles, { mode: "regex", pattern: "(", flags: "g" }), []);
 });
