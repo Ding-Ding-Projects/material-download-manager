@@ -165,9 +165,9 @@
         category: "security",
         requiredSurfaces: ["authenticator tab", "lock setup", "settings"],
         docsPath: "../docs/features/security/totp-authenticator-core.md",
-        status: "partial",
+        status: "planned",
         probes: ["otpauth-qr", "manual-secret", "rfc-6238-vectors", "secret-free-export"],
-        runtimeAnchors: ["otpauth-qr", "secret-free-export"]
+        runtimeAnchors: []
       },
       {
         id: "mutation-history",
