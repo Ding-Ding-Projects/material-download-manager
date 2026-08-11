@@ -14,7 +14,8 @@ the prototype's simulated engine is not part of the production download path.
   download engine (`electron/download/`): segmented multi-connection HTTP
   downloads with resume support, speed limiting, queue scheduling, category
   detection, category-folder routing, ordered custom regex rules evaluated in
-  terminable workers, and schema-v3 JSON persistence with per-key provenance —
+  terminable workers, schema-v5 JSON persistence with per-key provenance, and
+  shared School-mode presentation state —
   a TypeScript port of the concepts in
   `downloader/core` from the original Kotlin codebase.
 - `electron/preload.ts` — contextBridge-exposed `window.api`, the only surface
@@ -31,8 +32,10 @@ the prototype's simulated engine is not part of the production download path.
   expression, including Add download previews and final category routing.
   Cold-start readiness is timed independently from bounded evaluation, filter
   batches omit captures, and full match details accept one sample only.
-- `shared/settings.ts` — the exact settings and rule contract, including the
-  absolute Windows default-folder requirement and versioned provenance rules.
+- `shared/settings.ts` — the exact schema-v5 settings and rule contract,
+  including the absolute Windows default-folder requirement, versioned
+  provenance, shared School mode presentation state, and emoji decoration
+  toggle.
 - `electron/download/scheduleSources.ts` — bounded local/API/Home Assistant
   setting-source validation with nested rule cloning, private-address policy,
   per-request DNS resolution, and connection-time address pinning.

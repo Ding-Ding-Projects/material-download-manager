@@ -72,6 +72,22 @@ manager change events, persistence, and fail-closed School-mode exit. The
 renderer build is the real artifact used for the hidden-desktop smoke; the
 capture records the Settings surface with the renamed mode and emoji switch.
 
+The source commit for the published captures is
+`ecf9bc65e6f78f08e109abfbed5aa897cbdbb86d`. `npm run build` emitted
+`index-9-ppiL__.js` (SHA-256
+`AB1C07E2AF56D3A24E084D7EA04FAEBBAA11F6A114816B27B2D41A3149B0732B`) and
+`index-CL9UO5Fq.css` (SHA-256
+`23FF81988A28774B46E99E5FC38739905D813F8E7098D218325B9AC7974A0D45`). The
+1150×720 capture with the emoji control visible is
+[`school-mode-off-emoji-control.png`](../../screenshots/settings/school-mode-off-emoji-control.png)
+(SHA-256 `AAC74504311B2B795C8D8FD479750E938E6FB07C042E643DBAC606B60D9E94A8`),
+and the 1150×720 enabled-state capture with the language, funny-level, and
+emoji controls removed is
+[`school-mode-on-controls-suppressed.png`](../../screenshots/settings/school-mode-on-controls-suppressed.png)
+(SHA-256 `60A93B232437B6C9FDE4F38FB9CB6DBD6A554C1FF33204FFCC771EF03E206BED`).
+Both files were opened and inspected after capture from the real application;
+the temporary profile, process, and hidden desktop were then removed.
+
 ## Suggested articles
 
 - [Persisted language and appearance settings](language-and-appearance.md)

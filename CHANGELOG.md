@@ -5,6 +5,25 @@ or have reached a stable release. Published entries must link the exact commit
 that completed the change. An Unreleased entry names missing evidence instead
 of guessing a commit, release, or date.
 
+## Unreleased — shared School mode presentation and dialog emojis
+
+- **Source commit:** [`ecf9bc6`](https://github.com/Ding-Ding-Projects/material-download-manager/commit/ecf9bc65e6f78f08e109abfbed5aa897cbdbb86d)
+- **Added:** schema-v5 shared local application-data presentation settings,
+  user-renamable English-only School mode, persisted dialog/message-box emoji
+  decoration, canonical main-process IPC, and live propagation to the main and
+  progress windows.
+- **Suppression:** School mode removes language, bilingual, funny-level, and
+  emoji controls from Settings and the command palette, filters playful/dim-sum
+  article and release surfaces, clears the startup surprise, and suppresses
+  decorative notification emoji while preserving the user's prior choices.
+- **Fail-closed boundary:** leaving School mode requires `configured` reset
+  credential metadata; this slice does not enroll passwords or TOTP and points
+  to deliberate local application-data deletion for recovery.
+- **Local verification:** `npm run docs:bundle:check`, `npm run typecheck`, and
+  `npm run build` passed; compiled Electron checks passed **88/88** and engine
+  checks passed **99/99**. Real built-artifact captures are recorded in
+  [`HANDOFF.md`](HANDOFF.md), with no signing operation or CRX artifact.
+
 ## Unreleased — built-artifact smoke and gallery refresh
 
 - **Source commit:** [`92dc67a`](https://github.com/Ding-Ding-Projects/material-download-manager/commit/92dc67a17fbad4f7471cda5d7d85c1b4b78c44a5)
