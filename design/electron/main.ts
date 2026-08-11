@@ -61,6 +61,13 @@ import { HistoryAccessSession } from "./history/HistoryAccessSession";
 import { SchoolModeResetVault } from "./schoolMode/SchoolModeResetVault";
 import { SchoolModeCredentialService } from "./schoolMode/SchoolModeCredentialService";
 import { TotpRegistrationService } from "./authenticator/TotpRegistrationService";
+import { ExternalEditorService } from "./externalEditor/ExternalEditorService";
+import {
+  EXTERNAL_EDITOR_MAX_EXPORT_BYTES,
+  isExternalEditorOpenResult,
+  isSafeEditorExecutable,
+  isSafeExportFileName,
+} from "../shared/externalEditor";
 import { isDevelopmentLaunch, resolveRendererPath } from "./runtimePaths";
 import { CredentialVault } from "./download/distributed/CredentialVault";
 import { SshProvisioningService } from "./download/distributed/SshProvisioningService";
@@ -93,6 +100,7 @@ let extensionCapabilityVault: ExtensionCapabilityVault;
 let historyAccessVault: HistoryAccessVault;
 let schoolModeCredentialService: SchoolModeCredentialService;
 let authenticatorService: TotpRegistrationService;
+let externalEditorService: ExternalEditorService;
 const historyAccessSession = new HistoryAccessSession();
 let updater: UpdateService | null = null;
 let handoffServer: HandoffServer | null = null;
@@ -792,6 +800,53 @@ function registerIpcHandlers() {
     return changelogHandlers.exportView(request, format);
   });
 
+  ipcMain.handle(IPC.EXTERNAL_EDITOR_DISCOVER, (event) => {
+    assertTrustedSender(event);
+    return externalEditorService.discover(manager.getSettings().externalEditorPath);
+  });
+  ipcMain.handle(IPC.EXTERNAL_EDITOR_PICK, async (event) => {
+    assertTrustedSender(event);
+    if (!mainWindow) return null;
+    const picked = await dialog.showOpenDialog(mainWindow, {
+      properties: ["openFile"],
+      filters: [{ name: "Editor executable", extensions: ["exe", "cmd"] }],
+    });
+    if (picked.canceled || picked.filePaths.length === 0) return null;
+    const selected = picked.filePaths[0];
+    if (!isSafeEditorExecutable(selected)) {
+      throw new Error("The selected editor path is not safe.");
+    }
+    return selected;
+  });
+  ipcMain.handle(IPC.EXTERNAL_EDITOR_OPEN_EXPORT, async (event, content: unknown, fileName: unknown) => {
+    assertTrustedSender(event);
+    if (typeof content !== "string" || Buffer.byteLength(content, "utf8") > EXTERNAL_EDITOR_MAX_EXPORT_BYTES) {
+      throw new Error("The export is too large to open in the external editor.");
+    }
+    if (!isSafeExportFileName(fileName)) throw new Error("The export file name is not safe.");
+    const result = await externalEditorService.openExport(content, fileName, manager.getSettings().externalEditorPath);
+    if (!isExternalEditorOpenResult(result)) throw new Error("Invalid external editor result");
+    return result;
+  });
+  ipcMain.handle(IPC.EXTERNAL_EDITOR_OPEN_WORKSPACE, async (event) => {
+    assertTrustedSender(event);
+    if (!mainWindow) throw new Error("The workspace picker is unavailable.");
+    const picked = await dialog.showOpenDialog(mainWindow, { properties: ["openDirectory"] });
+    if (picked.canceled || picked.filePaths.length === 0) {
+      return {
+        schemaVersion: 1,
+        opened: false,
+        editor: null,
+        filePath: null,
+        workspacePath: null,
+        error: "Workspace selection was cancelled.",
+      };
+    }
+    const result = await externalEditorService.openWorkspace(picked.filePaths[0], manager.getSettings().externalEditorPath);
+    if (!isExternalEditorOpenResult(result)) throw new Error("Invalid external editor result");
+    return result;
+  });
+
   ipcMain.handle(IPC.QUEUE_CREATE, (event, queue: unknown) => {
     assertTrustedSender(event);
     assertQueueCreatePayload(queue);
@@ -935,6 +990,7 @@ app.whenReady().then(async () => {
     : path.resolve(__dirname, "../../../worker");
   sshProvisioning = new SshProvisioningService({ bundlePath: workerBundlePath, vault: sshVault, client: sshWorkerClient });
   manager = new DownloadManager(app.getPath("userData"), undefined, { credentialVault: sshVault });
+  externalEditorService = new ExternalEditorService(app.getPath("userData"));
   const hadStateFile = await fsp.stat(path.join(app.getPath("userData"), "state.json")).then(() => true, () => false);
   await manager.init();
   schoolModeCredentialService = new SchoolModeCredentialService(schoolModeResetVault, manager);

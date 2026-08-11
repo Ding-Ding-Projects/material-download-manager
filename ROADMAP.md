@@ -5,6 +5,17 @@ unverified surface has shipped.
 
 ## In progress
 
+- External editor export handoff on `codex/uh-external-editor`: discovery and
+  native Browse selection for Visual Studio Code, schema-v6 persisted choice,
+  safe app-owned export staging, workspace-root opening, and History/Changelog
+  buttons are implemented locally. Focused external-editor **7/7**,
+  persistence **13/13** (combined subset **20/20**), compiled Electron
+  **126/126**, and the real built Electron app smoke **44/44** are green. The
+  Settings → Advanced capture is stored at
+  `docs/screenshots/integrations/external-editor-settings.png` with SHA-256
+  `92dd6a25df6e810583878a61c5cec6c98e0acebdc6a7ceb267b898cce8843057`;
+  default-branch integration remains open.
+
 - Scheduled settings foundation is integrated and verified at
   `8b6e5f9c71e72cc5f86d8f85460ea6970b1c20fc`: versioned local records, native
   date/time and weekday editor, timezone and cross-midnight semantics,

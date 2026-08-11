@@ -26,8 +26,9 @@ import {
 } from "./types";
 import { normalizeRegexFlags, validateRegexPattern } from "./regex";
 import { cloneSshHostConfigs, isSshHostConfigs } from "./ssh";
+import { isSafeEditorExecutable } from "./externalEditor";
 
-export const SETTINGS_SCHEMA_VERSION = 5;
+export const SETTINGS_SCHEMA_VERSION = 6;
 export const APP_DISPLAY_NAME_MAX_LENGTH = 64;
 export const DEFAULT_APP_DISPLAY_NAME = "Material Download Manager";
 export const SCHOOL_MODE_NAME_MAX_LENGTH = 80;
@@ -65,6 +66,7 @@ export const COMPILED_IN_DEFAULTS = {
   uiFontWeight: 400 as UIFontWeight,
   autoOrganizeEnabled: true,
   sshDefaultWorkerCount: 2,
+  externalEditorPath: null as string | null,
 };
 
 export function compiledInProvenance(): SettingsProvenance {
@@ -302,6 +304,8 @@ export function validateSettingsPatch(
           return isSshHostConfigs(settingValue);
         case "sshDefaultWorkerCount":
           return isBoundedNumber(settingValue, 1, 16) && Number.isInteger(settingValue);
+        case "externalEditorPath":
+          return settingValue === null || isSafeEditorExecutable(settingValue);
       }
     })();
     if (!valid) throw new Error(`Invalid value for setting: ${key}`);

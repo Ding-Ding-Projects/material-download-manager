@@ -5,6 +5,26 @@ or have reached a stable release. Published entries must link the exact commit
 that completed the change. An Unreleased entry names missing evidence instead
 of guessing a commit, release, or date.
 
+## Unreleased — external editor export handoff
+
+- **Source issue:** [#18 — Implement the universal feature contract](https://github.com/Ding-Ding-Projects/material-download-manager/issues/18)
+- **Source branch:** `codex/uh-external-editor` (the completion commit will be linked here)
+- **Scope:** Windows desktop discovery and native Browse selection for Visual
+  Studio Code, safe app-owned export staging, workspace-root opening, Settings
+  persistence/provenance, and History/Changelog export actions.
+
+### Verification boundary
+
+- `design/electron/__tests__/externalEditor.test.ts` — **7/7 passed**.
+- `persistence.test.ts` — **13/13 passed**; the combined external-editor and
+  persistence subset is **20/20**.
+- Full compiled Electron suite passes **126/126** after the source changes.
+- The real built Electron app smoke passes **44/44**. The Settings → Advanced
+  capture is 534×232 pixels, 21,975 bytes, SHA-256
+  `92dd6a25df6e810583878a61c5cec6c98e0acebdc6a7ceb267b898cce8843057`.
+- The extension and Pages site keep their honest local-download fallback; no
+  native-messaging or browser-to-filesystem bridge was added.
+
 ## Unreleased — browser extension authenticator destination
 
 - **Source issue:** [#18 — Implement the universal feature contract](https://github.com/Ding-Ding-Projects/material-download-manager/issues/18)

@@ -183,6 +183,7 @@ export const SETTING_KEYS = [
   "autoOrganizeRules",
   "sshHosts",
   "sshDefaultWorkerCount",
+  "externalEditorPath",
 ] as const;
 
 export type SettingKey = (typeof SETTING_KEYS)[number];
@@ -229,6 +230,8 @@ export interface AppSettings {
   autoOrganizeRules: AutoOrganizeRule[];
   sshHosts: SshHostConfig[];
   sshDefaultWorkerCount: number;
+  /** Absolute local executable selected for the optional editor handoff. */
+  externalEditorPath: string | null;
   settingProvenance: SettingsProvenance;
 }
 
@@ -547,6 +550,10 @@ export const IPC = {
   AUTHENTICATOR_EXPORT_METADATA: "authenticator:exportMetadata",
   CHANGELOG_GET_VIEW: "changelog:getView",
   CHANGELOG_EXPORT_VIEW: "changelog:exportView",
+  EXTERNAL_EDITOR_DISCOVER: "externalEditor:discover",
+  EXTERNAL_EDITOR_PICK: "externalEditor:pick",
+  EXTERNAL_EDITOR_OPEN_EXPORT: "externalEditor:openExport",
+  EXTERNAL_EDITOR_OPEN_WORKSPACE: "externalEditor:openWorkspace",
 } as const;
 
 export type { ExportFormat, ExportResult, HistoryFilter, HistoryView, HistoryAccessState };

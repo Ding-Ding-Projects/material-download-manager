@@ -37,6 +37,12 @@ import { isPresentationSettings, isUpdateInstallResult, isUpdateState, isUpdateU
 import { isBrowserExtensionInstallResult, type BrowserExtensionInstallResult } from "../shared/types";
 import { isScheduledSettingsRecords, type ScheduledSettingsRecord } from "../shared/scheduledSettings";
 import {
+  isExternalEditorDiscovery,
+  isExternalEditorOpenResult,
+  type ExternalEditorDiscovery,
+  type ExternalEditorOpenResult,
+} from "../shared/externalEditor";
+import {
   isChangelogView,
   type ChangelogView,
   type ChangelogViewRequest,
@@ -306,6 +312,26 @@ const api = {
   exportChangelog: async (format: ExportFormat, request?: ChangelogViewRequest): Promise<ExportResult> => {
     const result: unknown = await ipcRenderer.invoke(IPC.CHANGELOG_EXPORT_VIEW, format, request);
     if (!isExportResult(result)) throw new Error("Invalid changelog export from main process");
+    return result;
+  },
+  discoverExternalEditors: async (): Promise<ExternalEditorDiscovery> => {
+    const result: unknown = await ipcRenderer.invoke(IPC.EXTERNAL_EDITOR_DISCOVER);
+    if (!isExternalEditorDiscovery(result)) throw new Error("Invalid external editor discovery result from main process");
+    return result;
+  },
+  pickExternalEditor: async (): Promise<string | null> => {
+    const result: unknown = await ipcRenderer.invoke(IPC.EXTERNAL_EDITOR_PICK);
+    if (result !== null && typeof result !== "string") throw new Error("Invalid external editor picker result from main process");
+    return result;
+  },
+  openExportInEditor: async (content: string, fileName: string): Promise<ExternalEditorOpenResult> => {
+    const result: unknown = await ipcRenderer.invoke(IPC.EXTERNAL_EDITOR_OPEN_EXPORT, content, fileName);
+    if (!isExternalEditorOpenResult(result)) throw new Error("Invalid external editor export result from main process");
+    return result;
+  },
+  openWorkspaceInEditor: async (): Promise<ExternalEditorOpenResult> => {
+    const result: unknown = await ipcRenderer.invoke(IPC.EXTERNAL_EDITOR_OPEN_WORKSPACE);
+    if (!isExternalEditorOpenResult(result)) throw new Error("Invalid external editor workspace result from main process");
     return result;
   },
 

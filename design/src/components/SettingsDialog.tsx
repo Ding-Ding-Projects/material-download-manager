@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import type { AppSettings, AutoOrganizeRule, AutoOrganizeTargetCategory, PresentationPatch, PresentationSettingKey, SettingKey, SettingsPatch } from "@shared/types";
 import type { SshHostDraft } from "@shared/ssh";
+import type { ExternalEditorDiscovery } from "@shared/externalEditor";
 import {
   AUTO_ORGANIZE_FOLDERS,
   AUTO_ORGANIZE_RULE_LIMIT,
@@ -209,6 +210,12 @@ const SETTINGS_SEARCH_INDEX = [
     labels: ["Advanced minimum splittable part size", "進階 最小可分割區塊大小"],
   },
   {
+    id: "settings-external-editor",
+    targetId: "settings-external-editor-select",
+    tab: "advanced" as const,
+    labels: ["External editor Visual Studio Code export workspace root open exported file editor discovery", "外部編輯器 Visual Studio Code 匯出 workspace root 開啟匯出檔案 編輯器探索"],
+  },
+  {
     id: "settings-authenticator",
     targetId: "settings-authenticator-panel",
     tab: "authenticator" as const,
@@ -307,9 +314,57 @@ export default function SettingsDialog() {
   const [sshBusyId, setSshBusyId] = useState<string | null>(null);
   const [sshNotice, setSshNotice] = useState<string | null>(null);
   const [pendingSshRemovalId, setPendingSshRemovalId] = useState<string | null>(null);
+  const [externalEditorDiscovery, setExternalEditorDiscovery] = useState<ExternalEditorDiscovery | null>(null);
+  const [externalEditorDiscoveryError, setExternalEditorDiscoveryError] = useState<string | null>(null);
+  const [externalEditorWorkspaceBusy, setExternalEditorWorkspaceBusy] = useState(false);
+  const [externalEditorWorkspaceMessage, setExternalEditorWorkspaceMessage] = useState<string | null>(null);
 
   const ui = useMemo(() => getUiCopy(form), [form]);
   const copy = useMemo(() => getSettingsCopy(ui.languageMode), [ui.languageMode]);
+  const editorDiscoveryUnavailableText = form.languageMode === "cantonese"
+    ? "編輯器探索暫時不可用。"
+    : form.languageMode === "bilingual"
+      ? "Editor discovery is unavailable. · 編輯器探索暫時不可用。"
+      : "Editor discovery is unavailable.";
+
+  useEffect(() => {
+    let current = true;
+    setExternalEditorDiscoveryError(null);
+    window.api.discoverExternalEditors().then((next) => {
+      if (current) setExternalEditorDiscovery(next);
+    }).catch(() => {
+      if (!current) return;
+      setExternalEditorDiscovery(null);
+      setExternalEditorDiscoveryError(editorDiscoveryUnavailableText);
+    });
+    return () => { current = false; };
+  }, [editorDiscoveryUnavailableText]);
+
+  async function openWorkspaceInEditor() {
+    setExternalEditorWorkspaceBusy(true);
+    setExternalEditorWorkspaceMessage(null);
+    try {
+      const result = await window.api.openWorkspaceInEditor();
+      if (result.opened) {
+        setExternalEditorWorkspaceMessage(ui.text(
+          "Opened the selected folder in Visual Studio Code as its workspace root.",
+          "已用 Visual Studio Code 將揀好嘅資料夾開成 workspace root。",
+        ));
+      } else if (result.error !== "Workspace selection was cancelled.") {
+        setExternalEditorWorkspaceMessage(ui.text(
+          "Visual Studio Code could not open the selected folder. Choose another editor or keep using local downloads.",
+          "Visual Studio Code 未能開啟揀好嘅資料夾。可以揀另一個編輯器，或者繼續用本機下載。",
+        ));
+      }
+    } catch {
+      setExternalEditorWorkspaceMessage(ui.text(
+        "Visual Studio Code could not open the selected folder. Choose another editor or keep using local downloads.",
+        "Visual Studio Code 未能開啟揀好嘅資料夾。可以揀另一個編輯器，或者繼續用本機下載。",
+      ));
+    } finally {
+      setExternalEditorWorkspaceBusy(false);
+    }
+  }
   const extensionStatusText = extensionStatus?.kind === "installed-opened"
     ? ui.text(
         `Installed and opened the extension folder automatically. In Chrome open chrome://extensions, turn on Developer mode, click Load unpacked, and choose: ${extensionStatus.path}`,
@@ -2105,6 +2160,54 @@ export default function SettingsDialog() {
         <section className="settings-section" aria-labelledby="settings-advanced-heading">
       <details className="advanced-details" id="settings-advanced" tabIndex={-1}>
         <summary>Advanced</summary>
+        <div className="field" id="settings-external-editor" tabIndex={-1}>
+          <label className="field-label" htmlFor="settings-external-editor-select">{ui.text("External editor for exports", "匯出用外部編輯器")}</label>
+          <p className="setting-helper">{ui.text(
+            "Choose a discovered Visual Studio Code executable, or use automatic discovery. Export actions write a local file and open its folder as a workspace root.",
+            "揀一個探索到嘅 Visual Studio Code 執行檔，或者用自動探索。匯出操作會寫入本機檔案，並以 workspace root 開啟佢所在資料夾。"
+          )}</p>
+          <select
+            className="input select"
+            id="settings-external-editor-select"
+            value={form.externalEditorPath ?? ""}
+            onChange={(event) => update("externalEditorPath", event.target.value || null)}
+            aria-describedby="settings-external-editor-help"
+          >
+            <option value="">{ui.text("Automatic discovery", "自動探索")}</option>
+            {externalEditorDiscovery?.editors.map((editor) => (
+              <option key={`${editor.id}:${editor.executable}`} value={editor.executable}>{editor.label} — {editor.executable}</option>
+            ))}
+            {form.externalEditorPath && !externalEditorDiscovery?.editors.some((editor) => editor.executable === form.externalEditorPath) && (
+              <option value={form.externalEditorPath}>{ui.text("Saved choice (currently unavailable)", "已儲存選擇（目前不可用）")} — {form.externalEditorPath}</option>
+            )}
+          </select>
+          <span className="setting-source" id="settings-external-editor-help">{source("externalEditorPath", "Automatic discovery")}</span>
+          <div className="settings-inline-actions">
+            <button type="button" className="btn btn-ghost btn-sm" onClick={() => {
+              void window.api.discoverExternalEditors().then(setExternalEditorDiscovery).catch(() => setExternalEditorDiscoveryError(editorDiscoveryUnavailableText));
+            }}>
+              {ui.text("Refresh editors", "重新探索編輯器")}
+            </button>
+            <button type="button" className="btn btn-ghost btn-sm" onClick={() => {
+              void window.api.pickExternalEditor().then((selected) => {
+                if (selected) update("externalEditorPath", selected);
+              }).catch(() => setExternalEditorDiscoveryError(ui.text("The editor picker is unavailable.", "編輯器選擇器暫時不可用。")));
+            }}>
+              {ui.text("Browse…", "瀏覽…")}
+            </button>
+            <button type="button" className="btn btn-ghost btn-sm" onClick={() => void openWorkspaceInEditor()} disabled={externalEditorWorkspaceBusy}>
+              {externalEditorWorkspaceBusy
+                ? ui.text("Opening folder…", "開緊資料夾…")
+                : ui.text("Open a folder in Visual Studio Code", "用 Visual Studio Code 開啟資料夾")}
+            </button>
+            <button type="button" className="btn btn-ghost btn-sm setting-reset" onClick={() => resetSetting("externalEditorPath")}>
+              {copy.reset}
+            </button>
+          </div>
+          {externalEditorDiscoveryError && <p className="field-error" role="alert">{externalEditorDiscoveryError}</p>}
+          {externalEditorWorkspaceMessage && <p className="setting-helper" role="status">{externalEditorWorkspaceMessage}</p>}
+          <p className="setting-helper">{ui.text("If no editor is installed, the export remains available as a normal local download and the failure explains how to recover.", "如果未安裝編輯器，匯出仍然可以正常下載；失敗通知會講清楚點樣處理。")}</p>
+        </div>
         <div className="field">
           <span className="field-label" id="settings-min-splittable-label">Minimum splittable part size (KB)</span>
           <input

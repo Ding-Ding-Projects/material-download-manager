@@ -1,5 +1,36 @@
 # Handoff: Material Download Manager
 
+## External editor export handoff (verified locally, 2026-08-11)
+
+Issue [#18](https://github.com/Ding-Ding-Projects/material-download-manager/issues/18)
+tracks this bounded desktop slice on `codex/uh-external-editor`. The current
+implementation adds a typed external-editor contract, schema-v6 Settings
+selection/provenance, main-process discovery and native Browse selection, and
+History/Changelog actions that open the last exported file in Visual Studio
+Code. Export content is staged into a fresh application-owned directory and
+the directory is passed as the workspace root.
+
+The main/preload boundary validates paths, names, content size, result shapes,
+and launcher resolution. `.cmd` launchers are converted to adjacent native
+`Code.exe`/`Code - Insiders.exe` binaries, and the child process is never
+started through a shell. Missing-editor recovery leaves the normal download
+available and tells the user how to choose automatic discovery or Browse.
+
+Local evidence:
+
+- external-editor tests **7/7**;
+- persistence tests **13/13** and combined subset **20/20**;
+- full compiled Electron suite **126/126**;
+- typecheck, renderer build, Electron compilation, and documentation bundle
+  checks passed;
+- real built Electron app smoke **44/44**;
+- Settings → Advanced capture: 534×232 pixels, 21,975 bytes, SHA-256
+  `92dd6a25df6e810583878a61c5cec6c98e0acebdc6a7ceb267b898cce8843057`,
+  stored at `docs/screenshots/integrations/external-editor-settings.png`.
+
+The extension and Pages site do not claim a privileged editor bridge because
+neither has a native-messaging or operating-system filesystem capability.
+
 ## Browser extension authenticator destination (2026-08-11)
 
 Issue [#18](https://github.com/Ding-Ding-Projects/material-download-manager/issues/18)

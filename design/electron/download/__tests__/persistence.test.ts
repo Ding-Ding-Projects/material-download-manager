@@ -9,7 +9,7 @@ import { migrateSettings, StateStore } from "../persistence";
 test("default settings are versioned and mark every value as compiled-in", () => {
   const settings = createDefaultSettings("C:/Downloads/MaterialDownloadManager");
 
-  assert.equal(SETTINGS_SCHEMA_VERSION, 5);
+  assert.equal(SETTINGS_SCHEMA_VERSION, 6);
   assert.equal(settings.settingsVersion, SETTINGS_SCHEMA_VERSION);
   assert.equal(settings.languageMode, "english");
   assert.equal(settings.displayName, "Material Download Manager");
@@ -28,6 +28,7 @@ test("default settings are versioned and mark every value as compiled-in", () =>
   assert.equal(settings.uiFontFamily, "segoe-ui");
   assert.equal(settings.uiFontSize, 13);
   assert.equal(settings.uiFontWeight, 400);
+  assert.equal(settings.externalEditorPath, null);
   assert.equal(settings.autoOrganizeEnabled, true);
   assert.deepEqual(settings.autoOrganizeRules, []);
   assert.ok(Object.values(settings.settingProvenance).every((source) => source === "compiled-in"));
@@ -61,6 +62,23 @@ test("legacy settings migrate safely and preserve provenance per field", () => {
   assert.equal(migrated.settingProvenance.accentSeedColor, "persisted");
   assert.equal(migrated.settingProvenance.autoOrganizeEnabled, "compiled-in");
   assert.equal(migrated.settingProvenance.autoOrganizeRules, "compiled-in");
+  assert.equal(migrated.externalEditorPath, null);
+});
+
+test("external editor selection is bounded, persisted, and resettable", () => {
+  const selected = "C:/Program Files/Microsoft VS Code/Code.exe";
+  const migrated = migrateSettings(
+    { externalEditorPath: selected, settingProvenance: { externalEditorPath: "persisted" } },
+    "C:/Downloads/MaterialDownloadManager",
+  );
+  assert.equal(migrated.externalEditorPath, selected);
+  assert.equal(migrated.settingProvenance.externalEditorPath, "persisted");
+  const rejected = migrateSettings(
+    { externalEditorPath: "..\\Code.exe", settingProvenance: { externalEditorPath: "persisted" } },
+    "C:/Downloads/MaterialDownloadManager",
+  );
+  assert.equal(rejected.externalEditorPath, null);
+  assert.equal(rejected.settingProvenance.externalEditorPath, "compiled-in");
 });
 
 test("display name migration accepts only canonical bounded labels", () => {
