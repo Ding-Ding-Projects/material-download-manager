@@ -270,7 +270,7 @@ function renderAuthenticatorPairing(model) {
     elements.authenticatorQr.textContent = localize("authenticatorQrUnavailable", settings);
     elements.authenticatorQrStatus.textContent = localize("authenticatorQrUnavailable", settings);
   }
-  elements.authenticatorPairingCard.scrollIntoView?.({ block: "nearest" });
+  if (activeTab === "authenticator") elements.authenticatorPairingCard.scrollIntoView?.({ block: "nearest" });
 }
 
 function refreshAuthenticatorPresentation() {
@@ -352,7 +352,7 @@ function renderAuthenticatorList() {
     code.className = "authenticator-code";
     code.dataset.authenticatorCode = item.id;
     code.textContent = "—";
-    code.setAttribute("aria-label", localize("authenticatorCurrentCode", settings, { code: "unavailable" }));
+    code.setAttribute("aria-label", localize("authenticatorCurrentCode", settings, { code: localize("authenticatorUnavailableValue", settings) }));
     const countdown = document.createElement("span");
     countdown.className = "authenticator-countdown";
     countdown.dataset.authenticatorCountdown = item.id;
@@ -397,14 +397,14 @@ async function refreshAuthenticatorCodes() {
           nextElement.textContent = localize("authenticatorCodeNext", settings, { code: value.nextCode });
         } else {
           codeElement.textContent = "—";
-          codeElement.setAttribute("aria-label", localize("authenticatorCurrentCode", settings, { code: "unavailable" }));
+          codeElement.setAttribute("aria-label", localize("authenticatorCurrentCode", settings, { code: localize("authenticatorUnavailableValue", settings) }));
           countdownElement.textContent = localize("authenticatorCodeUnavailable", settings);
           nextElement.textContent = "";
         }
       } catch {
         if (activeTab !== "authenticator") return;
         codeElement.textContent = "—";
-        codeElement.setAttribute("aria-label", localize("authenticatorCurrentCode", settings, { code: "unavailable" }));
+        codeElement.setAttribute("aria-label", localize("authenticatorCurrentCode", settings, { code: localize("authenticatorUnavailableValue", settings) }));
         countdownElement.textContent = localize("authenticatorCodeUnavailable", settings);
         nextElement.textContent = "";
       }
