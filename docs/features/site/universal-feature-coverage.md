@@ -75,12 +75,24 @@ npm --prefix site run check
 npm --prefix site run build
 ```
 
-The check validates the independent universal inventory, exact runtime probes,
-schema migration markers, emoji-control wiring, School-mode state and reset
-route, and the existing article inventory separately. The browser smoke matrix
-for cross-tab storage, keyboard focus, screen-reader names, narrow layouts,
-and every future contract entry remains a required follow-up as each manifest
-entry moves from planned or partial to implemented.
+The check validates the independent universal inventory, source-level
+runtime-anchor probes, schema migration markers, emoji-control wiring,
+School-mode state and reset route, and the existing article inventory
+separately. The browser smoke matrix for cross-tab storage, keyboard focus,
+screen-reader names, narrow layouts, and every future contract entry remains a
+required follow-up as each manifest entry moves from planned or partial to
+implemented.
+
+## Capture evidence
+
+![Feature catalogue showing coverage-aware copy](../../screenshots/site/feature-catalogue-coverage.png)
+
+This capture is from source commit
+`a3a7b5840d6c88e6a5f2827328a569f6eaf26da8` at a 929 by 1004 pixel viewport
+using the local Pages files on an isolated hidden desktop. The checked PNG is
+`docs/screenshots/site/feature-catalogue-coverage.png` with SHA-256
+`d5e2f347de788242039436a14d8cff6acd62caf6016a67e0764a8c447ee5d284`.
+It shows the feature catalogue’s coverage-aware heading and article count.
 
 ## Suggested articles
 

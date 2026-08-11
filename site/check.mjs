@@ -142,6 +142,13 @@ run("HTML has language, viewport, skip link, main landmark, and tab semantics", 
   assert.match(html, /aria-orientation="vertical"/);
 });
 
+run("feature catalogue copy does not claim universal implementation", () => {
+  assert.doesNotMatch(html, /Everything implemented, in one place\./);
+  assert.match(html, /data-copy="featureIndexTitle">Feature articles and coverage status\.</);
+  assert.doesNotMatch(app, /Implemented feature/);
+  assert.match(app, /articleStatus/);
+});
+
 run("site exposes the required keyboard command palette shortcut", () => {
   assert.match(html, /Ctrl\+Shift\+F/);
   assert.match(app, /event\.ctrlKey && event\.shiftKey/);

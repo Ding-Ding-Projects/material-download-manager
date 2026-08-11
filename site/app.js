@@ -78,12 +78,13 @@
     readAllArticles: ["Read all articles", "睇晒啲文章"],
     smallDelight: ["A SMALL DELIGHT", "細細份開心"],
     featureIndex: ["FEATURE INDEX", "功能索引"],
-    featureIndexTitle: ["Everything implemented, in one place.", "已經做到嘅功能，一次過睇晒。"],
-    featureIndexLede: ["Search the feature articles locally. Plain text is the default; the builder is there when the exact shape matters.", "本地搜尋功能文章；純文字係預設，想精準啲就開正則建構器。"],
+    featureIndexTitle: ["Feature articles and coverage status.", "功能文章，同覆蓋狀態。"],
+    featureIndexLede: ["Search the feature articles locally. Each article keeps its coverage boundary visible; plain text is the default and the builder is there when the exact shape matters.", "本地搜尋功能文章；每篇文章都保留覆蓋範圍，純文字係預設，想精準啲就開正則建構器。"],
     filterByCategory: ["Filter by category", "按分類篩選"],
     regexBuilder: ["Regex builder", "正則建構器"],
     selectArticle: ["Select an article", "揀一篇文章"],
     selectArticleHint: ["Choose a feature card to read behavior, configuration, failure modes, security, verification, and suggested articles.", "揀功能卡片，就可以睇行為、設定、失敗處理、安全、驗證同推薦文章。"],
+    articleStatus: ["Feature article", "功能文章"],
     releaseHistory: ["RELEASE HISTORY", "版本歷史"],
     changelogTitle: ["Changelog and release evidence.", "更新紀錄，同版本證據。"],
     changelogLede: ["Only recorded releases appear here. Missing dates and unavailable installers stay visible as missing facts.", "呢度只列有紀錄嘅版本；日期缺失同安裝程式未有，都會老老實實講。"],
@@ -1258,7 +1259,7 @@
     header.append(create("h2", null, schoolSafeText(feature.title)));
     header.append(create("p", "article-summary", schoolSafeText(feature.summary)));
     const meta = create("div", "article-meta");
-    meta.append(create("span", "article-status", "Implemented feature"));
+    meta.append(create("span", "article-status", localized("articleStatus")));
     const source = create("a", null, "Open categorized source article ↗");
     source.href = feature.docsPath;
     source.setAttribute("aria-label", `Open source article for ${schoolSafeText(feature.title)}`);
