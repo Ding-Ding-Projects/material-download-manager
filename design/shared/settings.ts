@@ -6,6 +6,10 @@ import type {
   DownloadCategory,
   FunnyLevel,
   LanguageMode,
+  PresentationPatch,
+  PresentationSettings,
+  ResetCredentialState,
+  SchoolModeCredentialMetadata,
   SettingKey,
   SettingsPatch,
   SettingsProvenance,
@@ -17,14 +21,27 @@ import {
   AUTO_ORGANIZE_RULE_LIMIT,
   AUTO_ORGANIZE_RULE_NAME_MAX_LENGTH,
   AUTO_ORGANIZE_RULE_PATTERN_MAX_LENGTH,
+  PRESENTATION_SETTING_KEYS,
   SETTING_KEYS,
 } from "./types";
 import { normalizeRegexFlags, validateRegexPattern } from "./regex";
 import { cloneSshHostConfigs, isSshHostConfigs } from "./ssh";
 
-export const SETTINGS_SCHEMA_VERSION = 4;
+export const SETTINGS_SCHEMA_VERSION = 5;
 export const APP_DISPLAY_NAME_MAX_LENGTH = 64;
 export const DEFAULT_APP_DISPLAY_NAME = "Material Download Manager";
+export const SCHOOL_MODE_NAME_MAX_LENGTH = 80;
+export const DEFAULT_SCHOOL_MODE_NAME = "School mode";
+export const RESET_CREDENTIAL_STATES = {
+  UNAVAILABLE: "unavailable",
+  UNCONFIGURED: "unconfigured",
+  CONFIGURED: "configured",
+} as const;
+export const DEFAULT_SCHOOL_MODE_CREDENTIAL: SchoolModeCredentialMetadata = {
+  schemaVersion: 1,
+  provider: "os-credential-vault",
+  state: RESET_CREDENTIAL_STATES.UNAVAILABLE,
+};
 
 export const COMPILED_IN_DEFAULTS = {
   maxConnectionsPerDownload: 8,
@@ -38,6 +55,9 @@ export const COMPILED_IN_DEFAULTS = {
   languageMode: "english" as LanguageMode,
   funnyLevelEnglish: 1 as FunnyLevel,
   funnyLevelCantonese: 3 as FunnyLevel,
+  schoolModeEnabled: false,
+  schoolModeName: DEFAULT_SCHOOL_MODE_NAME,
+  showEmojis: false,
   density: "comfortable" as DensityMode,
   accentSeedColor: "#7c5cff",
   uiFontFamily: "segoe-ui" as UIFontFamily,
@@ -63,11 +83,42 @@ export function createDefaultSettings(defaultSaveFolder: string): AppSettings {
     autoOrganizeRules: [],
     sshHosts: [],
     settingProvenance: compiledInProvenance(),
+    schoolModeCredential: { ...DEFAULT_SCHOOL_MODE_CREDENTIAL },
   };
 }
 
 export function isLanguageMode(value: unknown): value is LanguageMode {
   return value === "english" || value === "cantonese" || value === "bilingual";
+}
+
+export function isResetCredentialState(value: unknown): value is ResetCredentialState {
+  return value === RESET_CREDENTIAL_STATES.UNAVAILABLE
+    || value === RESET_CREDENTIAL_STATES.UNCONFIGURED
+    || value === RESET_CREDENTIAL_STATES.CONFIGURED;
+}
+
+export function isSchoolModeCredentialMetadata(value: unknown): value is SchoolModeCredentialMetadata {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
+  const candidate = value as Record<string, unknown>;
+  return candidate.schemaVersion === 1
+    && candidate.provider === "os-credential-vault"
+    && isResetCredentialState(candidate.state);
+}
+
+export function normalizeSchoolModeName(value: unknown): string {
+  const normalized = String(value ?? "")
+    .replace(/[\u0000-\u001f\u007f]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, SCHOOL_MODE_NAME_MAX_LENGTH);
+  return normalized || DEFAULT_SCHOOL_MODE_NAME;
+}
+
+export function isValidSchoolModeName(value: unknown): value is string {
+  return typeof value === "string"
+    && value.length > 0
+    && value.length <= SCHOOL_MODE_NAME_MAX_LENGTH
+    && value === normalizeSchoolModeName(value);
 }
 
 export function isFunnyLevel(value: unknown): value is FunnyLevel {
@@ -227,6 +278,11 @@ export function validateSettingsPatch(
         case "funnyLevelEnglish":
         case "funnyLevelCantonese":
           return isFunnyLevel(settingValue);
+        case "schoolModeEnabled":
+        case "showEmojis":
+          return typeof settingValue === "boolean";
+        case "schoolModeName":
+          return isValidSchoolModeName(settingValue);
         case "density":
           return isDensityMode(settingValue);
         case "accentSeedColor":
@@ -262,4 +318,68 @@ export function validateSettingsPatch(
       : settingValue;
   }
   return normalizedPatch as SettingsPatch;
+}
+
+export function validatePresentationPatch(value: unknown): PresentationPatch {
+  const validated = validateSettingsPatch(value);
+  for (const key of Object.keys(validated)) {
+    if (!(PRESENTATION_SETTING_KEYS as readonly string[]).includes(key)) {
+      throw new Error(`Invalid presentation setting key: ${key}`);
+    }
+  }
+  return validated as PresentationPatch;
+}
+
+export function validatePresentationResetKeys(value: unknown): Array<(typeof PRESENTATION_SETTING_KEYS)[number]> {
+  if (!Array.isArray(value) || value.length > PRESENTATION_SETTING_KEYS.length) {
+    throw new Error("Invalid presentation reset keys");
+  }
+  const keys: Array<(typeof PRESENTATION_SETTING_KEYS)[number]> = [];
+  const seen = new Set<string>();
+  for (const candidate of value) {
+    if (typeof candidate !== "string" || !(PRESENTATION_SETTING_KEYS as readonly string[]).includes(candidate) || seen.has(candidate)) {
+      throw new Error("Invalid presentation reset keys");
+    }
+    seen.add(candidate);
+    keys.push(candidate as (typeof PRESENTATION_SETTING_KEYS)[number]);
+  }
+  return keys;
+}
+
+export function presentationSettingsFromAppSettings(settings: AppSettings): PresentationSettings {
+  return {
+    languageMode: settings.languageMode,
+    funnyLevelEnglish: settings.funnyLevelEnglish,
+    funnyLevelCantonese: settings.funnyLevelCantonese,
+    schoolModeEnabled: settings.schoolModeEnabled,
+    schoolModeName: settings.schoolModeName,
+    showEmojis: settings.showEmojis,
+    schoolModeCredential: { ...settings.schoolModeCredential },
+  };
+}
+
+export function effectivePresentationSettings<T extends Pick<
+  AppSettings,
+  "languageMode" | "funnyLevelEnglish" | "funnyLevelCantonese" | "schoolModeEnabled" | "showEmojis"
+>>(settings: T): T {
+  if (!settings.schoolModeEnabled) return settings;
+  return {
+    ...settings,
+    languageMode: "english",
+    funnyLevelEnglish: 1,
+    funnyLevelCantonese: 1,
+    showEmojis: false,
+  } as T;
+}
+
+/**
+ * School mode removes playful language and dim-sum surfaces from local
+ * documentation and release views instead of leaving searchable references
+ * behind. This is deliberately a bounded text predicate; it never mutates
+ * persisted source content.
+ */
+const SCHOOL_MODE_SUPPRESSED_SURFACE_PATTERN = /\b(?:cantonese|bilingual|funny(?:[- ]level)?|dim[ -]?sum|har gow|siu mai|bao)\b|廣東話|雙語|搞笑|玩味|點心|蝦餃|燒賣/iu;
+
+export function isSchoolModeSuppressedText(value: string): boolean {
+  return SCHOOL_MODE_SUPPRESSED_SURFACE_PATTERN.test(value);
 }

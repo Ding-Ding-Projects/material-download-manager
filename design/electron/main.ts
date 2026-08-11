@@ -5,6 +5,8 @@ import {
   createBrowserExtensionInstallResult,
   IPC,
   isUpdateUnsavedWorkState,
+  type PresentationPatch,
+  type PresentationSettings,
   type UpdateInstallResult,
   type UpdateState,
 } from "../shared/types";
@@ -22,7 +24,12 @@ import {
   type TotpRegistrationMetadata,
   type TotpRegistrationInput,
 } from "../shared/authenticator";
-import { validateSettingResetKeys, validateSettingsPatch } from "../shared/settings";
+import {
+  validatePresentationPatch,
+  validatePresentationResetKeys,
+  validateSettingResetKeys,
+  validateSettingsPatch,
+} from "../shared/settings";
 import {
   isSshHostDraft,
   isSshHostKeyScanResult,
@@ -111,6 +118,11 @@ function createWindow() {
   });
 
   mainWindow.once("ready-to-show", () => mainWindow?.show());
+  mainWindow.webContents.once("did-finish-load", () => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send(IPC.PRESENTATION_CHANGED, manager.getPresentationSettings());
+    }
+  });
 
   if (isDev) {
     mainWindow.loadURL("http://localhost:5173");
@@ -136,6 +148,7 @@ function createProgressWindow(itemId: string): boolean {
     progressWindow.focus();
     progressWindow.webContents.send(IPC.PROGRESS_TARGET_CHANGED, itemId);
     progressWindow.webContents.send(IPC.STATE_CHANGED, manager.getState());
+    progressWindow.webContents.send(IPC.PRESENTATION_CHANGED, manager.getPresentationSettings());
     return true;
   }
 
@@ -161,6 +174,7 @@ function createProgressWindow(itemId: string): boolean {
     if (progressWindow && !progressWindow.isDestroyed()) {
       progressWindow.webContents.send(IPC.PROGRESS_TARGET_CHANGED, itemId);
       progressWindow.webContents.send(IPC.STATE_CHANGED, manager.getState());
+      progressWindow.webContents.send(IPC.PRESENTATION_CHANGED, manager.getPresentationSettings());
     }
   });
   if (isDev) {
@@ -267,6 +281,11 @@ function broadcastState() {
   const state = manager.getState();
   if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send(IPC.STATE_CHANGED, state);
   if (progressWindow && !progressWindow.isDestroyed()) progressWindow.webContents.send(IPC.STATE_CHANGED, state);
+}
+
+function broadcastPresentation(presentation: PresentationSettings) {
+  if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send(IPC.PRESENTATION_CHANGED, presentation);
+  if (progressWindow && !progressWindow.isDestroyed()) progressWindow.webContents.send(IPC.PRESENTATION_CHANGED, presentation);
 }
 
 async function processBrowserHandoffs(commandLine: readonly string[]) {
@@ -442,6 +461,19 @@ function registerIpcHandlers() {
       throw new Error("A setting cannot be changed and reset in the same mutation");
     }
     return manager.setSettings(settings, validatedResetKeys);
+  });
+  ipcMain.handle(IPC.PRESENTATION_GET, (event) => {
+    assertTrustedSender(event);
+    return manager.getPresentationSettings();
+  });
+  ipcMain.handle(IPC.PRESENTATION_SET, (event, settings: unknown, resetKeys: unknown = []) => {
+    assertTrustedSender(event);
+    const validated = validatePresentationPatch(settings);
+    const validatedResetKeys = validatePresentationResetKeys(resetKeys);
+    if (validatedResetKeys.some((key) => Object.prototype.hasOwnProperty.call(validated, key))) {
+      throw new Error("A presentation setting cannot be changed and reset in the same mutation");
+    }
+    return manager.setPresentationSettings(validated as PresentationPatch, validatedResetKeys);
   });
 
   ipcMain.handle(IPC.SSH_HOST_SAVE, async (event, draft: unknown) => {
@@ -848,6 +880,7 @@ app.whenReady().then(async () => {
   manager = new DownloadManager(app.getPath("userData"), undefined, { credentialVault: sshVault });
   await manager.init();
   manager.on("stateChanged", broadcastState);
+  manager.on("presentationChanged", broadcastPresentation);
   manager.on("itemCompleted", notifyDownloadComplete);
   await processBrowserHandoffs(process.argv);
   handoffServer = new HandoffServer({

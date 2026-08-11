@@ -7,6 +7,9 @@ import type {
   DownloadQueue,
   StateSnapshot,
   NewDownloadInfo,
+  PresentationPatch,
+  PresentationSettings,
+  PresentationSettingKey,
   SettingKey,
   SettingsPatch,
   UpdateInstallResult,
@@ -30,7 +33,7 @@ import { isExportResult } from "../shared/export";
 import { isHistoryAccessState, isHistoryView } from "../shared/history";
 import { isDownloadCategory } from "../shared/settings";
 import { isRegexEvaluation, type RegexEvaluation } from "../shared/regex";
-import { isUpdateInstallResult, isUpdateState, isUpdateUnsavedWorkState } from "../shared/types";
+import { isPresentationSettings, isUpdateInstallResult, isUpdateState, isUpdateUnsavedWorkState } from "../shared/types";
 import { isBrowserExtensionInstallResult, type BrowserExtensionInstallResult } from "../shared/types";
 import {
   isChangelogView,
@@ -47,6 +50,26 @@ const api = {
     const listener = (_: unknown, state: StateSnapshot) => cb(state);
     ipcRenderer.on(IPC.STATE_CHANGED, listener);
     return () => ipcRenderer.removeListener(IPC.STATE_CHANGED, listener);
+  },
+
+  getPresentationSettings: async (): Promise<PresentationSettings> => {
+    const value: unknown = await ipcRenderer.invoke(IPC.PRESENTATION_GET);
+    if (!isPresentationSettings(value)) throw new Error("Invalid presentation settings from main process");
+    return value;
+  },
+
+  setPresentationSettings: async (settings: PresentationPatch, resetKeys: PresentationSettingKey[] = []): Promise<PresentationSettings> => {
+    const value: unknown = await ipcRenderer.invoke(IPC.PRESENTATION_SET, settings, resetKeys);
+    if (!isPresentationSettings(value)) throw new Error("Invalid presentation settings from main process");
+    return value;
+  },
+
+  onPresentationChanged: (cb: (settings: PresentationSettings) => void) => {
+    const listener = (_: unknown, settings: unknown) => {
+      if (isPresentationSettings(settings)) cb(settings);
+    };
+    ipcRenderer.on(IPC.PRESENTATION_CHANGED, listener);
+    return () => ipcRenderer.removeListener(IPC.PRESENTATION_CHANGED, listener);
   },
 
   getUpdateState: async (): Promise<UpdateState> => {

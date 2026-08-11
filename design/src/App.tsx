@@ -61,7 +61,7 @@ export default function App() {
   const displayNameMigrationAttempted = useRef(false);
   const copy = useMemo(
     () => getUiCopy(settings),
-    [settings?.funnyLevelCantonese, settings?.funnyLevelEnglish, settings?.languageMode]
+    [settings?.funnyLevelCantonese, settings?.funnyLevelEnglish, settings?.languageMode, settings?.schoolModeEnabled, settings?.schoolModeName, settings?.showEmojis]
   );
   const observedItems = useRef(false);
   const previousItems = useRef(new Map<string, Pick<DownloadItem, "status" | "error" | "fileName" | "url">>());
@@ -170,22 +170,38 @@ export default function App() {
             },
           }]
         : []),
-      {
+      ...(!settings?.schoolModeEnabled ? [{
         id: "settings.language",
         label: copy.text("Settings · Language mode", "設定 · 語言模式"),
         description: copy.text("Open Settings to adjust language mode and funny levels", "開啟設定調整語言模式同搞笑程度"),
         keywords: ["english", "cantonese", "bilingual", "funny"],
         section: "Settings",
         onSelect: () => openSettings("language"),
-      },
+      }] : []),
       {
+        id: "settings.school-mode",
+        label: copy.text(`Settings · ${settings?.schoolModeName ?? "School mode"}`, `設定 · ${settings?.schoolModeName ?? "School mode"}`),
+        description: copy.text("Open the user-renamable English-only mode and reset metadata", "開啟可改名嘅純英文模式同重設 metadata"),
+        keywords: ["school", "mode", "english", "reset", "credential"],
+        section: "Settings",
+        onSelect: () => openSettings("school-mode"),
+      },
+      ...(!settings?.schoolModeEnabled ? [{
+        id: "settings.show-emojis",
+        label: copy.text("Settings · Show emojis", "設定 · 顯示 emoji"),
+        description: copy.text("Open the decorative emoji setting for dialogs and message boxes", "開啟對話框同訊息框嘅裝飾 emoji 設定"),
+        keywords: ["emoji", "dialogs", "message", "boxes"],
+        section: "Settings",
+        onSelect: () => openSettings("show-emojis"),
+      }] : []),
+      ...(!settings?.schoolModeEnabled ? [{
         id: "settings.appearance",
         label: copy.text("Settings · Appearance", "設定 · 外觀"),
         description: copy.text("Open Settings to adjust theme, density, accent, and fonts", "開啟設定調整主題、密度、主色同字型"),
         keywords: ["theme", "dark", "light", "density", "font", "accent"],
         section: "Settings",
         onSelect: () => openSettings("appearance"),
-      },
+      }] : []),
       {
         id: "settings.auto-organize",
         label: copy.text("Settings · Auto-organize folders", "設定 · 自動分類資料夾"),
@@ -249,7 +265,7 @@ export default function App() {
     // Item-scoped actions intentionally stay out of this registry: it has no
     // focused/selected-item contract, so an action must never guess a download.
     return [...commands, ...categoryCommands, ...queueCommands];
-  }, [activeQueueId, activeQueueName, copy, filter.kind, items, openAddDownload, openQueues, openSettings, queues, setFilter, startQueue, stopAllActive, stopQueue]);
+  }, [activeQueueId, activeQueueName, copy, filter.kind, items, openAddDownload, openQueues, openSettings, queues, setFilter, settings?.schoolModeEnabled, settings?.schoolModeName, startQueue, stopAllActive, stopQueue]);
 
   useEffect(() => {
     const unsubscribe = useAppStore.getState().init();
@@ -303,8 +319,13 @@ export default function App() {
       ? Object.values(currentSettings.settingProvenance).every((source) => source === "compiled-in")
       : true;
     if (firstRun || dialogs.addDownload || dialogs.settings || dialogs.queues || activeItems.length > 0) return;
+    if (currentSettings?.schoolModeEnabled) return;
     if (Math.random() < 0.1) setDimSumSurprise(chooseDimSum());
   }, [activeItems.length, dialogs.addDownload, dialogs.queues, dialogs.settings, ready]);
+
+  useEffect(() => {
+    if (settings?.schoolModeEnabled) setDimSumSurprise(null);
+  }, [settings?.schoolModeEnabled]);
 
   useEffect(() => {
     function handleDestructiveRequest(event: Event) {
@@ -442,7 +463,7 @@ export default function App() {
       {dialogs.settings && <SettingsDialog />}
       {dialogs.queues && <QueuesDialog />}
       <NotificationCenter />
-      {dimSumSurprise && <DimSumSurprise dish={dimSumSurprise} onDismiss={() => setDimSumSurprise(null)} />}
+      {!settings?.schoolModeEnabled && dimSumSurprise && <DimSumSurprise dish={dimSumSurprise} onDismiss={() => setDimSumSurprise(null)} />}
       {destructiveRequest && (
         <DestructiveActionGate
           request={destructiveRequest}

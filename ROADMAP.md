@@ -53,6 +53,16 @@ unverified surface has shipped.
 - Built-artifact UI smoke that fail-closes on the real separate progress
   window, rejects nested interactive labels, and checks narrow Settings layout
   at 2× scale.
+- Shared School mode presentation slice at source commit
+  [`ecf9bc6`](https://github.com/Ding-Ding-Projects/material-download-manager/commit/ecf9bc65e6f78f08e109abfbed5aa897cbdbb86d): schema-v5 local
+  application-data state, user-renamable English-only mode, persisted dialog
+  emoji switch, canonical main-process IPC, live main/progress-window
+  propagation, playful/dim-sum surface suppression, and fail-closed reset
+  metadata. Local evidence is 88/88 compiled Electron checks and 99/99 engine
+  checks. Real built-artifact captures cover the emoji control and the enabled
+  suppressed state in `docs/screenshots/settings/`; no password/TOTP
+  enrollment, narration, schedules, appearance, or history expansion is part
+  of this slice.
 
 ## Authenticated automatic browser capture implemented
 

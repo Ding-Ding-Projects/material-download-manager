@@ -1,6 +1,14 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { validateSettingResetKeys, validateSettingsPatch } from "../../shared/settings";
+import {
+  createDefaultSettings,
+  effectivePresentationSettings,
+  isSchoolModeSuppressedText,
+  validatePresentationPatch,
+  validatePresentationResetKeys,
+  validateSettingResetKeys,
+  validateSettingsPatch,
+} from "../../shared/settings";
 
 const validRule = {
   id: "documents",
@@ -20,6 +28,45 @@ test("settings IPC validation rejects unknown and non-finite values", () => {
   assert.throws(() => validateSettingsPatch({ settingProvenance: {} }), /Invalid setting key/);
   assert.throws(() => validateSettingsPatch({ displayName: "  My Downloads  " }), /Invalid value for setting/);
   assert.throws(() => validateSettingsPatch({ displayName: "x".repeat(65) }), /Invalid value for setting/);
+});
+
+test("presentation settings are bounded, allowlisted, and fail closed in School mode", () => {
+  const defaults = createDefaultSettings("C:\\Downloads");
+  assert.equal(defaults.schoolModeEnabled, false);
+  assert.equal(defaults.schoolModeName, "School mode");
+  assert.equal(defaults.showEmojis, false);
+  assert.deepEqual(defaults.schoolModeCredential, {
+    schemaVersion: 1,
+    provider: "os-credential-vault",
+    state: "unavailable",
+  });
+
+  assert.deepEqual(validatePresentationPatch({ schoolModeEnabled: true, schoolModeName: "Focus time", showEmojis: true }), {
+    schoolModeEnabled: true,
+    schoolModeName: "Focus time",
+    showEmojis: true,
+  });
+  assert.deepEqual(validatePresentationResetKeys(["schoolModeName", "showEmojis"]), ["schoolModeName", "showEmojis"]);
+  assert.throws(() => validatePresentationPatch({ displayName: "not presentation" }), /Invalid presentation setting key/);
+  assert.throws(() => validatePresentationPatch({ schoolModeName: "  Focus time  " }), /Invalid value for setting/);
+  assert.throws(() => validatePresentationResetKeys(["displayName"]), /Invalid presentation reset keys/);
+
+  const storedChoices = {
+    ...defaults,
+    languageMode: "cantonese" as const,
+    funnyLevelEnglish: 5 as const,
+    funnyLevelCantonese: 4 as const,
+    schoolModeEnabled: true,
+    showEmojis: true,
+  };
+  const effective = effectivePresentationSettings(storedChoices);
+  assert.equal(effective.languageMode, "english");
+  assert.equal(effective.funnyLevelEnglish, 1);
+  assert.equal(effective.funnyLevelCantonese, 1);
+  assert.equal(effective.showEmojis, false);
+  assert.equal(storedChoices.languageMode, "cantonese", "stored choices remain recoverable after School mode");
+  assert.equal(isSchoolModeSuppressedText("Cantonese funny-level and dim sum release surfaces"), true);
+  assert.equal(isSchoolModeSuppressedText("Download queue and file history"), false);
 });
 
 test("setting reset keys are bounded, unique, and allowlisted", () => {

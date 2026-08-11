@@ -99,6 +99,34 @@ commit documented in [`HANDOFF.md`](HANDOFF.md). SHA-256:
 </details>
 
 <details>
+<summary>School mode and dialog emoji settings</summary>
+
+The shared presentation settings are owned by the main process and persisted
+in the normal local application-data record. This real built-artifact capture
+comes from source commit `ecf9bc65e6f78f08e109abfbed5aa897cbdbb86d`, rebuilt
+with `npm run build` from the `design/` directory, and driven on a
+named hidden desktop. The renderer assets were `index-9-ppiL__.js` (SHA-256
+`AB1C07E2AF56D3A24E084D7EA04FAEBBAA11F6A114816B27B2D41A3149B0732B`) and
+`index-CL9UO5Fq.css` (SHA-256
+`23FF81988A28774B46E99E5FC38739905D813F8E7098D218325B9AC7974A0D45`). Both
+captures are 1150 × 720 PNGs and were inspected after capture.
+
+![Settings with the user-renamable School mode and Show emojis controls visible](docs/screenshots/settings/school-mode-off-emoji-control.png)
+
+![Settings with School mode enabled and language, funny-level, and emoji controls removed](docs/screenshots/settings/school-mode-on-controls-suppressed.png)
+
+The first capture SHA-256 is
+`AAC74504311B2B795C8D8FD479750E938E6FB07C042E643DBAC606B60D9E94A8`; the
+second is
+`60A93B232437B6C9FDE4F38FB9CB6DBD6A554C1FF33204FFCC771EF03E206BED`.
+School mode forces English and serious copy, preserves prior choices, removes
+playful/dim-sum surfaces, and fails closed when reset credential metadata is
+not locally verified. Emoji is decorative only and never enters accessible
+names or exports.
+
+</details>
+
+<details>
 <summary>Browser extension automatic capture and installation</summary>
 
 The Manifest V3 extension requests Chrome's `downloads` permission and enables

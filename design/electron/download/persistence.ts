@@ -15,6 +15,8 @@ import {
   isValidAppDisplayName,
   isLanguageMode,
   isValidDefaultSaveFolder,
+  isSchoolModeCredentialMetadata,
+  isValidSchoolModeName,
   isUIFontFamily,
   isUIFontWeight,
   SETTINGS_SCHEMA_VERSION,
@@ -142,6 +144,9 @@ export function migrateSettings(input: unknown, defaultSaveFolder: string): AppS
   adopt("languageMode", isLanguageMode);
   adopt("funnyLevelEnglish", isFunnyLevel);
   adopt("funnyLevelCantonese", isFunnyLevel);
+  adopt("schoolModeEnabled", (value): value is boolean => typeof value === "boolean");
+  adopt("schoolModeName", isValidSchoolModeName);
+  adopt("showEmojis", (value): value is boolean => typeof value === "boolean");
   adopt("density", isDensityMode);
   adopt("accentSeedColor", isHexColor);
   adopt("uiFontFamily", isUIFontFamily);
@@ -170,6 +175,9 @@ export function migrateSettings(input: unknown, defaultSaveFolder: string): AppS
   // A newer file is read conservatively: known keys are still validated, but
   // the in-memory schema is always the current one so the next save upgrades it.
   settings.settingsVersion = SETTINGS_SCHEMA_VERSION;
+  if (isSchoolModeCredentialMetadata(raw.schoolModeCredential)) {
+    settings.schoolModeCredential = { ...raw.schoolModeCredential };
+  }
   settings.settingProvenance = provenance;
   return settings;
 }

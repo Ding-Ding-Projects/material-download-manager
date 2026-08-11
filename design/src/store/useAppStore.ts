@@ -6,6 +6,9 @@ import type {
   DownloadItem,
   DownloadQueue,
   NewDownloadInfo,
+  PresentationPatch,
+  PresentationSettings,
+  PresentationSettingKey,
   SettingKey,
   SettingsPatch,
 } from "@shared/types";
@@ -31,7 +34,7 @@ interface DialogsState {
   detailsItemId: string | null;
 }
 
-export type SettingsFocus = "language" | "appearance" | "downloads" | "auto-organize" | "auto-organize-rules" | "advanced" | null;
+export type SettingsFocus = "language" | "school-mode" | "show-emojis" | "appearance" | "downloads" | "auto-organize" | "auto-organize-rules" | "advanced" | null;
 
 interface AppState {
   // live data, mirrored from the main process
@@ -86,6 +89,8 @@ interface AppState {
   openFolder: (id: string) => Promise<void>;
   getSettings: () => Promise<AppSettings>;
   setSettings: (settings: SettingsPatch, resetKeys?: SettingKey[]) => Promise<AppSettings>;
+  getPresentationSettings: () => Promise<PresentationSettings>;
+  setPresentationSettings: (settings: PresentationPatch, resetKeys?: PresentationSettingKey[]) => Promise<PresentationSettings>;
   createQueue: (queue: Partial<DownloadQueue>) => Promise<DownloadQueue>;
   updateQueue: (queue: DownloadQueue) => Promise<void>;
   deleteQueue: (id: string) => Promise<void>;
@@ -129,7 +134,18 @@ export const useAppStore = create<AppState>((set, get) => ({
         return { items: s.items, queues: s.queues, settings: s.settings };
       });
     });
-    return unsubscribe;
+    const unsubscribePresentation = window.api.onPresentationChanged((presentation) => {
+      set((state) => {
+        if (!state.settings) return state;
+        const nextSettings = { ...state.settings, ...presentation };
+        applyAppearanceSettings(nextSettings);
+        return { settings: nextSettings };
+      });
+    });
+    return () => {
+      unsubscribe();
+      unsubscribePresentation();
+    };
   },
 
   setFilter: (filter) => set({ filter, selectedIds: new Set() }),
@@ -191,6 +207,17 @@ export const useAppStore = create<AppState>((set, get) => ({
     const updated = await window.api.setSettings(settings, resetKeys);
     applyAppearanceSettings(updated);
     set({ settings: updated });
+    return updated;
+  },
+  getPresentationSettings: () => window.api.getPresentationSettings(),
+  setPresentationSettings: async (settings, resetKeys = []) => {
+    const updated = await window.api.setPresentationSettings(settings, resetKeys);
+    set((state) => {
+      if (!state.settings) return state;
+      const nextSettings = { ...state.settings, ...updated };
+      applyAppearanceSettings(nextSettings);
+      return { settings: nextSettings };
+    });
     return updated;
   },
   createQueue: (queue) => window.api.createQueue(queue),

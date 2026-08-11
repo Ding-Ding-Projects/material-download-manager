@@ -5,8 +5,8 @@
 Issue [#18](https://github.com/Ding-Ding-Projects/material-download-manager/issues/18)
 tracks this bounded model/main-process slice. Source commit
 [`ce09797`](https://github.com/Ding-Ding-Projects/material-download-manager/commit/ce09797e6c230cbb1fa9d1594fc2660655aa0cdf)
-is on `codex/uh-totp-core`; it is intentionally not merged into the default
-branch by this handoff.
+is integrated into the default branch through the current merge. The model-only
+slice remains deliberately separate from the later authenticator surface work.
 
 The slice adds `design/shared/authenticator.ts`, the RFC 6238 engine and
 credential-vault boundary under `design/electron/authenticator/`, focused tests
@@ -23,6 +23,52 @@ slice has no user-facing QR/authenticator surface, so no visual capture is
 claimed. The next owner should build the full authenticator tab and QR image
 renderer only after preserving the secret-free IPC/export boundary; per-tab
 locks, schedules, and authenticator-list workflows remain separate work.
+
+## Shared School mode presentation and dialog emoji settings (2026-08-11)
+
+Source commit [`ecf9bc6`](https://github.com/Ding-Ding-Projects/material-download-manager/commit/ecf9bc65e6f78f08e109abfbed5aa897cbdbb86d)
+adds the next bounded desktop presentation slice. The main process owns a
+schema-v5 local application-data record for a user-renamable School mode label,
+its enabled state, a persisted dialog/message-box emoji switch, and reset
+credential metadata. The canonical `presentation:get` / `presentation:set`
+IPC boundary validates the allowlist and broadcasts `presentation:changed` to
+both the main and separate progress windows. Existing settings are migrated
+conservatively; malformed metadata becomes `unavailable`.
+
+School mode forces English and serious copy, removes language, bilingual,
+funny-level, and emoji controls from Settings and the command palette, filters
+playful/dim-sum documentation and changelog surfaces, clears the startup
+surprise, and suppresses decorative notification emoji. Stored language,
+funny-level, emoji, and mode-name choices remain recoverable. Exiting while the
+local reset credential metadata is not `configured` fails closed and leaves the
+mode enabled; this slice intentionally does not add password or TOTP
+enrollment. Deleting the shared local application-data folder remains the
+documented user-directed recovery route.
+
+### Verification and real-artifact evidence
+
+- `npm run docs:bundle:check` — passed.
+- `npm run typecheck` — passed.
+- `npm run build` — passed; renderer `index-9-ppiL__.js` SHA-256
+  `AB1C07E2AF56D3A24E084D7EA04FAEBBAA11F6A114816B27B2D41A3149B0732B` and
+  `index-CL9UO5Fq.css` SHA-256
+  `23FF81988A28774B46E99E5FC38739905D813F8E7098D218325B9AC7974A0D45`.
+- Compiled Electron checks — **88/88 passed**.
+- Downloader/engine checks — **99/99 passed**.
+- Cheap Lowlevel hidden-desktop smoke from this source commit opened the real
+  Settings surface at 1150×720. The emoji-control state is captured at
+  [`docs/screenshots/settings/school-mode-off-emoji-control.png`](docs/screenshots/settings/school-mode-off-emoji-control.png)
+  (SHA-256
+  `AAC74504311B2B795C8D8FD479750E938E6FB07C042E643DBAC606B60D9E94A8`), and
+  the enabled state that removes the language/funny/emoji controls is at
+  [`docs/screenshots/settings/school-mode-on-controls-suppressed.png`](docs/screenshots/settings/school-mode-on-controls-suppressed.png)
+  (SHA-256
+  `60A93B232437B6C9FDE4F38FB9CB6DBD6A554C1FF33204FFCC771EF03E206BED`).
+  Both PNGs were opened and inspected after capture; the disposable profile,
+  process, and hidden desktop were removed.
+- GitHub Actions remains a build/package/publication path and does not run
+  tests or lint; the local results above are the test evidence. No signing
+  material or CRX artifact was introduced.
 
 ## Built-artifact smoke and gallery refresh (2026-08-11)
 
