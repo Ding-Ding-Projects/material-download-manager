@@ -20,6 +20,15 @@ directory outside the repository. The output path is printed by the script so
 it can be opened by a local static server without adding generated output to
 the checkout.
 
+`data/universal-feature-manifest.js` is the hand-written Pages contract
+inventory. It is checked separately from the feature article catalogue, keeps
+required surfaces and exact verification probes for every contract entry, and
+reports planned or partial entries without presenting them as shipped. The
+site settings schema also persists the emoji decoration switch and the
+user-renamable School mode name/state. School mode is an English-only
+user-experience setting: it removes the playful controls and local surprise,
+and clearing this site's browser storage is the documented reset route.
+
 The site embeds the categorized feature articles so the documentation remains
 available without a fetch. The source Markdown remains authoritative in
 `docs/features/`; every site article links back to its category article.
