@@ -147,6 +147,10 @@
   gap: 3px;
 }
 
+.authenticator-list-item-main {
+  flex: 1;
+}
+
 .authenticator-list-item strong,
 .authenticator-list-item span,
 .authenticator-list-item small {
@@ -161,6 +165,54 @@
 .authenticator-list-item small {
   color: var(--text-secondary);
   font-size: 11px;
+}
+
+.authenticator-live-code {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 8px;
+  padding: 8px;
+  border: 1px solid var(--border-color-strong);
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--bg-dialog) 78%, transparent);
+}
+
+.authenticator-code-row {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: minmax(82px, auto) minmax(90px, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+}
+
+.authenticator-code-secondary {
+  color: var(--text-secondary);
+}
+
+.authenticator-code-label {
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.authenticator-code-value {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: var(--text-primary);
+  font-family: var(--ui-font-family-mono, "Cascadia Code", monospace);
+  font-size: 18px;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.16em;
+  user-select: text;
+}
+
+.authenticator-countdown {
+  min-width: 82px;
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
 }
 
 @media (max-width: 680px) {
@@ -178,5 +230,16 @@
   .authenticator-list-item {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .authenticator-code-row {
+    grid-template-columns: minmax(70px, auto) minmax(0, 1fr);
+  }
+
+  .authenticator-code-row .btn,
+  .authenticator-countdown {
+    grid-column: 2;
+    justify-self: start;
+    text-align: left;
   }
 }

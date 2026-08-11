@@ -28,6 +28,7 @@ const RUNTIME_CHECK_IDS = [
   "progress-window",
   "settings-open",
   "settings-authenticator-surface",
+  "settings-authenticator-live-management",
   "settings-dialog-a11y",
   "settings-auto-organize-ui",
   "settings-auto-organize-regex-focus",
@@ -1564,6 +1565,67 @@ async function main(argv) {
         return { ...evidence, screenshotPath: capturedPath };
       }
       return evidence;
+    });
+
+    await runCheck(result, "settings-authenticator-live-management", async () => {
+      const registration = await cdp.evaluate(pageExpression(`return (async () => {
+        const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
+        const bytes = crypto.getRandomValues(new Uint8Array(20));
+        let buffer = 0;
+        let bits = 0;
+        let secret = "";
+        for (const byte of bytes) {
+          buffer = (buffer << 8) | byte;
+          bits += 8;
+          while (bits >= 5) {
+            bits -= 5;
+            secret += alphabet[(buffer >>> bits) & 31];
+          }
+        }
+        if (bits > 0) secret += alphabet[(buffer << (5 - bits)) & 31];
+        const metadata = await window.api.registerAuthenticator({
+          issuer: "Smoke Authenticator",
+          account: "smoke@local.test",
+          secret,
+          algorithm: "SHA1",
+          digits: 6,
+          period: 30,
+        });
+        const key = "material-download-manager.authenticator.metadata.v1";
+        localStorage.setItem(key, JSON.stringify([metadata]));
+        return { id: metadata.id, digits: metadata.digits };
+      })()`));
+      try {
+        await cdp.evaluate("location.reload()");
+        await waitForPage(cdp, `Boolean(document.querySelector("#root > *"))`, "reloaded app for authenticator management", options.timeoutMs);
+        await clickByRole(cdp, "button", "Settings");
+        await waitForPage(cdp, `Boolean(document.querySelector('[role="dialog"]'))`, "reloaded Settings dialog", options.timeoutMs);
+        await clickByRole(cdp, "tab", "Authenticator", '[role="dialog"]');
+        await waitForPage(cdp, `Boolean(document.querySelector("#settings-authenticator-panel"))`, "reloaded Authenticator panel", options.timeoutMs);
+        const evidence = await cdp.evaluate(pageExpression(`(() => {
+          const row = document.querySelector('[data-authenticator-code-id="${registration.id}"]');
+          const current = document.getElementById("authenticator-current-code-${registration.id}");
+          const next = document.getElementById("authenticator-next-code-${registration.id}");
+          const countdown = document.getElementById("authenticator-countdown-${registration.id}");
+          const copy = document.getElementById("authenticator-copy-${registration.id}");
+          if (!(row instanceof HTMLElement) || !isVisible(row)) throw new Error("live authenticator row is missing or hidden");
+          if (!(current instanceof HTMLElement) || !/^\\d{6}$/.test(current.textContent?.trim() ?? "")) throw new Error("current authenticator code is not a six-digit value");
+          if (!(next instanceof HTMLElement) || !/^\\d{6}$/.test(next.textContent?.trim() ?? "")) throw new Error("next authenticator code is not a six-digit value");
+          if (!(countdown instanceof HTMLElement) || !/^\\d+s (?:remaining|剩餘)$/.test(countdown.textContent?.trim() ?? "")) throw new Error("numeric authenticator countdown is missing");
+          if (!(copy instanceof HTMLButtonElement) || !isVisible(copy) || copy.disabled) throw new Error("current-code copy action is unavailable");
+          return { row: true, currentDigits: current.textContent?.trim().length, nextDigits: next.textContent?.trim().length, countdown: countdown.textContent?.trim(), copy: accessibleName(copy) };
+        })()`));
+        return { ...evidence, metadataId: registration.id, persistedMetadata: true, secretReturned: false };
+      } finally {
+        await cdp.evaluate(pageExpression(`(async () => {
+          const key = "material-download-manager.authenticator.metadata.v1";
+          const raw = localStorage.getItem(key);
+          const records = raw ? JSON.parse(raw) : [];
+          const target = Array.isArray(records) ? records.find((record) => record?.id === ${JSON.stringify(registration.id)}) : null;
+          if (target) await window.api.removeAuthenticator(target);
+          localStorage.removeItem(key);
+        })()`)).catch(() => {});
+      }
     });
     await clickByRole(cdp, "tab", "Downloads", '[role="dialog"]');
 

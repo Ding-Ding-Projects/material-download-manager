@@ -9,6 +9,7 @@ import {
   type TotpRegistrationMetadata,
   type TotpQrRegistrationModel,
 } from "@shared/authenticator";
+import { nextTotpTimestampMs, remainingTotpSeconds } from "@shared/authenticatorDisplay";
 import { useIsolatedRegexBatch, localizedRegexEvaluationError } from "../hooks/useIsolatedRegex";
 import { createDefaultRegexBuilderState, validateRegexPattern, type RegexBuilderState } from "@shared/regex";
 import { getUiCopy } from "../i18n/ui";
@@ -28,6 +29,14 @@ interface AuthenticatorDraft {
   algorithm: TotpAlgorithm;
   digits: TotpDigits;
   period: number;
+}
+
+interface LiveCodeState {
+  current: string;
+  next: string;
+  remainingSeconds: number;
+  loading: boolean;
+  error: boolean;
 }
 
 function initialDraft(): AuthenticatorDraft {
@@ -111,6 +120,16 @@ function metadataSearchText(item: TotpRegistrationMetadata): string {
   return `${item.issuer} ${item.account} ${item.algorithm} ${item.digits} ${item.period}`;
 }
 
+function emptyLiveCodeState(period: number, timestampMs: number): LiveCodeState {
+  return {
+    current: "",
+    next: "",
+    remainingSeconds: remainingTotpSeconds(timestampMs, period),
+    loading: true,
+    error: false,
+  };
+}
+
 export default function AuthenticatorPanel() {
   const settings = useAppStore((state) => state.settings);
   const ui = useMemo(() => getUiCopy(settings), [settings]);
@@ -119,14 +138,89 @@ export default function AuthenticatorPanel() {
   const [manualSecretVisible, setManualSecretVisible] = useState(false);
   const [pairingCode, setPairingCode] = useState("");
   const [metadata, setMetadata] = useState<TotpRegistrationMetadata[]>(loadMetadata);
-  const [busy, setBusy] = useState<"prepare" | "confirm" | "export" | null>(null);
+  const [busy, setBusy] = useState<"prepare" | "confirm" | "export" | "copy" | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
   const [pendingRemoval, setPendingRemoval] = useState<TotpRegistrationMetadata | null>(null);
   const [listSearch, setListSearch] = useState<RegexBuilderState>(() => createDefaultRegexBuilderState());
   const [listRegexOpen, setListRegexOpen] = useState(false);
+  const [liveCodes, setLiveCodes] = useState<Record<string, LiveCodeState>>({});
 
   useEffect(() => saveMetadata(metadata), [metadata]);
+
+  const metadataKey = useMemo(() => metadata.map((item) => `${item.id}:${item.period}`).join("\u0000"), [metadata]);
+  useEffect(() => {
+    let disposed = false;
+    const requestGenerations = new Map<string, number>();
+    const activeSlots = new Map<string, number>();
+
+    const refreshItem = async (item: TotpRegistrationMetadata, timestampMs: number): Promise<void> => {
+      const generation = (requestGenerations.get(item.id) ?? 0) + 1;
+      requestGenerations.set(item.id, generation);
+      try {
+        const nextTimestampMs = nextTotpTimestampMs(timestampMs, item.period);
+        const [current, next] = await Promise.all([
+          window.api.generateAuthenticatorCode(item, timestampMs),
+          window.api.generateAuthenticatorCode(item, nextTimestampMs),
+        ]);
+        if (disposed || requestGenerations.get(item.id) !== generation) return;
+        setLiveCodes((previous) => ({
+          ...previous,
+          [item.id]: {
+            current,
+            next,
+            remainingSeconds: remainingTotpSeconds(Date.now(), item.period),
+            loading: false,
+            error: false,
+          },
+        }));
+      } catch {
+        if (disposed || requestGenerations.get(item.id) !== generation) return;
+        setLiveCodes((previous) => ({
+          ...previous,
+          [item.id]: {
+            ...(previous[item.id] ?? emptyLiveCodeState(item.period, timestampMs)),
+            current: "",
+            next: "",
+            remainingSeconds: remainingTotpSeconds(Date.now(), item.period),
+            loading: false,
+            error: true,
+          },
+        }));
+      }
+    };
+
+    const tick = (): void => {
+      const timestampMs = Date.now();
+      if (metadata.length === 0) {
+        setLiveCodes((previous) => Object.keys(previous).length === 0 ? previous : {});
+        return;
+      }
+      setLiveCodes((previous) => {
+        const next = Object.fromEntries(metadata.map((item) => [
+          item.id,
+          {
+            ...(previous[item.id] ?? emptyLiveCodeState(item.period, timestampMs)),
+            remainingSeconds: remainingTotpSeconds(timestampMs, item.period),
+          },
+        ])) as Record<string, LiveCodeState>;
+        return next;
+      });
+      for (const item of metadata) {
+        const slot = Math.floor(Math.floor(timestampMs / 1_000) / item.period);
+        if (activeSlots.get(item.id) === slot) continue;
+        activeSlots.set(item.id, slot);
+        void refreshItem(item, timestampMs);
+      }
+    };
+
+    tick();
+    const interval = window.setInterval(tick, 1_000);
+    return () => {
+      disposed = true;
+      window.clearInterval(interval);
+    };
+  }, [metadataKey]);
 
   const listSamples = useMemo(() => metadata.map(metadataSearchText), [metadata]);
   const regexEnabled = listSearch.mode === "regex" && listSearch.pattern.length > 0;
@@ -228,6 +322,27 @@ export default function AuthenticatorPanel() {
     }
   }
 
+  async function copyCurrentCode(item: TotpRegistrationMetadata) {
+    const code = liveCodes[item.id]?.current;
+    if (!code || busy) return;
+    setBusy("copy");
+    setError(null);
+    try {
+      if (!navigator.clipboard?.writeText) throw new Error("Clipboard access is unavailable");
+      await navigator.clipboard.writeText(code);
+      setStatus(ui.text("Current code copied to the clipboard.", "目前代碼已複製到剪貼簿。"));
+      notify({
+        tone: "success",
+        title: ui.text("Code copied", "代碼已複製"),
+        message: ui.text("The current authenticator code is ready to paste.", "目前 authenticator 代碼可以貼上喇。"),
+      });
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : ui.text("The current code could not be copied.", "未能複製目前代碼。"));
+    } finally {
+      setBusy(null);
+    }
+  }
+
   function confirmRemoval(request: DestructiveActionRequest) {
     const candidate = pendingRemoval;
     setPendingRemoval(null);
@@ -282,7 +397,34 @@ export default function AuthenticatorPanel() {
         {listRegexOpen && <div className="authenticator-list-regex" id="authenticator-list-regex"><RegexBuilder title={ui.text("Authenticator list regex builder", "Authenticator 清單 regex 建構器")} value={listSearch} onChange={setListSearch} text={ui.text} /></div>}
         {listSearchError && <p className="field-error" role="alert">{localizedRegexEvaluationError(listSearchError, ui.text)}</p>}
         <p className="setting-helper" role="status">{ui.text(`${visibleMetadata.length} of ${metadata.length} metadata entr${metadata.length === 1 ? "y" : "ies"}`, `${visibleMetadata.length} / ${metadata.length} 個資料標籤`)}</p>
-        {metadata.length === 0 ? <div className="authenticator-empty" role="status">{ui.text("No authenticator metadata yet. Prepare a QR pairing above to begin.", "暫時未有 authenticator 資料標籤；喺上面準備 QR 配對先開始。")}</div> : visibleMetadata.length === 0 ? <div className="authenticator-empty" role="status">{ui.text("No registered metadata matches this search.", "冇註冊資料標籤符合呢個搜尋。")}</div> : <ul className="authenticator-list" aria-label={ui.text("Registered authenticator metadata", "已註冊 authenticator 資料標籤")}>{visibleMetadata.map((item) => <li key={item.id} className="authenticator-list-item"><div><strong>{item.issuer}</strong><span>{item.account}</span><small>{item.algorithm} · {item.digits} digits · {item.period}s · secret omitted from metadata</small></div><button type="button" className="btn btn-ghost btn-sm text-danger" onClick={() => setPendingRemoval(item)}>{ui.text("Remove", "移除")}</button></li>)}</ul>}
+        {metadata.length === 0 ? <div className="authenticator-empty" role="status">{ui.text("No authenticator metadata yet. Prepare a QR pairing above to begin.", "暫時未有 authenticator 資料標籤；喺上面準備 QR 配對先開始。")}</div> : visibleMetadata.length === 0 ? <div className="authenticator-empty" role="status">{ui.text("No registered metadata matches this search.", "冇註冊資料標籤符合呢個搜尋。")}</div> : <ul className="authenticator-list" aria-label={ui.text("Registered authenticator metadata", "已註冊 authenticator 資料標籤")}>{visibleMetadata.map((item) => {
+          const live = liveCodes[item.id];
+          const currentCode = live?.current || "—";
+          const nextCode = live?.next || "—";
+          const countdown = live?.remainingSeconds ?? item.period;
+          return (
+            <li key={item.id} className="authenticator-list-item">
+              <div className="authenticator-list-item-main">
+                <strong>{item.issuer}</strong>
+                <span>{item.account}</span>
+                <small>{item.algorithm} · {item.digits} digits · {item.period}s · secret omitted from metadata</small>
+                <div className="authenticator-live-code" data-authenticator-code-id={item.id}>
+                  <div className="authenticator-code-row">
+                    <span className="authenticator-code-label">{ui.text("Current code", "目前代碼")}</span>
+                    <code className="authenticator-code-value" id={`authenticator-current-code-${item.id}`} aria-live="polite">{currentCode}</code>
+                    <button type="button" className="btn btn-ghost btn-sm" id={`authenticator-copy-${item.id}`} disabled={!live?.current || busy !== null} onClick={() => void copyCurrentCode(item)}>{busy === "copy" ? ui.text("Copying…", "複製緊…") : ui.text("Copy", "複製")}</button>
+                  </div>
+                  <div className="authenticator-code-row authenticator-code-secondary">
+                    <span className="authenticator-code-label">{ui.text("Next code", "下一個代碼")}</span>
+                    <code className="authenticator-code-value" id={`authenticator-next-code-${item.id}`}>{nextCode}</code>
+                    <span className="authenticator-countdown" id={`authenticator-countdown-${item.id}`} role="status">{live?.error ? ui.text("Vault entry unavailable", "Vault entry 未能使用") : `${countdown}s ${ui.text("remaining", "剩餘")}`}</span>
+                  </div>
+                </div>
+              </div>
+              <button type="button" className="btn btn-ghost btn-sm text-danger" onClick={() => setPendingRemoval(item)}>{ui.text("Remove", "移除")}</button>
+            </li>
+          );
+        })}</ul>}
         {status && <p className="setting-helper" role="status" aria-live="polite">{status}</p>}
         {error && <p className="field-error" role="alert">{error}</p>}
       </section>
