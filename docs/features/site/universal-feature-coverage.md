@@ -94,6 +94,16 @@ using the local Pages files on an isolated hidden desktop. The checked PNG is
 `d5e2f347de788242039436a14d8cff6acd62caf6016a67e0764a8c447ee5d284`.
 It shows the feature catalogue’s coverage-aware heading and article count.
 
+![School mode suppressing hidden language and notification controls](../../screenshots/site/school-mode-suppression.png)
+
+This capture is from source commit
+`c1dca8ad72fed968b2a233cbc16803577ecff25b` at a 929 by 1004 pixel viewport
+using the local Pages files on an isolated hidden desktop. The checked PNG is
+`docs/screenshots/site/school-mode-suppression.png` with SHA-256
+`1360ddb2d12e795b7284a89666b4f161eefc5dba38790ad15d499fab89c6761b`.
+It shows School mode active with the language card and notification-centre
+launcher absent from the visible surface.
+
 ## Suggested articles
 
 - [Landing and documentation site](./landing-and-documentation-site.md)

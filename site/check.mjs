@@ -274,6 +274,7 @@ run("emoji and School controls are wired to persistence, reset, and live suppres
   assert.match(html, /data\/settings-contract\.js/);
   const languageCard = html.match(/<article class="settings-card" data-setting-search="language[^>]+>/);
   assert.ok(languageCard?.[0].includes("data-school-optional"), "language settings card is removed from School mode");
+  assert.match(css, /\[hidden\]\s*\{\s*display:\s*none\s*!important;/);
   assert.match(html, /data\/universal-feature-manifest\.js/);
   assert.match(app, /window\.addEventListener\("storage"/);
   assert.match(app, /marker\.setAttribute\("aria-hidden", "true"\)/);
