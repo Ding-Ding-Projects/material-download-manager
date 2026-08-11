@@ -275,6 +275,8 @@ test("service worker, popup, options, and runtime message boundary are wired", a
   assert.match(optionsScript, /REMOVE_AUTHENTICATOR/);
   assert.match(optionsScript, /void loadAuthenticatorState\(\)/);
   assert.match(optionsScript, /await loadState\(\);/);
+  assert.match(optionsScript, /refreshAuthenticatorPresentation/);
+  assert.match(optionsScript, /authenticatorCurrentCode/);
   assert.match(await read("src/options.js"), /REQUIRED_SEARCHABLE_SETTING_IDS[\s\S]*"auto-capture-downloads"/);
   assert.match(options, /role="tab"/);
   assert.match(options, /id="import-file" type="file"/);

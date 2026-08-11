@@ -192,6 +192,7 @@ const UI_TEXT = {
   authenticatorListSummary: { en: "{{visible}} of {{total}} authenticator entr{{suffix}}", yue: "{{visible}} / {{total}} 個 authenticator 項目" },
   authenticatorCodeUnavailable: { en: "Code unavailable; the browser-local secret is missing.", yue: "代碼不可用；browser-local secret 唔見咗。" },
   authenticatorCodeFacts: { en: "{{issuer}} · {{account}} · {{algorithm}} · {{digits}} digits · {{period}}s", yue: "{{issuer}} · {{account}} · {{algorithm}} · {{digits}} 位 · {{period}} 秒" },
+  authenticatorCurrentCode: { en: "Current code: {{code}}", yue: "目前代碼：{{code}}" },
   authenticatorCodeNext: { en: "Next code: {{code}}", yue: "下一個代碼：{{code}}" },
   authenticatorCountdown: { en: "{{seconds}} seconds remaining", yue: "剩餘 {{seconds}} 秒" },
   authenticatorRemoveHeading: { en: "Confirm authenticator removal", yue: "確認移除 authenticator" },

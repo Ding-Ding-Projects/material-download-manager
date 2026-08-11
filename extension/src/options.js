@@ -273,6 +273,20 @@ function renderAuthenticatorPairing(model) {
   elements.authenticatorPairingCard.scrollIntoView?.({ block: "nearest" });
 }
 
+function refreshAuthenticatorPresentation() {
+  const revealed = pendingAuthenticator && !elements.authenticatorManualSecret.hidden;
+  renderAuthenticatorList();
+  if (!pendingAuthenticator) return;
+  renderAuthenticatorPairing(pendingAuthenticator);
+  if (revealed) {
+    elements.authenticatorManualSecret.textContent = formatAuthenticatorSecret(pendingAuthenticator.manualSecret);
+    elements.authenticatorManualSecret.hidden = false;
+    elements.authenticatorCopySecret.hidden = false;
+    elements.authenticatorRevealSecret.textContent = localize("authenticatorHideSecret", settings);
+    elements.authenticatorRevealSecret.dataset.revealed = "true";
+  }
+}
+
 function authenticatorMetadataSearchText(item) {
   return `${item.issuer} ${item.account} ${item.algorithm} ${item.digits} ${item.period}`;
 }
@@ -338,6 +352,7 @@ function renderAuthenticatorList() {
     code.className = "authenticator-code";
     code.dataset.authenticatorCode = item.id;
     code.textContent = "—";
+    code.setAttribute("aria-label", localize("authenticatorCurrentCode", settings, { code: "unavailable" }));
     const countdown = document.createElement("span");
     countdown.className = "authenticator-countdown";
     countdown.dataset.authenticatorCountdown = item.id;
@@ -377,16 +392,19 @@ async function refreshAuthenticatorCodes() {
         const value = response?.result;
         if (response?.ok && value?.ok) {
           codeElement.textContent = value.code;
+          codeElement.setAttribute("aria-label", localize("authenticatorCurrentCode", settings, { code: value.code }));
           countdownElement.textContent = localize("authenticatorCountdown", settings, { seconds: value.remainingSeconds });
           nextElement.textContent = localize("authenticatorCodeNext", settings, { code: value.nextCode });
         } else {
           codeElement.textContent = "—";
+          codeElement.setAttribute("aria-label", localize("authenticatorCurrentCode", settings, { code: "unavailable" }));
           countdownElement.textContent = localize("authenticatorCodeUnavailable", settings);
           nextElement.textContent = "";
         }
       } catch {
         if (activeTab !== "authenticator") return;
         codeElement.textContent = "—";
+        codeElement.setAttribute("aria-label", localize("authenticatorCurrentCode", settings, { code: "unavailable" }));
         countdownElement.textContent = localize("authenticatorCodeUnavailable", settings);
         nextElement.textContent = "";
       }
@@ -1092,6 +1110,7 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
   settings = sanitizeSettings(changes[SETTINGS_KEY].newValue);
   fillForm();
   refreshSearch();
+  refreshAuthenticatorPresentation();
 });
 
 await loadState();
