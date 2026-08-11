@@ -7,6 +7,7 @@ import {
   type RegexBuilderState,
 } from "@shared/regex";
 import { localizedRegexEvaluationError, useIsolatedRegexBatch } from "../hooks/useIsolatedRegex";
+import { useExternalEditorExport } from "../hooks/useExternalEditorExport";
 import "../styles/regex.css";
 
 interface RegexBuilderProps {
@@ -50,6 +51,14 @@ export default function RegexBuilder({
   const activeMode = fixedRegex ? "regex" : state.mode;
   const t = text ?? ((english: string) => english);
   const contextualName = (english: string, cantonese: string) => `${title}: ${t(english, cantonese)}`;
+  const {
+    editorExport,
+    setEditorExport,
+    editorBusy,
+    editorMessage,
+    setEditorMessage,
+    openLastExportInEditor,
+  } = useExternalEditorExport(t);
   const evaluationSamples = useMemo(() => [state.sample], [state.sample]);
   const isolatedEvaluation = useIsolatedRegexBatch(
     state.pattern,
@@ -101,14 +110,17 @@ export default function RegexBuilder({
   }
 
   function exportPattern() {
+    const fileName = "material-download-manager-regex.json";
     const payload = JSON.stringify({ dialect: "JavaScript RegExp", pattern: state.pattern, flags: state.flags }, null, 2);
     const blob = new Blob([payload], { type: "application/json" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = "material-download-manager-regex.json";
+    link.download = fileName;
     link.click();
     URL.revokeObjectURL(url);
+    setEditorExport({ content: payload, fileName });
+    setEditorMessage(null);
   }
 
   return (
@@ -149,8 +161,18 @@ export default function RegexBuilder({
           >
             {t("Export", "匯出")}
           </button>
+          {editorExport && <button
+            type="button"
+            className="btn btn-ghost btn-sm"
+            onClick={() => void openLastExportInEditor()}
+            disabled={editorBusy}
+            aria-label={contextualName("Open last export in Visual Studio Code", "用 Visual Studio Code 開啟上次匯出")}
+          >
+            {editorBusy ? t("Opening editor…", "開緊編輯器…") : t("Open last export in Visual Studio Code", "用 Visual Studio Code 開啟上次匯出")}
+          </button>}
         </div>
       </div>
+      {editorMessage && <p className="regex-editor-message" role="status" aria-live="polite">{editorMessage}</p>}
 
       {!fixedRegex && <div className="regex-mode" role="radiogroup" aria-label={contextualName("Search mode", "搜尋模式")}>
         <label>

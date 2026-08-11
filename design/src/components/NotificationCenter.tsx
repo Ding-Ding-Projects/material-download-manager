@@ -3,6 +3,7 @@ import { getUiCopy } from "../i18n/ui";
 import { useAppStore } from "../store/useAppStore";
 import { CloseIcon, InfoIcon, RefreshIcon } from "./icons";
 import DestructiveActionGate from "./DestructiveActionGate";
+import { useExternalEditorExport } from "../hooks/useExternalEditorExport";
 
 export type NotificationTone = "info" | "success" | "warning" | "error";
 
@@ -85,6 +86,14 @@ export default function NotificationCenter() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [historyOpen, setHistoryOpen] = useState(false);
   const [deleteRequest, setDeleteRequest] = useState<string[] | null>(null);
+  const {
+    editorExport,
+    setEditorExport,
+    editorBusy,
+    editorMessage,
+    setEditorMessage,
+    openLastExportInEditor,
+  } = useExternalEditorExport(copy.text);
 
   useEffect(() => {
     const timeoutIds = new Set<number>();
@@ -165,7 +174,11 @@ export default function NotificationCenter() {
   function exportSelected() {
     const exported = records.filter((record) => selectedIds.has(record.id));
     if (exported.length === 0) return;
-    downloadBlob("material-download-manager-notifications.json", `${JSON.stringify({ schemaVersion: 1, exportedAt: new Date().toISOString(), records: exported }, null, 2)}\n`, "application/json");
+    const fileName = "material-download-manager-notifications.json";
+    const content = `${JSON.stringify({ schemaVersion: 1, exportedAt: new Date().toISOString(), records: exported }, null, 2)}\n`;
+    downloadBlob(fileName, content, "application/json");
+    setEditorExport({ content, fileName });
+    setEditorMessage(null);
   }
 
   function confirmDelete() {
@@ -206,9 +219,13 @@ export default function NotificationCenter() {
                     <button type="button" className="btn btn-ghost btn-sm" onClick={invertSelection}>{copy.invertSelection}</button>
                     <button type="button" className="btn btn-ghost btn-sm" onClick={dismissSelected} disabled={selectedCount === 0}>{copy.dismissSelected}</button>
                     <button type="button" className="btn btn-ghost btn-sm" onClick={exportSelected} disabled={selectedCount === 0}>{copy.exportSelected}</button>
+                    {editorExport && <button type="button" className="btn btn-ghost btn-sm" onClick={() => void openLastExportInEditor()} disabled={editorBusy}>
+                      {editorBusy ? copy.text("Opening editor…", "開緊編輯器…") : copy.text("Open last export in Visual Studio Code", "用 Visual Studio Code 開啟上次匯出")}
+                    </button>}
                     <button type="button" className="btn btn-danger btn-sm" onClick={() => setDeleteRequest([...selectedIds])} disabled={selectedCount === 0}>{copy.deleteSelected}</button>
                   </div>
                   <span className="setting-helper notification-selection-count" aria-live="polite">{selectedCount} {copy.text("selected", "個已選")}</span>
+                  {editorMessage && <span className="setting-helper notification-selection-count" role="status" aria-live="polite">{editorMessage}</span>}
                   <div className="notification-history-list" role="list">
                     {historyRecords.map((record) => (
                       <div key={record.id} className={`notification-history-item notification-history-item-${record.tone}`} role="listitem">

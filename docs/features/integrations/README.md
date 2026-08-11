@@ -6,6 +6,6 @@
   every failed takeover, retain manual page/link capture, and automatically
   reveal the exact private staged folder.
 - [External editor handoff](./external-editor.md) — discover or browse for a
-  local Visual Studio Code executable, open exported History and Changelog files
-  from an application-owned workspace root, and fail safely when the editor is
-  unavailable.
+  local Visual Studio Code executable, open exported desktop records from an
+  application-owned workspace root, and fail safely when the editor is
+  unavailable. Browser-extension and Pages exports remain local downloads.

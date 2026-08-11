@@ -2,12 +2,14 @@
 
 ## Behavior
 
-The Windows desktop application can open an exported History or Changelog file
-directly in Visual Studio Code. The export still downloads normally first, so
-the editor action is an additive convenience rather than the only copy of the
-user's data. The selected editor is stored as an absolute local executable
-path, or the application can discover `code` and `code-insiders` on `PATH` and
-in the usual per-user and machine installations.
+The Windows desktop application can open an exported History, Changelog,
+NotificationCenter, RegexBuilder, or AuthenticatorPanel file directly in
+Visual Studio Code. The export still downloads normally first, so the editor
+action is an additive convenience rather than the only copy of the user's
+data. AuthenticatorPanel exports contain metadata only and explicitly omit
+secrets and `otpauth://` URIs. The selected editor is stored as an absolute
+local executable path, or the application can discover `code` and
+`code-insiders` on `PATH` and in the usual per-user and machine installations.
 
 Each handoff writes UTF-8 content into a fresh, application-owned export
 directory beneath the application-data folder. Visual Studio Code receives the
@@ -68,14 +70,24 @@ recovery, bounded export writes, workspace-root arguments, native `.cmd`
 resolution, and the no-shell launch boundary. `persistence.test.ts` covers
 schema-v6 default, migration, provenance, and rejected selection values.
 
-The History and Changelog panels retain their normal download action and expose
-**Open last export in Visual Studio Code** after a successful export. A built
-desktop smoke exercises Settings → Advanced discovery/selection/reset, both
-export buttons, the missing-editor notice, and a narrow bilingual layout. The
-exact built-artifact capture is 534×232 pixels, 21,975 bytes, SHA-256
+The History, Changelog, NotificationCenter, RegexBuilder, and AuthenticatorPanel
+surfaces retain their normal download action and expose **Open last export in
+Visual Studio Code** after a successful export. A built desktop smoke
+continues to exercise Settings → Advanced discovery/selection/reset, the
+missing-editor notice, and a narrow bilingual layout. Focused renderer
+contracts cover all five export surfaces and the metadata-only authenticator
+payload. The existing Settings capture is 534×232 pixels,
+21,975 bytes, SHA-256
 `92dd6a25df6e810583878a61c5cec6c98e0acebdc6a7ceb267b898cce8843057`:
 
 ![External editor Settings card showing discovery, refresh, browse, reset, and provenance](../../../screenshots/integrations/external-editor-settings.png)
+
+The new RegexBuilder handoff was also captured from the built desktop running
+on a hidden desktop through the approved headless capture route. The 1150×720 PNG is
+98,403 bytes with SHA-256
+`57ed3a50f78fb553444992c5a128a16860bbfb7c2b2db736cf28015bba5da45f`:
+
+![Built desktop RegexBuilder export showing the local pattern and Open last export in Visual Studio Code action](../../../screenshots/integrations/external-editor-desktop-exports-regex.png)
 
 ## Suggested articles
 

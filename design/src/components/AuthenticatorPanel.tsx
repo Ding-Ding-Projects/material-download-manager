@@ -17,6 +17,7 @@ import { useAppStore } from "../store/useAppStore";
 import DestructiveActionGate, { type DestructiveActionRequest } from "./DestructiveActionGate";
 import RegexBuilder from "./RegexBuilder";
 import { notify } from "./NotificationCenter";
+import { useExternalEditorExport } from "../hooks/useExternalEditorExport";
 import "../styles/authenticator.css";
 
 const METADATA_STORAGE_KEY = "material-download-manager.authenticator.metadata.v1";
@@ -145,6 +146,14 @@ export default function AuthenticatorPanel() {
   const [listSearch, setListSearch] = useState<RegexBuilderState>(() => createDefaultRegexBuilderState());
   const [listRegexOpen, setListRegexOpen] = useState(false);
   const [liveCodes, setLiveCodes] = useState<Record<string, LiveCodeState>>({});
+  const {
+    editorExport,
+    setEditorExport,
+    editorBusy,
+    editorMessage,
+    setEditorMessage,
+    openLastExportInEditor,
+  } = useExternalEditorExport(ui.text);
 
   useEffect(() => saveMetadata(metadata), [metadata]);
 
@@ -307,13 +316,17 @@ export default function AuthenticatorPanel() {
     setError(null);
     try {
       const records = await Promise.all(metadata.map((item) => window.api.exportAuthenticatorMetadata(item)));
-      const blob = new Blob([JSON.stringify({ schema: "material-download-manager.authenticator-export", schemaVersion: 1, secretOmitted: true, records }, null, 2) + "\n"], { type: "application/json" });
+      const fileName = "authenticator-metadata.json";
+      const content = JSON.stringify({ schema: "material-download-manager.authenticator-export", schemaVersion: 1, secretOmitted: true, records }, null, 2) + "\n";
+      const blob = new Blob([content], { type: "application/json" });
       const url = URL.createObjectURL(blob);
       const anchor = document.createElement("a");
       anchor.href = url;
-      anchor.download = "authenticator-metadata.json";
+      anchor.download = fileName;
       anchor.click();
       URL.revokeObjectURL(url);
+      setEditorExport({ content, fileName });
+      setEditorMessage(null);
       setStatus(ui.text("Metadata export created; no secret or otpauth URI was written.", "資料標籤匯出完成；冇有寫入 secret 或 otpauth URI。"));
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : ui.text("Metadata export failed.", "資料標籤匯出失敗。"));
@@ -392,7 +405,7 @@ export default function AuthenticatorPanel() {
       )}
 
       <section className="settings-section authenticator-card" aria-labelledby="authenticator-list-heading">
-        <div className="authenticator-list-heading"><div className="settings-section-heading" id="authenticator-list-heading">{ui.text("Registered metadata", "已註冊資料標籤")}</div><button type="button" className="btn btn-ghost btn-sm" id="authenticator-export" disabled={metadata.length === 0 || busy !== null} onClick={() => void exportMetadata()}>{busy === "export" ? ui.text("Exporting…", "匯出緊…") : ui.text("Export metadata", "匯出資料標籤")}</button></div>
+        <div className="authenticator-list-heading"><div className="settings-section-heading" id="authenticator-list-heading">{ui.text("Registered metadata", "已註冊資料標籤")}</div><div className="authenticator-export-actions"><button type="button" className="btn btn-ghost btn-sm" id="authenticator-export" disabled={metadata.length === 0 || busy !== null} onClick={() => void exportMetadata()}>{busy === "export" ? ui.text("Exporting…", "匯出緊…") : ui.text("Export metadata", "匯出資料標籤")}</button>{editorExport && <button type="button" className="btn btn-ghost btn-sm" id="authenticator-open-export" onClick={() => void openLastExportInEditor()} disabled={editorBusy || busy !== null}>{editorBusy ? ui.text("Opening editor…", "開緊編輯器…") : ui.text("Open last export in Visual Studio Code", "用 Visual Studio Code 開啟上次匯出")}</button>}</div></div>
         <div className="authenticator-list-search-row"><input className="input" type="search" id="authenticator-list-search" placeholder={ui.text("Search issuer, account, or algorithm", "搜尋 issuer、account 或 algorithm")} value={listSearch.pattern} onChange={(event) => setListSearch((current) => ({ ...current, pattern: event.target.value }))} /><button type="button" className="btn btn-ghost btn-sm" aria-expanded={listRegexOpen} aria-controls="authenticator-list-regex" onClick={() => setListRegexOpen((open) => !open)}>{ui.text("Regex", "Regex")}</button></div>
         {listRegexOpen && <div className="authenticator-list-regex" id="authenticator-list-regex"><RegexBuilder title={ui.text("Authenticator list regex builder", "Authenticator 清單 regex 建構器")} value={listSearch} onChange={setListSearch} text={ui.text} /></div>}
         {listSearchError && <p className="field-error" role="alert">{localizedRegexEvaluationError(listSearchError, ui.text)}</p>}
@@ -426,6 +439,7 @@ export default function AuthenticatorPanel() {
           );
         })}</ul>}
         {status && <p className="setting-helper" role="status" aria-live="polite">{status}</p>}
+        {editorMessage && <p className="setting-helper" role="status" aria-live="polite">{editorMessage}</p>}
         {error && <p className="field-error" role="alert">{error}</p>}
       </section>
       {pendingRemoval && <DestructiveActionGate request={{ itemIds: [pendingRemoval.id], deleteFile: false }} actionName={ui.text("remove this authenticator registration", "移除呢個 authenticator 註冊") } affectedLabel={ui.text("authenticator registration", "authenticator 註冊")} onCancel={() => setPendingRemoval(null)} onConfirm={confirmRemoval} />}
