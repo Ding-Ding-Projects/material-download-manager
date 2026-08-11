@@ -157,6 +157,10 @@ operating-system credential vault stores only a salted scrypt verifier; the
 password never enters settings state, local history, exports, logs, renderer
 state, or screenshots. Metadata propagates live to both application windows,
 and a deleted app-data profile removes an orphaned verifier before a new setup.
+Follow-up hardening commit
+[`40fc29123da0c8b83c13176ab4ba526a4d5dcbd8`](https://github.com/Ding-Ding-Projects/material-download-manager/commit/40fc29123da0c8b83c13176ab4ba526a4d5dcbd8)
+rejects every direct renderer disable attempt, rolls metadata back when its
+settings write fails, and scrubs verifier validation buffers.
 
 ![Settings showing the configured School-mode credential and current-value turn-off prompt](docs/screenshots/settings/school-mode-credential-turnoff.png)
 
@@ -167,7 +171,7 @@ cheap hidden-desktop route. SHA-256:
 The local Chuts for this slice are `npm run docs:bundle:check`,
 `npm run typecheck`, `npm run build`, `npm run test:docs` (**2/2**),
 `npm run test:electron` (**104/104**), and `npm run test:engine`
-(**99/99**). TOTP locks, schedules, narration, appearance editors, signing,
+(**100/100** after hardening). TOTP locks, schedules, narration, appearance editors, signing,
 and CRX artifacts remain outside this slice.
 
 </details>

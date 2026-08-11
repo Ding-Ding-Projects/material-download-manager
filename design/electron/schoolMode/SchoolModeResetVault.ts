@@ -56,6 +56,11 @@ function decodeBase64(value: string, expectedLength: number, label: string): Buf
   return bytes;
 }
 
+function validateBase64(value: string, expectedLength: number, label: string): void {
+  const bytes = decodeBase64(value, expectedLength, label);
+  bytes.fill(0);
+}
+
 function parseRecord(bytes: Uint8Array): SchoolModeResetRecord | null {
   if (bytes.length === 0) return null;
   if (bytes.length > MAX_RECORD_BYTES) throw new Error("School mode reset credential is too large");
@@ -76,8 +81,8 @@ function parseRecord(bytes: Uint8Array): SchoolModeResetRecord | null {
   if (record.version !== RECORD_VERSION || typeof record.salt !== "string" || typeof record.verifier !== "string") {
     throw new Error("School mode reset credential has an invalid schema");
   }
-  decodeBase64(record.salt, SALT_BYTES, "salt");
-  decodeBase64(record.verifier, VERIFIER_BYTES, "verifier");
+  validateBase64(record.salt, SALT_BYTES, "salt");
+  validateBase64(record.verifier, VERIFIER_BYTES, "verifier");
   return { version: RECORD_VERSION, salt: record.salt, verifier: record.verifier };
 }
 

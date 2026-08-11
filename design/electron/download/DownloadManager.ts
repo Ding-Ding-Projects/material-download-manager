@@ -970,11 +970,18 @@ export class DownloadManager extends EventEmitter {
       throw new Error("Invalid School mode reset credential state");
     }
     if (this.settings.schoolModeCredential.state === state) return this.getPresentationSettings();
+    const previousSettings = this.settings;
     this.settings = {
       ...this.settings,
       schoolModeCredential: { ...this.settings.schoolModeCredential, state },
     };
-    await this.persist("settings-changed", "Updated School mode reset credential metadata");
+    try {
+      await this.persist("settings-changed", "Updated School mode reset credential metadata");
+    } catch (error) {
+      this.settings = previousSettings;
+      await this.saveState().catch(() => undefined);
+      throw error;
+    }
     this.emit("presentationChanged", this.getPresentationSettings());
     this.scheduleNotify();
     return this.getPresentationSettings();
@@ -1024,6 +1031,7 @@ export class DownloadManager extends EventEmitter {
       if (previousSettings.schoolModeCredential.state !== "configured") {
         throw new Error("School mode cannot be turned off because its locally verified reset credential is unavailable.");
       }
+      throw new Error("School mode can only be turned off after verifying its reset credential.");
     }
     this.settings = {
       ...nextSettings,
@@ -1056,7 +1064,17 @@ export class DownloadManager extends EventEmitter {
         throw error;
       }
     } else {
-      await this.persist("settings-changed", "Changed application settings");
+      try {
+        await this.persist("settings-changed", "Changed application settings");
+      } catch (error) {
+        this.settings = previousSettings;
+        this.globalSpeedLimiter.setLimit(previousSettings.globalSpeedLimitBytes);
+        if ((validated.startOnSystemStartup !== undefined || resetKeys.includes("startOnSystemStartup")) && process.platform !== "linux") {
+          this.writeLoginItemSettings(previousSettings.startOnSystemStartup);
+        }
+        await this.saveState().catch(() => undefined);
+        throw error;
+      }
     }
     if (presentationChanged) this.emit("presentationChanged", this.getPresentationSettings());
     this.scheduleNotify();

@@ -111,6 +111,10 @@ of guessing a commit, release, or date.
   Electron **104/104**, and engine **99/99** passed. This slice does not add
   TOTP locks, schedules, narration, appearance editors, signing, or CRX
   artifacts.
+- **Boundary hardening:** follow-up commit [`40fc29123da0c8b83c13176ab4ba526a4d5dcbd8`](https://github.com/Ding-Ding-Projects/material-download-manager/commit/40fc29123da0c8b83c13176ab4ba526a4d5dcbd8)
+  rejects direct renderer disable attempts, rolls metadata back after a failed
+  settings write, and scrubs verifier validation buffers. Follow-up engine
+  verification is **100/100**; the existing real Settings capture is unchanged.
 
 ## Unreleased — built-artifact smoke and gallery refresh
 

@@ -315,6 +315,29 @@ test("presentation settings propagate through one manager event and refuse an un
   }
 });
 
+test("manager requires the credential-specific disable boundary even when metadata is configured", async () => {
+  const root = await fsp.mkdtemp(path.join(os.tmpdir(), "mdm-school-credential-boundary-test-"));
+  const previousUserProfile = process.env.USERPROFILE;
+  process.env.USERPROFILE = root;
+  const manager = new DownloadManager(root);
+  try {
+    await manager.init();
+    await manager.setSchoolModeCredentialState("configured");
+    await manager.setPresentationSettings({ schoolModeEnabled: true });
+    await assert.rejects(
+      () => manager.setPresentationSettings({ schoolModeEnabled: false }),
+      /only be turned off after verifying/,
+    );
+    const disabled = await manager.disableSchoolModeAfterCredentialVerification();
+    assert.equal(disabled.schoolModeEnabled, false);
+  } finally {
+    await manager.shutdown();
+    await removeTestRoot(root);
+    if (previousUserProfile === undefined) delete process.env.USERPROFILE;
+    else process.env.USERPROFILE = previousUserProfile;
+  }
+});
+
 test("manager preview matches the final category while raw query values stay redacted", async () => {
   const root = await fsp.mkdtemp(path.join(os.tmpdir(), "mdm-category-preview-redaction-test-"));
   const server = await startTestServer(1_024);
