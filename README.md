@@ -168,7 +168,7 @@ This 1150×720 capture came from the real built desktop surface through the
 cheap hidden-desktop route. SHA-256:
 `1BA68A701556A1957756722A022B6708B32F8D0CAB1C2E71065B5C1DB96F24C1`.
 
-The local Chuts for this slice are `npm run docs:bundle:check`,
+The local checks for this slice are `npm run docs:bundle:check`,
 `npm run typecheck`, `npm run build`, `npm run test:docs` (**2/2**),
 `npm run test:electron` (**104/104**), and `npm run test:engine`
 (**100/100** after hardening). TOTP locks, schedules, narration, appearance editors, signing,

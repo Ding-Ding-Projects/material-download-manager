@@ -233,7 +233,7 @@ when persistence fails, and verifier validation buffers are scrubbed after
 schema checks. The real Settings pixels are unchanged, so the existing
 1150×720 capture and hash remain the evidence for the visible surface.
 
-The follow-up Chuts are `npm run typecheck`, `npm run build:electron`,
+The follow-up checks are `npm run typecheck`, `npm run build:electron`,
 `npm run test:electron` (**104/104**), and `npm run test:engine`
 (**100/100**).
 
