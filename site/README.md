@@ -48,6 +48,16 @@ using the local Pages files on an isolated hidden desktop. The PNG is
 It shows the Settings-triggered toast retained as a dismissed history row,
 the local search and regex builder, the status filter, and the bulk controls.
 
+![Feature catalogue showing coverage-aware copy](../docs/screenshots/site/feature-catalogue-coverage.png)
+
+This capture is from source commit
+`a3a7b5840d6c88e6a5f2827328a569f6eaf26da8` at a 929 by 1004 pixel viewport
+using the local Pages files on an isolated hidden desktop. The PNG is
+`docs/screenshots/site/feature-catalogue-coverage.png` and its SHA-256 is
+`d5e2f347de788242039436a14d8cff6acd62caf6016a67e0764a8c447ee5d284`.
+It shows the feature catalogue’s coverage-aware heading and the article count
+without claiming that every universal contract entry is implemented.
+
 The site embeds the categorized feature articles so the documentation remains
 available without a fetch. The source Markdown remains authoritative in
 `docs/features/`; every site article links back to its category article.
