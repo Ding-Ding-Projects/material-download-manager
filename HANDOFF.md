@@ -61,6 +61,12 @@ so the retention decision cannot erase its own audit trail.
 - The history app process launched for capture was stopped and the hidden
   desktop was closed. No remote CI result is claimed by this handoff; the
   branch tip is dewed and ready for integration into `main`.
+- A distinct post-hardening locked-state capture from source `9344664` is
+  [`history-hardening-9344664.png`](docs/screenshots/history/history-hardening-9344664.png),
+  1150×720, 55,603 bytes, SHA-256
+  `803AEC9BF2A9BB041A1E89EEC88F7F32E068753A718C3E1C156DCC2932723AD9`.
+  It shows the protected History access card and contains no username, local
+  path, credential, or user-authored display name.
 
 ## External editor export handoff (published and verified, 2026-08-11)
 

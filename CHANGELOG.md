@@ -30,8 +30,12 @@ of guessing a commit, release, or date.
   `845E8EA17410AF2C4CE95CF3531C03CCB100664C768297746F460CE02BC75115`) and
   `history-manager-actions-diff.png` (1150×720, 84,295 bytes, SHA-256
   `2F7C4290D2809095AC5D463F9DDF4D63C71FF3C3CCAD3A2F7C4CD5D1E6F28930`).
-  The diff capture visibly redacts local paths, and a post-capture probe found
-  no absolute path, username, or user-authored display name.
+   The diff capture visibly redacts local paths, and a post-capture probe found
+   no absolute path, username, or user-authored display name.
+- A distinct post-hardening locked-state capture from source `9344664` is
+  `history-hardening-9344664.png` (1150×720, 55,603 bytes, SHA-256
+  `803AEC9BF2A9BB041A1E89EEC88F7F32E068753A718C3E1C156DCC2932723AD9`). It
+  contains no username, local path, credential, or user-authored display name.
 - No remote CI or release result is claimed for this task branch; integration
   into `main` is the next handoff action.
 

@@ -125,6 +125,15 @@ The capture profile was disposable and the hidden desktop and application were
 closed after the images were inspected. The images prove visible wiring only;
 vault storage and append-only behavior are covered by the focused tests above.
 
+![Built History surface showing the protected access state after the restore-hardening build](../../screenshots/history/history-hardening-9344664.png)
+
+This distinct 1150×720 capture was taken from the built primary application at
+source `9344664`. It is 55,603 bytes with SHA-256
+`803AEC9BF2A9BB041A1E89EEC88F7F32E068753A718C3E1C156DCC2932723AD9` and shows
+the locked History access card, vault explanation, reset route, and disabled
+export control. No username, local path, credential, or user-authored display
+name appears in the frame.
+
 ## Suggested articles
 
 - [Local version history](local-version-history.md)

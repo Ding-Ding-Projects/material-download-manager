@@ -138,6 +138,13 @@ capture probe found no absolute path, username, or user-authored display name.
 Local evidence is full Electron **132/132**, engine **102/102**, docs **2/2**,
 typecheck/build green, and built UI smoke **45/45**.
 
+The post-hardening locked-state capture is
+`docs/screenshots/history/history-hardening-9344664.png` (1150×720, 55,603
+bytes, SHA-256
+`803AEC9BF2A9BB041A1E89EEC88F7F32E068753A718C3E1C156DCC2932723AD9`). It was
+captured from source `9344664` through the Cheap hidden-desktop route and
+contains no username, local path, credential, or user-authored display name.
+
 </details>
 
 <details>
