@@ -142,6 +142,11 @@ unverified surface has shipped.
   checks, all seven auto-organize gallery frames were replaced, and a
   public-safe browser-extension install/reveal capture was added. Stable
   release `v0.1.54` and Pages run `31464419316` are verified for that commit.
+- A current-main recapture from source commit
+  `84da5e1f2b10b6d88e9b946fe1523ad0295ddb2b` again passed 43/43 real-app
+  checks. All seven fresh auto-organize PNGs matched the tracked bytes exactly,
+  so the gallery remains current while only its verification provenance needed
+  updating. The run created no CRX and used no signing material.
 
 ## Auto-organize foundation integrated
 
