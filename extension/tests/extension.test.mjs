@@ -8,12 +8,15 @@ import { fileURLToPath } from "node:url";
 
 import {
   DEFAULT_SETTINGS,
+  DEFAULT_SCHOOL_MODE_NAME,
   DEFAULT_HANDOFF_ENDPOINT,
   HANDOFF_PATH,
   HANDOFF_PROTOCOL_VERSION,
   makeSettingsExport,
   parseSettingsExport,
   sanitizeSettings,
+  presentationSettings,
+  canDisableSchoolMode,
   statusEndpoint,
   validateEndpoint,
 } from "../src/shared/settings.js";
@@ -28,7 +31,14 @@ import {
   validateIncomingMessage,
 } from "../src/shared/handoff.js";
 import { appendRegexFragment, evaluateRegex, validateRegex } from "../src/shared/regex.js";
-import { hasLocalizationKey, localize } from "../src/shared/localization.js";
+import { decorateMessage, hasLocalizationKey, localize } from "../src/shared/localization.js";
+import { RESET_CREDENTIAL_STATES, createCredentialAbstraction } from "../src/shared/credential.js";
+import {
+  DISPLAY_NAME_MUTATION_JOURNAL_KEY,
+  DISPLAY_NAME_MUTATION_JOURNAL_SCHEMA,
+  appendDisplayNameMutation,
+  readDisplayNameMutationJournal,
+} from "../src/shared/mutation-journal.js";
 
 const extensionRoot = dirname(dirname(fileURLToPath(import.meta.url)));
 const read = (relativePath) => readFile(join(extensionRoot, relativePath), "utf8");
@@ -314,6 +324,17 @@ test("service worker runtime boundary stores settings and reports disabled hando
     const saved = await send({ type: "SAVE_SETTINGS", settings: { managerName: "Test manager", funnyLevelEn: 4 } });
     assert.equal(saved.settings.managerName, "Test manager");
     assert.equal(saved.settings.funnyLevelEn, 4);
+    const journal = storage.get(DISPLAY_NAME_MUTATION_JOURNAL_KEY);
+    assert.equal(journal.length, 1);
+    assert.equal(journal[0].redacted, true);
+    assert.doesNotMatch(JSON.stringify(journal), /Test manager|Material Download Manager/i);
+    const schoolEnabled = await send({ type: "SAVE_SETTINGS", settings: { schoolModeEnabled: true, schoolModeName: "Quiet study", showEmojis: true } });
+    assert.equal(schoolEnabled.settings.schoolModeEnabled, true);
+    assert.equal(schoolEnabled.settings.schoolModeName, "Quiet study");
+    assert.doesNotMatch(JSON.stringify(Object.fromEntries(storage)), /password|passphrase|pin|secret|otp|token/i);
+    const schoolReset = await send({ type: "SAVE_SETTINGS", settings: { schoolModeEnabled: false } });
+    assert.equal(schoolReset.ok, false);
+    assert.equal(schoolReset.result.code, "school-mode-reset-unavailable");
     assert.equal(contextMenus.created.length, 1);
     assert.match(contextMenus.created[0].title, /Test manager/);
     assert.deepEqual(contextMenus.created[0].contexts, ["page", "link", "selection"]);
@@ -721,6 +742,109 @@ test("settings are bounded, persistable, and exportable without arbitrary endpoi
   assert.equal(sanitizeSettings({}).handoffEndpoint, DEFAULT_HANDOFF_ENDPOINT);
 });
 
+test("School mode and emoji settings persist without credential material", () => {
+  const safe = sanitizeSettings({
+    schoolModeEnabled: true,
+    schoolModeName: "  Quiet study  ",
+    schoolModeCredentialState: "not-a-real-state",
+    showEmojis: true,
+    languageMode: "bilingual",
+    funnyLevelEn: 5,
+    funnyLevelYue: 5,
+  });
+  assert.equal(safe.schoolModeEnabled, true);
+  assert.equal(safe.schoolModeName, "Quiet study");
+  assert.equal(safe.schoolModeCredentialState, RESET_CREDENTIAL_STATES.UNAVAILABLE);
+  assert.equal(safe.showEmojis, true);
+  const presentation = presentationSettings(safe);
+  assert.equal(presentation.languageMode, "en");
+  assert.equal(presentation.funnyLevelEn, 1);
+  assert.equal(presentation.funnyLevelYue, 1);
+  assert.equal(presentation.showEmojis, false);
+  assert.equal(localize("handoffSuccess", safe), localize("handoffSuccess", { ...DEFAULT_SETTINGS, languageMode: "en", funnyLevelEn: 1 }));
+  assert.doesNotMatch(localize("handoffSuccess", safe), / · /u);
+  assert.equal(decorateMessage("Saved", { ...safe, schoolModeEnabled: false, showEmojis: true }, "✅"), "✅ Saved");
+  assert.equal(decorateMessage("Saved", safe, "✅"), "Saved");
+  assert.equal(canDisableSchoolMode(safe, { ...safe, schoolModeEnabled: false }), false);
+  assert.equal(canDisableSchoolMode(safe, { ...safe, schoolModeEnabled: false, schoolModeCredentialState: RESET_CREDENTIAL_STATES.CONFIGURED }), true);
+  const exported = makeSettingsExport(safe);
+  assert.equal(exported.settings.schoolModeName, "Quiet study");
+  assert.equal(exported.settings.showEmojis, true);
+  assert.doesNotMatch(JSON.stringify(exported), /password|passphrase|pin|secret|otp|token/i);
+  assert.equal(DEFAULT_SCHOOL_MODE_NAME, "School mode");
+});
+
+test("credential abstraction is explicit and fail-closed without storing a secret", async () => {
+  const abstraction = createCredentialAbstraction(RESET_CREDENTIAL_STATES.UNAVAILABLE);
+  assert.equal(abstraction.available, false);
+  assert.equal(abstraction.supportsVerification, false);
+  assert.deepEqual(await abstraction.verifyLocally(), { ok: false, code: "credential-unavailable" });
+  assert.deepEqual(await abstraction.configure(), { ok: false, code: "credential-unavailable" });
+  assert.deepEqual(await abstraction.clear(), { ok: false, code: "credential-unavailable" });
+  assert.equal(createCredentialAbstraction(RESET_CREDENTIAL_STATES.CONFIGURED).available, false);
+  assert.doesNotMatch(JSON.stringify(abstraction), /password|passphrase|pin|secret|otp|token/i);
+});
+
+test("display-name mutation journal stores only redacted append-only metadata", async () => {
+  const values = new Map();
+  const storage = {
+    async get(key) { return { [key]: values.get(key) }; },
+    async set(entries) { Object.entries(entries).forEach(([key, value]) => values.set(key, value)); },
+  };
+  const created = await appendDisplayNameMutation(storage, {
+    before: DEFAULT_SETTINGS.managerName,
+    after: "First display name",
+    shippedName: DEFAULT_SETTINGS.managerName,
+    at: "2026-08-11T14:00:00.000Z",
+  });
+  const reset = await appendDisplayNameMutation(storage, {
+    before: "First display name",
+    after: DEFAULT_SETTINGS.managerName,
+    shippedName: DEFAULT_SETTINGS.managerName,
+    at: "2026-08-11T14:00:01.000Z",
+  });
+  assert.equal(created.action, "display-name-created");
+  assert.equal(reset.action, "display-name-reset");
+  const entries = await readDisplayNameMutationJournal(storage);
+  assert.equal(entries.length, 2);
+  assert.equal(entries[0].schema, DISPLAY_NAME_MUTATION_JOURNAL_SCHEMA);
+  assert.equal(entries[0].redacted, true);
+  assert.equal(entries[0].beforeHash.length, 64);
+  assert.equal(entries[0].afterHash.length, 64);
+  assert.doesNotMatch(JSON.stringify(values.get(DISPLAY_NAME_MUTATION_JOURNAL_KEY)), /First display name|Material Download Manager/i);
+  const concurrentValues = new Map();
+  const concurrentStorage = {
+    async get(key) { return { [key]: concurrentValues.get(key) }; },
+    async set(entries) {
+      await new Promise((resolve) => setTimeout(resolve, 1));
+      Object.entries(entries).forEach(([key, value]) => concurrentValues.set(key, value));
+    },
+  };
+  await Promise.all([
+    appendDisplayNameMutation(concurrentStorage, { before: "one", after: "two", shippedName: DEFAULT_SETTINGS.managerName, at: "2026-08-11T14:00:02.000Z" }),
+    appendDisplayNameMutation(concurrentStorage, { before: "two", after: "three", shippedName: DEFAULT_SETTINGS.managerName, at: "2026-08-11T14:00:03.000Z" }),
+  ]);
+  assert.equal((await readDisplayNameMutationJournal(concurrentStorage)).length, 2);
+  values.set(DISPLAY_NAME_MUTATION_JOURNAL_KEY, [{ schema: "not-a-journal" }]);
+  await assert.rejects(
+    () => appendDisplayNameMutation(storage, {
+      before: "one",
+      after: "two",
+      shippedName: DEFAULT_SETTINGS.managerName,
+    }),
+    (error) => error?.code === "display-name-history-unavailable",
+  );
+  values.delete(DISPLAY_NAME_MUTATION_JOURNAL_KEY);
+  await assert.rejects(
+    () => appendDisplayNameMutation({ get: async () => ({ [DISPLAY_NAME_MUTATION_JOURNAL_KEY]: [] }) }, {
+      before: "one",
+      after: "two",
+      shippedName: DEFAULT_SETTINGS.managerName,
+    }),
+    (error) => error?.code === "display-name-history-unavailable",
+  );
+});
+
 test("regex builder evaluates captures with bounded safety checks", () => {
   assert.equal(validateRegex("download", "gi").valid, true);
   const evaluation = evaluateRegex("(download)\\.(\\w+)", "gi", "download.zip and download.tar");
@@ -744,6 +868,27 @@ test("language modes and independent funny levels are wired to rendered copy", (
   const bilingual = localize("handoffSuccess", { ...DEFAULT_SETTINGS, languageMode: "bilingual", funnyLevelEn: 1, funnyLevelYue: 5 });
   assert.match(bilingual, / · /);
   assert.match(bilingual, /The URL was accepted/);
+});
+
+test("School mode, emoji controls, live settings refresh, and redacted journal wiring are present", async () => {
+  const options = await read("src/options.html");
+  const optionsScript = await read("src/options.js");
+  const popupScript = await read("src/popup.js");
+  const worker = await read("src/service-worker.js");
+  assert.match(options, /id="school-mode"/);
+  assert.match(options, /id="school-mode-name"/);
+  assert.match(options, /id="show-emojis"/);
+  assert.match(options, /data-school-hidden/);
+  assert.match(optionsScript, /chrome\.storage\.onChanged\.addListener/);
+  assert.match(optionsScript, /displayNameHistoryRecorded/);
+  assert.match(popupScript, /document\.documentElement\.lang/);
+  assert.match(popupScript, /chrome\.storage\.onChanged\.addListener/);
+  assert.match(popupScript, /school-mode-reset-unavailable/);
+  assert.match(worker, /appendDisplayNameMutation/);
+  assert.match(worker, /school-mode-reset-unavailable/);
+  assert.match(localize("schoolModeLabel", { ...DEFAULT_SETTINGS, schoolModeName: "Quiet study" }, { name: "Quiet study" }), /Quiet study/);
+  assert.match(localize("popupTitle", { ...DEFAULT_SETTINGS, managerName: "Renamed manager" }, { name: "Renamed manager" }), /Renamed manager/);
+  assert.match(localize("schoolModeCredentialStatus", DEFAULT_SETTINGS), /No credential material is stored/);
 });
 
 test("popup and options localization markers all resolve to known copy", async () => {

@@ -2,13 +2,21 @@
   "use strict";
 
   const content = window.MDM_SITE_CONTENT;
+  const settingsContract = window.MDM_SITE_SETTINGS_CONTRACT;
   const manifest = window.MDM_RELEASE_MANIFEST || { stable: null, publication: { pages: "unverified" } };
   const root = document.documentElement;
-  const STORAGE_KEY = "mdm-site-settings-v1";
+  const SETTINGS_SCHEMA_VERSION = 2;
+  const STORAGE_KEY = "mdm-site-settings-v2";
+  const LEGACY_STORAGE_KEYS = ["mdm-site-settings-v1"];
+  const DEFAULT_SCHOOL_MODE_NAME = "School mode";
   const DEFAULTS = {
+    schemaVersion: SETTINGS_SCHEMA_VERSION,
+    revision: 0,
     language: "en",
     funnyEn: 3,
     funnyYue: 3,
+    showEmojis: true,
+    schoolMode: { enabled: false, name: DEFAULT_SCHOOL_MODE_NAME },
     theme: "system",
     density: "comfortable",
     accent: "#6750A4",
@@ -83,6 +91,17 @@
     settingsLede: ["Preferences are local to this browser. Every control states what it changes and where its current value came from.", "偏好只留喺呢個瀏覽器；每個控制都講清楚改乜，同埋個值由邊度嚟。"],
     resetAll: ["Reset all", "全部重設"],
     funnyDisclosure: ["Funny levels style all site messages, including warnings and errors. They change voice, never facts, and can be reset at any time.", "幽默程度會套用到所有網站訊息，包括警告同錯誤；只改語氣，唔改事實，隨時可以重設。"],
+    emojiToggleTitle: ["Message decorations", "訊息裝飾"],
+    emojiToggleExplanation: ["Show a small decorative emoji in notifications and decision messages. It never changes facts, control labels, or accessible names.", "喺通知同決定訊息加細細個裝飾 emoji；唔會改事實、控制標籤或者無障礙名稱。"],
+    emojiToggleLabel: ["Show emojis in messages", "喺訊息顯示 emoji"],
+    schoolModeTitle: ["School mode", "學校模式"],
+    schoolModeNameLabel: ["Mode name", "模式名稱"],
+    schoolModeToggleLabel: ["Use this mode", "使用呢個模式"],
+    schoolModeExplanation: ["This user-named mode keeps the site in English and removes playful language, Cantonese options, funny-level controls, and the dim sum surprise while it is on. It is a user-experience setting, not a security boundary.", "呢個由你改名嘅模式開啟後會用英文，並移除玩味語氣、粵語選項、幽默程度控制同點心驚喜。佢係使用體驗設定，唔係安全邊界。"],
+    schoolModeRecovery: ["To clear a forgotten mode name or reset state, clear this site's browser storage. Nothing is sent anywhere.", "如果忘記模式名稱或者想重設狀態，可以清除呢個網站嘅瀏覽器儲存；資料唔會送去任何地方。"],
+    schoolModeReset: ["Reset mode name and state", "重設模式名稱同狀態"],
+    schoolModeOn: ["{name} is on", "{name} 已開啟"],
+    schoolModeOff: ["{name} is off", "{name} 已關閉"],
     languageModeEyebrow: ["LANGUAGE MODE", "語言模式"],
     languageModeTitle: ["Choose the reading voice.", "揀你想點樣讀。"],
     languageExplanation: ["Controls the primary language of every label on this site. Bilingual mode keeps English prominent and adds a compact Cantonese counterpart.", "控制網站所有標籤嘅主要語言；雙語模式保留英文主標，同時加一行精簡粵語。"],
@@ -166,26 +185,29 @@
   };
   const normalize = (value) => String(value ?? "").trim().toLocaleLowerCase();
 
+  function normalizeLabel(value, fallback, maxLength) {
+    return settingsContract.normalizeLabel(value, fallback, maxLength);
+  }
+
+  function normalizeSettings(parsed) {
+    return settingsContract.normalizeSettingsRecord(parsed, DEFAULTS, DEFAULT_SCHOOL_MODE_NAME, content.product.name);
+  }
+
   function readSettings() {
-    try {
-      const parsed = JSON.parse(localStorage.getItem(STORAGE_KEY) || "null");
-      if (!parsed || typeof parsed !== "object") return { ...DEFAULTS };
-      return {
-        ...DEFAULTS,
-        ...parsed,
-        funnyEn: clamp(Number(parsed.funnyEn), 1, 5, DEFAULTS.funnyEn),
-        funnyYue: clamp(Number(parsed.funnyYue), 1, 5, DEFAULTS.funnyYue),
-        fontScale: clamp(Number(parsed.fontScale), 90, 125, DEFAULTS.fontScale),
-        accent: validHex(parsed.accent) ? parsed.accent : DEFAULTS.accent,
-        appearanceOverrides: parsed.appearanceOverrides && typeof parsed.appearanceOverrides === "object" ? parsed.appearanceOverrides : {},
-        tabOverrides: parsed.tabOverrides && typeof parsed.tabOverrides === "object" ? parsed.tabOverrides : {}
-      };
-    } catch (_error) {
-      return { ...DEFAULTS };
+    for (const key of [STORAGE_KEY, ...LEGACY_STORAGE_KEYS]) {
+      try {
+        const raw = localStorage.getItem(key);
+        if (raw) return normalizeSettings(JSON.parse(raw));
+      } catch (_error) {
+        // A malformed newer record must not prevent a valid older record from migrating.
+      }
     }
+    return normalizeSettings(null);
   }
 
   function saveSettings() {
+    settings = { ...settings, schemaVersion: SETTINGS_SCHEMA_VERSION, revision: Number(settings.revision || 0) + 1 };
+    window.settings = settings;
     try { localStorage.setItem(STORAGE_KEY, JSON.stringify(settings)); } catch (_error) { /* Private browsing can refuse persistence; the UI still works. */ }
   }
 
@@ -195,18 +217,28 @@
 
   function validHex(value) { return typeof value === "string" && /^#[0-9a-f]{6}$/i.test(value); }
 
+  function isSchoolMode() { return settings.schoolMode?.enabled === true; }
+  function schoolModeLabel() { return settings.schoolMode?.name || DEFAULT_SCHOOL_MODE_NAME; }
+  function effectiveLanguage() { return isSchoolMode() ? "en" : settings.language; }
+  function effectiveShowEmojis() { return !isSchoolMode() && settings.showEmojis === true; }
+
+  function schoolSafeText(value) {
+    return settingsContract.filterSchoolCopy(value, settings, schoolModeLabel());
+  }
+
   function localized(key) {
     const pair = COPY[key] || [key, key];
-    if (settings.language === "yue") return pair[1];
-    if (settings.language === "bilingual") return `${pair[0]} · ${pair[1]}`;
+    if (effectiveLanguage() === "yue") return pair[1];
+    if (effectiveLanguage() === "bilingual") return `${pair[0]} · ${pair[1]}`;
     return pair[0];
   }
 
   function applyTranslations() {
     $$('[data-copy]').forEach((element) => { element.textContent = localized(element.dataset.copy); });
     $$('[data-copy-placeholder]').forEach((element) => { element.placeholder = localized(element.dataset.copyPlaceholder); });
-    root.lang = settings.language === "yue" ? "zh-Hant" : "en";
-    document.title = `${settings.displayName || DEFAULTS.displayName} · ${settings.language === "yue" ? "文件" : "Documentation"}`;
+    root.lang = effectiveLanguage() === "yue" ? "zh-Hant" : "en";
+    const section = effectiveLanguage() === "yue" ? "文件" : "Documentation";
+    document.title = isSchoolMode() ? `${settings.displayName || DEFAULTS.displayName} · ${schoolModeLabel()}` : `${settings.displayName || DEFAULTS.displayName} · ${section}`;
   }
 
   function hexRgb(hex) {
@@ -221,6 +253,8 @@
     root.dataset.density = settings.density;
     root.dataset.tabPosition = settings.tabPosition;
     root.dataset.reducedMotion = settings.reducedMotion ? "true" : "false";
+    root.dataset.schoolMode = isSchoolMode() ? "true" : "false";
+    root.dataset.showEmojis = effectiveShowEmojis() ? "true" : "false";
     root.style.setProperty("--font-scale", String(settings.fontScale / 100));
     root.style.setProperty("--accent", settings.accent);
     root.style.setProperty("--accent-strong", settings.accent);
@@ -230,8 +264,9 @@
     strip.setAttribute("aria-orientation", settings.tabPosition === "top" ? "horizontal" : "vertical");
     $("#brand-name").textContent = settings.displayName || DEFAULTS.displayName;
     applyAppearanceOverrides();
-    renderSettingsControls();
     applyTranslations();
+    applySchoolModeSurface();
+    renderSettingsControls();
   }
 
   function setSetting(key, value, announce = true) {
@@ -239,6 +274,56 @@
     saveSettings();
     applySettings();
     if (announce) notify("success", "Setting updated", `${key} is now ${String(value)}.`);
+  }
+
+  function setSchoolMode(enabled, announce = true) {
+    settings = { ...settings, schoolMode: { ...settings.schoolMode, enabled: Boolean(enabled) } };
+    saveSettings();
+    applySettings();
+    if (isSchoolMode()) {
+      clearNotifications();
+      const surprise = $("#dim-sum-surprise");
+      if (surprise) surprise.hidden = true;
+    }
+    if (announce && !isSchoolMode()) notify("success", `${schoolModeLabel()} updated`, `${schoolModeLabel()} is now off. Your saved language and funny-level choices are restored.`);
+  }
+
+  function setSchoolModeName(value) {
+    const name = normalizeLabel(value, DEFAULT_SCHOOL_MODE_NAME, 48);
+    settings = { ...settings, schoolMode: { ...settings.schoolMode, name } };
+    saveSettings();
+    applySettings();
+  }
+
+  function resetSchoolMode() {
+    settings = { ...settings, schoolMode: { enabled: false, name: DEFAULT_SCHOOL_MODE_NAME } };
+    saveSettings();
+    applySettings();
+    notify("success", "Mode reset", "The mode name is back to its shipped value and the mode is off.");
+  }
+
+  function clearNotifications() {
+    const region = $("#notification-region");
+    if (region) region.replaceChildren();
+  }
+
+  function applyIncomingSettings(raw) {
+    try {
+      const incoming = normalizeSettings(JSON.parse(raw));
+      if (incoming.revision <= Number(settings.revision || 0)) return false;
+      settings = incoming;
+      window.settings = settings;
+      applySettings();
+      return true;
+    } catch (_error) {
+      return false;
+    }
+  }
+
+  function bindSettingsSync() {
+    window.addEventListener("storage", (event) => {
+      if (event.key === STORAGE_KEY && event.newValue) applyIncomingSettings(event.newValue);
+    });
   }
 
   function applyAppearanceOverrides() {
@@ -271,15 +356,67 @@
     $("#font-scale").value = String(settings.fontScale);
     $("#reduced-motion").checked = settings.reducedMotion;
     $("#display-name").value = settings.displayName;
+    $("#show-emojis").checked = settings.showEmojis;
+    if (document.activeElement !== $("#school-mode-name")) $("#school-mode-name").value = schoolModeLabel();
+    $("#school-mode-enabled").checked = isSchoolMode();
+    renderSchoolControls();
     renderTonePreview();
     renderAppearanceEditor();
     renderTabAppearanceEditor();
     renderProvenance();
   }
 
+  function renderSchoolControls() {
+    const name = schoolModeLabel();
+    const title = $("#school-mode-title");
+    const eyebrow = $("#school-mode-eyebrow");
+    const status = $("#school-mode-status");
+    const explanation = $("#school-mode-explanation");
+    const nameOutput = $("#school-mode-name-output");
+    if (title) title.textContent = name;
+    if (eyebrow) eyebrow.textContent = name;
+    if (nameOutput) nameOutput.textContent = name;
+    if (status) {
+      status.textContent = (isSchoolMode() ? localized("schoolModeOn") : localized("schoolModeOff")).replace("{name}", name);
+      status.dataset.active = String(isSchoolMode());
+    }
+    if (explanation) explanation.textContent = `${name}: ${localized("schoolModeExplanation")}`;
+  }
+
+  function applySchoolModeSurface() {
+    const active = isSchoolMode();
+    root.dataset.schoolMode = active ? "true" : "false";
+    root.dataset.showEmojis = effectiveShowEmojis() ? "true" : "false";
+    $$('[data-school-optional]').forEach((element) => {
+      element.hidden = active;
+      element.setAttribute("aria-hidden", String(active));
+      if (active) element.setAttribute("inert", "");
+      else element.removeAttribute("inert");
+    });
+    $$('[data-school-language-option]').forEach((element) => {
+      element.hidden = active;
+      element.setAttribute("aria-hidden", String(active));
+      if (active) element.setAttribute("inert", "");
+      else element.removeAttribute("inert");
+    });
+    const surprise = $("#dim-sum-surprise");
+    if (active && surprise) surprise.hidden = true;
+    if (active && document.activeElement?.closest?.("[data-school-optional], [data-school-language-option]")) {
+      $("#school-mode-enabled")?.focus();
+    }
+    renderSchoolControls();
+    if (typeof renderFeatureGrid === "function" && $("#feature-grid")) renderFeatureGrid();
+    if (typeof renderArticle === "function" && $("#article-detail")) renderArticle();
+    if (typeof renderReleaseList === "function" && $("#release-list")) renderReleaseList();
+    if (typeof renderTabDiscovery === "function" && $("#tab-results")) renderTabDiscovery();
+    if (typeof renderPalette === "function" && $("#palette-results")) renderPalette();
+  }
+
   function renderProvenance() {
     const pairs = {
       language: settings.language !== DEFAULTS.language ? "Persisted in this browser" : "Compiled-in value: English",
+      showEmojis: settings.showEmojis !== DEFAULTS.showEmojis ? "Persisted in this browser" : "Compiled-in value: on",
+      schoolMode: isSchoolMode() || schoolModeLabel() !== DEFAULT_SCHOOL_MODE_NAME ? `Persisted in this browser: ${schoolModeLabel()}` : `Compiled-in value: ${DEFAULT_SCHOOL_MODE_NAME} (off)`,
       theme: settings.theme !== DEFAULTS.theme ? `Persisted in this browser: ${settings.theme}` : "Compiled-in value: system",
       density: settings.density !== DEFAULTS.density ? `Persisted in this browser: ${settings.density}` : "Compiled-in value: comfortable",
       accent: settings.accent !== DEFAULTS.accent ? `Persisted in this browser: ${settings.accent}` : `Compiled-in value: ${DEFAULTS.accent}`,
@@ -295,6 +432,11 @@
   }
 
   function renderTonePreview() {
+    if (isSchoolMode()) {
+      $("#tone-preview-en").textContent = "";
+      $("#tone-preview-yue").textContent = "";
+      return;
+    }
     const english = [
       "Facts first. Neat, quiet, no confetti.",
       "A tidy local preview; the facts are still in charge.",
@@ -692,7 +834,10 @@
 
   function renderFeatureGrid() {
     const state = searchStates.features;
-    const list = content.features.filter((feature) => (categoryFilter === "All" || feature.category === categoryFilter) && searchMatches("features", `${feature.title} ${feature.summary} ${feature.category} ${feature.tags.join(" ")}`));
+    const list = content.features.filter((feature) => {
+      const searchable = schoolSafeText(`${feature.title} ${feature.summary} ${feature.category} ${feature.tags.join(" ")}`);
+      return (categoryFilter === "All" || feature.category === categoryFilter) && searchMatches("features", searchable);
+    });
     const grid = $("#feature-grid");
     grid.replaceChildren();
     $("#feature-count").textContent = `${list.length} / ${content.features.length} articles`;
@@ -703,17 +848,17 @@
     list.forEach((feature) => {
       const card = create("button", `feature-card${currentArticleId === feature.id ? " is-selected" : ""}`);
       card.type = "button";
-      card.setAttribute("aria-label", `Open feature article: ${feature.title}`);
+      card.setAttribute("aria-label", `Open feature article: ${schoolSafeText(feature.title)}`);
       const top = create("div", "feature-card-top");
       const heading = create("div");
-      heading.append(create("span", "feature-category", feature.category));
-      heading.append(create("h2", null, feature.title));
+      heading.append(create("span", "feature-category", schoolSafeText(feature.category)));
+      heading.append(create("h2", null, schoolSafeText(feature.title)));
       top.append(heading);
       top.append(create("span", "state-icon state-icon-accent", "→"));
       card.append(top);
-      card.append(create("p", null, feature.summary));
+      card.append(create("p", null, schoolSafeText(feature.summary)));
       const tags = create("div", "tag-line");
-      feature.tags.slice(0, 4).forEach((tag) => tags.append(create("span", "tag", tag)));
+      feature.tags.slice(0, 4).forEach((tag) => tags.append(create("span", "tag", schoolSafeText(tag))));
       card.append(tags);
       card.addEventListener("click", () => selectArticle(feature.id));
       grid.append(card);
@@ -743,14 +888,14 @@
       return;
     }
     const header = create("header", "article-header");
-    header.append(create("p", "eyebrow", feature.category.toUpperCase()));
-    header.append(create("h2", null, feature.title));
-    header.append(create("p", "article-summary", feature.summary));
+    header.append(create("p", "eyebrow", schoolSafeText(feature.category).toUpperCase()));
+    header.append(create("h2", null, schoolSafeText(feature.title)));
+    header.append(create("p", "article-summary", schoolSafeText(feature.summary)));
     const meta = create("div", "article-meta");
     meta.append(create("span", "article-status", "Implemented feature"));
     const source = create("a", null, "Open categorized source article ↗");
     source.href = feature.docsPath;
-    source.setAttribute("aria-label", `Open source article for ${feature.title}`);
+    source.setAttribute("aria-label", `Open source article for ${schoolSafeText(feature.title)}`);
     meta.append(source);
     header.append(meta);
     detail.append(header);
@@ -758,7 +903,7 @@
     Object.entries(feature.sections).forEach(([key, paragraphs]) => {
       const section = create("section", "article-section");
       section.append(create("h3", null, labels[key] || key));
-      paragraphs.forEach((paragraph) => section.append(create("p", null, paragraph)));
+      paragraphs.forEach((paragraph) => section.append(create("p", null, schoolSafeText(paragraph))));
       detail.append(section);
     });
     const suggestions = create("section", "article-suggestions");
@@ -768,7 +913,7 @@
       const target = content.features.find((item) => item.id === suggestedId);
       if (!target) return;
       const item = create("li");
-      const button = create("button", "chip-button", target.title);
+      const button = create("button", "chip-button", schoolSafeText(target.title));
       button.type = "button";
       button.addEventListener("click", () => selectArticle(target.id));
       item.append(button);
@@ -800,8 +945,8 @@
       ];
       COPY.publicationTitle = ["Pages publication verified.", "Pages 發佈已驗證。"];
       COPY.publicationBody = [
-        `The live site is published at ${manifest.publication.url || "the configured Pages URL"}. Its release manifest is supplied by the self-hosted Pages workflow.`,
-        `Live site 已經發佈喺 ${manifest.publication.url || "已設定嘅 Pages 網址"}；release manifest 由 self-hosted Pages workflow 提供。`
+        `The live site is published at ${manifest.publication.url || "the configured Pages URL"}. Its release manifest is supplied by the hosted Pages workflow.`,
+        `Live site 已經發佈喺 ${manifest.publication.url || "已設定嘅 Pages 網址"}；release manifest 由 hosted Pages workflow 提供。`
       ];
       COPY.publicationDetail = ["Publication: verified", "發佈：已驗證"];
     }
@@ -828,7 +973,7 @@
   function renderReleaseList() {
     const state = searchStates.changelog;
     const chosenDate = $("#changelog-date").value;
-    const list = content.releases.filter((release) => searchMatches("changelog", `${release.version} ${release.channel} ${release.summary} ${release.notes.join(" ")} ${release.commit}`) && (!chosenDate || !release.releaseDate || release.releaseDate === chosenDate));
+    const list = content.releases.filter((release) => searchMatches("changelog", schoolSafeText(`${release.version} ${release.channel} ${release.summary} ${release.notes.join(" ")} ${release.commit}`)) && (!chosenDate || !release.releaseDate || release.releaseDate === chosenDate));
     const container = $("#release-list");
     container.replaceChildren();
     if (!list.length) { container.append(create("div", "release-empty", state.error || "No recorded releases match this view.")); return; }
@@ -844,7 +989,7 @@
       badges.append(create("span", "release-badge", release.status));
       header.append(badges);
       card.append(header);
-      card.append(create("p", null, release.summary));
+      card.append(create("p", null, schoolSafeText(release.summary)));
       const meta = create("dl", "release-meta");
       const dateTerm = create("dt", null, "Release date");
       const dateValue = create("dd", null, formatDate(release.releaseDate));
@@ -859,7 +1004,7 @@
       meta.append(dateTerm, dateValue, commitTerm, commitValue);
       card.append(meta);
       const notes = create("ul");
-      release.notes.forEach((note) => notes.append(create("li", null, note)));
+      release.notes.filter((note) => !isSchoolMode() || !/code name|dim sum|shrimp dumpling|har gow|siu mai|dessert/i.test(note)).forEach((note) => notes.append(create("li", null, schoolSafeText(note))));
       card.append(notes);
       if (!releaseIsStableVerified(release)) card.append(create("p", "field-help", "Installer action: absent. This recorded release is not eligible for stable download discovery."));
       container.append(card);
@@ -868,13 +1013,13 @@
 
   function changelogMarkdown() {
     const chosenDate = $("#changelog-date").value;
-    return content.releases.filter((release) => searchMatches("changelog", `${release.version} ${release.channel} ${release.summary} ${release.notes.join(" ")} ${release.commit}`) && (!chosenDate || !release.releaseDate || release.releaseDate === chosenDate)).map((release) => [
+    return content.releases.filter((release) => searchMatches("changelog", schoolSafeText(`${release.version} ${release.channel} ${release.summary} ${release.notes.join(" ")} ${release.commit}`)) && (!chosenDate || !release.releaseDate || release.releaseDate === chosenDate)).map((release) => [
       `## v${release.version} · ${release.channel}`,
       `- Release date: ${formatDate(release.releaseDate)}`,
       `- Commit: ${release.commit}`,
       `- Status: ${release.status}`,
-      `- ${release.summary}`,
-      ...release.notes.map((note) => `- ${note}`)
+      `- ${schoolSafeText(release.summary)}`,
+      ...release.notes.filter((note) => !isSchoolMode() || !/code name|dim sum|shrimp dumpling|har gow|siu mai|dessert/i.test(note)).map((note) => `- ${schoolSafeText(note)}`)
     ].join("\n")).join("\n\n") || "No recorded releases match this view.\n";
   }
 
@@ -919,8 +1064,8 @@
         const row = create("div", "tab-result");
         row.append(create("span", "state-icon state-icon-accent", record.pinned ? "•" : "→"));
         const text = create("div");
-        text.append(create("strong", null, record.label));
-        text.append(create("small", null, `${scope} · ${record.group} · ${record.strip}`));
+        text.append(create("strong", null, schoolSafeText(record.label)));
+        text.append(create("small", null, schoolSafeText(`${scope} · ${record.group} · ${record.strip}`)));
         row.append(text);
         row.append(create("small", null, record.pinned ? "Pinned" : "Open"));
         row.addEventListener("click", () => selectTab(record.label.toLocaleLowerCase()));
@@ -943,14 +1088,16 @@
       { id: "search.settings", label: "Settings · search", description: "Focus the settings search field", action: () => focusElement("settings-search", "settings") },
       { id: "search.tabs", label: "Tabs · four searches", description: "Open the tab discovery lab", action: () => focusElement("tab-strip-search", "settings") },
       { id: "setting.language", label: "Settings · language mode", description: "Choose English, Cantonese, or bilingual copy", action: () => focusElement("language-mode-buttons", "settings") },
-      { id: "setting.funny-en", label: "Settings · English funny level", description: "Adjust English voice from 1 to 5", action: () => focusElement("funny-en", "settings") },
-      { id: "setting.funny-yue", label: "Settings · Cantonese funny level", description: "Adjust Cantonese voice from 1 to 5", action: () => focusElement("funny-yue", "settings") },
+      { id: "setting.funny-en", label: "Settings · English funny level", description: "Adjust English voice from 1 to 5", schoolOptional: true, action: () => focusElement("funny-en", "settings") },
+      { id: "setting.funny-yue", label: "Settings · Cantonese funny level", description: "Adjust Cantonese voice from 1 to 5", schoolOptional: true, action: () => focusElement("funny-yue", "settings") },
       { id: "setting.theme", label: "Settings · theme", description: "Choose system, light, or dark", action: () => focusElement("theme-setting", "settings") },
       { id: "setting.accent", label: "Settings · accent", description: "Choose the seed color", action: () => focusElement("accent-setting", "settings") },
       { id: "setting.appearance", label: "Settings · appearance editor", description: "Edit per-surface radius, color, and spacing", action: () => focusElement("appearance-target", "settings") },
       ...content.features.map((feature) => ({ id: `feature.${feature.id}`, label: feature.title, description: `${feature.category} · ${feature.summary}`, action: () => selectArticle(feature.id) }))
     ];
-    return commands;
+    return isSchoolMode()
+      ? commands.filter((command) => !command.schoolOptional).map((command) => ({ ...command, label: schoolSafeText(command.label), description: schoolSafeText(command.description) }))
+      : commands;
   }
 
   function renderPalette() {
@@ -1019,7 +1166,11 @@
     if (id === "features") renderFeatureGrid();
     if (id === "settings") {
       const state = searchStates.settings;
-      $$(".settings-card").forEach((card) => { card.hidden = Boolean(state.query || state.mode === "regex") && !searchMatches(id, card.dataset.settingSearch); });
+      $$(".settings-card").forEach((card) => {
+        card.hidden = isSchoolMode() && card.hasAttribute("data-school-optional")
+          ? true
+          : Boolean(state.query || state.mode === "regex") && !searchMatches(id, card.dataset.settingSearch);
+      });
     }
     if (id === "changelog") renderReleaseList();
     if (id === "palette" && !$("#command-palette-layer").hidden) renderPalette();
@@ -1030,6 +1181,7 @@
     document.addEventListener("click", (event) => {
       const button = event.target.closest("[data-setting]");
       if (!button) return;
+      if (isSchoolMode() && button.hasAttribute("data-school-language-option")) return;
       const key = button.dataset.setting;
       if (["language", "density", "tabPosition"].includes(key)) setSetting(key, button.dataset.value);
     });
@@ -1039,11 +1191,15 @@
     $("#accent-setting").addEventListener("input", (event) => setSetting("accent", validHex(event.target.value) ? event.target.value.toUpperCase() : DEFAULTS.accent, false));
     $("#font-scale").addEventListener("input", (event) => setSetting("fontScale", clamp(Number(event.target.value), 90, 125, 100), false));
     $("#reduced-motion").addEventListener("change", (event) => setSetting("reducedMotion", Boolean(event.target.checked)));
+    $("#show-emojis").addEventListener("change", (event) => setSetting("showEmojis", Boolean(event.target.checked)));
+    $("#school-mode-enabled").addEventListener("change", (event) => setSchoolMode(Boolean(event.target.checked)));
+    $("#school-mode-name").addEventListener("input", (event) => setSchoolModeName(event.target.value));
+    $("#reset-school-mode").addEventListener("click", resetSchoolMode);
     $("#display-name").addEventListener("input", (event) => {
-      settings = { ...settings, displayName: event.target.value.trim().slice(0, 80) || DEFAULTS.displayName };
+      settings = { ...settings, displayName: normalizeLabel(event.target.value, DEFAULTS.displayName, 80) };
       saveSettings();
       $("#brand-name").textContent = settings.displayName;
-      document.title = `${settings.displayName} · Documentation`;
+      applyTranslations();
       renderProvenance();
     });
     $("#appearance-target").addEventListener("change", renderAppearanceEditor);
@@ -1058,12 +1214,16 @@
 
   function notify(tone, title, message) {
     const region = $("#notification-region");
+    if (!region) return;
     const item = create("article", `notification ${tone}`);
     item.setAttribute("role", tone === "error" || tone === "warning" ? "alert" : "status");
-    item.append(create("span", "signal-dot", tone === "success" ? "✓" : tone === "error" ? "!" : "·"));
+    const marker = create("span", "signal-dot", effectiveShowEmojis() ? (tone === "success" ? "✅" : tone === "error" ? "⚠️" : "💬") : "");
+    marker.setAttribute("aria-hidden", "true");
+    marker.dataset.decorative = "true";
+    item.append(marker);
     const copy = create("div");
-    copy.append(create("div", "notification-title", title));
-    copy.append(create("div", "notification-message", message));
+    copy.append(create("div", "notification-title", isSchoolMode() ? String(title).replace(/Cantonese|bilingual|funny|emoji/gi, "setting") : title));
+    copy.append(create("div", "notification-message", isSchoolMode() ? String(message).replace(/Cantonese|bilingual|funny|emoji/gi, "setting") : message));
     item.append(copy);
     const close = create("button", "notification-close", "×");
     close.type = "button";
@@ -1075,7 +1235,7 @@
   }
 
   function maybeShowSurprise() {
-    if (Math.random() >= 0.1) return;
+    if (isSchoolMode() || Math.random() >= 0.1) return;
     const card = $("#dim-sum-surprise");
     card.hidden = false;
     const title = $("#surprise-title");
@@ -1121,6 +1281,7 @@
     bindSearches();
     bindPalette();
     bindSettings();
+    bindSettingsSync();
     bindChangelogActions();
     bindGlobalKeys();
     setTimeout(maybeShowSurprise, 40);

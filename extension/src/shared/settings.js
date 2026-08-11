@@ -1,3 +1,5 @@
+import { RESET_CREDENTIAL_STATES, normalizeCredentialState } from "./credential.js";
+
 export const SETTINGS_KEY = "settings";
 export const LAST_RESULT_KEY = "lastResult";
 export const DOWNLOAD_CLAIMS_KEY = "automaticDownloadClaims";
@@ -8,10 +10,15 @@ export const HANDOFF_PATH = "/v1/downloads";
 export const STATUS_PATH = "/v1/status";
 export const ALLOWED_LOOPBACK_HOSTS = new Set(["127.0.0.1", "localhost"]);
 export const DEFAULT_HANDOFF_ENDPOINT = "http://127.0.0.1:43771/v1/downloads";
+export const DEFAULT_SCHOOL_MODE_NAME = "School mode";
 
 export const DEFAULT_SETTINGS = Object.freeze({
   schemaVersion: 1,
   managerName: "Material Download Manager",
+  schoolModeEnabled: false,
+  schoolModeName: DEFAULT_SCHOOL_MODE_NAME,
+  schoolModeCredentialState: RESET_CREDENTIAL_STATES.UNAVAILABLE,
+  showEmojis: false,
   languageMode: "en",
   funnyLevelEn: 2,
   funnyLevelYue: 2,
@@ -38,6 +45,15 @@ export function sanitizeManagerName(value) {
     .trim()
     .slice(0, 80);
   return normalized || DEFAULT_SETTINGS.managerName;
+}
+
+export function sanitizeSchoolModeName(value) {
+  const normalized = String(value ?? "")
+    .replace(/[\u0000-\u001f\u007f]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 80);
+  return normalized || DEFAULT_SCHOOL_MODE_NAME;
 }
 
 export function validateEndpoint(rawValue) {
@@ -92,6 +108,14 @@ export function sanitizeSettings(value) {
   return {
     schemaVersion: 1,
     managerName: sanitizeManagerName(source.managerName),
+    schoolModeEnabled: typeof source.schoolModeEnabled === "boolean"
+      ? source.schoolModeEnabled
+      : DEFAULT_SETTINGS.schoolModeEnabled,
+    schoolModeName: sanitizeSchoolModeName(source.schoolModeName),
+    schoolModeCredentialState: normalizeCredentialState(source.schoolModeCredentialState),
+    showEmojis: typeof source.showEmojis === "boolean"
+      ? source.showEmojis
+      : DEFAULT_SETTINGS.showEmojis,
     languageMode: LANGUAGE_MODES.has(source.languageMode) ? source.languageMode : DEFAULT_SETTINGS.languageMode,
     funnyLevelEn: clampLevel(source.funnyLevelEn, DEFAULT_SETTINGS.funnyLevelEn),
     funnyLevelYue: clampLevel(source.funnyLevelYue, DEFAULT_SETTINGS.funnyLevelYue),
@@ -100,6 +124,25 @@ export function sanitizeSettings(value) {
       : DEFAULT_SETTINGS.autoCaptureDownloads,
     handoffEndpoint: endpoint.valid ? endpoint.value : "",
   };
+}
+
+export function presentationSettings(value) {
+  const safe = sanitizeSettings(value);
+  if (!safe.schoolModeEnabled) return safe;
+  return {
+    ...safe,
+    languageMode: "en",
+    funnyLevelEn: 1,
+    funnyLevelYue: 1,
+    showEmojis: false,
+  };
+}
+
+export function canDisableSchoolMode(current, next) {
+  const previous = sanitizeSettings(current);
+  const candidate = sanitizeSettings(next);
+  if (!previous.schoolModeEnabled || candidate.schoolModeEnabled) return true;
+  return candidate.schoolModeCredentialState === RESET_CREDENTIAL_STATES.CONFIGURED;
 }
 
 export function makeSettingsExport(settings) {

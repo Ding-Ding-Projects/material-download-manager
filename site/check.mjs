@@ -49,6 +49,45 @@ async function walk(directory, prefix = "") {
   return result;
 }
 
+const universalStatuses = new Set(["implemented", "partial", "planned"]);
+
+function validateUniversalFeatureManifest(candidate, sourceCorpus) {
+  assert.equal(candidate?.schemaVersion, 1, "schemaVersion must be 1");
+  assert.equal(candidate?.surface, "GitHub Pages landing and documentation site", "surface must name the Pages site");
+  assert.ok(Array.isArray(candidate?.requiredIds) && candidate.requiredIds.length > 0, "requiredIds must be a non-empty hand-written list");
+  assert.ok(Array.isArray(candidate?.features) && candidate.features.length > 0, "features must be a non-empty hand-written list");
+  const requiredIds = new Set(candidate.requiredIds);
+  assert.equal(requiredIds.size, candidate.requiredIds.length, "requiredIds must be unique");
+  const ids = new Set();
+  for (const feature of candidate.features) {
+    assert.match(String(feature?.id || ""), /^[a-z0-9]+(?:-[a-z0-9]+)*$/, `invalid feature id: ${feature?.id}`);
+    assert.ok(!ids.has(feature.id), `duplicate feature id: ${feature.id}`);
+    ids.add(feature.id);
+    assert.ok(requiredIds.has(feature.id), `feature is not in requiredIds: ${feature.id}`);
+    assert.equal(feature.required, undefined, `${feature.id} must use the manifest requiredIds list rather than an inferred flag`);
+    assert.ok(typeof feature.title === "string" && feature.title.trim(), `${feature.id} needs a title`);
+    assert.ok(typeof feature.category === "string" && feature.category.trim(), `${feature.id} needs a category`);
+    assert.ok(Array.isArray(feature.requiredSurfaces) && feature.requiredSurfaces.length > 0, `${feature.id} needs required surfaces`);
+    assert.ok(typeof feature.docsPath === "string" && feature.docsPath.trim(), `${feature.id} needs a docs path`);
+    const docsPath = path.resolve(siteRoot, feature.docsPath);
+    assert.ok(docsPath.startsWith(`${repoRoot}${path.sep}`), `${feature.id} docs path escapes the repository`);
+    assert.ok(universalStatuses.has(feature.status), `${feature.id} has an unsupported status`);
+    assert.ok(Array.isArray(feature.probes) && feature.probes.length > 0, `${feature.id} needs verification probes`);
+    feature.probes.forEach((probe) => assert.match(String(probe), /^[a-z0-9]+(?:-[a-z0-9]+)*$/, `${feature.id} has an invalid probe id`));
+    assert.ok(Array.isArray(feature.runtimeAnchors), `${feature.id} runtimeAnchors must be an array`);
+    feature.runtimeAnchors.forEach((anchor) => assert.ok(typeof anchor === "string" && anchor.length > 0, `${feature.id} has an empty runtime anchor`));
+    if (feature.status === "planned") {
+      assert.equal(feature.runtimeAnchors.length, 0, `${feature.id} cannot claim runtime anchors while planned`);
+    } else {
+      assert.ok(feature.runtimeAnchors.length > 0, `${feature.id} needs runtime anchors while ${feature.status}`);
+      feature.runtimeAnchors.forEach((anchor) => assert.ok(sourceCorpus.includes(anchor), `${feature.id} runtime anchor is missing: ${anchor}`));
+    }
+  }
+  candidate.requiredIds.forEach((id) => assert.ok(ids.has(id), `required feature record is missing: ${id}`));
+  assert.equal(ids.size, requiredIds.size, "feature records and requiredIds must have the same coverage");
+  return candidate.features;
+}
+
 const expectedFiles = [
   "index.html",
   "styles.css",
@@ -60,6 +99,8 @@ const expectedFiles = [
   "build.mjs",
   "data/release-manifest.json",
   "data/release-manifest.js",
+  "data/universal-feature-manifest.js",
+  "data/settings-contract.js",
   "assets/dim-sum.svg"
 ];
 for (const relativePath of expectedFiles) {
@@ -74,8 +115,12 @@ const buildSource = await read("build.mjs");
 const contentSource = await read("content.js");
 const manifestJsonSource = await read("data/release-manifest.json");
 const manifestJsSource = await read("data/release-manifest.js");
+const universalFeatureManifestSource = await read("data/universal-feature-manifest.js");
+const settingsContractSource = await read("data/settings-contract.js");
 const content = loadScript(contentSource, "content.js", "MDM_SITE_CONTENT");
 const manifestFromJs = loadScript(manifestJsSource, "release-manifest.js", "MDM_RELEASE_MANIFEST");
+const universalFeatureManifest = loadScript(universalFeatureManifestSource, "universal-feature-manifest.js", "MDM_UNIVERSAL_FEATURE_MANIFEST");
+const settingsContract = loadScript(settingsContractSource, "settings-contract.js", "MDM_SITE_SETTINGS_CONTRACT");
 const manifestFromJson = JSON.parse(manifestJsonSource);
 
 run("site builder never recursively removes a caller-selected output path", () => {
@@ -112,6 +157,85 @@ run("release manifest JSON and browser form agree", () => {
   assert.deepEqual(JSON.parse(JSON.stringify(manifestFromJs)), manifestFromJson);
   assert.equal(manifestFromJson.schemaVersion, 1);
   assert.equal(manifestFromJson.stable, null);
+});
+
+const universalSourceCorpus = `${html}\n${css}\n${app}\n${contentSource}\n${universalFeatureManifestSource}`;
+const universalFeatureEntries = validateUniversalFeatureManifest(universalFeatureManifest, universalSourceCorpus);
+run("universal feature manifest is explicit and independently validated", () => {
+  assert.equal(universalFeatureEntries.length, universalFeatureManifest.requiredIds.length);
+  assert.ok(universalFeatureEntries.some((feature) => feature.status === "planned"), "pending contract entries must remain visible");
+});
+run("universal manifest validator rejects missing records, duplicates, unsafe docs, and missing probes", () => {
+  const missing = JSON.parse(JSON.stringify(universalFeatureManifest));
+  missing.features.shift();
+  assert.throws(() => validateUniversalFeatureManifest(missing, universalSourceCorpus), /required feature record is missing/);
+
+  const duplicate = JSON.parse(JSON.stringify(universalFeatureManifest));
+  duplicate.features.push({ ...duplicate.features[0] });
+  assert.throws(() => validateUniversalFeatureManifest(duplicate, universalSourceCorpus), /duplicate feature id/);
+
+  const unsafeDocs = JSON.parse(JSON.stringify(universalFeatureManifest));
+  unsafeDocs.features[0].docsPath = "../../outside.md";
+  assert.throws(() => validateUniversalFeatureManifest(unsafeDocs, universalSourceCorpus), /escapes the repository/);
+
+  const missingProbe = JSON.parse(JSON.stringify(universalFeatureManifest));
+  const emojiFeature = missingProbe.features.find((feature) => feature.id === "emoji-toggle");
+  emojiFeature.runtimeAnchors = [];
+  assert.throws(() => validateUniversalFeatureManifest(missingProbe, universalSourceCorpus), /needs runtime anchors/);
+});
+for (const feature of universalFeatureEntries) {
+  await stat(path.resolve(siteRoot, feature.docsPath));
+  pass(`universal article source exists for ${feature.id}`);
+}
+const pendingUniversal = universalFeatureEntries.filter((feature) => feature.status !== "implemented");
+console.log(`UNIVERSAL COVERAGE: ${universalFeatureEntries.length - pendingUniversal.length} implemented, ${pendingUniversal.length} partial/planned; no pending entry is treated as shipped.`);
+
+run("emoji and School settings have an executable versioned state contract", () => {
+  assert.equal(typeof settingsContract.normalizeSettingsRecord, "function");
+  assert.equal(typeof settingsContract.effectiveSettings, "function");
+  assert.equal(typeof settingsContract.filterSchoolCopy, "function");
+  const defaults = {
+    schemaVersion: 2,
+    revision: 0,
+    language: "en",
+    funnyEn: 3,
+    funnyYue: 3,
+    showEmojis: true,
+    theme: "system",
+    density: "comfortable",
+    accent: "#6750A4",
+    fontScale: 100,
+    tabPosition: "left"
+  };
+  const migrated = settingsContract.normalizeSettingsRecord({
+    language: "yue",
+    funnyEn: 5,
+    funnyYue: 4,
+    showEmojis: false,
+    schoolModeEnabled: true,
+    schoolModeName: " Focus\u0000 mode ",
+    unknownSecret: "must be ignored"
+  }, defaults, "School mode", "Material Download Manager");
+  assert.equal(migrated.schemaVersion, 2);
+  assert.equal(migrated.language, "yue", "the saved language remains recoverable");
+  assert.equal(migrated.funnyEn, 5, "the saved funny level remains recoverable");
+  assert.equal(migrated.showEmojis, false);
+  assert.equal(migrated.schoolMode.enabled, true);
+  assert.equal(migrated.schoolMode.name, "Focus mode");
+  assert.equal(migrated.unknownSecret, undefined, "unknown storage fields are not copied into runtime state");
+  assert.deepEqual(JSON.parse(JSON.stringify(settingsContract.effectiveSettings(migrated))), { language: "en", funnyEn: 1, funnyYue: 1, showEmojis: false, schoolMode: true });
+  assert.equal(settingsContract.filterSchoolCopy("Cantonese · bilingual · funny · emoji · 蝦餃 · School mode", migrated, "Focus mode"), "English-only · English-only · English-only · English-only · · Focus mode");
+  assert.equal(settingsContract.normalizeLabel("\r\n", "School mode", 48), "School mode");
+  assert.equal(settingsContract.normalizeLabel("\u202EFocus\u202C", "School mode", 48), "Focus");
+});
+
+run("emoji and School controls are wired to persistence, reset, and live suppression", () => {
+  for (const marker of ["SETTINGS_SCHEMA_VERSION = 2", "mdm-site-settings-v2", "showEmojis", "schoolMode", "setSchoolMode", "resetSchoolMode", "bindSettingsSync", "applySchoolModeSurface", "effectiveShowEmojis"]) assert.match(app, new RegExp(marker.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+  for (const marker of ["id=\"show-emojis\"", "id=\"school-mode-name\"", "id=\"school-mode-enabled\"", "id=\"reset-school-mode\"", "data-school-optional", "data-school-language-option"]) assert.ok(html.includes(marker), `${marker} is present`);
+  assert.match(html, /data\/settings-contract\.js/);
+  assert.match(html, /data\/universal-feature-manifest\.js/);
+  assert.match(app, /window\.addEventListener\("storage"/);
+  assert.match(app, /marker\.setAttribute\("aria-hidden", "true"\)/);
 });
 
 run("stable installer is absent until verified metadata exists", () => {
@@ -184,6 +308,8 @@ run("Pages publication states share one verified contract", () => {
   assert.match(pagesManifestPreparer, /pages = 'verified'/);
   assert.match(pagesManifestPreparer, /pages = 'unverified'/);
   assert.match(app, /\["verified", "workflow-deployed"\]\.includes\(manifest\.publication\?\.pages\)/);
+  assert.doesNotMatch(app, /self-hosted Pages workflow/i);
+  assert.match(app, /hosted Pages workflow/i);
 });
 
 run("public prototype guidance contains no host-specific sample paths", () => {

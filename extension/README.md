@@ -104,9 +104,21 @@ The options page includes browser-style tabs, keyboard-operable settings
 search, an adjacent anchored full regex builder, English / playful Hong Kong
 Cantonese / bilingual language modes, separate English and Cantonese funny-
 level sliders from 1–5, a display-name setting, a persisted **Automatically
-send browser downloads to the local manager** checkbox, and versioned JSON
-settings export/import. The checkbox defaults on and can be turned off without
-removing manual handoff actions.
+send browser downloads to the local manager** checkbox, the named School mode
+foundation, the **Show emojis in dialogs and message boxes** preference, and
+versioned JSON settings export/import. The checkbox defaults on and can be
+turned off without removing manual handoff actions. School mode keeps previous
+language and funny-level choices stored, but presents serious English and
+removes those controls while it is enabled.
+
+Display-name changes are recorded before success in a local redacted mutation
+journal. Journal entries contain hashes and action metadata only; they never
+contain a display name or credential. The extension's reset-credential
+abstraction is deliberately unavailable until the trusted desktop credential
+vault bridge exists, so disabling School mode fails safely rather than storing
+a credential in browser storage. See
+[`docs/settings-foundation.md`](docs/settings-foundation.md) for the exact
+boundary and remaining protected-history work.
 
 Protocol 2 has no provisional response. An authenticated `202` means the app
 finished its credential-free source proof, durable manager-state write, and
@@ -180,10 +192,14 @@ search field without its own builder.
   menu, message boundary, storage, bounded fetch timeout, and result state.
 - `src/popup.*` — current-tab URL handoff surface.
 - `src/options.*` — connection, preferences, help, settings search, regex
-  builder, and settings export/import.
+  builder, School mode and emoji settings, redacted display-name journal
+  wiring, and settings export/import.
 - `src/shared/` — pure validation, protocol-2 proofs, handoff envelope, pairing
-  module, regex, settings, and localization logic. The repository pairing
+  module, regex, settings, localization, the capability-free credential
+  abstraction, and the redacted display-name journal. The repository pairing
   module is intentionally empty; only the app's private staged copy is paired.
+- `docs/README.md` and `docs/settings-foundation.md` — documentation index and
+  the shared settings/journal boundary.
 - `docs/handoff-contract.md` — adapter contract and security boundary.
 - `docs/electron-integration-seam.md` — implemented Electron seam and truthful
   failure behavior.

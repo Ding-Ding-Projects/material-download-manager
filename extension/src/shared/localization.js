@@ -1,5 +1,7 @@
+import { presentationSettings } from "./settings.js";
+
 const UI_TEXT = {
-  popupTitle: { en: "Send to Material Download Manager", yue: "傳送到 Material Download Manager" },
+  popupTitle: { en: "Send to {{name}}", yue: "傳送到 {{name}}" },
   popupSubtitle: { en: "A local handoff, with the door firmly closed to the wider internet.", yue: "本機交接，門口鎖實，唔會周街搵人。" },
   currentUrl: { en: "URL", yue: "網址" },
   urlHint: { en: "Use an http:// or https:// URL without embedded credentials.", yue: "請用唔帶帳戶密碼嘅 http:// 或 https:// 網址。" },
@@ -45,7 +47,7 @@ const UI_TEXT = {
   regexNoMatches: { en: "No matches in the sample.", yue: "樣本文字冇符合項目。" },
   regexMatches: { en: "{{count}} match(es) in the sample.", yue: "樣本文字有 {{count}} 個符合項目。" },
   regexPatternCopied: { en: ["Pattern copied.", "Pattern copied to the clipboard.", "Pattern copied; the clipboard has a new tiny resident.", "Pattern copied; the clipboard accepted its regex paperwork.", "Pattern copied; the clipboard is now guarding a small pattern dragon."], yue: ["模式已複製。", "模式已複製到剪貼簿。", "模式已複製，剪貼簿多咗位小住客。", "模式已複製，剪貼簿收妥 regex 文件。", "模式已複製，剪貼簿而家守住一條小模式龍。"] },
-  optionsTitle: { en: "Extension options", yue: "Extension 選項" },
+  optionsTitle: { en: "{{name}} extension options", yue: "{{name}} extension 選項" },
   optionsSubtitle: { en: "Configure a bounded local handoff and the way this extension speaks to you.", yue: "設定受限制嘅本機交接，同埋 extension 點樣同你講嘢。" },
   optionsSections: { en: "Extension options sections", yue: "Extension 選項分頁" },
   settingsSearch: { en: "Search settings", yue: "搜尋設定" },
@@ -103,6 +105,17 @@ const UI_TEXT = {
   searchMatchCount: { en: "{{count}} setting(s) match.", yue: "有 {{count}} 項設定符合。" },
   searchOtherTabs: { en: "Matches also exist in: {{tabs}}.", yue: "其他分頁亦有符合項目：{{tabs}}。" },
   settingsUnsaved: { en: "Unsaved setting changes", yue: "有未儲存設定更改" },
+  schoolModeHeading: { en: "{{name}}", yue: "{{name}}" },
+  schoolModeLabel: { en: "Use {{name}}", yue: "使用{{name}}" },
+  schoolModeNameLabel: { en: "{{name}} name", yue: "{{name}}名稱" },
+  schoolModeHelp: { en: "When enabled, this extension uses English-only serious copy and hides alternate-language and playful controls. Previous choices stay stored. Turning it off needs a locally verified reset credential; this extension slice does not store one.", yue: "開啟之後，extension 只用嚴肅英文文字，並隱藏其他語言同玩味控制。之前選擇會保留。關閉需要本機驗證嘅重設 credential；呢個 extension slice 唔會儲存 credential。" },
+  schoolModeCredentialStatus: { en: "Reset credential state: unavailable in this extension slice. No credential material is stored.", yue: "重設 credential 狀態：呢個 extension slice 未能使用。冇有儲存任何 credential 資料。" },
+  schoolModeCredentialUnavailable: { en: ["{{name}} could not be turned off because its locally verified reset credential is unavailable. The setting was kept on; remove this extension's local storage only if you intend to reset it.", "{{name}} stays on because its reset credential is not available locally. The setting was kept safe; remove this extension's local storage only as a deliberate reset.", "{{name}} keeps the door closed: its reset credential is unavailable, so the mode stayed on. Delete this extension's local storage only for a deliberate reset.", "{{name}} refuses the off switch while its reset credential is missing. The mode stayed on; local storage deletion is the explicit recovery route.", "{{name}} is guarding the off switch until a reset credential exists. It stayed on; delete this extension's local storage only when you mean to reset it."], yue: ["{{name}}未能關閉，因為本機驗證嘅重設 credential 未能使用。設定保持開啟；只有你真係想重設時先刪除呢個 extension 嘅本機儲存。", "{{name}}繼續開啟，因為重設 credential 未能使用。設定已安全保留；只有刻意重設先刪除 extension 本機儲存。", "{{name}}閂住道門：重設 credential 未能使用，所以模式保持開啟。刻意重設先刪除 extension 本機儲存。", "{{name}}唔肯畀你關掣，因為重設 credential 唔見咗。模式保持開啟；刪除本機儲存係明確恢復方法。", "{{name}}守住關閉掣，等到有重設 credential 先放行。模式保持開啟；真係要重設先刪除 extension 本機儲存。"] },
+  emojiToggleLabel: { en: "Show emojis in dialogs and message boxes", yue: "喺對話框同訊息框顯示 emoji" },
+  emojiToggleHelp: { en: "When enabled, dialog and message-box copy may include a relevant emoji. Buttons, field labels, and accessible names stay factual.", yue: "開啟後，對話框同訊息框文字可以加入相關 emoji。按鈕、欄位標籤同讀屏名稱仍然保持事實清楚。" },
+  displayNameHistoryRecorded: { en: ["Display-name change recorded as redacted local history.", "The display-name change is recorded in redacted local history.", "Display-name change recorded; the journal kept the names behind a privacy curtain.", "The redacted local journal caught the display-name change before the setting finished.", "The display-name journal filed a tiny redacted receipt for the new name."], yue: ["顯示名稱更改已記錄為刪敏感資料嘅本機歷史。", "顯示名稱更改已記錄喺刪敏感資料嘅本機歷史。", "顯示名稱更改已記錄；歷史紀錄幫名稱拉咗私隱布簾。", "刪敏感資料嘅本機歷史喺設定完成前已經接住今次改名。", "顯示名稱歷史幫新名開咗張細細張刪敏感資料收據。"] },
+  displayNameHistoryUnavailable: { en: ["The display-name change was not saved because redacted local history is unavailable.", "The display name stayed unchanged because its local history could not be recorded.", "The name stayed put: the redacted journal was unavailable, so the setting did not move.", "The journal could not take its privacy-safe receipt, so the display name stayed unchanged.", "The name declined to travel without its redacted journal receipt; nothing was saved."], yue: ["顯示名稱未有儲存，因為刪敏感資料嘅本機歷史未能使用。", "顯示名稱保持不變，因為本機歷史未能記錄今次更改。", "個名留返原位：刪敏感資料嘅歷史未能使用，所以設定冇郁。", "歷史紀錄未能收取私隱安全收據，所以顯示名稱保持不變。", "個名唔肯冇收據就出門口；刪敏感資料歷史未能使用，所以冇儲存。"] },
+  settingsSaveFailed: { en: "Settings could not be saved safely. The previous values remain active.", yue: "設定未能安全儲存，之前嘅值仍然生效。" },
   protocolDetail: { en: "{{detail}}", yue: "{{detail}}" },
 };
 
@@ -120,7 +133,12 @@ function languageText(value, settings) {
 
 export function localize(key, settings, variables = {}) {
   const value = UI_TEXT[key] ?? UI_TEXT.protocolDetail;
-  return replaceTokens(languageText(value, settings), variables);
+  return replaceTokens(languageText(value, presentationSettings(settings)), variables);
+}
+
+export function decorateMessage(text, settings, emoji = "💬") {
+  const effective = presentationSettings(settings);
+  return effective.showEmojis ? `${emoji} ${text}` : text;
 }
 
 export function hasLocalizationKey(key) {

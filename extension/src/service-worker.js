@@ -3,6 +3,8 @@ import {
   DOWNLOAD_CLAIMS_KEY,
   LAST_RESULT_KEY,
   SETTINGS_KEY,
+  DEFAULT_SETTINGS,
+  canDisableSchoolMode,
   sanitizeSettings,
   statusEndpoint,
 } from "./shared/settings.js";
@@ -18,6 +20,8 @@ import {
 } from "./shared/handoff.js";
 import { localize } from "./shared/localization.js";
 import { HANDOFF_CAPABILITY } from "./shared/pairing.js";
+import { createCredentialAbstraction } from "./shared/credential.js";
+import { appendDisplayNameMutation } from "./shared/mutation-journal.js";
 
 const MENU_ID = "send-to-material-download-manager";
 const STATUS_TIMEOUT_MS = 1_500;
@@ -58,6 +62,24 @@ async function recordResult(value) {
 async function saveSettings(patch) {
   const current = await readSettings();
   const settings = sanitizeSettings({ ...current, ...patch });
+  if (!canDisableSchoolMode(current, settings)) {
+    const error = new Error("The School mode reset credential is unavailable.");
+    error.code = "school-mode-reset-unavailable";
+    throw error;
+  }
+  const credential = createCredentialAbstraction(current.schoolModeCredentialState);
+  if (current.schoolModeEnabled && !settings.schoolModeEnabled && !credential.available) {
+    const error = new Error("The School mode reset credential is unavailable.");
+    error.code = "school-mode-reset-unavailable";
+    throw error;
+  }
+  if (current.managerName !== settings.managerName) {
+    await appendDisplayNameMutation(chrome.storage.local, {
+      before: current.managerName,
+      after: settings.managerName,
+      shippedName: DEFAULT_SETTINGS.managerName,
+    });
+  }
   await chrome.storage.local.set({ [SETTINGS_KEY]: settings });
   await refreshContextMenu(settings);
   return settings;
@@ -551,10 +573,20 @@ chrome.runtime.onMessage.addListener((rawMessage, sender, sendResponse) => {
       return;
     }
     if (message.type === "SAVE_SETTINGS") {
-      const settings = await saveSettings(message.settings);
-      const saved = result("settings-saved");
-      await recordResult(saved);
-      sendResponse({ ok: true, settings, result: saved });
+      try {
+        const settings = await saveSettings(message.settings);
+        const saved = result("settings-saved");
+        await recordResult(saved);
+        sendResponse({ ok: true, settings, result: saved });
+      } catch (error) {
+        const failed = result(error?.code === "school-mode-reset-unavailable"
+          ? "school-mode-reset-unavailable"
+          : error?.code === "display-name-history-unavailable"
+            ? "display-name-history-unavailable"
+            : "settings-save-failed");
+        try { await recordResult(failed); } catch { /* Keep the live settings unchanged if storage is failing. */ }
+        sendResponse({ ok: false, error: failed.code, result: failed });
+      }
       return;
     }
     const settings = await readSettings();
