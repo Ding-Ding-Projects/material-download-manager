@@ -6,7 +6,9 @@ Issue [#18](https://github.com/Ding-Ding-Projects/material-download-manager/issu
 tracks this extension slice. Commits
 [`572d37e`](https://github.com/Ding-Ding-Projects/material-download-manager/commit/572d37e0ddc3abd0eca495c1d97af4e7dde0fef2)
 and
-[`1c5273d`](https://github.com/Ding-Ding-Projects/material-download-manager/commit/1c5273dfc77f23659d8aa2d0ed168c54bd22a04d)
+[`1c5273d`](https://github.com/Ding-Ding-Projects/material-download-manager/commit/1c5273dfc77f23659d8aa2d0ed168c54bd22a04d),
+plus the refresh/accessibility hardening in
+[`e0b8c39`](https://github.com/Ding-Ding-Projects/material-download-manager/commit/e0b8c39f55982df59b2690f45c9cd9480b89ec73),
 add the real Chromium extension Authenticator options destination. It accepts
 manual or `otpauth://totp/` registration values, draws the QR locally, reveals
 the manual secret only on explicit request, verifies a current code before
