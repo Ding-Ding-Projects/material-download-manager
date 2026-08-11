@@ -71,6 +71,15 @@ files are encrypted. Search evaluation is bounded and local. Export uses the
 shared escaping and representational-limit warnings, and the history repository
 remains isolated from user projects and GitHub remotes.
 
+Restore is deliberately narrower than importing a snapshot: only the public
+download fields needed for a dormant item are accepted, live vault-backed source
+maps and arbitrary headers are discarded, and the restored state preserves the
+current School-mode credential state. The restored state is normalized before a
+new audit revision is written, with a separate display-name audit when that
+value changes. Diff redaction covers credential-like key names, URL userinfo,
+query material, and complete local paths (including paths containing spaces)
+before any patch reaches the renderer.
+
 ## Verification
 
 `npm run typecheck`, `npm run build`, `npm run test:engine`, and
@@ -89,7 +98,10 @@ export validation failure, proves that search remains valid, corrects the
 format, retries the exact action, and observes successful recovery.
 The history action tests additionally cover redacted diffs, sidecar labels,
 append-only restore, protected display-name audit retention, tombstone pruning,
-and the unchanged Git commit count proof.
+and the unchanged Git commit count proof. Additional restore-hardening tests
+prove that tampered snapshots cannot reuse vault-backed source maps or inject
+unknown fields, and redaction tests cover token-like keys, URL credentials, and
+POSIX paths with spaces.
 
 ## Capture evidence
 

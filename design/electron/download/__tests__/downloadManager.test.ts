@@ -987,3 +987,76 @@ test("manager fails closed when the required display-name history commit cannot 
     await removeTestRoot(root);
   }
 });
+
+test("history restore allowlists dormant public items and never reuses live source secrets", async () => {
+  const root = await fsp.mkdtemp(path.join(os.tmpdir(), "mdm-history-restore-safety-test-"));
+  const manager = new DownloadManager(root);
+  try {
+    await manager.init();
+    const id = await manager.addDownload({
+      url: "https://example.test/state.bin?token=browser-secret",
+      folder: path.join(root, "Downloads"),
+      fileName: "state.bin",
+      startImmediately: false,
+    });
+    const current = manager.getState();
+    const item = current.items.find((candidate) => candidate.id === id);
+    assert.ok(item);
+
+    const internals = manager as unknown as {
+      itemHeaders: Map<string, Record<string, string>>;
+      itemSourceUrls: Map<string, string>;
+      distributedSources: Map<string, { url: string; headers: Record<string, string> }>;
+      settings: typeof current.settings;
+    };
+    internals.itemHeaders.set(id, { authorization: "Bearer live-secret" });
+    internals.itemSourceUrls.set(id, "https://user:password@worker.example.test/state.bin?token=live-secret");
+    internals.distributedSources.set(id, { url: "https://user:password@worker.example.test/state.bin?token=live-secret", headers: { authorization: "Bearer live-secret" } });
+    internals.settings.schoolModeEnabled = true;
+    internals.settings.schoolModeName = "Study time";
+
+    const tamperedState = {
+      items: [{
+        ...item,
+        status: "added",
+        transferMode: "ssh-distributed",
+        sshHostIds: ["attacker-host"],
+        headers: { authorization: "Bearer injected-secret" },
+        mysteryToken: "snapshot-secret",
+      }],
+      queues: current.queues.map((queue) => ({ ...queue, isRunning: true, itemIds: [id], queueSecret: "should-not-survive" })),
+      settings: {
+        ...current.settings,
+        schoolModeEnabled: false,
+        schoolModeName: "Tampered mode",
+        displayName: "Restored title",
+        settingProvenance: { ...current.settings.settingProvenance, displayName: "persisted" },
+      },
+      scheduleRules: [],
+    };
+    const revision = await new HistoryStore(root).appendSnapshot(JSON.stringify(tamperedState), "updated", "Tampered restore fixture");
+    assert.ok(revision);
+
+    await manager.restoreHistoryRevision(revision!.id);
+    const restored = manager.getState();
+    const restoredItem = restored.items.find((candidate) => candidate.id === id);
+    assert.ok(restoredItem);
+    assert.equal(restoredItem?.status, "paused");
+    assert.equal(restoredItem?.transferMode, "local");
+    assert.equal(restoredItem?.sourceSecretStoredInVault, false);
+    assert.equal("headers" in (restoredItem ?? {}), false);
+    assert.equal("mysteryToken" in (restoredItem ?? {}), false);
+    assert.equal(internals.itemHeaders.size, 0);
+    assert.equal(internals.itemSourceUrls.size, 0);
+    assert.equal(internals.distributedSources.size, 0);
+    assert.equal(restored.settings.schoolModeEnabled, true);
+    assert.equal(restored.settings.schoolModeName, "Study time");
+    assert.equal(restored.settings.displayName, "Restored title");
+    assert.equal(restored.queues[0]?.isRunning, false);
+    assert.deepEqual(restored.queues[0]?.itemIds, [id]);
+    assert.equal("queueSecret" in (restored.queues[0] ?? {}), false);
+  } finally {
+    await manager.shutdown();
+    await removeTestRoot(root);
+  }
+});

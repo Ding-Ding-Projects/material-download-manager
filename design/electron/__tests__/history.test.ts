@@ -197,13 +197,15 @@ test("revision diff redacts sensitive fields before renderer delivery", async ()
   const root = await fsp.mkdtemp(path.join(os.tmpdir(), "mdm-history-diff-redaction-"));
   try {
     const history = new HistoryStore(root);
-    await history.appendSnapshot("{\"token\":\"not-secret-yet\",\"defaultSaveFolder\":\"C:\\\\Users\\\\cntow\\\\Downloads\\\\MaterialDownloadManager\",\"displayName\":\"Private display name\",\"url\":\"https://example.test/file\"}", "created", "Created safe state");
-    const updated = await history.appendSnapshot("{\"token\":\"top-secret-value\",\"defaultSaveFolder\":\"C:\\\\Users\\\\cntow\\\\Downloads\\\\MaterialDownloadManager\",\"displayName\":\"Private display name\",\"url\":\"https://example.test/file?token=top-secret-value\"}", "updated", "Updated state");
+    await history.appendSnapshot("{\"token\":\"not-secret-yet\",\"mysteryPath\":\"/Users/alice/My Documents/file.txt\",\"defaultSaveFolder\":\"C:\\\\Users\\\\cntow\\\\Downloads\\\\MaterialDownloadManager\",\"displayName\":\"Private display name\",\"url\":\"https://example.test/file\"}", "created", "Created safe state");
+    const updated = await history.appendSnapshot("{\"mysteryToken\":\"new-secret-value\",\"mysteryPath\":\"/Users/alice/My Documents/next.txt\",\"token\":\"top-secret-value\",\"x-api-key\":\"header-secret\",\"defaultSaveFolder\":\"C:\\\\Users\\\\cntow\\\\Downloads\\\\MaterialDownloadManager\",\"displayName\":\"Private display name\",\"url\":\"https://user:password@example.test/file?token=top-secret-value\"}", "updated", "Updated state");
     assert.ok(updated);
     const diff = await history.getDiff(updated!.id);
     assert.equal(diff.redacted, true);
     assert.equal(diff.hasChanges, true);
-    assert.equal(diff.patch.includes("top-secret-value"), false);
+    for (const secret of ["top-secret-value", "new-secret-value", "header-secret", "password@example.test", "/Users/alice", "Documents/next.txt"]) {
+      assert.equal(diff.patch.includes(secret), false, `diff leaked ${secret}`);
+    }
     assert.equal(diff.patch.includes("C:\\\\Users\\\\cntow"), false);
     assert.equal(diff.patch.includes("defaultSaveFolder\\\":\\\"C:\\\\Users"), false);
     assert.equal(diff.patch.includes("/Users/"), false);

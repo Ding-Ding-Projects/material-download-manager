@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type RefObject } from "react";
 import { useAppStore } from "../store/useAppStore";
 import { getUiCopy } from "../i18n/ui";
 import { CloseIcon, ErrorIcon, TrashIcon } from "./icons";
@@ -21,18 +21,21 @@ interface DestructiveActionGateProps {
   request: DestructiveActionRequest;
   actionName?: string;
   affectedLabel?: string;
+  returnFocusRef?: RefObject<HTMLElement | null>;
   onCancel: () => void;
   onConfirm: (request: DestructiveActionRequest) => void;
 }
 
-export default function DestructiveActionGate({ request, actionName: actionNameOverride, affectedLabel: affectedLabelOverride, onCancel, onConfirm }: DestructiveActionGateProps) {
+export default function DestructiveActionGate({ request, actionName: actionNameOverride, affectedLabel: affectedLabelOverride, returnFocusRef, onCancel, onConfirm }: DestructiveActionGateProps) {
   const settings = useAppStore((state) => state.settings);
   const copy = getUiCopy(settings);
+  const effective = settings ? { showEmojis: settings.showEmojis && !settings.schoolModeEnabled } : { showEmojis: false };
   const [keys, setKeys] = useState<[boolean, boolean]>([false, false]);
   const [progress, setProgress] = useState(0);
   const [authorized, setAuthorized] = useState(false);
   const headingRef = useRef<HTMLHeadingElement>(null);
   const firstKeyRef = useRef<HTMLButtonElement>(null);
+  const triggerAtOpenRef = useRef<HTMLElement | null>(returnFocusRef?.current ?? null);
 
   const actionName = actionNameOverride ?? (request.deleteFile
     ? copy.text("remove the downloads and delete their files", "移除下載項目並刪除檔案")
@@ -49,8 +52,12 @@ export default function DestructiveActionGate({ request, actionName: actionNameO
       }
     }
     window.addEventListener("keydown", handleEscape, true);
-    return () => window.removeEventListener("keydown", handleEscape, true);
-  }, [onCancel]);
+    return () => {
+      window.removeEventListener("keydown", handleEscape, true);
+      const trigger = triggerAtOpenRef.current ?? returnFocusRef?.current;
+      trigger?.focus({ preventScroll: true });
+    };
+  }, [onCancel, returnFocusRef]);
 
   useEffect(() => {
     if (progress !== 100 || !bothKeysReady || authorized) return;
@@ -112,7 +119,23 @@ export default function DestructiveActionGate({ request, actionName: actionNameO
 
         <div className="dialog-body destructive-gate-body">
           <p id="destructive-gate-description" className="destructive-gate-warning">
-            This will {actionName} for {request.itemIds.length} selected {affectedLabel}{request.itemIds.length === 1 ? "" : "s"}. The action cannot be undone here.
+            {effective.showEmojis && <span aria-hidden="true">⚠️ </span>}
+            {copy.funny(
+              [
+                `This will ${actionName} for ${request.itemIds.length} selected ${affectedLabel}${request.itemIds.length === 1 ? "" : "s"}. The action cannot be undone here.`,
+                `This will ${actionName} for ${request.itemIds.length} selected ${affectedLabel}${request.itemIds.length === 1 ? "" : "s"}. Review the count before authorizing; this action cannot be undone here.`,
+                `This will ${actionName} for ${request.itemIds.length} selected ${affectedLabel}${request.itemIds.length === 1 ? "" : "s"}. The paperwork is dramatic because the action cannot be undone here.`,
+                `This will ${actionName} for ${request.itemIds.length} selected ${affectedLabel}${request.itemIds.length === 1 ? "" : "s"}. The facts stay fixed and the action cannot be undone here.`,
+                `This will ${actionName} for ${request.itemIds.length} selected ${affectedLabel}${request.itemIds.length === 1 ? "" : "s"}. The broom waits for both keys because the action cannot be undone here.`,
+              ],
+              [
+                `今次會${actionName}，影響 ${request.itemIds.length} 條${affectedLabel}；呢個操作喺呢度唔可以撤銷。`,
+                `今次會${actionName}，影響 ${request.itemIds.length} 條${affectedLabel}；授權之前請核對數量，呢個操作喺呢度唔可以撤銷。`,
+                `今次會${actionName}，影響 ${request.itemIds.length} 條${affectedLabel}；文件咁認真係因為呢個操作喺呢度唔可以撤銷。`,
+                `今次會${actionName}，影響 ${request.itemIds.length} 條${affectedLabel}；事實唔會變，呢個操作喺呢度唔可以撤銷。`,
+                `今次會${actionName}，影響 ${request.itemIds.length} 條${affectedLabel}；兩把匙未齊，掃把唔郁。`,
+              ]
+            )}
           </p>
           <p className="destructive-gate-instruction">
              {copy.funny(
@@ -162,7 +185,10 @@ export default function DestructiveActionGate({ request, actionName: actionNameO
             step={1}
             value={progress}
             disabled={!bothKeysReady || authorized}
-            aria-valuetext={`${progress}% of the confirmation range`}
+            aria-valuetext={copy.funny(
+              [`${progress}% of the confirmation range`, `${progress}% of the confirmation range`, `${progress}% of the confirmation range`, `${progress}% of the confirmation range`, `${progress}% of the confirmation range`],
+              [`${progress}% 完整範圍確認`, `${progress}% 完整範圍確認`, `${progress}% 完整範圍確認`, `${progress}% 完整範圍確認`, `${progress}% 完整範圍確認`]
+            )}
             onChange={(event) => setProgress(Number(event.target.value))}
           />
           <div className="destructive-slider-track" aria-hidden="true">

@@ -573,7 +573,10 @@ export class HistoryStore {
   }
 
   private redactDiffLine(line: string): string {
-    const redactedKeys = "headers|authorization|cookie|proxy-authorization|password|secret|token|credential|privateKey|displayName|username|userName|accountName|email|author";
+    // Match known fields and attacker-chosen names such as `mysteryToken` or
+    // `x-api-key`; snapshots are local input and must not become an IPC side
+    // channel for credentials or personal identifiers.
+    const redactedKeys = "[^\"]*(?:headers|authorization|cookie|proxy-authorization|password|secret|token|credential|privateKey|displayName|username|userName|accountName|email|author|api[-_]?key|bearer|jwt)[^\"]*";
     const pathKeys = "path|filePath|folder|directory|defaultSaveFolder|downloadPath|sourcePath|destinationPath|saveFolder";
     if (new RegExp(`^[-+]\\s*"?(?:${redactedKeys})"?\\s*:`, "iu").test(line)) {
       return `${line.slice(0, 1)} [redacted sensitive history field]`;
@@ -582,11 +585,12 @@ export class HistoryStore {
       .replace(new RegExp(`("(?:${redactedKeys})"\\s*:\\s*)"(?:\\\\.|[^"\\\\])*"`, "giu"), '$1"[REDACTED]"')
       .replace(new RegExp(`("(?:${pathKeys})"\\s*:\\s*)"(?:\\\\.|[^"\\\\])*"`, "giu"), '$1"[LOCAL_PATH_REDACTED]"')
       .replace(/([?&](?:access_token|token|password|secret|signature|key)=)[^&\s"']+/giu, "$1[REDACTED]")
+      .replace(/(https?:\/\/)(?:[^\/\s"@]+):(?:[^\/\s"@]+)@/giu, "$1[REDACTED]@")
       // Snapshot strings can contain JSON-escaped Windows/UNC paths or plain
       // POSIX home paths even when the property name is unfamiliar. Strip
       // those values as a final defence before the patch crosses IPC.
       .replace(/(?:[A-Za-z]:\\(?:\\.|[^"\\,}])*(?:\\.|[^"\\,}])|\\\\(?:\\.|[^"\\,}])*(?:\\.|[^"\\,}]))/gu, "[LOCAL_PATH_REDACTED]")
-      .replace(/(?:^|["\s])\/(?:Users|home|private|tmp|var|mnt|opt|Volumes)\/[^"\s,}]+/gu, (match) => match.startsWith("/") ? "[LOCAL_PATH_REDACTED]" : `${match.slice(0, 1)}[LOCAL_PATH_REDACTED]`);
+      .replace(/(?:^|["\s])\/(?:Users|home|private|tmp|var|mnt|opt|Volumes)\/[^",}]+/gu, (match) => match.startsWith("/") ? "[LOCAL_PATH_REDACTED]" : `${match.slice(0, 1)}[LOCAL_PATH_REDACTED]`);
   }
 
   async getDiff(revisionId: string): Promise<HistoryDiff> {

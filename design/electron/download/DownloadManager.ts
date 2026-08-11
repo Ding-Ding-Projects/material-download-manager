@@ -8,6 +8,7 @@ import type {
   AppSettings,
   DownloadCategory,
   DownloadItem,
+  DownloadStatus,
   DownloadQueue,
   NewDownloadInfo,
   PresentationPatch,
@@ -43,6 +44,7 @@ import {
   validatePresentationResetKeys,
   validateSettingResetKeys,
   validateSettingsPatch,
+  isDownloadCategory,
 } from "../../shared/settings";
 import { DEFAULT_QUEUE_ID, PRESENTATION_SETTING_KEYS, SETTING_KEYS } from "../../shared/types";
 import {
@@ -1256,32 +1258,79 @@ export class DownloadManager extends EventEmitter {
     const seenItemIds = new Set<string>();
     for (const candidate of parsed.items) {
       if (!isRecord(candidate) || typeof candidate.id !== "string" || candidate.id.length === 0 || candidate.id.length > 256 ||
-        typeof candidate.fileName !== "string" || typeof candidate.folder !== "string") {
+        typeof candidate.url !== "string" || candidate.url.length > 32_768 || typeof candidate.fileName !== "string" || candidate.fileName.length > 512 ||
+        typeof candidate.folder !== "string" || candidate.folder.length > 32_000 ||
+        !isDownloadCategory(candidate.category) ||
+        !["added", "queued", "downloading", "paused", "completed", "error", "cancelled"].includes(candidate.status as string)) {
         throw new Error("History revision contains an invalid download record");
       }
       if (seenItemIds.has(candidate.id)) throw new Error("History revision contains duplicate download ids");
       seenItemIds.add(candidate.id);
-      const item = { ...candidate } as unknown as DownloadItem;
-      item.fileName = sanitizeFileName(item.fileName);
-      item.url = redactUrl(item.url);
-      if (item.error !== null && typeof item.error === "string") item.error = redactErrorMessage(item.error, item.url, item.url);
-      if (item.status === "downloading" || item.status === "queued") item.status = "paused";
-      item.speed = 0;
+      const status = candidate.status as DownloadStatus;
+      const item: DownloadItem = {
+        id: candidate.id,
+        url: redactUrl(candidate.url),
+        fileName: sanitizeFileName(candidate.fileName),
+        folder: candidate.folder.slice(0, 32_000),
+        category: candidate.category,
+        // Restored state is always dormant. In particular, a tampered
+        // `added` record must not be picked up by a running queue.
+        status: status === "added" || status === "queued" || status === "downloading" ? "paused" : status,
+        totalSize: candidate.totalSize === null ? null : typeof candidate.totalSize === "number" && Number.isFinite(candidate.totalSize) && candidate.totalSize >= 0 ? candidate.totalSize : null,
+        downloadedSize: typeof candidate.downloadedSize === "number" && Number.isFinite(candidate.downloadedSize) && candidate.downloadedSize >= 0 ? candidate.downloadedSize : 0,
+        speed: 0,
+        eta: candidate.eta === null ? null : typeof candidate.eta === "number" && Number.isFinite(candidate.eta) && candidate.eta >= 0 ? candidate.eta : null,
+        resumeSupport: candidate.resumeSupport === true,
+        queueId: candidate.queueId === null || typeof candidate.queueId !== "string" || candidate.queueId.length > MAX_QUEUE_ID_LENGTH ? null : candidate.queueId,
+        dateAdded: typeof candidate.dateAdded === "number" && Number.isFinite(candidate.dateAdded) && candidate.dateAdded >= 0 ? candidate.dateAdded : Date.now(),
+        dateCompleted: candidate.dateCompleted === null || typeof candidate.dateCompleted === "number" && Number.isFinite(candidate.dateCompleted) && candidate.dateCompleted >= 0 ? candidate.dateCompleted : null,
+        error: candidate.error === null || typeof candidate.error === "string" ? (candidate.error === null ? null : redactErrorMessage(candidate.error, candidate.url, candidate.url)) : null,
+        ...(typeof candidate.transferNotice === "string" ? { transferNotice: candidate.transferNotice.slice(0, 4_096) } : {}),
+        // Never restore vault-backed source metadata or SSH assignments from
+        // an untrusted snapshot. The public URL remains resumable only after
+        // the user explicitly adds the source again.
+        sourceSecretStoredInVault: false,
+        parts: [],
+        connections: typeof candidate.connections === "number" && Number.isSafeInteger(candidate.connections) && candidate.connections > 0 && candidate.connections <= 64 ? candidate.connections : 1,
+        transferMode: "local",
+      };
       restoredItems.push(item);
     }
     const restoredQueues: DownloadQueue[] = [];
     const seenQueueIds = new Set<string>();
     for (const candidate of parsed.queues) {
       if (!isRecord(candidate) || typeof candidate.id !== "string" || candidate.id.length === 0 ||
-        typeof candidate.name !== "string" || !Array.isArray(candidate.itemIds)) {
+        candidate.id.length > MAX_QUEUE_ID_LENGTH || typeof candidate.name !== "string" || candidate.name.length === 0 || candidate.name.length > MAX_QUEUE_NAME_LENGTH ||
+        !Array.isArray(candidate.itemIds) || candidate.itemIds.length > MAX_QUEUE_ITEM_IDS) {
         throw new Error("History revision contains an invalid queue record");
       }
       if (seenQueueIds.has(candidate.id)) throw new Error("History revision contains duplicate queue ids");
       seenQueueIds.add(candidate.id);
-      restoredQueues.push({ ...candidate, itemIds: candidate.itemIds.filter((id): id is string => typeof id === "string") } as DownloadQueue);
+      const queueItemIds = candidate.itemIds.filter((itemId): itemId is string => isQueueItemId(itemId) && seenItemIds.has(itemId));
+      restoredQueues.push({
+        id: candidate.id,
+        name: candidate.name.slice(0, MAX_QUEUE_NAME_LENGTH),
+        maxConcurrent: typeof candidate.maxConcurrent === "number" && Number.isSafeInteger(candidate.maxConcurrent) && candidate.maxConcurrent > 0 && candidate.maxConcurrent <= 64 ? candidate.maxConcurrent : 3,
+        // Restored transfers are dormant; a tampered running flag must not
+        // make the queue start work while the restore is being committed.
+        isRunning: false,
+        itemIds: queueItemIds,
+        scheduleEnabled: candidate.scheduleEnabled === true,
+        startAt: typeof candidate.startAt === "string" && candidate.startAt.length <= 16 ? candidate.startAt : null,
+        endAt: typeof candidate.endAt === "string" && candidate.endAt.length <= 16 ? candidate.endAt : null,
+      });
     }
     const defaultSaveFolder = this.settings?.defaultSaveFolder ?? path.join(this.userDataPath, "Downloads");
-    const restoredSettings = migrateSettings(parsed.settings, defaultSaveFolder);
+    const migratedSettings = migrateSettings(parsed.settings, defaultSaveFolder);
+    // History access is not a substitute for the shared School-mode
+    // credential. Preserve the live mode/name/verifier metadata across a
+    // restore so an old snapshot cannot silently disable or rename it.
+    const restoredSettings = {
+      ...migratedSettings,
+      schoolModeEnabled: this.settings.schoolModeEnabled,
+      schoolModeName: this.settings.schoolModeName,
+      schoolModeCredential: { ...this.settings.schoolModeCredential },
+    };
     const restoredRules = validateManagedScheduleRules(parsed.scheduleRules ?? []);
     const previous = {
       items: this.items,
@@ -1295,17 +1344,12 @@ export class DownloadManager extends EventEmitter {
       distributedSources: this.distributedSources,
     };
     const nextItems = new Map(restoredItems.map((item) => [item.id, item] as const));
+    // Do not copy existing private maps by item ID: a modified snapshot could
+    // otherwise adopt a live vault-backed source and redirect it elsewhere.
     const nextHeaders = new Map<string, Record<string, string>>();
     const nextSourceUrls = new Map<string, string>();
     const nextDistributedSources = new Map<string, DistributedSourceSecret>();
-    for (const item of restoredItems) {
-      const headers = previous.itemHeaders.get(item.id);
-      if (headers) nextHeaders.set(item.id, headers);
-      const sourceUrl = previous.itemSourceUrls.get(item.id);
-      if (sourceUrl) nextSourceUrls.set(item.id, sourceUrl);
-      const distributed = previous.distributedSources.get(item.id);
-      if (distributed) nextDistributedSources.set(item.id, distributed);
-    }
+    const displayNameChanged = previous.settings.displayName !== restoredSettings.displayName;
     this.items = nextItems;
     this.itemOrder = restoredItems.map((item) => item.id);
     this.queues = new Map(restoredQueues.map((queue) => [queue.id, queue] as const));
@@ -1317,8 +1361,12 @@ export class DownloadManager extends EventEmitter {
     this.globalSpeedLimiter = new SpeedLimiter(this.settings.globalSpeedLimitBytes);
     try {
       await this.saveState();
-      const revision = await this.history.restore(id);
+      const canonicalSnapshot = JSON.stringify(this.getState(), null, 2);
+      const revision = await this.history.appendSnapshot(canonicalSnapshot, "restored", `Restored revision ${id.slice(0, 8)}`, true);
       if (!revision) throw new Error("History restore did not create an audit revision");
+      if (displayNameChanged) {
+        await this.history.appendDisplayNameMutation(previous.settings.displayName, restoredSettings.displayName, "display-name-changed");
+      }
       this.emit("presentationChanged", this.getPresentationSettings());
       this.scheduleNotify();
       this.processAllQueues();

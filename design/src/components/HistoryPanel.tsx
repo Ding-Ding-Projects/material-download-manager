@@ -62,7 +62,7 @@ export default function HistoryPanel() {
   const settings = useAppStore((state) => state.settings);
   const copy = useMemo(
     () => getUiCopy(settings),
-    [settings?.funnyLevelCantonese, settings?.funnyLevelEnglish, settings?.languageMode]
+    [settings?.funnyLevelCantonese, settings?.funnyLevelEnglish, settings?.languageMode, settings?.schoolModeEnabled, settings?.schoolModeName, settings?.showEmojis]
   );
   const [builder, setBuilder] = useState<RegexBuilderState>(() => createDefaultRegexBuilderState());
   const [regexOpen, setRegexOpen] = useState(false);
@@ -102,6 +102,7 @@ export default function HistoryPanel() {
   const [pruneBusy, setPruneBusy] = useState(false);
   const [pruneMessage, setPruneMessage] = useState<string | null>(null);
   const [pruneError, setPruneError] = useState<string | null>(null);
+  const pruneTriggerRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
     let current = true;
@@ -334,6 +335,14 @@ export default function HistoryPanel() {
   const availableActions = Object.entries(view?.actionCounts ?? {})
     .filter(([action, count]) => (HISTORY_ACTIONS as readonly string[]).includes(action) && count > 0)
     .sort(([left], [right]) => left.localeCompare(right));
+  const hasActiveHistoryFilters = Boolean(builder.pattern.trim() || fromDate || toDate || selectedActions.length > 0);
+  const stateRevisionIds = (view?.revisions ?? [])
+    .filter((revision) => revision.action !== "labeled" && revision.action !== "pruned")
+    .map((revision) => revision.id);
+  const parsedPruneKeep = Number(pruneKeep);
+  const pruneCandidateIds = !hasActiveHistoryFilters && Number.isSafeInteger(parsedPruneKeep) && parsedPruneKeep >= 1
+    ? stateRevisionIds.slice(parsedPruneKeep)
+    : [];
 
   return (
     <section className="history-panel" aria-labelledby="history-panel-heading" onKeyDownCapture={handleHistoryKeyDown}>
@@ -366,9 +375,17 @@ export default function HistoryPanel() {
               <span>{copy.text("Keep newest", "保留最新")}</span>
               <input className="input" type="number" min={1} max={5000} step={1} value={pruneKeep} onChange={(event) => setPruneKeep(event.target.value)} aria-label={copy.text("Number of revisions to keep", "要保留嘅修訂數量")} />
             </label>
-            <button type="button" className="btn btn-danger btn-sm" disabled={pruneBusy || !view?.available} onClick={() => setPruneRequest({ itemIds: [pruneKeep], deleteFile: false })}>
+            <button
+              ref={pruneTriggerRef}
+              type="button"
+              className="btn btn-danger btn-sm"
+              disabled={pruneBusy || !view?.available || hasActiveHistoryFilters || pruneCandidateIds.length === 0}
+              title={hasActiveHistoryFilters ? copy.text("Clear history filters to preview the full retention scope.", "清除紀錄篩選先可以預覽完整保留範圍。") : undefined}
+              onClick={() => setPruneRequest({ itemIds: pruneCandidateIds, deleteFile: false })}
+            >
               {pruneBusy ? copy.text("Pruning…", "清理緊…") : copy.text("Prune older revisions", "清理舊修訂")}
             </button>
+            {hasActiveHistoryFilters && <span className="setting-helper">{copy.text("Clear filters to preview and prune the complete history scope.", "清除篩選先可以預覽同清理完整紀錄範圍。")}</span>}
           </div>}
         </div>
       </header>
@@ -524,8 +541,24 @@ export default function HistoryPanel() {
       )}
       {pruneRequest && <DestructiveActionGate
         request={pruneRequest}
-        actionName={copy.text("hide older local history revisions", "隱藏較舊嘅本機修訂紀錄")}
-        affectedLabel={copy.text("revision retention set", "修訂保留設定")}
+        actionName={copy.funny(
+          [
+            `hide ${pruneRequest.itemIds.length} older local history revisions while keeping the newest ${pruneKeep}`,
+            `hide ${pruneRequest.itemIds.length} older local history revisions while keeping the newest ${pruneKeep}`,
+            `hide ${pruneRequest.itemIds.length} older local history revisions while keeping the newest ${pruneKeep}`,
+            `hide ${pruneRequest.itemIds.length} older local history revisions while keeping the newest ${pruneKeep}`,
+            `hide ${pruneRequest.itemIds.length} older local history revisions while keeping the newest ${pruneKeep}`,
+          ],
+          [
+            `隱藏 ${pruneRequest.itemIds.length} 條舊本機修訂，保留最新 ${pruneKeep} 條`,
+            `隱藏 ${pruneRequest.itemIds.length} 條舊本機修訂，保留最新 ${pruneKeep} 條`,
+            `隱藏 ${pruneRequest.itemIds.length} 條舊本機修訂，保留最新 ${pruneKeep} 條`,
+            `隱藏 ${pruneRequest.itemIds.length} 條舊本機修訂，保留最新 ${pruneKeep} 條`,
+            `隱藏 ${pruneRequest.itemIds.length} 條舊本機修訂，保留最新 ${pruneKeep} 條`,
+          ]
+        )}
+        affectedLabel={copy.text("older local history revision", "舊本機修訂")}
+        returnFocusRef={pruneTriggerRef}
         onCancel={() => setPruneRequest(null)}
         onConfirm={() => { setPruneRequest(null); void confirmPrune(); }}
       />}
