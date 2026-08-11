@@ -3,7 +3,8 @@
 ## External editor export handoff (verified locally, 2026-08-11)
 
 Issue [#18](https://github.com/Ding-Ding-Projects/material-download-manager/issues/18)
-tracks this bounded desktop slice on `codex/uh-external-editor`. The current
+tracks this bounded desktop slice on `codex/uh-external-editor`, source commit
+[`37237cd`](https://github.com/Ding-Ding-Projects/material-download-manager/commit/37237cd82ec8b7c259b57a12ba248599ee218f70). The current
 implementation adds a typed external-editor contract, schema-v6 Settings
 selection/provenance, main-process discovery and native Browse selection, and
 History/Changelog actions that open the last exported file in Visual Studio

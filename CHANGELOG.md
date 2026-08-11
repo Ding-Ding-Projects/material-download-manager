@@ -8,7 +8,8 @@ of guessing a commit, release, or date.
 ## Unreleased — external editor export handoff
 
 - **Source issue:** [#18 — Implement the universal feature contract](https://github.com/Ding-Ding-Projects/material-download-manager/issues/18)
-- **Source branch:** `codex/uh-external-editor` (the completion commit will be linked here)
+- **Source commit:** [`37237cd`](https://github.com/Ding-Ding-Projects/material-download-manager/commit/37237cd82ec8b7c259b57a12ba248599ee218f70)
+- **Source branch:** `codex/uh-external-editor`
 - **Scope:** Windows desktop discovery and native Browse selection for Visual
   Studio Code, safe app-owned export staging, workspace-root opening, Settings
   persistence/provenance, and History/Changelog export actions.

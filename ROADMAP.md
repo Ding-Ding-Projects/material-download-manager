@@ -5,7 +5,8 @@ unverified surface has shipped.
 
 ## In progress
 
-- External editor export handoff on `codex/uh-external-editor`: discovery and
+- External editor export handoff on `codex/uh-external-editor` at source commit
+  [`37237cd`](https://github.com/Ding-Ding-Projects/material-download-manager/commit/37237cd82ec8b7c259b57a12ba248599ee218f70): discovery and
   native Browse selection for Visual Studio Code, schema-v6 persisted choice,
   safe app-owned export staging, workspace-root opening, and History/Changelog
   buttons are implemented locally. Focused external-editor **7/7**,
