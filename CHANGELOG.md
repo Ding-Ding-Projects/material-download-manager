@@ -5,6 +5,23 @@ or have reached a stable release. Published entries must link the exact commit
 that completed the change. An Unreleased entry names missing evidence instead
 of guessing a commit, release, or date.
 
+## Unreleased — scheduled settings foundation (branch verification)
+
+- **Source issue:** [#18 — Implement the universal feature contract](https://github.com/Ding-Ding-Projects/material-download-manager/issues/18)
+- **Source branch:** `codex/uh-scheduled-settings`
+- **Base commit:** `84da5e1f2b10b6d88e9b946fe1523ad0295ddb2b`
+- **Scope:** versioned local schedule records, native date/time and weekday
+  editing, timezone and cross-midnight semantics, deterministic priority
+  precedence, state/history persistence, live two-window IPC, and safe
+  credential-free external-source metadata.
+
+### Verification boundary
+
+Local typecheck/build and focused suites are still running. The final entry
+will add the exact source commit, test counts, built-artifact capture, and
+remote workflow result only after those records exist. No signing operation or
+CRX artifact is part of this change.
+
 ## Unreleased — authenticator Settings registration surface
 
 - **Source issue:** [#18 — Implement the universal feature contract](https://github.com/Ding-Ding-Projects/material-download-manager/issues/18)

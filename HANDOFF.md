@@ -1,5 +1,30 @@
 # Handoff: Material Download Manager
 
+## Scheduled settings foundation (2026-08-11, branch-only until verification)
+
+Issue [#18](https://github.com/Ding-Ding-Projects/material-download-manager/issues/18)
+tracks this bounded desktop slice on `codex/uh-scheduled-settings`, based on
+`84da5e1f2b10b6d88e9b946fe1523ad0295ddb2b`. It adds versioned local schedule
+records, native date/time and weekday editing with timezone and cross-midnight
+semantics, deterministic priority resolution, local persistence/history, and
+main-process IPC that broadcasts updates to both application windows.
+
+The persisted source shape is data-only. API records carry only a
+credential-free HTTPS URL (or an explicitly enabled loopback-development HTTP
+URL). Home Assistant records carry only a credential-free base URL, a boolean
+entity id, and bounded settings. The existing main-process resolver remains the
+only place that can resolve an operating-system-vault token; no credential field
+is accepted by the renderer, settings state, export, log, or history snapshot.
+
+### Verification boundary
+
+The source is still in branch verification. The focused schedule suite and the
+existing schedule-source suite must pass after the final build, followed by the
+full local Electron/engine suites and a real built-artifact Settings capture.
+No signing or CRX artifact is part of this slice. The remote result must be
+read from the exact pushed commit and workflow record before this section is
+marked shipped.
+
 ## Authenticator Settings registration surface (2026-08-11)
 
 Issue [#18](https://github.com/Ding-Ding-Projects/material-download-manager/issues/18)

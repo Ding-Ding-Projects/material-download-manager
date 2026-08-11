@@ -20,6 +20,7 @@ import type {
   HistoryView,
   HistoryAccessState,
 } from "@shared/types";
+import type { ScheduledSettingsRecord } from "@shared/scheduledSettings";
 import type { ChangelogView, ChangelogViewRequest } from "../electron/history/ChangelogStore";
 import type { RegexEvaluation } from "@shared/regex";
 import type { SshHostDraft, SshHostStatus } from "@shared/ssh";
@@ -56,6 +57,9 @@ export interface MaterialDownloadManagerAPI {
   setSettings(settings: SettingsPatch, resetKeys?: SettingKey[]): Promise<AppSettings>;
   getPresentationSettings(): Promise<PresentationSettings>;
   setPresentationSettings(settings: PresentationPatch, resetKeys?: PresentationSettingKey[]): Promise<PresentationSettings>;
+  getScheduleRules(): Promise<ScheduledSettingsRecord[]>;
+  setScheduleRules(records: ScheduledSettingsRecord[]): Promise<ScheduledSettingsRecord[]>;
+  onScheduleChanged(cb: (records: ScheduledSettingsRecord[]) => void): () => void;
   setupSchoolModeCredential(next: string, confirmation: string): Promise<PresentationSettings>;
   changeSchoolModeCredential(current: string, next: string, confirmation: string): Promise<PresentationSettings>;
   resetSchoolModeCredential(current: string): Promise<PresentationSettings>;

@@ -3,6 +3,15 @@
 This roadmap is a factual implementation checklist, not a promise that an
 unverified surface has shipped.
 
+## In progress
+
+- Scheduled settings foundation on `codex/uh-scheduled-settings`: versioned
+  local records, native date/time and weekday editor, timezone and
+  cross-midnight semantics, deterministic precedence, state/history persistence,
+  and credential-free HTTPS/loopback/Home Assistant metadata validation. This
+  remains branch-only until local tests, the full build, and a real Settings
+  capture are verified.
+
 ## Shipped and verified foundations
 
 - Real Windows Electron download engine with segmented transfers,

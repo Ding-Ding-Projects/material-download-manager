@@ -27,6 +27,7 @@ const RUNTIME_CHECK_IDS = [
   "changelog-action-error-separation",
   "progress-window",
   "settings-open",
+  "settings-scheduled-settings",
   "settings-authenticator-surface",
   "settings-dialog-a11y",
   "settings-auto-organize-ui",
@@ -73,6 +74,7 @@ function usage() {
     "  --timeout <ms>         Per-run timeout (default: 30000)",
     "  --temp-root <path>     Parent for the disposable app profile (default: OS temp directory)",
     "  --screenshot <path>    Capture a PNG of the installed browser-extension card after automatic folder reveal",
+    "  --scheduled-screenshot <path>  Capture the built Settings scheduled-settings surface",
     "  --authenticator-screenshot <path>  Capture the secret-free Authenticator Settings registration surface",
     "  --progress-screenshot <path>  Capture a separate progress page when one exists",
     "  --gallery-dir <path>    Capture the seven auto-organize documentation states into this directory",
@@ -94,6 +96,7 @@ function parseArgs(argv) {
     timeoutMs: DEFAULT_TIMEOUT_MS,
     tempRoot: null,
     screenshotPath: null,
+    scheduledScreenshotPath: null,
     authenticatorScreenshotPath: null,
     progressScreenshotPath: null,
     galleryDirectory: null,
@@ -119,6 +122,7 @@ function parseArgs(argv) {
     else if (argument === "--timeout") options.timeoutMs = parseBoundedInteger(value, "timeout", 1_000, 300_000);
     else if (argument === "--temp-root") options.tempRoot = path.resolve(value);
     else if (argument === "--screenshot") options.screenshotPath = path.resolve(value);
+    else if (argument === "--scheduled-screenshot") options.scheduledScreenshotPath = path.resolve(value);
     else if (argument === "--authenticator-screenshot") options.authenticatorScreenshotPath = path.resolve(value);
     else if (argument === "--progress-screenshot") options.progressScreenshotPath = path.resolve(value);
     else if (argument === "--gallery-dir") options.galleryDirectory = path.resolve(value);
@@ -906,6 +910,9 @@ function createResult(options) {
     timeoutMs: options.timeoutMs,
     checks: [],
     screenshot: options.screenshotPath ? { requested: true, status: "not-run", path: options.screenshotPath } : { requested: false, status: "not-requested", path: null },
+    scheduled: options.scheduledScreenshotPath
+      ? { requested: true, status: "not-run", path: options.scheduledScreenshotPath }
+      : { requested: false, status: "not-requested", path: null },
     authenticator: options.authenticatorScreenshotPath
       ? { requested: true, status: "not-run", path: options.authenticatorScreenshotPath }
       : { requested: false, status: "not-requested", path: null },
@@ -1530,6 +1537,33 @@ async function main(argv) {
         if (!dialog || !isVisible(dialog)) throw new Error("Settings dialog is not visible after activating Settings");
         return { className: dialog.className, visible: true };
       `));
+    });
+
+    await runCheck(result, "settings-scheduled-settings", async () => {
+      await clickByRole(cdp, "tab", "Downloads", '[role="dialog"]');
+      await waitForPage(cdp, `Boolean(document.querySelector("#settings-scheduled-settings"))`, "scheduled settings surface", options.timeoutMs);
+      await clickByRole(cdp, "button", "Add schedule", "#settings-scheduled-settings");
+      await waitForPage(cdp, `document.querySelectorAll('#settings-scheduled-settings input[type="date"]').length === 2`, "native scheduled date controls", options.timeoutMs);
+      const evidence = await cdp.evaluate(pageExpression(`
+        const panel = document.getElementById("settings-scheduled-settings");
+        const add = findByRole("button", "Add schedule", panel ?? document);
+        const save = findByRole("button", "Save schedules", panel ?? document);
+        const nativeDates = panel?.querySelectorAll('input[type="date"]') ?? [];
+        const nativeTimes = panel?.querySelectorAll('input[type="time"]') ?? [];
+        const timezone = panel?.querySelector('select');
+        if (!(panel instanceof HTMLElement) || !isVisible(panel)) throw new Error("Scheduled settings panel is missing or hidden");
+        if (!add || !save || nativeDates.length !== 2 || nativeTimes.length !== 2 || !timezone) {
+          throw new Error("Scheduled settings editor controls are incomplete after adding a record");
+        }
+        return { panel: true, add: accessibleName(add), save: accessibleName(save), emptyState: Boolean(panel.querySelector('[role="status"]')) };
+      `));
+      if (options.scheduledScreenshotPath) {
+        await cdp.send("Emulation.setDeviceMetricsOverride", { width: 1100, height: 900, deviceScaleFactor: 1, mobile: false });
+        const capturedPath = await captureScreenshot(cdp, options.scheduledScreenshotPath, "#settings-scheduled-settings");
+        result.scheduled = { requested: true, status: "captured", path: capturedPath };
+        return { ...evidence, screenshotPath: capturedPath };
+      }
+      return evidence;
     });
 
     await runCheck(result, "settings-authenticator-surface", async () => {

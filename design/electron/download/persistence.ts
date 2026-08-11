@@ -23,11 +23,13 @@ import {
 } from "../../shared/settings";
 import { normalizeRegexFlags } from "../../shared/regex";
 import { cloneSshHostConfigs, isSshHostConfigs } from "../../shared/ssh";
+import { validateScheduledSettingsRecords, type ScheduledSettingsRecord } from "../../shared/scheduledSettings";
 
 export interface PersistedState {
   items: DownloadItem[];
   queues: DownloadQueue[];
   settings: AppSettings;
+  scheduleRules?: ScheduledSettingsRecord[];
 }
 
 export function defaultSettings(defaultSaveFolder: string): AppSettings {
@@ -212,9 +214,19 @@ export class StateStore {
         items?: DownloadItem[];
         queues?: DownloadQueue[];
         settings?: unknown;
+        scheduleRules?: unknown;
       };
       const settings = migrateSettings(parsed.settings, defaultSaveFolder);
       const queues = parsed.queues?.length ? parsed.queues : defaultQueues();
+      let scheduleRules: ScheduledSettingsRecord[] = [];
+      try {
+        scheduleRules = validateScheduledSettingsRecords(parsed.scheduleRules ?? []);
+      } catch {
+        // A malformed schedule must never poison the rest of the profile; it
+        // is discarded and the Settings surface starts from an honest empty
+        // state that the user can rebuild.
+        scheduleRules = [];
+      }
       const items = (parsed.items ?? []).map((item) => ({
         ...item,
         // never resurrect a download as actively "downloading"/"queued" after
@@ -225,12 +237,13 @@ export class StateStore {
             : item.status,
         speed: 0,
       }));
-      return { items, queues, settings };
+      return { items, queues, settings, scheduleRules };
     } catch {
       return {
         items: [],
         queues: defaultQueues(),
         settings: defaultSettings(defaultSaveFolder),
+        scheduleRules: [],
       };
     }
   }

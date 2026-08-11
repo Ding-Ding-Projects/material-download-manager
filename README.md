@@ -177,6 +177,30 @@ and CRX artifacts remain outside this slice.
 </details>
 
 <details>
+<summary>Scheduled settings foundation (branch verification)</summary>
+
+The branch `codex/uh-scheduled-settings` adds versioned local schedule records
+under **Settings → Downloads → Scheduled settings**. The editor uses native
+date/time controls, an explicit weekday chooser, inclusive date/time
+boundaries, selected IANA timezone rules (including daylight-saving changes),
+cross-midnight windows, and deterministic priority resolution. Local, versioned
+HTTPS API, loopback-development, and Home Assistant boolean metadata all cross
+the main-process validation boundary; no access token can enter the renderer,
+settings file, export, log, or history.
+
+![Scheduled settings editor showing native dates/times, weekdays, timezone and priority controls](docs/screenshots/settings/scheduled-settings.png)
+
+This 524 × 738 PNG was captured from the real built desktop renderer after
+adding a schedule through `design/ui-tests/smoke.mjs
+--scheduled-screenshot`; SHA-256 is
+`471166F2C1DBBF3BDDD48603DBF5A4D573E60EDD9032B8E904D5727DF337E4C6`.
+The branch remains in local verification until the exact source commit and
+remote workflow record are available. No signing operation or CRX artifact is
+part of this slice.
+
+</details>
+
+<details>
 <summary>Browser extension automatic capture and installation</summary>
 
 The Manifest V3 extension requests Chrome's `downloads` permission and enables
