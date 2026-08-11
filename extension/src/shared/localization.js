@@ -116,6 +116,28 @@ const UI_TEXT = {
   displayNameHistoryRecorded: { en: ["Display-name change recorded as redacted local history.", "The display-name change is recorded in redacted local history.", "Display-name change recorded; the journal kept the names behind a privacy curtain.", "The redacted local journal caught the display-name change before the setting finished.", "The display-name journal filed a tiny redacted receipt for the new name."], yue: ["顯示名稱更改已記錄為刪敏感資料嘅本機歷史。", "顯示名稱更改已記錄喺刪敏感資料嘅本機歷史。", "顯示名稱更改已記錄；歷史紀錄幫名稱拉咗私隱布簾。", "刪敏感資料嘅本機歷史喺設定完成前已經接住今次改名。", "顯示名稱歷史幫新名開咗張細細張刪敏感資料收據。"] },
   displayNameHistoryUnavailable: { en: ["The display-name change was not saved because redacted local history is unavailable.", "The display name stayed unchanged because its local history could not be recorded.", "The name stayed put: the redacted journal was unavailable, so the setting did not move.", "The journal could not take its privacy-safe receipt, so the display name stayed unchanged.", "The name declined to travel without its redacted journal receipt; nothing was saved."], yue: ["顯示名稱未有儲存，因為刪敏感資料嘅本機歷史未能使用。", "顯示名稱保持不變，因為本機歷史未能記錄今次更改。", "個名留返原位：刪敏感資料嘅歷史未能使用，所以設定冇郁。", "歷史紀錄未能收取私隱安全收據，所以顯示名稱保持不變。", "個名唔肯冇收據就出門口；刪敏感資料歷史未能使用，所以冇儲存。"] },
   settingsSaveFailed: { en: "Settings could not be saved safely. The previous values remain active.", yue: "設定未能安全儲存，之前嘅值仍然生效。" },
+  narratorHeading: { en: "Spoken narrator", yue: "語音旁白" },
+  narratorToggleLabel: { en: "Speak extension events", yue: "讀出 extension 事件" },
+  narratorLanguageLabel: { en: "Narrator language", yue: "旁白語言" },
+  narratorLanguageEnglish: { en: "English", yue: "英文" },
+  narratorLanguageCantonese: { en: "Hong Kong Cantonese", yue: "香港廣東話" },
+  narratorLanguageBoth: { en: "English then Cantonese", yue: "先英文後廣東話" },
+  narratorSoundLabel: { en: "Sound level", yue: "聲音程度" },
+  narratorSoundNormal: { en: "Normal", yue: "正常" },
+  narratorSoundReduced: { en: "Reduced", yue: "較細聲" },
+  narratorSoundMuted: { en: "Muted", yue: "靜音" },
+  narratorQuietLabel: { en: "Quiet mode", yue: "靜音模式" },
+  narratorReducedMotionLabel: { en: "Respect reduced-motion preference", yue: "尊重減少動態偏好" },
+  narratorHelp: { en: "Off by default. Spoken events are serialized, debounced, and rate-limited. English then Cantonese is spoken in order when Both is selected. Quiet mode and a reduced-motion preference suppress speech without changing the on-screen message.", yue: "預設關閉。語音事件會排隊、去抖同限制頻率。揀兩種語言時會先讀英文，再讀廣東話。靜音模式同減少動態偏好會暫停語音，但唔會改畫面訊息。" },
+  narratorProvenance: { en: "Current values come from this extension's local settings record. The compiled value for Narrator is Off, language English, Normal sound, Quiet mode Off, and reduced-motion respect On.", yue: "目前值來自呢個 extension 嘅本機設定紀錄。旁白編譯預設係關閉、英文、正常聲、靜音模式關閉，同埋開啟尊重減少動態。" },
+  narratorTest: { en: "Narrator test: the extension is ready to speak this short event.", yue: "旁白測試：extension 準備好讀出呢個短事件。" },
+  narratorTestButton: { en: "Test narration", yue: "測試旁白" },
+  narratorReady: { en: "Narrator is enabled. New extension events will be spoken locally.", yue: "旁白已開啟。新 extension 事件會喺本機讀出。" },
+  narratorDisabled: { en: "Narrator is off. On-screen messages remain available.", yue: "旁白已關閉。畫面訊息仍然照常顯示。" },
+  narratorSuppressed: { en: "Narration is paused by the current narrator settings; visible messages remain available.", yue: "旁白因目前設定而暫停；畫面訊息仍然照常顯示。" },
+  narratorQueueFull: { en: "Narrator capacity is full; visible messages remain available and no handoff was blocked.", yue: "旁白容量已滿；畫面訊息仍然照常顯示，交接功能冇受阻。" },
+  narratorTestQueued: { en: "Narrator test queued locally.", yue: "旁白測試已喺本機排隊。" },
+  narratorUnavailable: { en: "Spoken narration is unavailable in this browser; on-screen messages remain available.", yue: "呢個瀏覽器未能提供語音旁白；畫面訊息仍然照常顯示。" },
   protocolDetail: { en: "{{detail}}", yue: "{{detail}}" },
 };
 
@@ -134,6 +156,15 @@ function languageText(value, settings) {
 export function localize(key, settings, variables = {}) {
   const value = UI_TEXT[key] ?? UI_TEXT.protocolDetail;
   return replaceTokens(languageText(value, presentationSettings(settings)), variables);
+}
+
+export function narrationParts(key, settings, variables = {}) {
+  const value = UI_TEXT[key] ?? UI_TEXT.protocolDetail;
+  const effective = presentationSettings(settings);
+  return {
+    en: replaceTokens(languageText(value, { ...effective, languageMode: "en" }), variables),
+    yue: replaceTokens(languageText(value, { ...effective, languageMode: "yue" }), variables),
+  };
 }
 
 export function decorateMessage(text, settings, emoji = "💬") {

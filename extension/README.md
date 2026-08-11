@@ -106,7 +106,9 @@ Cantonese / bilingual language modes, separate English and Cantonese funny-
 level sliders from 1–5, a display-name setting, a persisted **Automatically
 send browser downloads to the local manager** checkbox, the named School mode
 foundation, the **Show emojis in dialogs and message boxes** preference, and
-versioned JSON settings export/import. The checkbox defaults on and can be
+the opt-in spoken narrator with English, Hong Kong Cantonese, English-then-
+Cantonese, sound-level, Quiet mode, reduced-motion, and **Test narration**
+controls, plus versioned JSON settings export/import. The checkbox defaults on and can be
 turned off without removing manual handoff actions. School mode keeps previous
 language and funny-level choices stored, but presents serious English and
 removes those controls while it is enabled.
@@ -128,6 +130,13 @@ back and the browser fallback remains available. Funny levels change voice
 only. Warnings, errors, URLs, affected data, and recovery choices remain
 explicit at every level.
 
+The spoken narrator is off by default. New worker result events are narrated
+through Chrome's local `tts` API only after the user opts in; its queue
+debounces, rate-limits, replaces pending status speech, and serializes English
+then Cantonese. Quiet mode, Muted sound, and the reduced-motion preference can
+suppress speech without changing the visible result. See
+[`docs/narrator.md`](docs/narrator.md) for the browser and final-event boundary.
+
 ## Permissions
 
 | Permission | Reason |
@@ -136,6 +145,7 @@ explicit at every level.
 | `contextMenus` | Add the page, link, and selection “Send URL” action. |
 | `downloads` | Pause eligible new browser downloads before handoff, then cancel/erase only after final authenticated acceptance or resume after failure. |
 | `storage` | Persist local settings, the prepared pairing capability, the last handoff result, and bounded ownership claims for restart-safe recovery; handed-off query URLs are not stored here. |
+| `tts` | Speak newly recorded extension events through the browser's local operating-system speech service after the user opts in; no remote audio service is used. |
 | `http://127.0.0.1/*`, `http://localhost/*` | Permit only the documented loopback HTTP handoff; no arbitrary web-host access is declared. |
 
 The extension does not request `tabs`, `scripting`, `notifications`, or
@@ -181,9 +191,9 @@ authentication, final-only acceptance, automatic pause/accept/cancel/erase and
 pause/reject/resume behavior, ownership recovery, privacy-safe payload
 construction, entrypoint wiring for the service worker, popup, and options
 surfaces, the runtime message boundary, URL and endpoint validation, settings
-export sanitization, regex safety limits, and accessible UI markers. The full
-regex builder remains adjacent to the settings search; this change adds no
-search field without its own builder.
+export sanitization, regex safety limits, accessible UI markers, and narrator
+queue/permission/result wiring. The full regex builder remains adjacent to the
+settings search; this change adds no search field without its own builder.
 
 ## File map
 
@@ -193,13 +203,15 @@ search field without its own builder.
 - `src/popup.*` — current-tab URL handoff surface.
 - `src/options.*` — connection, preferences, help, settings search, regex
   builder, School mode and emoji settings, redacted display-name journal
-  wiring, and settings export/import.
+  wiring, spoken narrator controls, and settings export/import.
 - `src/shared/` — pure validation, protocol-2 proofs, handoff envelope, pairing
   module, regex, settings, localization, the capability-free credential
-  abstraction, and the redacted display-name journal. The repository pairing
+  abstraction, redacted display-name journal, serialized narrator, and Chrome
+  TTS adapter. The repository pairing
   module is intentionally empty; only the app's private staged copy is paired.
-- `docs/README.md` and `docs/settings-foundation.md` — documentation index and
-  the shared settings/journal boundary.
+- `docs/README.md`, `docs/settings-foundation.md`, and `docs/narrator.md` —
+  documentation index, shared settings/journal boundary, and spoken narrator
+  contract.
 - `docs/handoff-contract.md` — adapter contract and security boundary.
 - `docs/electron-integration-seam.md` — implemented Electron seam and truthful
   failure behavior.

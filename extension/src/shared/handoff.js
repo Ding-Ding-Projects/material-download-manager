@@ -105,6 +105,7 @@ export function validateIncomingMessage(value) {
   if (!isRecord(value) || typeof value.type !== "string") return null;
   if (value.type === "GET_STATE") return { type: value.type };
   if (value.type === "TEST_HANDOFF") return { type: value.type };
+  if (value.type === "TEST_NARRATION") return { type: value.type };
   if (value.type === "SAVE_SETTINGS" && isRecord(value.settings)) {
     return { type: value.type, settings: value.settings };
   }

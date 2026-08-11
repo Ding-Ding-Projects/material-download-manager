@@ -8,7 +8,8 @@
     "activeTab",
     "contextMenus",
     "downloads",
-    "storage"
+    "storage",
+    "tts"
   ],
   "host_permissions": [
     "http://127.0.0.1/*",

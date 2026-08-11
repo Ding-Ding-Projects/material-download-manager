@@ -11,6 +11,8 @@ export const STATUS_PATH = "/v1/status";
 export const ALLOWED_LOOPBACK_HOSTS = new Set(["127.0.0.1", "localhost"]);
 export const DEFAULT_HANDOFF_ENDPOINT = "http://127.0.0.1:43771/v1/downloads";
 export const DEFAULT_SCHOOL_MODE_NAME = "School mode";
+export const NARRATOR_LANGUAGE_MODES = new Set(["en", "yue", "both"]);
+export const NARRATOR_SOUND_MODES = new Set(["normal", "reduced", "muted"]);
 
 export const DEFAULT_SETTINGS = Object.freeze({
   schemaVersion: 1,
@@ -19,6 +21,12 @@ export const DEFAULT_SETTINGS = Object.freeze({
   schoolModeName: DEFAULT_SCHOOL_MODE_NAME,
   schoolModeCredentialState: RESET_CREDENTIAL_STATES.UNAVAILABLE,
   showEmojis: false,
+  narratorEnabled: false,
+  narratorLanguage: "en",
+  narratorSoundMode: "normal",
+  narratorQuietMode: false,
+  narratorRespectReducedMotion: true,
+  narratorReducedMotionActive: false,
   languageMode: "en",
   funnyLevelEn: 2,
   funnyLevelYue: 2,
@@ -116,6 +124,24 @@ export function sanitizeSettings(value) {
     showEmojis: typeof source.showEmojis === "boolean"
       ? source.showEmojis
       : DEFAULT_SETTINGS.showEmojis,
+    narratorEnabled: typeof source.narratorEnabled === "boolean"
+      ? source.narratorEnabled
+      : DEFAULT_SETTINGS.narratorEnabled,
+    narratorLanguage: NARRATOR_LANGUAGE_MODES.has(source.narratorLanguage)
+      ? source.narratorLanguage
+      : DEFAULT_SETTINGS.narratorLanguage,
+    narratorSoundMode: NARRATOR_SOUND_MODES.has(source.narratorSoundMode)
+      ? source.narratorSoundMode
+      : DEFAULT_SETTINGS.narratorSoundMode,
+    narratorQuietMode: typeof source.narratorQuietMode === "boolean"
+      ? source.narratorQuietMode
+      : DEFAULT_SETTINGS.narratorQuietMode,
+    narratorRespectReducedMotion: typeof source.narratorRespectReducedMotion === "boolean"
+      ? source.narratorRespectReducedMotion
+      : DEFAULT_SETTINGS.narratorRespectReducedMotion,
+    narratorReducedMotionActive: typeof source.narratorReducedMotionActive === "boolean"
+      ? source.narratorReducedMotionActive
+      : DEFAULT_SETTINGS.narratorReducedMotionActive,
     languageMode: LANGUAGE_MODES.has(source.languageMode) ? source.languageMode : DEFAULT_SETTINGS.languageMode,
     funnyLevelEn: clampLevel(source.funnyLevelEn, DEFAULT_SETTINGS.funnyLevelEn),
     funnyLevelYue: clampLevel(source.funnyLevelYue, DEFAULT_SETTINGS.funnyLevelYue),
@@ -146,10 +172,14 @@ export function canDisableSchoolMode(current, next) {
 }
 
 export function makeSettingsExport(settings) {
+  const exportSettings = sanitizeSettings(settings);
+  // This is a volatile host observation captured by the options page, not a
+  // portable user preference. Keep it out of files that may move machines.
+  delete exportSettings.narratorReducedMotionActive;
   return {
     schema: SETTINGS_EXPORT_SCHEMA,
     version: SETTINGS_EXPORT_VERSION,
-    settings: sanitizeSettings(settings),
+    settings: exportSettings,
   };
 }
 

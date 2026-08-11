@@ -18,6 +18,11 @@ const REQUIRED_SEARCHABLE_SETTING_IDS = Object.freeze([
   "school-mode",
   "school-mode-name",
   "show-emojis",
+  "narrator-enabled",
+  "narrator-language",
+  "narrator-sound-mode",
+  "narrator-quiet-mode",
+  "narrator-respect-reduced-motion",
   "language-mode",
   "funny-level-en",
   "funny-level-yue",
@@ -56,6 +61,13 @@ const elements = {
   schoolModeHelp: document.querySelector("#school-mode-help"),
   schoolModeCredentialStatus: document.querySelector("#school-mode-credential-status"),
   showEmojis: document.querySelector("#show-emojis"),
+  narratorEnabled: document.querySelector("#narrator-enabled"),
+  narratorLanguage: document.querySelector("#narrator-language"),
+  narratorSoundMode: document.querySelector("#narrator-sound-mode"),
+  narratorQuietMode: document.querySelector("#narrator-quiet-mode"),
+  narratorRespectReducedMotion: document.querySelector("#narrator-respect-reduced-motion"),
+  narratorStatus: document.querySelector("#narrator-status"),
+  testNarration: document.querySelector("#test-narration"),
   languageMode: document.querySelector("#language-mode"),
   funnyEn: document.querySelector("#funny-level-en"),
   funnyEnOutput: document.querySelector("#funny-level-en-output"),
@@ -94,6 +106,7 @@ function localizePage() {
   elements.schoolModeNameLabel.textContent = localize("schoolModeNameLabel", settings, { name: schoolModeName });
   elements.schoolModeHelp.textContent = localize("schoolModeHelp", settings, { name: schoolModeName });
   elements.schoolModeCredentialStatus.textContent = localize("schoolModeCredentialStatus", settings, { name: schoolModeName });
+  elements.narratorStatus.textContent = localize(settings.narratorEnabled ? "narratorReady" : "narratorDisabled", settings);
   const schoolModeCard = document.querySelector("#school-mode-card");
   if (schoolModeCard) schoolModeCard.dataset.search = `${schoolModeName} name reset credential local mode`;
   document.querySelectorAll("[data-school-hidden]").forEach((element) => {
@@ -113,6 +126,11 @@ function fillForm() {
   elements.schoolMode.checked = settings.schoolModeEnabled;
   elements.schoolModeName.value = settings.schoolModeName;
   elements.showEmojis.checked = settings.showEmojis;
+  elements.narratorEnabled.checked = settings.narratorEnabled;
+  elements.narratorLanguage.value = settings.narratorLanguage;
+  elements.narratorSoundMode.value = settings.narratorSoundMode;
+  elements.narratorQuietMode.checked = settings.narratorQuietMode;
+  elements.narratorRespectReducedMotion.checked = settings.narratorRespectReducedMotion;
   elements.languageMode.value = settings.languageMode;
   elements.funnyEn.value = String(settings.funnyLevelEn);
   elements.funnyYue.value = String(settings.funnyLevelYue);
@@ -121,6 +139,12 @@ function fillForm() {
 }
 
 function collectFormSettings() {
+  let narratorReducedMotionActive = false;
+  try {
+    narratorReducedMotionActive = window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches === true;
+  } catch {
+    narratorReducedMotionActive = false;
+  }
   return sanitizeSettings({
     ...settings,
     handoffEndpoint: elements.endpoint.value,
@@ -129,6 +153,12 @@ function collectFormSettings() {
     schoolModeEnabled: elements.schoolMode.checked,
     schoolModeName: elements.schoolModeName.value,
     showEmojis: elements.showEmojis.checked,
+    narratorEnabled: elements.narratorEnabled.checked,
+    narratorLanguage: elements.narratorLanguage.value,
+    narratorSoundMode: elements.narratorSoundMode.value,
+    narratorQuietMode: elements.narratorQuietMode.checked,
+    narratorRespectReducedMotion: elements.narratorRespectReducedMotion.checked,
+    narratorReducedMotionActive,
     languageMode: elements.languageMode.value,
     funnyLevelEn: Number(elements.funnyEn.value),
     funnyLevelYue: Number(elements.funnyYue.value),
@@ -172,6 +202,11 @@ function resultMessage(value) {
     "school-mode-reset-unavailable": "schoolModeCredentialUnavailable",
     "display-name-history-unavailable": "displayNameHistoryUnavailable",
     "settings-save-failed": "settingsSaveFailed",
+    "narrator-test-queued": "narratorTestQueued",
+    "narrator-disabled": "narratorDisabled",
+    "narrator-suppressed": "narratorSuppressed",
+    "narrator-queue-full": "narratorQueueFull",
+    "narrator-unavailable": "narratorUnavailable",
   }[value?.code] ?? "handoffFailed";
   return localize(key, settings, { detail: value?.detail ?? "", name: settings.schoolModeName });
 }
@@ -391,7 +426,7 @@ elements.useDefaultEndpoint.addEventListener("click", () => {
   updateConnectionState();
   markDirty();
 });
-[elements.autoCaptureDownloads, elements.managerDisplayName, elements.schoolMode, elements.schoolModeName, elements.showEmojis, elements.languageMode, elements.funnyEn, elements.funnyYue].forEach((input) => {
+[elements.autoCaptureDownloads, elements.managerDisplayName, elements.schoolMode, elements.schoolModeName, elements.showEmojis, elements.narratorEnabled, elements.narratorLanguage, elements.narratorSoundMode, elements.narratorQuietMode, elements.narratorRespectReducedMotion, elements.languageMode, elements.funnyEn, elements.funnyYue].forEach((input) => {
   input.addEventListener("input", () => {
     settings = collectFormSettings();
     localizePage();
@@ -399,6 +434,22 @@ elements.useDefaultEndpoint.addEventListener("click", () => {
     updateConnectionState();
     refreshSearch();
   });
+});
+elements.testNarration.addEventListener("click", async () => {
+  const saved = await persistSettings();
+  if (!saved) return;
+  elements.testNarration.disabled = true;
+  try {
+    const response = await chrome.runtime.sendMessage({ type: "TEST_NARRATION" });
+    const value = response?.result ?? { code: "narrator-unavailable" };
+    elements.narratorStatus.textContent = resultMessage(value);
+    showToast(resultMessage(value));
+  } catch {
+    elements.narratorStatus.textContent = localize("narratorUnavailable", settings);
+    showToast(localize("narratorUnavailable", settings));
+  } finally {
+    elements.testNarration.disabled = false;
+  }
 });
 elements.resetManagerName.addEventListener("click", () => {
   elements.managerDisplayName.value = DEFAULT_SETTINGS.managerName;

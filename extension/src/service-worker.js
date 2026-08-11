@@ -22,6 +22,8 @@ import { localize } from "./shared/localization.js";
 import { HANDOFF_CAPABILITY } from "./shared/pairing.js";
 import { createCredentialAbstraction } from "./shared/credential.js";
 import { appendDisplayNameMutation } from "./shared/mutation-journal.js";
+import { createNarrator } from "./shared/narrator.js";
+import { createChromeTtsAdapter } from "./shared/chrome-tts.js";
 
 const MENU_ID = "send-to-material-download-manager";
 const STATUS_TIMEOUT_MS = 1_500;
@@ -30,10 +32,56 @@ const MAX_STATUS_BODY = 4_096;
 const MAX_DOWNLOAD_CLAIMS = 64;
 const HANDOFF_CAPABILITY_KEY = "handoffCapability";
 const SUCCESS_CODES = new Set(["handoff-success", "connection-success", "settings-saved", "settings-imported"]);
+const RESULT_NARRATION_KEYS = Object.freeze({
+  "handoff-success": "handoffSuccess",
+  "handoff-cleanup-warning": "handoffCleanupWarning",
+  "automatic-pause-failed": "automaticPauseFailed",
+  "automatic-capacity-full": "automaticCapacityFull",
+  "automatic-resumed-failed": "automaticResumedFailed",
+  "automatic-resume-failed": "automaticResumeFailed",
+  "automatic-cancel-failed-resumed": "automaticCancelFailedResumed",
+  "automatic-cancel-failed-original-gone": "automaticCancelFailedOriginalGone",
+  "automatic-cancel-failed-already-running": "automaticCancelFailedAlreadyRunning",
+  "automatic-cancel-recovery-failed": "automaticCancelRecoveryFailed",
+  "automatic-original-gone": "automaticOriginalGone",
+  "automatic-original-already-running": "automaticOriginalAlreadyRunning",
+  "automatic-ownership-mismatch": "automaticOwnershipMismatch",
+  "automatic-restart-resume-failed": "automaticRestartResumeFailed",
+  "handoff-disabled": "handoffDisabled",
+  "handoff-unpaired": "handoffUnpaired",
+  "handoff-failed": "handoffFailed",
+  "connection-success": "connectionSuccess",
+  "connection-disabled": "connectionDisabled",
+  "connection-unpaired": "connectionUnpaired",
+  "connection-failed": "connectionFailed",
+  "settings-saved": "settingsSaved",
+  "settings-imported": "settingsImported",
+  "settings-exported": "settingsExported",
+  "school-mode-reset-unavailable": "schoolModeCredentialUnavailable",
+  "display-name-history-unavailable": "displayNameHistoryUnavailable",
+  "settings-save-failed": "settingsSaveFailed",
+});
+const RESULT_NARRATION_CATEGORIES = Object.freeze({
+  "handoff-cleanup-warning": "warning",
+  "automatic-original-gone": "warning",
+  "automatic-original-already-running": "warning",
+  "automatic-ownership-mismatch": "warning",
+  "handoff-disabled": "info",
+  "connection-disabled": "info",
+  "handoff-unpaired": "warning",
+  "connection-unpaired": "warning",
+});
 let contextMenuRefresh = Promise.resolve();
 let downloadClaimMutation = Promise.resolve();
 let initializationPromise = null;
 const automaticDownloadsInFlight = new Set();
+const chromeTts = createChromeTtsAdapter(chrome.tts);
+const narrator = createNarrator({
+  tts: chromeTts,
+  isReducedMotion: () => false,
+  isScreenReaderActive: () => false,
+});
+let narratorSettingsGeneration = 0;
 
 function result(code, detail = null) {
   return { ok: SUCCESS_CODES.has(code), code, detail, at: new Date().toISOString() };
@@ -49,6 +97,26 @@ async function readLastResult() {
   return stored[LAST_RESULT_KEY] ?? null;
 }
 
+async function narrateResult(value) {
+  const key = RESULT_NARRATION_KEYS[value?.code];
+  if (!key) return;
+  const generation = narratorSettingsGeneration;
+  try {
+    await chromeTts.refreshVoices();
+    const settings = await readSettings();
+    // A storage change can cancel the queue while this event is waiting on
+    // voice discovery or storage. Do not enqueue a stale language, tone, or
+    // School-mode presentation after that cancellation.
+    if (generation !== narratorSettingsGeneration) return;
+    const category = RESULT_NARRATION_CATEGORIES[value?.code]
+      ?? (value?.ok === false ? "error" : "success");
+    const name = key === "schoolModeCredentialUnavailable" ? settings.schoolModeName : settings.managerName;
+    narrator.narrateKey(key, settings, { name }, { category });
+  } catch {
+    // Narration is advisory and never blocks storage, handoff, or recovery.
+  }
+}
+
 async function recordResult(value) {
   await chrome.storage.local.set({ [LAST_RESULT_KEY]: value });
   try {
@@ -57,6 +125,9 @@ async function recordResult(value) {
   } catch {
     // Badge APIs are not required for the handoff contract; the popup remains the recovery surface.
   }
+  // Speech is advisory: never hold the handoff or settings result open on a
+  // browser voice engine that is slow or unavailable.
+  void narrateResult(value);
 }
 
 async function saveSettings(patch) {
@@ -531,7 +602,14 @@ chrome.runtime.onStartup.addListener(() => {
 });
 
 chrome.storage.onChanged.addListener((changes, areaName) => {
-  if (areaName === "local" && changes[SETTINGS_KEY]) void refreshContextMenu(sanitizeSettings(changes[SETTINGS_KEY].newValue));
+  if (areaName !== "local" || !changes[SETTINGS_KEY]) return;
+  const settings = sanitizeSettings(changes[SETTINGS_KEY].newValue);
+  // Revalidate every narrator-affecting setting change, including School mode,
+  // language, funny levels, sound, and reduced-motion state. This prevents an
+  // in-flight event from speaking with stale language or tone after a change.
+  narratorSettingsGeneration += 1;
+  narrator.cancel();
+  void refreshContextMenu(settings);
 });
 
 chrome.downloads.onCreated.addListener((item) => {
@@ -570,6 +648,30 @@ chrome.runtime.onMessage.addListener((rawMessage, sender, sendResponse) => {
   void (async () => {
     if (message.type === "GET_STATE") {
       sendResponse({ ok: true, settings: await readSettings(), lastResult: await readLastResult() });
+      return;
+    }
+    if (message.type === "TEST_NARRATION") {
+      const settings = await readSettings();
+      await chromeTts.refreshVoices();
+      const narratorLanguages = settings.schoolModeEnabled || settings.narratorLanguage === "en"
+        ? ["en"]
+        : settings.narratorLanguage === "yue" ? ["yue"] : ["en", "yue"];
+      const hasVoice = chromeTts.isAvailable() && narratorLanguages.every((language) => chromeTts.supportsLanguage(language));
+      const spoken = hasVoice
+        ? narrator.narrateKey("narratorTest", settings, {}, { category: "info" })
+        : { accepted: false, reason: "unsupported" };
+      const testResult = spoken.accepted
+        ? { ok: true, code: "narrator-test-queued", reason: null }
+        : {
+          ok: false,
+          code: spoken.reason === "disabled"
+            ? "narrator-disabled"
+            : spoken.reason === "queue-full"
+              ? "narrator-queue-full"
+              : spoken.reason === "unsupported" ? "narrator-unavailable" : "narrator-suppressed",
+          reason: spoken.reason,
+        };
+      sendResponse({ ok: testResult.ok, result: testResult, settings });
       return;
     }
     if (message.type === "SAVE_SETTINGS") {

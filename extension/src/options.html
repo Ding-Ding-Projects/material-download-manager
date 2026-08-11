@@ -114,6 +114,37 @@
           </label>
           <p id="show-emojis-help" class="field-help" data-l10n="emojiToggleHelp">When enabled, dialog and message-box copy may include a relevant emoji. Buttons, field labels, and accessible names stay factual.</p>
         </div>
+        <div class="setting-card narrator-card" data-school-hidden data-search="narrator spoken voice speech english cantonese both quiet reduced sound motion accessibility">
+          <h2 data-l10n="narratorHeading">Spoken narrator</h2>
+          <label class="check-row" for="narrator-enabled">
+            <input id="narrator-enabled" name="narratorEnabled" type="checkbox" aria-describedby="narrator-help narrator-status">
+            <span data-l10n="narratorToggleLabel">Speak extension events</span>
+          </label>
+          <label for="narrator-language" data-l10n="narratorLanguageLabel">Narrator language</label>
+          <select id="narrator-language" name="narratorLanguage" aria-describedby="narrator-help">
+            <option value="en" data-l10n="narratorLanguageEnglish">English</option>
+            <option value="yue" data-l10n="narratorLanguageCantonese">Hong Kong Cantonese</option>
+            <option value="both" data-l10n="narratorLanguageBoth">English then Cantonese</option>
+          </select>
+          <label for="narrator-sound-mode" data-l10n="narratorSoundLabel">Sound level</label>
+          <select id="narrator-sound-mode" name="narratorSoundMode" aria-describedby="narrator-help">
+            <option value="normal" data-l10n="narratorSoundNormal">Normal</option>
+            <option value="reduced" data-l10n="narratorSoundReduced">Reduced</option>
+            <option value="muted" data-l10n="narratorSoundMuted">Muted</option>
+          </select>
+          <label class="check-row" for="narrator-quiet-mode">
+            <input id="narrator-quiet-mode" name="narratorQuietMode" type="checkbox" aria-describedby="narrator-help">
+            <span data-l10n="narratorQuietLabel">Quiet mode</span>
+          </label>
+          <label class="check-row" for="narrator-respect-reduced-motion">
+            <input id="narrator-respect-reduced-motion" name="narratorRespectReducedMotion" type="checkbox" aria-describedby="narrator-help">
+            <span data-l10n="narratorReducedMotionLabel">Respect reduced-motion preference</span>
+          </label>
+          <p id="narrator-help" class="field-help" data-l10n="narratorHelp">Off by default. Spoken events are serialized, debounced, and rate-limited. English then Cantonese is spoken in order when Both is selected. Quiet mode and a reduced-motion preference suppress speech without changing the on-screen message.</p>
+          <p class="field-help" data-l10n="narratorProvenance">Current values come from this extension's local settings record. The compiled value for Narrator is Off, language English, Normal sound, Quiet mode Off, and reduced-motion respect On.</p>
+          <p id="narrator-status" class="inline-status" role="status" aria-live="polite"></p>
+          <button id="test-narration" class="button button-secondary" type="button" data-l10n="narratorTestButton">Test narration</button>
+        </div>
         <div class="setting-card" data-search="manager name display name title identity">
           <label for="manager-display-name" data-l10n="managerNameLabel">Manager display name</label>
           <input id="manager-display-name" name="managerName" type="text" maxlength="80" autocomplete="off" aria-describedby="manager-name-help">
@@ -159,7 +190,7 @@
       </div>
     </form>
 
-    <section class="setting-card export-card" aria-labelledby="export-heading" data-search="export import json settings file">
+    <section class="setting-card export-card" data-school-hidden aria-labelledby="export-heading" data-search="export import json settings file">
       <h2 id="export-heading" data-l10n="exportHeading">Exportable settings</h2>
       <p class="field-help" data-l10n="exportHelp">Exports a versioned JSON file. It includes the configured endpoint, so treat the file as local configuration.</p>
       <div class="inline-actions">

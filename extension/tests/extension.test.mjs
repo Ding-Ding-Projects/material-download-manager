@@ -10,6 +10,8 @@ import {
   DEFAULT_SETTINGS,
   DEFAULT_SCHOOL_MODE_NAME,
   DEFAULT_HANDOFF_ENDPOINT,
+  NARRATOR_LANGUAGE_MODES,
+  NARRATOR_SOUND_MODES,
   HANDOFF_PATH,
   HANDOFF_PROTOCOL_VERSION,
   makeSettingsExport,
@@ -31,7 +33,7 @@ import {
   validateIncomingMessage,
 } from "../src/shared/handoff.js";
 import { appendRegexFragment, evaluateRegex, validateRegex } from "../src/shared/regex.js";
-import { decorateMessage, hasLocalizationKey, localize } from "../src/shared/localization.js";
+import { decorateMessage, hasLocalizationKey, localize, narrationParts } from "../src/shared/localization.js";
 import { RESET_CREDENTIAL_STATES, createCredentialAbstraction } from "../src/shared/credential.js";
 import {
   DISPLAY_NAME_MUTATION_JOURNAL_KEY,
@@ -39,6 +41,8 @@ import {
   appendDisplayNameMutation,
   readDisplayNameMutationJournal,
 } from "../src/shared/mutation-journal.js";
+import { createNarrator, NARRATOR_COOLDOWN_MS, NARRATOR_DEBOUNCE_MS } from "../src/shared/narrator.js";
+import { createChromeTtsAdapter } from "../src/shared/chrome-tts.js";
 
 const extensionRoot = dirname(dirname(fileURLToPath(import.meta.url)));
 const read = (relativePath) => readFile(join(extensionRoot, relativePath), "utf8");
@@ -165,11 +169,12 @@ test("MV3 manifest declares the intended entrypoints and minimized permissions",
   assert.equal(manifest.background.type, "module");
   assert.equal(manifest.action.default_popup, "src/popup.html");
   assert.equal(manifest.options_page, "src/options.html");
-  assert.deepEqual(manifest.permissions, ["activeTab", "contextMenus", "downloads", "storage"]);
+  assert.deepEqual(manifest.permissions, ["activeTab", "contextMenus", "downloads", "storage", "tts"]);
   assert.deepEqual(manifest.host_permissions, ["http://127.0.0.1/*", "http://localhost/*"]);
   assert.equal(manifest.permissions.includes("tabs"), false);
   assert.equal(manifest.permissions.includes("scripting"), false);
   assert.equal(manifest.permissions.includes("downloads"), true);
+  assert.equal(manifest.permissions.includes("tts"), true);
   assert.equal(manifest.host_permissions.includes("<all_urls>"), false);
   await import("node:fs/promises").then(({ access }) => Promise.all([
     access(join(extensionRoot, manifest.background.service_worker)),
@@ -191,6 +196,10 @@ test("service worker, popup, options, and runtime message boundary are wired", a
   assert.match(worker, /chrome\.downloads\.resume/);
   assert.match(worker, /chrome\.downloads\.cancel/);
   assert.match(worker, /chrome\.downloads\.erase/);
+  assert.match(worker, /createNarrator/);
+  assert.match(worker, /createChromeTtsAdapter/);
+  assert.match(worker, /narrateResult/);
+  assert.match(worker, /TEST_NARRATION/);
   assert.match(worker, /validateIncomingMessage/);
   assert.match(worker, /HANDOFF_URL/);
   assert.match(worker, /sendResponse/);
@@ -208,6 +217,12 @@ test("service worker, popup, options, and runtime message boundary are wired", a
   assert.match(options, /id="auto-capture-downloads"/);
   assert.match(options, /id="auto-capture-downloads"[^>]+aria-describedby="auto-capture-downloads-help"/);
   assert.match(options, /id="auto-capture-downloads-help"/);
+  assert.match(options, /id="narrator-enabled"/);
+  assert.match(options, /id="narrator-language"/);
+  assert.match(options, /id="narrator-sound-mode"/);
+  assert.match(options, /id="narrator-quiet-mode"/);
+  assert.match(options, /id="narrator-respect-reduced-motion"/);
+  assert.match(options, /id="test-narration"/);
   assert.match(await read("src/options.js"), /REQUIRED_SEARCHABLE_SETTING_IDS[\s\S]*"auto-capture-downloads"/);
   assert.match(options, /role="tab"/);
   assert.match(options, /id="import-file" type="file"/);
@@ -668,6 +683,7 @@ test("handoff message boundary accepts only bounded download messages", () => {
   assert.equal(validateIncomingMessage({ type: "HANDOFF_URL", url: "https://example.test/file", selectionText: "x".repeat(2049) }), null);
   assert.equal(validateIncomingMessage({ type: "UNKNOWN", url: "https://example.test/file" }), null);
   assert.deepEqual(validateIncomingMessage({ type: "GET_STATE" }), { type: "GET_STATE" });
+  assert.deepEqual(validateIncomingMessage({ type: "TEST_NARRATION", detail: "ignored" }), { type: "TEST_NARRATION" });
 });
 
 test("handoff envelope normalizes safe URLs and records the protocol source", () => {
@@ -772,6 +788,281 @@ test("School mode and emoji settings persist without credential material", () =>
   assert.equal(exported.settings.showEmojis, true);
   assert.doesNotMatch(JSON.stringify(exported), /password|passphrase|pin|secret|otp|token/i);
   assert.equal(DEFAULT_SCHOOL_MODE_NAME, "School mode");
+});
+
+test("narrator settings are opt-in, bounded, and exportable without secrets", () => {
+  const safe = sanitizeSettings({
+    narratorEnabled: true,
+    narratorLanguage: "both",
+    narratorSoundMode: "reduced",
+    narratorQuietMode: true,
+    narratorRespectReducedMotion: false,
+    narratorReducedMotionActive: true,
+  });
+  assert.equal(DEFAULT_SETTINGS.narratorEnabled, false);
+  assert.equal(safe.narratorEnabled, true);
+  assert.equal(safe.narratorLanguage, "both");
+  assert.equal(safe.narratorSoundMode, "reduced");
+  assert.equal(safe.narratorQuietMode, true);
+  assert.equal(safe.narratorRespectReducedMotion, false);
+  assert.equal(safe.narratorReducedMotionActive, true);
+  assert.equal(sanitizeSettings({ narratorLanguage: "mandarin" }).narratorLanguage, "en");
+  assert.equal(sanitizeSettings({ narratorSoundMode: "loud" }).narratorSoundMode, "normal");
+  assert.deepEqual([...NARRATOR_LANGUAGE_MODES].sort(), ["both", "en", "yue"]);
+  assert.deepEqual([...NARRATOR_SOUND_MODES].sort(), ["muted", "normal", "reduced"]);
+  const exported = makeSettingsExport(safe);
+  assert.equal(Object.prototype.hasOwnProperty.call(exported.settings, "narratorReducedMotionActive"), false);
+  assert.equal(parseSettingsExport(exported).narratorReducedMotionActive, false);
+  assert.doesNotMatch(JSON.stringify(exported), /password|passphrase|pin|secret|otp|token/i);
+  const school = presentationSettings({ ...safe, schoolModeEnabled: true, languageMode: "bilingual", funnyLevelEn: 5, funnyLevelYue: 5 });
+  assert.equal(school.narratorEnabled, true);
+  assert.equal(school.narratorLanguage, "both");
+  assert.equal(school.funnyLevelEn, 1);
+  assert.equal(school.showEmojis, false);
+});
+
+test("narration parts keep language order and funny-level styling separate", () => {
+  const parts = narrationParts("handoffSuccess", { ...DEFAULT_SETTINGS, funnyLevelEn: 1, funnyLevelYue: 5 });
+  assert.match(parts.en, /The URL was accepted/);
+  assert.match(parts.yue, /本機程式/);
+  assert.notEqual(parts.en, narrationParts("handoffSuccess", { ...DEFAULT_SETTINGS, funnyLevelEn: 5 }).en);
+  assert.notEqual(parts.yue, narrationParts("handoffSuccess", { ...DEFAULT_SETTINGS, funnyLevelYue: 1 }).yue);
+});
+
+function createFakeClock() {
+  let current = 0;
+  let nextId = 1;
+  const timers = new Map();
+  const setTimeoutFake = (callback, delay) => {
+    const id = nextId++;
+    timers.set(id, { at: current + Number(delay), callback });
+    return id;
+  };
+  const clearTimeoutFake = (id) => timers.delete(id);
+  const advance = (milliseconds) => {
+    current += milliseconds;
+    let progressed = true;
+    while (progressed) {
+      progressed = false;
+      for (const [id, timer] of [...timers.entries()]) {
+        if (timer.at > current) continue;
+        timers.delete(id);
+        timer.callback();
+        progressed = true;
+      }
+    }
+  };
+  return { now: () => current, setTimeoutFake, clearTimeoutFake, advance };
+}
+
+function narratorSettings(overrides = {}) {
+  return sanitizeSettings({ ...DEFAULT_SETTINGS, narratorEnabled: true, ...overrides });
+}
+
+test("narrator serializes Both language speech, debounces, and uses final callbacks", () => {
+  const clock = createFakeClock();
+  const spoken = [];
+  const tts = {
+    speak(text, options, done) { spoken.push({ text, options, done }); },
+    stop() {},
+    isAvailable: () => true,
+  };
+  const narrator = createNarrator({
+    tts,
+    now: clock.now,
+    setTimeout: clock.setTimeoutFake,
+    clearTimeout: clock.clearTimeoutFake,
+    isReducedMotion: () => false,
+    isScreenReaderActive: () => false,
+  });
+  const settings = narratorSettings({ narratorLanguage: "both", funnyLevelEn: 1, funnyLevelYue: 5 });
+  assert.equal(narrator.narrateKey("handoffSuccess", settings, {}, { category: "success" }).accepted, true);
+  clock.advance(NARRATOR_DEBOUNCE_MS - 1);
+  assert.equal(spoken.length, 0);
+  clock.advance(1);
+  assert.equal(spoken.length, 1);
+  assert.match(spoken[0].text, /The URL was accepted/);
+  assert.equal(spoken[0].options.lang, "en-US");
+  assert.equal(spoken[0].options.enqueue, false);
+  assert.equal(spoken[0].options.rate, 0.94);
+  spoken[0].done();
+  assert.equal(spoken.length, 2);
+  assert.match(spoken[1].text, /本機程式/);
+  assert.equal(spoken[1].options.lang, "zh-HK");
+  assert.equal(spoken[1].options.rate, 1.08);
+  spoken[1].done();
+  assert.equal(narrator.snapshot().active, false);
+});
+
+test("narrator replaces pending events, enforces cooldown, and ignores late generations", () => {
+  const clock = createFakeClock();
+  const spoken = [];
+  let stopCount = 0;
+  const tts = {
+    speak(text, options, done) { spoken.push({ text, options, done }); },
+    stop() { stopCount += 1; },
+    isAvailable: () => true,
+  };
+  const narrator = createNarrator({ tts, now: clock.now, setTimeout: clock.setTimeoutFake, clearTimeout: clock.clearTimeoutFake, isReducedMotion: () => false, isScreenReaderActive: () => false });
+  const settings = narratorSettings({ narratorLanguage: "en" });
+  assert.equal(narrator.narrateText("old", settings, { category: "general" }).accepted, true);
+  const replacement = narrator.narrateText("new", settings, { category: "general" });
+  assert.equal(replacement.replaced, true);
+  clock.advance(NARRATOR_DEBOUNCE_MS);
+  assert.deepEqual(spoken.map((item) => item.text), ["new"]);
+  spoken[0].done();
+  assert.equal(narrator.narrateText("too soon", settings, { category: "general" }).accepted, true);
+  clock.advance(NARRATOR_DEBOUNCE_MS);
+  assert.equal(spoken.length, 1);
+  clock.advance(NARRATOR_COOLDOWN_MS);
+  assert.equal(spoken.length, 2);
+  const lateDone = spoken[1].done;
+  narrator.cancel();
+  assert.equal(stopCount, 1);
+  assert.equal(narrator.narrateText("fresh", settings, { category: "success" }).accepted, true);
+  clock.advance(NARRATOR_DEBOUNCE_MS);
+  assert.equal(spoken.length, 3);
+  lateDone();
+  assert.equal(narrator.snapshot().active, true);
+
+  const errorClock = createFakeClock();
+  const errorSpoken = [];
+  const errorNarrator = createNarrator({
+    tts: { speak(text, options, done) { errorSpoken.push({ text, done }); }, stop() {}, isAvailable: () => true },
+    now: errorClock.now,
+    setTimeout: errorClock.setTimeoutFake,
+    clearTimeout: errorClock.clearTimeoutFake,
+    isReducedMotion: () => false,
+    isScreenReaderActive: () => false,
+  });
+  assert.equal(errorNarrator.narrateText("first error", settings, { category: "error" }).accepted, true);
+  errorClock.advance(NARRATOR_DEBOUNCE_MS);
+  errorSpoken[0].done();
+  assert.equal(errorNarrator.narrateText("second error", settings, { category: "error" }).accepted, true);
+  errorClock.advance(NARRATOR_DEBOUNCE_MS);
+  assert.equal(errorSpoken.length, 2);
+  const priority = createNarrator({
+    tts: { speak() {}, stop() {}, isAvailable: () => true },
+    now: errorClock.now,
+    setTimeout: errorClock.setTimeoutFake,
+    clearTimeout: errorClock.clearTimeoutFake,
+    isReducedMotion: () => false,
+    isScreenReaderActive: () => false,
+  });
+  assert.equal(priority.narrateText("error", settings, { category: "error" }).accepted, true);
+  assert.equal(priority.narrateText("info", settings, { category: "info" }).accepted, true);
+  assert.deepEqual(priority.snapshot().pending.categories, ["error", "info"]);
+
+  const pendingCancelClock = createFakeClock();
+  const pendingSpoken = [];
+  const pendingCancel = createNarrator({
+    tts: { speak(text, options, done) { pendingSpoken.push(text); }, stop() {}, isAvailable: () => true },
+    now: pendingCancelClock.now,
+    setTimeout: pendingCancelClock.setTimeoutFake,
+    clearTimeout: pendingCancelClock.clearTimeoutFake,
+    isReducedMotion: () => false,
+    isScreenReaderActive: () => false,
+  });
+  pendingCancel.narrateText("stale settings event", settings, { category: "success" });
+  pendingCancel.cancel();
+  pendingCancelClock.advance(NARRATOR_DEBOUNCE_MS + NARRATOR_COOLDOWN_MS);
+  assert.deepEqual(pendingSpoken, []);
+});
+
+test("narrator fails closed for quiet, muted, reduced-motion, screen-reader, and unavailable states", () => {
+  const clock = createFakeClock();
+  const tts = { speak() {}, stop() {}, isAvailable: () => true };
+  const make = (settings, overrides = {}) => createNarrator({
+    tts,
+    now: clock.now,
+    setTimeout: clock.setTimeoutFake,
+    clearTimeout: clock.clearTimeoutFake,
+    isReducedMotion: () => overrides.reducedMotion === true,
+    isScreenReaderActive: () => overrides.screenReader === true,
+  }).narrateText("event", settings, { category: "info" });
+  assert.equal(make({ ...DEFAULT_SETTINGS }).accepted, false);
+  assert.equal(make(narratorSettings({ narratorQuietMode: true })).reason, "quiet");
+  assert.equal(make(narratorSettings({ narratorSoundMode: "muted" })).reason, "muted");
+  assert.equal(make(narratorSettings(), { reducedMotion: true }).reason, "reduced-motion");
+  assert.equal(make(narratorSettings({ narratorReducedMotionActive: true })).reason, "reduced-motion");
+  assert.equal(make(narratorSettings(), { screenReader: true }).reason, "screen-reader");
+  const unavailable = createNarrator({ tts: { speak() {}, isAvailable: () => false } });
+  assert.equal(unavailable.narrateText("event", narratorSettings(), { category: "info" }).reason, "unsupported");
+});
+
+test("narrator reschedules a newly queued error ahead of a progress cooldown", () => {
+  const clock = createFakeClock();
+  const spoken = [];
+  const narrator = createNarrator({
+    tts: { speak(text, options, done) { spoken.push({ text, done }); }, stop() {}, isAvailable: () => true },
+    now: clock.now,
+    setTimeout: clock.setTimeoutFake,
+    clearTimeout: clock.clearTimeoutFake,
+    isReducedMotion: () => false,
+    isScreenReaderActive: () => false,
+  });
+  const settings = narratorSettings({ narratorLanguage: "en" });
+  narrator.narrateText("progress one", settings, { category: "progress" });
+  clock.advance(NARRATOR_DEBOUNCE_MS);
+  spoken[0].done();
+  narrator.narrateText("progress two", settings, { category: "progress" });
+  narrator.narrateText("failure", settings, { category: "error" });
+  clock.advance(NARRATOR_DEBOUNCE_MS);
+  assert.equal(spoken.length, 2);
+  assert.equal(spoken[1].text, "failure");
+});
+
+test("Chrome TTS adapter waits for final events and never delegates queue ordering", () => {
+  const calls = [];
+  let completed = 0;
+  const tts = {
+    speak(text, options, callback) { calls.push({ text, options, callback }); },
+    stop() {},
+  };
+  const adapter = createChromeTtsAdapter(tts, { assumePerCallEvents: true });
+  assert.equal(adapter.isAvailable(), true);
+  adapter.speak("hello", { lang: "en-US", enqueue: true }, () => { completed += 1; });
+  assert.equal(completed, 0);
+  assert.equal(calls[0].options.enqueue, false);
+  assert.deepEqual(calls[0].options.requiredEventTypes, ["end", "interrupted", "cancelled", "error"]);
+  calls[0].options.onEvent({ type: "start", isFinalEvent: false });
+  assert.equal(completed, 0);
+  calls[0].options.onEvent({ type: "provider-final", isFinalEvent: true });
+  assert.equal(completed, 1);
+  calls[0].options.onEvent({ type: "end", charIndex: 5, isFinalEvent: true });
+  assert.equal(completed, 1);
+  const unavailable = createChromeTtsAdapter({ speak() {} });
+  assert.equal(unavailable.isAvailable(), false);
+
+  const voiceCalls = [];
+  const unavailableLanguages = [];
+  const voiceAdapter = createChromeTtsAdapter({
+    getVoices(callback) {
+      callback([
+        { voiceName: "Remote Cantonese", lang: "zh-HK", remote: true, eventTypes: ["end", "error"] },
+        { voiceName: "Local English", lang: "en-US", remote: false, eventTypes: ["end", "interrupted", "cancelled", "error"] },
+      ]);
+    },
+    speak(text, options) { voiceCalls.push({ text, options }); },
+    stop() {},
+  }, { onUnavailable: (language) => unavailableLanguages.push(language) });
+  return voiceAdapter.refreshVoices().then(() => {
+    assert.equal(voiceAdapter.supportsLanguage("yue"), false);
+    assert.equal(voiceAdapter.supportsLanguage("en"), true);
+    voiceAdapter.speak("廣東話", { language: "yue", lang: "zh-HK" }, () => {});
+    assert.deepEqual(unavailableLanguages, ["yue"]);
+    voiceAdapter.speak("English", { language: "en", lang: "en-US" }, () => {});
+    assert.equal(voiceCalls[0].options.voiceName, "Local English");
+    assert.equal(voiceCalls[0].options.onEvent instanceof Function, true);
+    const brokenVoices = createChromeTtsAdapter({
+      getVoices() { return Promise.reject(new Error("voice enumeration failed")); },
+      speak() {},
+      stop() {},
+    });
+    return brokenVoices.refreshVoices().then(() => {
+      assert.equal(brokenVoices.supportsLanguage("yue"), false);
+    });
+  });
 });
 
 test("credential abstraction is explicit and fail-closed without storing a secret", async () => {
@@ -889,6 +1180,40 @@ test("School mode, emoji controls, live settings refresh, and redacted journal w
   assert.match(localize("schoolModeLabel", { ...DEFAULT_SETTINGS, schoolModeName: "Quiet study" }, { name: "Quiet study" }), /Quiet study/);
   assert.match(localize("popupTitle", { ...DEFAULT_SETTINGS, managerName: "Renamed manager" }, { name: "Renamed manager" }), /Renamed manager/);
   assert.match(localize("schoolModeCredentialStatus", DEFAULT_SETTINGS), /No credential material is stored/);
+});
+
+test("narrator controls and service-worker event wiring are localized and searchable", async () => {
+  const options = await read("src/options.html");
+  const optionsScript = await read("src/options.js");
+  const popup = await read("src/popup.html");
+  const popupScript = await read("src/popup.js");
+  const worker = await read("src/service-worker.js");
+  const narrator = await read("src/shared/narrator.js");
+  const adapter = await read("src/shared/chrome-tts.js");
+  for (const id of ["narrator-enabled", "narrator-language", "narrator-sound-mode", "narrator-quiet-mode", "narrator-respect-reduced-motion", "test-narration"]) {
+    assert.match(options, new RegExp(`id="${id}"`), id);
+  }
+  assert.match(options, /data-school-hidden[^>]+data-search="narrator/);
+  assert.match(options, /<section class="setting-card export-card" data-school-hidden/);
+  assert.match(popup, /data-school-hidden[^>]+data-l10n="settingsDisclosure"/);
+  assert.match(popupScript, /document\.querySelectorAll\("\[data-school-hidden\]"\)/);
+  assert.match(optionsScript, /REQUIRED_SEARCHABLE_SETTING_IDS[\s\S]*"narrator-enabled"/);
+  assert.match(optionsScript, /TEST_NARRATION/);
+  assert.match(worker, /RESULT_NARRATION_KEYS/);
+  assert.match(worker, /narratorSettingsGeneration/);
+  assert.match(worker, /generation !== narratorSettingsGeneration/);
+  assert.match(worker, /void narrateResult\(value\)/);
+  const narrateResultBlock = worker.match(/async function narrateResult[\s\S]*?\r?\n\}\r?\n\r?\nasync function recordResult/iu)?.[0] ?? "";
+  assert.doesNotMatch(narrateResultBlock, /value\.detail|selectionText|fileName|capability/iu);
+  assert.match(adapter, /requiredEventTypes/);
+  assert.match(narrator, /NARRATOR_DEBOUNCE_MS/);
+  assert.match(narrator, /NARRATOR_COOLDOWN_MS/);
+  assert.match(adapter, /enqueue: false/);
+  for (const key of ["narratorHeading", "narratorHelp", "narratorProvenance", "narratorLanguageBoth", "narratorSoundReduced", "narratorTestButton", "narratorUnavailable"]) {
+    assert.equal(hasLocalizationKey(key), true, key);
+  }
+  assert.match(localize("narratorHelp", { ...DEFAULT_SETTINGS, languageMode: "en" }), /serialized|debounced|rate-limited/);
+  assert.match(localize("narratorHelp", { ...DEFAULT_SETTINGS, languageMode: "yue" }), /語音事件/);
 });
 
 test("popup and options localization markers all resolve to known copy", async () => {
