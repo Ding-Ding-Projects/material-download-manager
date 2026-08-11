@@ -346,6 +346,15 @@ feed result was verified by the historical self-hosted release run that
 published `v0.1.18`; later successful runs advance the same feed without
 recycling a tag.
 
+Before the native Squirrel updater downloads or reports a ready update, the
+main process validates the bounded HTTPS `RELEASES` index, selects exactly one
+matching full package, and carries its Squirrel SHA-1/size metadata plus the
+index SHA-256 through the validated IPC state. The ready banner repeats the
+localized unsigned-artifact warning: no code signature is present and the
+operating system may show an unknown-publisher or SmartScreen warning. These
+digests provide package-integrity metadata only; they are not a signature or
+authenticity claim.
+
 The release workflow runs on every push and on manual dispatch. It builds,
 packages, publishes, and verifies a unique release; it does not run tests or
 lint. The Pages workflow builds and deploys the documentation site from `main`

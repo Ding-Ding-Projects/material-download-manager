@@ -1,5 +1,6 @@
 import { EventEmitter } from "node:events";
-import type { UpdateState } from "../../shared/types";
+import { isUpdateState, type UpdateFeedIntegrityMetadata, type UpdateState } from "../../shared/types";
+import { verifyUpdateFeedIntegrity, type UpdateFeedIntegrity } from "./FeedIntegrity";
 
 export type { UpdateState } from "../../shared/types";
 
@@ -55,6 +56,7 @@ export interface UpdateServiceOptions {
   checkTimeoutMs?: number;
   downloadTimeoutMs?: number;
   canInstall?: () => boolean;
+  verifyFeedIntegrity?: (feedUrl: string, version: string | null) => Promise<UpdateFeedIntegrityMetadata>;
   logger?: (message: string) => void;
 }
 
@@ -93,9 +95,9 @@ function boundedDelay(value: number | undefined, fallback: number, min: number, 
 }
 
 function updateVersion(value: unknown): string | null {
-  return typeof value === "string" && value.trim().length > 0 && value.trim().length <= 128
-    ? value.trim()
-    : null;
+  if (typeof value !== "string") return null;
+  const normalized = value.trim().replace(/^v(?=\d)/iu, "");
+  return normalized.length > 0 && normalized.length <= 128 ? normalized : null;
 }
 
 function parseVersion(value: string): ParsedVersion | null {
@@ -269,6 +271,7 @@ export class UpdateService extends EventEmitter {
   private readonly checkTimeoutMs: number;
   private readonly downloadTimeoutMs: number;
   private readonly canInstall: () => boolean;
+  private readonly verifyFeedIntegrity: (feedUrl: string, version: string | null) => Promise<UpdateFeedIntegrityMetadata>;
   private readonly logger: (message: string) => void;
   private state: UpdateState;
   private timer: TimerHandle | null = null;
@@ -279,6 +282,7 @@ export class UpdateService extends EventEmitter {
   private downloadInFlight: DownloadLease | null = null;
   private availableVersion: string | null = null;
   private availableReleaseNotesUrl: string | null = null;
+  private availableIntegrity: UpdateFeedIntegrityMetadata | null = null;
 
   private readonly handleUpdateAvailable = (info?: UpdateInfoLike) => {
     const lease = this.checkInFlight;
@@ -293,6 +297,7 @@ export class UpdateService extends EventEmitter {
     if (version && !isNewerVersion(version, this.currentVersion)) {
       this.availableVersion = null;
       this.availableReleaseNotesUrl = null;
+      this.availableIntegrity = null;
       this.setCurrent();
       this.settleCheck(lease);
       return;
@@ -336,7 +341,7 @@ export class UpdateService extends EventEmitter {
     }
 
     const releaseName = updateVersion(args[2]);
-    const version = releaseName ?? lease.version ?? this.availableVersion;
+    const version = releaseName ?? lease.version ?? this.availableVersion ?? this.availableIntegrity?.version ?? null;
     if (!version || !isNewerVersion(version, this.currentVersion)) {
       this.settleDownload(lease);
       this.fail("The update did not provide a newer verified version.");
@@ -344,7 +349,7 @@ export class UpdateService extends EventEmitter {
     }
 
     this.availableVersion = version;
-    this.setReady(version, lease.releaseNotesUrl ?? this.availableReleaseNotesUrl);
+    this.setReady(version, lease.releaseNotesUrl ?? this.availableReleaseNotesUrl, this.availableIntegrity);
     this.settleDownload(lease);
   };
 
@@ -412,6 +417,7 @@ export class UpdateService extends EventEmitter {
       MAX_DOWNLOAD_TIMEOUT_MS
     );
     this.canInstall = options.canInstall ?? (() => false);
+    this.verifyFeedIntegrity = options.verifyFeedIntegrity ?? (async (feedUrl, version) => verifyUpdateFeedIntegrity(feedUrl, version));
     this.logger = options.logger ?? (() => {});
     this.state = {
       status: "current",
@@ -512,12 +518,34 @@ export class UpdateService extends EventEmitter {
     if (this.stopped || !this.started || !this.isPackaged || !this.feedUrl || this.downloadInFlight) return false;
     if (this.state.status !== "available" && this.state.status !== "downloading") return false;
 
-    const version = this.availableVersion ?? this.state.version;
+    const requestedVersion = this.availableVersion ?? (typeof this.state.version === "string" ? this.state.version : null);
     const releaseNotesUrl = this.availableReleaseNotesUrl ?? this.state.releaseNotesUrl;
-    if (version && !isNewerVersion(version, this.currentVersion)) {
-      this.setCurrent();
+    if (requestedVersion && !isNewerVersion(requestedVersion, this.currentVersion)) {
+      this.fail("The update feed did not provide a newer verified version.");
       return false;
     }
+
+    let integrity: UpdateFeedIntegrity;
+    try {
+      integrity = await withTimeout(this.verifyFeedIntegrity(this.feedUrl, requestedVersion), this.checkTimeoutMs);
+    } catch (error) {
+      if (networkFailure(error)) this.offline();
+      else this.fail("The update feed RELEASES metadata could not be verified.");
+      return false;
+    }
+    if (this.stopped || this.isReady()) return false;
+    this.availableIntegrity = integrity;
+    const version = requestedVersion ?? integrity.version;
+
+    if (!isNewerVersion(version, this.currentVersion)) {
+      this.fail("The update feed did not provide a newer verified version.");
+      return false;
+    }
+    if (!this.createReadyState(version, releaseNotesUrl, integrity)) {
+      this.fail("The update feed RELEASES metadata was not valid for the selected version.");
+      return false;
+    }
+    this.availableVersion = version;
 
     if (!this.adapter.downloadUpdate) {
       const lease: DownloadLease = {
@@ -535,11 +563,6 @@ export class UpdateService extends EventEmitter {
       // bounds the event-only path when neither event arrives.
       lease.timeoutTimer = setTimeout(() => this.handleNativeDownloadTimeout(lease), this.downloadTimeoutMs);
       this.setDownloading(version, releaseNotesUrl, 0);
-      return false;
-    }
-
-    if (!version || !isNewerVersion(version, this.currentVersion)) {
-      this.fail("The update feed did not provide a newer verified version.");
       return false;
     }
 
@@ -565,7 +588,7 @@ export class UpdateService extends EventEmitter {
     void rawOperation.then(
       () => {
         if (this.downloadInFlight !== lease) return;
-        if (!lease.timedOut && !this.isReady()) this.setReady(version, releaseNotesUrl);
+        if (!lease.timedOut && !this.isReady()) this.setReady(version, releaseNotesUrl, this.availableIntegrity);
         this.settleDownload(lease);
       },
       (error: unknown) => {
@@ -677,6 +700,7 @@ export class UpdateService extends EventEmitter {
       releaseNotesUrl: null,
       checkedAt: this.now(),
     };
+    this.availableIntegrity = null;
     this.emit("state-changed", this.getState());
   }
 
@@ -696,6 +720,7 @@ export class UpdateService extends EventEmitter {
       releaseNotesUrl,
       checkedAt: this.now(),
     };
+    this.availableIntegrity = null;
     this.emit("state-changed", this.getState());
   }
 
@@ -711,15 +736,31 @@ export class UpdateService extends EventEmitter {
     this.emit("state-changed", this.getState());
   }
 
-  private setReady(version: string, candidateReleaseNotesUrl: string | null) {
-    if (this.state.status === "ready") return;
+  private createReadyState(
+    version: string,
+    candidateReleaseNotesUrl: string | null,
+    integrity: UpdateFeedIntegrityMetadata | null,
+  ): Extract<UpdateState, { status: "ready" }> | null {
+    if (!integrity || integrity.version !== version) return null;
     const releaseNotesUrl = releaseNotesUrlFor(version, candidateReleaseNotesUrl, this.releaseNotesBaseUrl);
-    this.state = {
-      status: "ready",
+    const candidate = {
+      status: "ready" as const,
       version,
       releaseNotesUrl,
       checkedAt: this.now(),
+      integrity,
     };
+    return isUpdateState(candidate) ? candidate : null;
+  }
+
+  private setReady(version: string, candidateReleaseNotesUrl: string | null, integrity: UpdateFeedIntegrityMetadata | null) {
+    if (this.state.status === "ready") return;
+    const readyState = this.createReadyState(version, candidateReleaseNotesUrl, integrity);
+    if (!readyState) {
+      this.fail("The update feed RELEASES metadata was not verified for the selected version.");
+      return;
+    }
+    this.state = readyState;
     this.emit("state-changed", this.getState());
   }
 

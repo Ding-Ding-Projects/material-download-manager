@@ -11,6 +11,7 @@ import {
   type UpdateInfoLike,
   type UpdaterAdapter,
 } from "../updater/UpdateService";
+import { verifyUpdateFeedIntegrity } from "../updater/FeedIntegrity";
 import { isUpdateState } from "../../shared/types";
 
 class FakeUpdater extends EventEmitter implements UpdaterAdapter {
@@ -79,6 +80,14 @@ function service(adapter: UpdaterAdapter, options: Partial<ConstructorParameters
     checkTimeoutMs: 1_000,
     downloadTimeoutMs: 1_000,
     canInstall: () => true,
+    verifyFeedIntegrity: async () => ({
+      version: "1.1.0",
+      packageName: "material-download-manager-1.1.0-full.nupkg",
+      packageSize: 1234,
+      packageDigestAlgorithm: "sha1",
+      packageDigest: "a".repeat(40),
+      releasesSha256: "b".repeat(64),
+    }),
     schedule: () => 1 as unknown as ReturnType<typeof setTimeout>,
     cancelSchedule: () => {},
     ...options,
@@ -117,21 +126,149 @@ test("packaged service stages a newer update, exposes exact release notes, and i
   updater.onStateChanged((state) => states.push(state.status));
 
   assert.equal(updater.start().status, "current");
-  const result = await updater.checkForUpdates();
+  await updater.checkForUpdates();
   await tick();
+  const result = updater.getState();
 
   assert.equal(adapter.feedUrl, "https://updates.example.test/material-download-manager/");
   assert.equal(adapter.checks, 1);
   assert.equal(adapter.downloads, 1);
   assert.equal(result.status, "ready");
+  if (result.status !== "ready") throw new Error("expected a ready update state");
   assert.equal(result.version, "1.1.0");
   assert.equal(result.releaseNotesUrl, "https://updates.example.test/releases/tag/v1.1.0");
+  assert.equal(result.integrity.packageName, "material-download-manager-1.1.0-full.nupkg");
+  assert.equal(result.integrity.packageDigestAlgorithm, "sha1");
+  assert.equal(result.integrity.packageDigest, "a".repeat(40));
+  assert.equal(result.integrity.releasesSha256, "b".repeat(64));
   assert.equal(isUpdateState(result), true);
+  assert.equal(
+    isUpdateState({
+      ...result,
+      integrity: { ...result.integrity, version: "1.0.0" },
+    }),
+    false,
+  );
   assert.equal(adapter.installs, 0);
   assert.equal(updater.quitAndInstall(), true);
   assert.equal(adapter.installs, 1);
   assert.deepEqual(states, ["available", "downloading", "ready"]);
   updater.stop();
+});
+
+test("unverified RELEASES metadata blocks the download and ready state", async () => {
+  const adapter = new FakeUpdater();
+  adapter.nextCheck = { updateInfo: { version: "1.1.0" } };
+  const updater = service(adapter, {
+    verifyFeedIntegrity: async () => {
+      throw new Error("The update RELEASES metadata contains a malformed package entry.");
+    },
+  });
+  updater.start();
+
+  const state = await updater.checkForUpdates();
+  await tick();
+
+  assert.equal(state.status, "failed");
+  const finalState = updater.getState();
+  assert.equal(finalState.status, "failed");
+  if (finalState.status !== "failed" && finalState.status !== "offline") throw new Error("expected a failed update state");
+  assert.match(finalState.message, /RELEASES metadata/);
+  assert.equal(adapter.downloads, 0);
+  updater.stop();
+});
+
+test("mismatched RELEASES version blocks the adapter download before ready", async () => {
+  const adapter = new FakeUpdater();
+  adapter.nextCheck = { updateInfo: { version: "1.1.0" } };
+  const updater = service(adapter, {
+    verifyFeedIntegrity: async () => ({
+      version: "1.2.0",
+      packageName: "material-download-manager-1.2.0-full.nupkg",
+      packageSize: 1234,
+      packageDigestAlgorithm: "sha1",
+      packageDigest: "c".repeat(40),
+      releasesSha256: "d".repeat(64),
+    }),
+  });
+  updater.start();
+
+  const state = await updater.checkForUpdates();
+  await tick();
+
+  assert.equal(state.status, "failed");
+  assert.match(state.message, /valid for the selected version/);
+  assert.equal(adapter.downloads, 0);
+  updater.stop();
+});
+
+test("feed verifier parses one matching full package and bounded digest metadata", async () => {
+  const releases = "\uFEFF" + [
+    `${"a".repeat(40)} material-download-manager-1.1.0-full.nupkg 1234`,
+    `${"c".repeat(40)} material-download-manager-1.1.0-delta.nupkg 456`,
+  ].join("\n");
+  const metadata = await verifyUpdateFeedIntegrity(
+    "https://updates.example.test/feed/",
+    "v1.1.0",
+    {
+      fetcher: async (url) => ({
+        status: 200,
+        ok: true,
+        url,
+        headers: { get: () => String(Buffer.byteLength(releases)) },
+        text: async () => releases,
+      }),
+    }
+  );
+
+  assert.equal(metadata.packageName, "material-download-manager-1.1.0-full.nupkg");
+  assert.equal(metadata.version, "1.1.0");
+  assert.equal(metadata.packageSize, 1234);
+  assert.equal(metadata.packageDigest, "a".repeat(40));
+  assert.equal(metadata.packageDigestAlgorithm, "sha1");
+  assert.equal(metadata.releasesSha256.length, 64);
+});
+
+test("feed verifier rejects unsafe redirects and oversized RELEASES bodies", async () => {
+  const releases = `${"a".repeat(40)} material-download-manager-1.1.0-full.nupkg 1234`;
+  const response = (overrides: Record<string, unknown> = {}) => ({
+    status: 200,
+    ok: true,
+    url: "https://updates.example.test/RELEASES",
+    headers: { get: () => String(Buffer.byteLength(releases)) },
+    text: async () => releases,
+    ...overrides,
+  });
+
+  await assert.rejects(
+    () => verifyUpdateFeedIntegrity("https://updates.example.test/feed/", "1.1.0", {
+      fetcher: async () => response({ url: "http://redirect.example.test/RELEASES" }),
+    }),
+    /unsafe URL/
+  );
+
+  await assert.rejects(
+    () => verifyUpdateFeedIntegrity("https://updates.example.test/feed/", "1.1.0", {
+      fetcher: async () => response({ url: "https://evil.example.test/RELEASES" }),
+    }),
+    /unsafe URL/
+  );
+
+  const githubRedirect = await verifyUpdateFeedIntegrity(
+    "https://github.com/Ding-Ding-Projects/material-download-manager/releases/latest/download/",
+    "1.1.0",
+    {
+      fetcher: async () => response({ url: "https://release-assets.githubusercontent.com/release/RELEASES" }),
+    }
+  );
+  assert.equal(githubRedirect.version, "1.1.0");
+
+  await assert.rejects(
+    () => verifyUpdateFeedIntegrity("https://updates.example.test/feed/", "1.1.0", {
+      fetcher: async () => response({ headers: { get: () => String(256 * 1024 + 1) } }),
+    }),
+    /too large/
+  );
 });
 
 test("older and equal update events are ignored without starting a download", async () => {

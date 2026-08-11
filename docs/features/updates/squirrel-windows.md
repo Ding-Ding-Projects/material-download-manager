@@ -27,6 +27,22 @@ an explicit unsigned-artifact warning. HTTPS feed metadata, `RELEASES`, and
 package hashes provide transport and package integrity; they are not a
 signature claim.
 
+Before the native Squirrel updater is allowed to enter `downloading` or
+`ready`, the main process fetches the feed's `RELEASES` index over bounded
+credential-free HTTPS. It rejects unsafe redirects, oversized or malformed
+indexes, duplicate or missing full packages, invalid SHA-1 entries, invalid
+sizes, and a package whose version does not match the newer update. The
+fetch follows only HTTPS redirects and accepts GitHub's exact release-asset
+hosts; signed redirect query data never crosses the renderer boundary. A
+validated response can include a UTF-8 BOM, which is ignored only while
+parsing the first Squirrel line. The validated ready state carries the matching
+full package name and byte size, the Squirrel SHA-1 digest supplied by
+`RELEASES`, and a SHA-256 digest of the index body.
+That metadata crosses the preload boundary only after `isUpdateState` validates
+its shape; it is integrity evidence, not a signing or authenticity claim.
+The verifier does not download a second copy of the package or invoke a
+signer, so the native updater remains the sole staged-download owner.
+
 ## Configuration
 
 The service uses the stable public feed URL
@@ -72,6 +88,9 @@ path while keeping payload contents out of logs.
   and prevent late events from overwriting a ready state.
 - Equal, older, malformed, or unverified candidate versions never become
   downloadable or ready.
+- A malformed, missing, oversized, redirected, or version-mismatched
+  `RELEASES` index fails the update before any download begins; the renderer
+  receives only the localized failure state.
 - The app stages an update and never calls `quitAndInstall()` while active work
   or a stale unsaved-work check remains.
 - Any signer invocation or setup executable whose Authenticode state is not
@@ -120,6 +139,10 @@ metadata mutations, filename-independent key and CRX detection, nested archive
 inspection, and oversized manifest or ZIP-entry-count rejection. These checks
 are intentionally local evidence; the GitHub Actions workflow remains
 test-free and only builds, packages, and publishes.
+
+The focused updater suite also covers a verified full-package metadata record,
+malformed `RELEASES` rejection before download, unsafe redirect rejection, and
+the ready-state integrity fields that reach the renderer boundary.
 
 ## Suggested articles
 

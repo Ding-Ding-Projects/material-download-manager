@@ -138,6 +138,27 @@ headless route; the named desktop disappeared and the final cheap desktop
 inventory reported zero entries. The expected invalid-format diagnostics from
 negative History and Changelog export probes did not change the passed result.
 
+## Updater ready-state integrity and unsigned warning (2026-08-11)
+
+Issue [#18](https://github.com/Ding-Ding-Projects/material-download-manager/issues/18)
+tracks this bounded desktop updater slice. Source commit
+[`0a47393`](https://github.com/Ding-Ding-Projects/material-download-manager/commit/0a473939b6bbee657d199903a9056e53e871c7d4)
+verifies Squirrel `RELEASES` metadata before a download enters `ready`:
+unsafe redirects, oversized or malformed indexes, invalid SHA-1 entries,
+invalid sizes, duplicate full packages, and version mismatches are rejected.
+The validated ready state carries the full package name and size, Squirrel
+SHA-1, and a SHA-256 digest of the `RELEASES` body; preload validation rejects
+malformed integrity metadata before it reaches the renderer.
+
+The ready banner now displays localized unsigned-artifact copy naming the
+missing code signature and possible unknown-publisher or SmartScreen warning.
+No signer, CRX, or alternate publication path was added. Local verification
+recorded **112/112** compiled Electron tests, documentation **2/2**, typecheck,
+renderer/Electron build, fresh `build.bat /s`, and UI smoke **42/42**. The live
+feed probe verified the full package's SHA-1/size and the index SHA-256; no
+updater-ready capture is claimed because unpacked smoke intentionally disables
+updates and a packaged run would start a native download.
+
 ## Authenticator Settings registration surface (2026-08-11)
 
 Issue [#18](https://github.com/Ding-Ding-Projects/material-download-manager/issues/18)
