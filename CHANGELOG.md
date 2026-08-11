@@ -8,7 +8,7 @@ of guessing a commit, release, or date.
 ## Unreleased — browser extension authenticator destination
 
 - **Source issue:** [#18 — Implement the universal feature contract](https://github.com/Ding-Ding-Projects/material-download-manager/issues/18)
-- **Source commits:** [`572d37e`](https://github.com/Ding-Ding-Projects/material-download-manager/commit/572d37e0ddc3abd0eca495c1d97af4e7dde0fef2), [`1c5273d`](https://github.com/Ding-Ding-Projects/material-download-manager/commit/1c5273dfc77f23659d8aa2d0ed168c54bd22a04d), [`e0b8c39`](https://github.com/Ding-Ding-Projects/material-download-manager/commit/e0b8c39f55982df59b2690f45c9cd9480b89ec73), [`d3822a7`](https://github.com/Ding-Ding-Projects/material-download-manager/commit/d3822a7d521ffaf9ea762896748f7910289a223e)
+- **Source commits:** [`572d37e`](https://github.com/Ding-Ding-Projects/material-download-manager/commit/572d37e0ddc3abd0eca495c1d97af4e7dde0fef2), [`1c5273d`](https://github.com/Ding-Ding-Projects/material-download-manager/commit/1c5273dfc77f23659d8aa2d0ed168c54bd22a04d), [`e0b8c39`](https://github.com/Ding-Ding-Projects/material-download-manager/commit/e0b8c39f55982df59b2690f45c9cd9480b89ec73), [`d3822a7`](https://github.com/Ding-Ding-Projects/material-download-manager/commit/d3822a780776ff00383751407022e013903f6be8), [`94b636c`](https://github.com/Ding-Ding-Projects/material-download-manager/commit/94b636c6f2d3e3c1abe1ccaa30adcc9370325f28), [`e94beb4`](https://github.com/Ding-Ding-Projects/material-download-manager/commit/e94beb486e0290c470b6013718f19043ff5467ec), [`1cd54d0`](https://github.com/Ding-Ding-Projects/material-download-manager/commit/1cd54d0176f83a1e92c23f102a4fa03276072a9e), and [`573e8b5`](https://github.com/Ding-Ding-Projects/material-download-manager/commit/573e8b51e5405ff82990f7b8127a80343fa3f13f)
 - **Scope:** Chromium extension options destination with local registration and
   browser-local storage; no network, CRX, or signing path was added.
 
@@ -36,6 +36,67 @@ of guessing a commit, release, or date.
   no scanner decoder dependency, so no scanner-backed capture is claimed.
 - GitHub Actions remains build/package/publication-only and does not run tests
   or lint. No CRX artifact, signing key, or signing operation was added.
+
+## Unreleased — scheduled settings foundation
+
+- **Source issue:** [#18 — Implement the universal feature contract](https://github.com/Ding-Ding-Projects/material-download-manager/issues/18)
+- **Source commit:** [`8b6e5f9`](https://github.com/Ding-Ding-Projects/material-download-manager/commit/8b6e5f9c71e72cc5f86d8f85460ea6970b1c20fc)
+- **Scope:** versioned local schedule records, native date/time and weekday
+  editing, timezone and cross-midnight semantics, deterministic priority
+  precedence, state/history persistence, live two-window IPC, and safe
+  credential-free external-source metadata.
+
+### Verification
+
+- `npm run typecheck` and `npm run build` — passed.
+- Scheduled-settings tests — **5/5 passed**; schedule-source resolver —
+  **11/11 passed**.
+- Full compiled Electron tests — **113/113 passed**; download-engine tests —
+  **100/100 passed**; documentation tests — **2/2 passed**.
+- Real built-artifact smoke — **43/43 passed**. The Settings capture is
+  [`scheduled-settings.png`](docs/screenshots/settings/scheduled-settings.png)
+  (524×738 PNG, SHA-256
+  `471166F2C1DBBF3BDDD48603DBF5A4D573E60EDD9032B8E904D5727DF337E4C6`).
+- GitHub Actions run [31493449594](https://github.com/Ding-Ding-Projects/material-download-manager/actions/runs/31493449594)
+  succeeded for the exact source commit and published `v0.1.107`; the release
+  is unsigned and contains no CRX artifact.
+
+## Unreleased — authenticator management list and live codes
+
+- **Source issue:** [#18 — Implement the universal feature contract](https://github.com/Ding-Ding-Projects/material-download-manager/issues/18)
+- **Source commit:** [`9c32741`](https://github.com/Ding-Ding-Projects/material-download-manager/commit/9c3274134e6aa4b2d1de6b9f234fdf680b72f16f)
+- **Scope:** bounded management follow-up to the authenticator Settings
+  registration surface. It adds restart-safe metadata loading, vault-backed
+  current/next TOTP codes, a numeric period countdown, copy action, and
+  period-boundary request ordering. Reorder/group/bulk management, per-tab
+  locks, and schedules remain separate work.
+
+### Added
+
+- Live current and next code rows fed only by the existing main-process
+  `generateAuthenticatorCode` IPC method; the renderer never reads a secret.
+- Numeric seconds-remaining countdown that refreshes at each period boundary,
+  clears stale values when a vault entry is unavailable, and keeps the copy
+  action disabled until a current code is ready.
+- A real built-artifact smoke check that creates a disposable vault entry,
+  reloads the app, verifies the live row, and removes the entry without writing
+  its secret or code to evidence.
+
+### Verification boundary
+
+- `npm run typecheck` — passed.
+- `npm run build` — passed.
+- Focused TOTP/UI tests — **14/14 passed**.
+- Full compiled Electron tests — **110/110 passed**.
+- Real built-artifact smoke — **43/43 required checks passed**. The existing
+  secret-free registration capture remains
+  [`authenticator-settings-empty.png`](docs/screenshots/authenticator/authenticator-settings-empty.png)
+  (524×462 PNG, SHA-256
+  `92DCE765FF7B8D07854C15D34FAED2708EB5C29C827DA26879E02DEACFD4DDC`). No
+  live-code screenshot is claimed because the displayed digits are
+  credential-bearing.
+- GitHub Actions does not run tests or lint; local results are the test
+  evidence. No signing operation or CRX artifact was added.
 
 ## Unreleased — authenticator Settings registration surface
 
@@ -148,24 +209,27 @@ of guessing a commit, release, or date.
   settings write, and scrubs verifier validation buffers. Follow-up engine
   verification is **100/100**; the existing real Settings capture is unchanged.
 
-## Unreleased — built-artifact smoke and gallery refresh
+## Unreleased — current auto-organize gallery verification
 
-- **Source commit:** [`92dc67a`](https://github.com/Ding-Ding-Projects/material-download-manager/commit/92dc67a17fbad4f7471cda5d7d85c1b4b78c44a5)
+- **Source commit:** [`84da5e1`](https://github.com/Ding-Ding-Projects/material-download-manager/commit/84da5e1f2b10b6d88e9b946fe1523ad0295ddb2b)
 - **Local verification:** `npm run build` passed; the real hidden-desktop/CDP
-  smoke passed **42/42 required checks** in `10.488` seconds.
-- **Renderer assets:** `index-CUWEWH76.js` SHA-256
-  `34EF8CF409C1C6B5248E7F345CC9F2F58BD17C1A8022014D275C220F448FFCCC` and
-  `index-CL9UO5Fq.css` SHA-256
-  `23FF81988A28774B46E99E5FC38739905D813F8E7098D218325B9AC7974A0D45`.
-- **Gallery:** all seven auto-organize PNGs were replaced from that run; six
-  are 1100×900 and one is 520×760. Per-file hashes are recorded in
+  smoke passed **43/43 required checks** in `13.094` seconds.
+- **Renderer assets:** `index-D6pDySqX.js` SHA-256
+  `5E55A622C73485693527C1BFE35981FDD9BDFBBD940A36DDC79D9CE98C1D7C27` and
+  `index-DCh-PbGs.css` SHA-256
+  `CCA54DDFA9227A90F08E686322973C5358042EE0F7A71B840E8165C85F8AE697`.
+- **Gallery:** all seven auto-organize PNGs were freshly captured and copied
+  from that run. Six are 1100×900 and one is 520×760; all are 24-bit PNGs with
+  unique hashes. Their bytes match the tracked gallery exactly, so the refresh
+  produces no artificial binary diff. Per-file hashes are recorded in
   [`HANDOFF.md`](HANDOFF.md).
-- **Install/reveal capture:** the browser-extension card was recaptured from
-  the same run as a 524×233 PNG, SHA-256
-  `B465ABCB5A4B4BBB605B5289A27E75BF2DB473408481C1AE32EEB9997BE08785`, with
-  a generic temporary staging path and no user name in the image.
-- **Cleanup:** the disposable app/profile/process tree and named headless
-  desktop were removed; the final desktop inventory was zero.
+- **Extension boundary:** the same built-app run verified automatic and manual
+  browser-extension folder reveal, the Settings search's adjacent regex
+  builder, and the narrow bilingual card without overflow or clipped text. It
+  did not create a CRX or introduce signing material.
+- **Cleanup:** the disposable app/profile/process tree, fixture server, folder
+  window, and named headless desktop were removed; the final desktop inventory
+  was zero.
 
 ## Unreleased — protected display-name mutation history
 

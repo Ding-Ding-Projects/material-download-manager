@@ -10,7 +10,8 @@ and
 plus the refresh/accessibility hardening in
 [`e0b8c39`](https://github.com/Ding-Ding-Projects/material-download-manager/commit/e0b8c39f55982df59b2690f45c9cd9480b89ec73),
 and focus/localization cleanup in
-[`d3822a7`](https://github.com/Ding-Ding-Projects/material-download-manager/commit/d3822a7d521ffaf9ea762896748f7910289a223e),
+[`d3822a7`](https://github.com/Ding-Ding-Projects/material-download-manager/commit/d3822a780776ff00383751407022e013903f6be8),
+plus documentation/public-record commits [`94b636c`](https://github.com/Ding-Ding-Projects/material-download-manager/commit/94b636c6f2d3e3c1abe1ccaa30adcc9370325f28), [`e94beb4`](https://github.com/Ding-Ding-Projects/material-download-manager/commit/e94beb486e0290c470b6013718f19043ff5467ec), [`1cd54d0`](https://github.com/Ding-Ding-Projects/material-download-manager/commit/1cd54d0176f83a1e92c23f102a4fa03276072a9e), and [`573e8b5`](https://github.com/Ding-Ding-Projects/material-download-manager/commit/573e8b51e5405ff82990f7b8127a80343fa3f13f),
 add the real Chromium extension Authenticator options destination. It accepts
 manual or `otpauth://totp/` registration values, draws the QR locally, reveals
 the manual secret only on explicit request, verifies a current code before
@@ -34,7 +35,166 @@ check is a payload-bound matrix invariant because this checkout has no scanner
 decoder dependency; no scanner-backed capture is claimed. The extension keeps
 the unsigned ZIP/Load-unpacked path and adds no CRX, signing key, or signing
 operation. Image/camera/clipboard QR import, deliberate secret export, reorder,
-groups, and bulk management remain explicit follow-up work.
+  groups, and bulk management remain explicit follow-up work.
+
+## Scheduled settings foundation (2026-08-11)
+
+Issue [#18](https://github.com/Ding-Ding-Projects/material-download-manager/issues/18)
+tracks this bounded desktop slice. Source commit
+[`8b6e5f9`](https://github.com/Ding-Ding-Projects/material-download-manager/commit/8b6e5f9c71e72cc5f86d8f85460ea6970b1c20fc)
+adds versioned local schedule records, native date/time and weekday editing,
+timezone and cross-midnight semantics, deterministic priority resolution,
+local persistence/history, and live main-process IPC updates for both windows.
+External-source metadata is credential-free in renderer state: HTTPS API,
+explicit loopback development, and Home Assistant boolean records cross the
+main-process validation boundary, while access tokens remain outside settings,
+exports, logs, and history.
+
+### Changed files and verification
+
+- `design/shared/scheduledSettings.ts` and
+  `design/src/components/ScheduledSettingsPanel.tsx`: bounded schedule schema,
+  editor, timezone/date semantics, precedence, and source metadata.
+- `design/electron/download/DownloadManager.ts`, persistence, `main.ts`,
+  `preload.ts`, shared types, and Settings wiring: persistence, history, IPC,
+  and live two-window propagation.
+- `design/electron/__tests__/scheduledSettings.test.ts` and
+  `design/ui-tests/smoke.mjs`: schedule/resolver and real built-artifact proof.
+- `docs/features/settings/scheduled-settings.md` and
+  `docs/screenshots/settings/scheduled-settings.png`: behavior, security,
+  failure modes, and the captured Settings surface.
+
+Local evidence:
+
+- `npm run typecheck` and `npm run build` — passed.
+- Scheduled settings **5/5**, schedule-source resolver **11/11**, full
+  compiled Electron **113/113**, engine **100/100**, documentation **2/2**.
+- Real built-artifact smoke **43/43**. The 524×738 Settings capture has
+  SHA-256 `471166F2C1DBBF3BDDD48603DBF5A4D573E60EDD9032B8E904D5727DF337E4C6`.
+- GitHub Actions run
+  [31493449594](https://github.com/Ding-Ding-Projects/material-download-manager/actions/runs/31493449594)
+  succeeded for the exact commit and published `v0.1.107`; artifacts remain
+  unsigned and no CRX was created.
+
+## Authenticator management list and live codes (2026-08-11)
+
+Issue [#18](https://github.com/Ding-Ding-Projects/material-download-manager/issues/18)
+tracks this bounded desktop management slice. Source commit
+[`9c32741`](https://github.com/Ding-Ding-Projects/material-download-manager/commit/9c3274134e6aa4b2d1de6b9f234fdf680b72f16f)
+extends the existing authenticator Settings tab with a real persisted metadata
+list that reloads after restart, vault-backed current and next TOTP code
+display, a numeric seconds-remaining countdown, and an explicit clipboard copy
+action. The renderer calls only the existing typed
+`generateAuthenticatorCode` IPC seam; secrets remain in the operating-system
+credential vault and never enter local metadata storage, ordinary exports,
+history, logs, or the smoke result.
+
+The row refreshes on initial load and at each period rollover. A per-entry
+request generation prevents a delayed vault response from replacing a newer
+period. When a vault entry is missing or corrupt, both code fields are cleared
+and the row reports that the entry is unavailable rather than offering stale
+digits. The list's existing plain-text-first search and anchored regex builder
+remain active. Reorder/group/bulk workflows, per-tab locks, and schedules are
+not part of this slice. No signing or CRX artifact was added.
+
+### Changed files and verification
+
+- `design/src/components/AuthenticatorPanel.tsx`: live current/next code rows,
+  countdown tick, vault-backed refresh, and user-triggered copy.
+- `design/src/styles/authenticator.css`: responsive live-code row layout and
+  numeric-code typography.
+- `design/shared/authenticatorDisplay.ts`: secret-free period-boundary helpers.
+- `design/electron/__tests__/totp.test.ts` and
+  `design/electron/__tests__/authenticatorSurface.test.ts`: countdown boundary,
+  no-network, IPC, copy, and secret-free renderer assertions.
+- `design/ui-tests/smoke.mjs`: disposable built-artifact registration, reload,
+  live current/next code/countdown/copy checks, and vault cleanup. It returns
+  code widths and metadata IDs only, never the generated digits or fixture
+  secret.
+- `docs/features/security/totp-authenticator-core.md`, `site/content.js`, and
+  `design/src/generated/documentationArticles.ts`: categorized behavior,
+  security, failure-mode, and verification documentation.
+
+Local evidence for this handoff:
+
+- `npm run typecheck` — passed.
+- `npm run build` — passed (renderer and Electron output).
+- Focused TOTP/UI tests — **14/14 passed**.
+- Full compiled Electron tests — **110/110 passed**.
+- Real built-artifact smoke — **43/43 required checks passed**. The new
+  `settings-authenticator-live-management` check registered a disposable
+  vault entry, reloaded the app, verified six-digit current/next values, a
+  numeric countdown, and an enabled copy action, then removed the vault entry
+  and metadata. No live-code screenshot is claimed because the displayed
+  digits are credential-bearing.
+- The secret-free registration capture remains
+  [`docs/screenshots/authenticator/authenticator-settings-empty.png`](docs/screenshots/authenticator/authenticator-settings-empty.png)
+  (524×462 PNG, SHA-256
+  `92DCE765FF7B8D07854C15D34FAED2708EB5C29C827DA26879E02DEACFD4DDC`),
+  recaptured from the built renderer during the 43/43 smoke run.
+## Current auto-organize gallery verification (2026-08-11)
+
+Issue [#18](https://github.com/Ding-Ding-Projects/material-download-manager/issues/18)
+tracks the universal-feature follow-up that includes this bounded evidence
+refresh. Source commit
+[`84da5e1`](https://github.com/Ding-Ding-Projects/material-download-manager/commit/84da5e1f2b10b6d88e9b946fe1523ad0295ddb2b)
+was rebuilt before the real Electron application was launched on a named cheap
+hidden desktop and driven through the committed CDP smoke harness. The run
+passed **43/43 required checks** in `13.094` seconds and captured all seven
+auto-organize states. Renderer freshness was verified before capture;
+`index-D6pDySqX.js` is 565,125 bytes with SHA-256
+`5E55A622C73485693527C1BFE35981FDD9BDFBBD940A36DDC79D9CE98C1D7C27`, and
+`index-DCh-PbGs.css` is 66,627 bytes with SHA-256
+`CCA54DDFA9227A90F08E686322973C5358042EE0F7A71B840E8165C85F8AE697`.
+
+The fresh PNG bytes were copied into the tracked gallery and match the prior
+tracked bytes exactly. That byte-for-byte result is evidence that the current
+build still renders the documented states; no metadata was injected merely to
+force binary churn. Each image was opened at original resolution and inspected:
+
+| Capture | Dimensions | SHA-256 | Inspected state |
+| --- | ---: | --- | --- |
+| `01-six-category-paths.png` | 1100×900 | `6865326A14705FD4229EFDEA4D2A015F38DD1D36AC4061F31951ADB3C0816013` | Enabled routing and six generic `C:\Downloads` paths |
+| `02-ordered-rule-editor.png` | 1100×900 | `FCD9BD786DD2B51297226FE1B336F18BC5FA0A1AB96F123E59B3C18EB9B1BC06` | Two ordered rules with destination and move controls |
+| `03-anchored-regex-builder.png` | 1100×900 | `5EC02087A536C3096B96AEDB771EC2AB842321011828B58060250961BD0D6AC1` | Rule-local JavaScript regex builder anchored inside Settings |
+| `04-inline-invalid-rule.png` | 1100×900 | `C8C81E557613E3C2C971179CCEABD4A249458854B98F794D9BE6CB061B55711C` | Blank pattern error and disabled Save action |
+| `05-narrow-rule-layout.png` | 520×760 | `E48ECF3AD3786EC600C94D8CA7DEBD3C6A666302862370316E48621B5E374A63` | Narrow builder reflow without horizontal clipping |
+| `06-bilingual-category-settings.png` | 1100×900 | `9E0C7FD9B8F11C0A6AD0597E81B8D38AA4622833102EF2EDB7DBF133D8E74D82` | English and Cantonese Downloads settings |
+| `07-command-palette-destination.png` | 1100×900 | `71324F4523B3D46A47807EE955C8764C2719816016A62D19A6D1C9A1FC6644A5` | Exact auto-organize destination and adjacent full regex builder |
+
+The same run verified both automatic and manual browser-extension folder
+reveal, preserved the Settings search's adjacent regex builder, and found no
+horizontal overflow or clipped text in the 520 CSS-pixel bilingual extension
+card. No search field was added or changed by this refresh. No CRX was created,
+and no signing material or signing operation was introduced.
+
+The harness terminated the Electron process tree with zero survivors, closed
+the fixture server, and removed its disposable profile. The isolated folder
+window opened by the reveal check was then closed through the same cheap
+headless route; the named desktop disappeared and the final cheap desktop
+inventory reported zero entries. The expected invalid-format diagnostics from
+negative History and Changelog export probes did not change the passed result.
+
+## Updater ready-state integrity and unsigned warning (2026-08-11)
+
+Issue [#18](https://github.com/Ding-Ding-Projects/material-download-manager/issues/18)
+tracks this bounded desktop updater slice. Source commit
+[`0a47393`](https://github.com/Ding-Ding-Projects/material-download-manager/commit/0a473939b6bbee657d199903a9056e53e871c7d4)
+verifies Squirrel `RELEASES` metadata before a download enters `ready`:
+unsafe redirects, oversized or malformed indexes, invalid SHA-1 entries,
+invalid sizes, duplicate full packages, and version mismatches are rejected.
+The validated ready state carries the full package name and size, Squirrel
+SHA-1, and a SHA-256 digest of the `RELEASES` body; preload validation rejects
+malformed integrity metadata before it reaches the renderer.
+
+The ready banner now displays localized unsigned-artifact copy naming the
+missing code signature and possible unknown-publisher or SmartScreen warning.
+No signer, CRX, or alternate publication path was added. Local verification
+recorded **112/112** compiled Electron tests, documentation **2/2**, typecheck,
+renderer/Electron build, fresh `build.bat /s`, and UI smoke **42/42**. The live
+feed probe verified the full package's SHA-1/size and the index SHA-256; no
+updater-ready capture is claimed because unpacked smoke intentionally disables
+updates and a packaged run would start a native download.
 
 ## Authenticator Settings registration surface (2026-08-11)
 

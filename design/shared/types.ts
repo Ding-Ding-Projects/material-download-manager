@@ -5,6 +5,7 @@
 import type { ExportFormat, ExportResult } from "./export";
 import type { HistoryFilter, HistoryView, HistoryAccessState } from "./history";
 import type { DistributedDownloadSelection, SourceIdentity } from "./distributedProtocol";
+import type { ScheduledSettingsRecord } from "./scheduledSettings";
 
 export type DownloadCategory =
   | "image"
@@ -311,12 +312,23 @@ export interface NewDownloadInfo {
   contentType: string | null;
 }
 
+export interface UpdateFeedIntegrityMetadata {
+  version: string;
+  packageName: string;
+  packageSize: number;
+  packageDigestAlgorithm: "sha1";
+  packageDigest: string;
+  releasesSha256: string;
+}
+
 export const DEFAULT_QUEUE_ID = "default";
 
 export interface StateSnapshot {
   items: DownloadItem[];
   queues: DownloadQueue[];
   settings: AppSettings;
+  /** Shared local schedule metadata; credentials are never represented here. */
+  scheduleRules?: ScheduledSettingsRecord[];
 }
 
 export type UpdateState =
@@ -344,6 +356,7 @@ export type UpdateState =
       version: string;
       releaseNotesUrl: string;
       checkedAt: number;
+      integrity: UpdateFeedIntegrityMetadata;
     }
   | {
       status: "failed" | "offline";
@@ -404,6 +417,28 @@ function isSafeHttpsUrl(value: unknown): value is string {
   }
 }
 
+function isUpdateFeedIntegrityMetadata(value: unknown): value is UpdateFeedIntegrityMetadata {
+  const packageVersion = isRecord(value) && typeof value.packageName === "string"
+    ? /^.+-(\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?)-full\.nupkg$/u.exec(value.packageName)?.[1]
+    : undefined;
+  return (
+    isRecord(value) &&
+    typeof value.version === "string" &&
+    /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/u.test(value.version) &&
+    typeof value.packageName === "string" &&
+    /^[A-Za-z0-9._-]+\.nupkg$/u.test(value.packageName) &&
+    typeof value.packageSize === "number" &&
+    Number.isSafeInteger(value.packageSize) &&
+    value.packageSize > 0 &&
+    packageVersion === value.version &&
+    value.packageDigestAlgorithm === "sha1" &&
+    typeof value.packageDigest === "string" &&
+    /^[a-f0-9]{40}$/u.test(value.packageDigest) &&
+    typeof value.releasesSha256 === "string" &&
+    /^[a-f0-9]{64}$/u.test(value.releasesSha256)
+  );
+}
+
 export function isUpdateState(value: unknown): value is UpdateState {
   if (!isRecord(value)) return false;
   if (typeof value.status !== "string" || typeof value.checkedAt !== "number" || !Number.isFinite(value.checkedAt)) {
@@ -420,7 +455,7 @@ export function isUpdateState(value: unknown): value is UpdateState {
     case "downloading":
       return typeof value.percent === "number" && Number.isFinite(value.percent) && value.percent >= 0 && value.percent <= 100;
     case "ready":
-      return typeof value.version === "string" && isSafeHttpsUrl(value.releaseNotesUrl);
+      return typeof value.version === "string" && isSafeHttpsUrl(value.releaseNotesUrl) && isUpdateFeedIntegrityMetadata(value.integrity);
     case "failed":
     case "offline":
       return typeof value.message === "string" && value.message.length > 0 && value.message.length <= 512;
@@ -463,6 +498,9 @@ export const IPC = {
   STATE_CHANGED: "state:changed",
   SETTINGS_GET: "settings:get",
   SETTINGS_SET: "settings:set",
+  SCHEDULE_GET: "schedule:get",
+  SCHEDULE_SET: "schedule:set",
+  SCHEDULE_CHANGED: "schedule:changed",
   PRESENTATION_GET: "presentation:get",
   PRESENTATION_SET: "presentation:set",
   PRESENTATION_CHANGED: "presentation:changed",

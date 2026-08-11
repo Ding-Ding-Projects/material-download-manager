@@ -18,6 +18,12 @@ a private paired folder. It has no signing route.
 
 - [Squirrel.Windows packaging and bounded updates](squirrel-windows.md)
 
+The main-process updater now verifies the bounded `RELEASES` index before a
+ready state: one matching full package, its Squirrel SHA-1 and byte size, and
+the index SHA-256 are validated before metadata crosses the preload boundary.
+The ready banner repeats the intentionally unsigned/SmartScreen warning in
+the active language mode; no signing or CRX path is introduced.
+
 ## Verification
 
 The updater tests run locally as part of `npm run test:electron`, including focused

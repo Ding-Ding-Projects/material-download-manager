@@ -40,19 +40,22 @@ AB Download Manager codebase.
 <details>
 <summary>Auto-organize screenshot gallery</summary>
 
-These captures come from the real built Electron renderer on a disposable
-cheap hidden desktop. The displayed base path was deliberately set to the
-generic `C:\Downloads` before capture. Commit
-`92dc67a17fbad4f7471cda5d7d85c1b4b78c44a5` was rebuilt with `npm run build`,
-and the verified 2026-08-11 capture run passed all 42 required
-built-application checks in 10.488 seconds. Its renderer emitted
-`index-CUWEWH76.js` (SHA-256
-`34EF8CF409C1C6B5248E7F345CC9F2F58BD17C1A8022014D275C220F448FFCCC`)
-and `index-CL9UO5Fq.css` (SHA-256
-`23FF81988A28774B46E99E5FC38739905D813F8E7098D218325B9AC7974A0D45`).
+These captures were freshly reproduced from the real built Electron renderer
+on a disposable cheap hidden desktop. The displayed base path was deliberately
+set to the generic `C:\Downloads` before capture. Source commit
+`84da5e1f2b10b6d88e9b946fe1523ad0295ddb2b` was rebuilt with `npm run build`,
+and the verified 2026-08-11 capture run passed all 43 required
+built-application checks in 13.094 seconds. Its renderer emitted
+`index-D6pDySqX.js` (SHA-256
+`5E55A622C73485693527C1BFE35981FDD9BDFBBD940A36DDC79D9CE98C1D7C27`)
+and `index-DCh-PbGs.css` (SHA-256
+`CCA54DDFA9227A90F08E686322973C5358042EE0F7A71B840E8165C85F8AE697`).
 Six gallery frames are 1100 × 900 and the narrow frame is 520 × 760; every
-image decodes as a 24-bit PNG with a unique SHA-256 hash. The exact disposable
-process tree, profile, and hidden desktop were removed after the run.
+image decodes as a 24-bit PNG with a unique SHA-256 hash. The fresh capture
+bytes match the seven tracked files exactly, proving that the documented
+surfaces remain current without manufacturing binary churn. The disposable
+process tree, profile, fixture server, folder window, and hidden desktop were
+removed after the run.
 
 ### Six future category paths
 
@@ -102,20 +105,24 @@ commit documented in [`HANDOFF.md`](HANDOFF.md). SHA-256:
 <details>
 <summary>Authenticator Settings registration surface</summary>
 
-The current bounded authenticator slice adds a real Settings registration tab
+The bounded authenticator surface now includes a real Settings registration tab
 with local QR rendering, an explicit one-time manual-secret reveal, pairing
-confirmation before credential-vault storage, and a metadata-only list/export.
-This capture comes from the built Electron renderer at source commit
-`385e04030b0eebc6df5afa1370571226b9dd9d56` through the CDP smoke harness. It
+confirmation before credential-vault storage, and a metadata-only list/export,
+plus a restart-safe management list with vault-backed current/next codes, a
+numeric countdown, and a copy action. This registration capture comes from the
+built Electron renderer at source commit
+`9c3274134e6aa4b2d1de6b9f234fdf680b72f16f` through the CDP smoke harness. It
 shows the complete registration card with an empty secret field; no QR, manual
-secret, URI, or metadata record was photographed.
+secret, URI, metadata record, or live code was photographed.
 
 ![Authenticator Settings registration card with local QR pairing controls and an empty secret field](docs/screenshots/authenticator/authenticator-settings-empty.png)
 
 The 524×462 PNG has SHA-256
-`92DCE765FF7B8D07854C15D34FAED2708EB5C29C827DA26879E02DEACFD4DDC`. Live
-code/countdown, reorder/group/bulk management, per-tab locks, and schedules are
-not part of this bounded slice.
+`92DCE765FF7B8D07854C15D34FAED2708EB5C29C827DA26879E02DEACFD4DDC`. The
+same built smoke run verified the management row without recording its current
+or next digits; live-code screenshots are intentionally not claimed because
+those values are credential-bearing. Reorder/group/bulk management, per-tab
+locks, and schedules remain outside this bounded slice.
 
 </details>
 
@@ -173,6 +180,30 @@ The local checks for this slice are `npm run docs:bundle:check`,
 `npm run test:electron` (**104/104**), and `npm run test:engine`
 (**100/100** after hardening). TOTP locks, schedules, narration, appearance editors, signing,
 and CRX artifacts remain outside this slice.
+
+</details>
+
+<details>
+<summary>Scheduled settings foundation (verified)</summary>
+
+The integrated scheduled-settings slice adds versioned local schedule records
+under **Settings → Downloads → Scheduled settings**. The editor uses native
+date/time controls, an explicit weekday chooser, inclusive date/time
+boundaries, selected IANA timezone rules (including daylight-saving changes),
+cross-midnight windows, and deterministic priority resolution. Local, versioned
+HTTPS API, loopback-development, and Home Assistant boolean metadata all cross
+the main-process validation boundary; no access token can enter the renderer,
+settings file, export, log, or history.
+
+![Scheduled settings editor showing native dates/times, weekdays, timezone and priority controls](docs/screenshots/settings/scheduled-settings.png)
+
+This 524 × 738 PNG was captured from the real built desktop renderer after
+adding a schedule through `design/ui-tests/smoke.mjs
+--scheduled-screenshot`; SHA-256 is
+`471166F2C1DBBF3BDDD48603DBF5A4D573E60EDD9032B8E904D5727DF337E4C6`.
+Source commit `8b6e5f9c71e72cc5f86d8f85460ea6970b1c20fc` was built and verified
+locally, and GitHub Actions run `31493449594` published `v0.1.107` from that
+exact commit. The release is unsigned and contains no CRX artifact.
 
 </details>
 
@@ -314,6 +345,15 @@ unsigned `v0.1.0` test release is excluded from the stable feed. A new stable
 feed result was verified by the historical self-hosted release run that
 published `v0.1.18`; later successful runs advance the same feed without
 recycling a tag.
+
+Before the native Squirrel updater downloads or reports a ready update, the
+main process validates the bounded HTTPS `RELEASES` index, selects exactly one
+matching full package, and carries its Squirrel SHA-1/size metadata plus the
+index SHA-256 through the validated IPC state. The ready banner repeats the
+localized unsigned-artifact warning: no code signature is present and the
+operating system may show an unknown-publisher or SmartScreen warning. These
+digests provide package-integrity metadata only; they are not a signature or
+authenticity claim.
 
 The release workflow runs on every push and on manual dispatch. It builds,
 packages, publishes, and verifies a unique release; it does not run tests or

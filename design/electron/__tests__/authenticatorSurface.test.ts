@@ -14,10 +14,31 @@ test("authenticator surface uses local QR rendering and keeps network out of pai
   assert.match(panel, /Reveal manual secret/u);
   assert.match(panel, /confirmAuthenticatorRegistration/u);
   assert.match(panel, /registerAuthenticator/u);
+  assert.match(panel, /generateAuthenticatorCode/u);
+  assert.match(panel, /nextTotpTimestampMs/u);
+  assert.match(panel, /remainingTotpSeconds/u);
+  assert.match(panel, /authenticator-current-code-/u);
+  assert.match(panel, /authenticator-next-code-/u);
+  assert.match(panel, /authenticator-countdown-/u);
+  assert.match(panel, /navigator\.clipboard\.writeText\(code\)/u);
+  assert.match(panel, /Copying…/u);
   assert.match(panel, /secretOmitted: true/u);
   assert.match(panel, /otpauth URI was written/u);
   assert.doesNotMatch(panel, /\b(fetch|XMLHttpRequest|WebSocket)\s*\(/u);
   assert.doesNotMatch(panel, /https?:\/\//u);
+});
+
+test("live authenticator management keeps the renderer boundary secret-free", () => {
+  const panel = source("src/components/AuthenticatorPanel.tsx");
+  const timing = source("shared/authenticatorDisplay.ts");
+  assert.match(panel, /window\.api\.generateAuthenticatorCode\(item, timestampMs\)/u);
+  assert.match(panel, /window\.api\.generateAuthenticatorCode\(item, nextTimestampMs\)/u);
+  assert.match(panel, /setInterval\(tick, 1_000\)/u);
+  assert.match(panel, /role="status"/u);
+  assert.match(timing, /remainingTotpSeconds/u);
+  assert.match(timing, /nextTotpTimestampMs/u);
+  assert.doesNotMatch(panel, /localStorage\.setItem\([^\n]*otpauth/u);
+  assert.doesNotMatch(panel, /localStorage\.setItem\([^\n]*secret/u);
 });
 
 test("authenticator surface persists only validated metadata and gives a secret-free export", () => {

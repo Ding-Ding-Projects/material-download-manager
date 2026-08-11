@@ -413,30 +413,31 @@ window.MDM_SITE_CONTENT = {
       id: "local-totp-core",
       category: "Security",
       title: "Local TOTP and QR registration core",
-      summary: "A bounded RFC 6238 authenticator Settings tab with local otpauth://totp/ QR pairing, one-time manual reveal, credential-vault storage, and secret-free metadata export.",
+      summary: "A bounded RFC 6238 authenticator Settings tab with local otpauth://totp/ QR pairing, one-time manual reveal, vault-backed current/next code management, and secret-free metadata export.",
       docsPath: "../docs/features/security/totp-authenticator-core.md",
       tags: ["authenticator", "TOTP", "QR", "security", "export"],
       sections: {
         behavior: [
           "The core generates and verifies RFC 6238 codes with SHA-1, SHA-256, or SHA-512, six or eight digits, a bounded period, and a bounded adjacent-period clock-skew window.",
           "The model builds and parses otpauth://totp/ URIs, checks issuer consistency, rejects duplicate or unknown parameters, and creates one-time QR/manual-secret registration material in memory.",
-          "The Settings authenticator tab renders the QR matrix locally, confirms the current code before vault mutation, and clears the secret-bearing view after pairing."
+          "The Settings authenticator tab renders the QR matrix locally, confirms the current code before vault mutation, and clears the secret-bearing view after pairing.",
+          "Registered metadata rows ask the main process for current and next codes, show a numeric seconds-remaining countdown, and provide a user-triggered copy action; the renderer persists metadata only and clears a row when its vault entry is unavailable."
         ],
         configuration: [
           "Registration metadata includes issuer, account, algorithm, digit width, period, schema version, and a stable ID.",
           "TotpSecretVault stores the normalized secret only in the operating-system credential vault under a stable service/account boundary.",
-          "Ordinary export is metadata-only and marks secret-free export explicitly with secretOmitted: true."
+          "Ordinary export is metadata-only and marks secret-free export explicitly with secretOmitted: true. Current/next code values are short-lived renderer state returned by vault-backed IPC and are never persisted."
         ],
         failureModes: [
           "Invalid schemes, hotp URIs, issuer mismatches, malformed base32, unsupported algorithms, invalid digit widths or periods, bad timestamps, and oversized skew windows fail closed.",
           "Missing or corrupt vault records never become usable codes. Malformed candidates return false without revealing credential bytes."
         ],
         security: [
-          "Secrets never enter settings, history snapshots, logs, ordinary exports, or renderer metadata. The otpauth URI and manual secret are one-time in-memory registration values, not ordinary state.",
+          "Secrets never enter settings, history snapshots, logs, ordinary exports, or renderer metadata. The otpauth URI and manual secret are one-time in-memory registration values, not ordinary state; current/next code strings are short-lived renderer state and are never persisted.",
           "The local core and registration tab perform no network requests and have no cloud account or telemetry path."
         ],
         verification: [
-          "The focused suite covers all published RFC 6238 SHA-1/SHA-256/SHA-512 vectors, six/eight-digit output, periods/skew, URI validation, QR-model boundaries, pending pairing before vault mutation, local/no-network UI wiring, vault behavior, and secret-free export."
+          "The focused suite covers all published RFC 6238 SHA-1/SHA-256/SHA-512 vectors, six/eight-digit output, periods/skew, URI validation, QR-model boundaries, pending pairing before vault mutation, countdown boundary arithmetic, local/no-network UI wiring, vault behavior, and secret-free export. The built smoke also exercises a disposable vault-backed row without recording its digits."
         ]
       },
       suggested: ["local-history", "destructive-action-gate", "site-foundation"]

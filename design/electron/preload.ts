@@ -35,6 +35,7 @@ import { isDownloadCategory } from "../shared/settings";
 import { isRegexEvaluation, type RegexEvaluation } from "../shared/regex";
 import { isPresentationSettings, isUpdateInstallResult, isUpdateState, isUpdateUnsavedWorkState } from "../shared/types";
 import { isBrowserExtensionInstallResult, type BrowserExtensionInstallResult } from "../shared/types";
+import { isScheduledSettingsRecords, type ScheduledSettingsRecord } from "../shared/scheduledSettings";
 import {
   isChangelogView,
   type ChangelogView,
@@ -94,6 +95,27 @@ const api = {
     };
     ipcRenderer.on(IPC.PRESENTATION_CHANGED, listener);
     return () => ipcRenderer.removeListener(IPC.PRESENTATION_CHANGED, listener);
+  },
+
+  getScheduleRules: async (): Promise<ScheduledSettingsRecord[]> => {
+    const value: unknown = await ipcRenderer.invoke(IPC.SCHEDULE_GET);
+    if (!isScheduledSettingsRecords(value)) throw new Error("Invalid scheduled settings records from main process");
+    return value;
+  },
+
+  setScheduleRules: async (records: ScheduledSettingsRecord[]): Promise<ScheduledSettingsRecord[]> => {
+    if (!isScheduledSettingsRecords(records)) throw new Error("Invalid scheduled settings records");
+    const value: unknown = await ipcRenderer.invoke(IPC.SCHEDULE_SET, records);
+    if (!isScheduledSettingsRecords(value)) throw new Error("Invalid scheduled settings result from main process");
+    return value;
+  },
+
+  onScheduleChanged: (cb: (records: ScheduledSettingsRecord[]) => void) => {
+    const listener = (_unknown: unknown, value: unknown) => {
+      if (isScheduledSettingsRecords(value)) cb(value);
+    };
+    ipcRenderer.on(IPC.SCHEDULE_CHANGED, listener);
+    return () => ipcRenderer.removeListener(IPC.SCHEDULE_CHANGED, listener);
   },
 
   getUpdateState: async (): Promise<UpdateState> => {

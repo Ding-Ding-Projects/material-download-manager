@@ -27,7 +27,9 @@ const RUNTIME_CHECK_IDS = [
   "changelog-action-error-separation",
   "progress-window",
   "settings-open",
+  "settings-scheduled-settings",
   "settings-authenticator-surface",
+  "settings-authenticator-live-management",
   "settings-dialog-a11y",
   "settings-auto-organize-ui",
   "settings-auto-organize-regex-focus",
@@ -73,6 +75,7 @@ function usage() {
     "  --timeout <ms>         Per-run timeout (default: 30000)",
     "  --temp-root <path>     Parent for the disposable app profile (default: OS temp directory)",
     "  --screenshot <path>    Capture a PNG of the installed browser-extension card after automatic folder reveal",
+    "  --scheduled-screenshot <path>  Capture the built Settings scheduled-settings surface",
     "  --authenticator-screenshot <path>  Capture the secret-free Authenticator Settings registration surface",
     "  --progress-screenshot <path>  Capture a separate progress page when one exists",
     "  --gallery-dir <path>    Capture the seven auto-organize documentation states into this directory",
@@ -94,6 +97,7 @@ function parseArgs(argv) {
     timeoutMs: DEFAULT_TIMEOUT_MS,
     tempRoot: null,
     screenshotPath: null,
+    scheduledScreenshotPath: null,
     authenticatorScreenshotPath: null,
     progressScreenshotPath: null,
     galleryDirectory: null,
@@ -119,6 +123,7 @@ function parseArgs(argv) {
     else if (argument === "--timeout") options.timeoutMs = parseBoundedInteger(value, "timeout", 1_000, 300_000);
     else if (argument === "--temp-root") options.tempRoot = path.resolve(value);
     else if (argument === "--screenshot") options.screenshotPath = path.resolve(value);
+    else if (argument === "--scheduled-screenshot") options.scheduledScreenshotPath = path.resolve(value);
     else if (argument === "--authenticator-screenshot") options.authenticatorScreenshotPath = path.resolve(value);
     else if (argument === "--progress-screenshot") options.progressScreenshotPath = path.resolve(value);
     else if (argument === "--gallery-dir") options.galleryDirectory = path.resolve(value);
@@ -906,6 +911,9 @@ function createResult(options) {
     timeoutMs: options.timeoutMs,
     checks: [],
     screenshot: options.screenshotPath ? { requested: true, status: "not-run", path: options.screenshotPath } : { requested: false, status: "not-requested", path: null },
+    scheduled: options.scheduledScreenshotPath
+      ? { requested: true, status: "not-run", path: options.scheduledScreenshotPath }
+      : { requested: false, status: "not-requested", path: null },
     authenticator: options.authenticatorScreenshotPath
       ? { requested: true, status: "not-run", path: options.authenticatorScreenshotPath }
       : { requested: false, status: "not-requested", path: null },
@@ -1532,6 +1540,33 @@ async function main(argv) {
       `));
     });
 
+    await runCheck(result, "settings-scheduled-settings", async () => {
+      await clickByRole(cdp, "tab", "Downloads", '[role="dialog"]');
+      await waitForPage(cdp, `Boolean(document.querySelector("#settings-scheduled-settings"))`, "scheduled settings surface", options.timeoutMs);
+      await clickByRole(cdp, "button", "Add schedule", "#settings-scheduled-settings");
+      await waitForPage(cdp, `document.querySelectorAll('#settings-scheduled-settings input[type="date"]').length === 2`, "native scheduled date controls", options.timeoutMs);
+      const evidence = await cdp.evaluate(pageExpression(`
+        const panel = document.getElementById("settings-scheduled-settings");
+        const add = findByRole("button", "Add schedule", panel ?? document);
+        const save = findByRole("button", "Save schedules", panel ?? document);
+        const nativeDates = panel?.querySelectorAll('input[type="date"]') ?? [];
+        const nativeTimes = panel?.querySelectorAll('input[type="time"]') ?? [];
+        const timezone = panel?.querySelector('select');
+        if (!(panel instanceof HTMLElement) || !isVisible(panel)) throw new Error("Scheduled settings panel is missing or hidden");
+        if (!add || !save || nativeDates.length !== 2 || nativeTimes.length !== 2 || !timezone) {
+          throw new Error("Scheduled settings editor controls are incomplete after adding a record");
+        }
+        return { panel: true, add: accessibleName(add), save: accessibleName(save), emptyState: Boolean(panel.querySelector('[role="status"]')) };
+      `));
+      if (options.scheduledScreenshotPath) {
+        await cdp.send("Emulation.setDeviceMetricsOverride", { width: 1100, height: 900, deviceScaleFactor: 1, mobile: false });
+        const capturedPath = await captureScreenshot(cdp, options.scheduledScreenshotPath, "#settings-scheduled-settings");
+        result.scheduled = { requested: true, status: "captured", path: capturedPath };
+        return { ...evidence, screenshotPath: capturedPath };
+      }
+      return evidence;
+    });
+
     await runCheck(result, "settings-authenticator-surface", async () => {
       await clickByRole(cdp, "tab", "Authenticator", '[role="dialog"]');
       await waitForPage(cdp, `Boolean(document.querySelector("#settings-authenticator-panel"))`, "Authenticator Settings panel", options.timeoutMs);
@@ -1564,6 +1599,67 @@ async function main(argv) {
         return { ...evidence, screenshotPath: capturedPath };
       }
       return evidence;
+    });
+
+    await runCheck(result, "settings-authenticator-live-management", async () => {
+      const registration = await cdp.evaluate(pageExpression(`return (async () => {
+        const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
+        const bytes = crypto.getRandomValues(new Uint8Array(20));
+        let buffer = 0;
+        let bits = 0;
+        let secret = "";
+        for (const byte of bytes) {
+          buffer = (buffer << 8) | byte;
+          bits += 8;
+          while (bits >= 5) {
+            bits -= 5;
+            secret += alphabet[(buffer >>> bits) & 31];
+          }
+        }
+        if (bits > 0) secret += alphabet[(buffer << (5 - bits)) & 31];
+        const metadata = await window.api.registerAuthenticator({
+          issuer: "Smoke Authenticator",
+          account: "smoke@local.test",
+          secret,
+          algorithm: "SHA1",
+          digits: 6,
+          period: 30,
+        });
+        const key = "material-download-manager.authenticator.metadata.v1";
+        localStorage.setItem(key, JSON.stringify([metadata]));
+        return { id: metadata.id, digits: metadata.digits };
+      })()`));
+      try {
+        await cdp.evaluate("location.reload()");
+        await waitForPage(cdp, `Boolean(document.querySelector("#root > *"))`, "reloaded app for authenticator management", options.timeoutMs);
+        await clickByRole(cdp, "button", "Settings");
+        await waitForPage(cdp, `Boolean(document.querySelector('[role="dialog"]'))`, "reloaded Settings dialog", options.timeoutMs);
+        await clickByRole(cdp, "tab", "Authenticator", '[role="dialog"]');
+        await waitForPage(cdp, `Boolean(document.querySelector("#settings-authenticator-panel"))`, "reloaded Authenticator panel", options.timeoutMs);
+        const evidence = await cdp.evaluate(pageExpression(`(() => {
+          const row = document.querySelector('[data-authenticator-code-id="${registration.id}"]');
+          const current = document.getElementById("authenticator-current-code-${registration.id}");
+          const next = document.getElementById("authenticator-next-code-${registration.id}");
+          const countdown = document.getElementById("authenticator-countdown-${registration.id}");
+          const copy = document.getElementById("authenticator-copy-${registration.id}");
+          if (!(row instanceof HTMLElement) || !isVisible(row)) throw new Error("live authenticator row is missing or hidden");
+          if (!(current instanceof HTMLElement) || !/^\\d{6}$/.test(current.textContent?.trim() ?? "")) throw new Error("current authenticator code is not a six-digit value");
+          if (!(next instanceof HTMLElement) || !/^\\d{6}$/.test(next.textContent?.trim() ?? "")) throw new Error("next authenticator code is not a six-digit value");
+          if (!(countdown instanceof HTMLElement) || !/^\\d+s (?:remaining|剩餘)$/.test(countdown.textContent?.trim() ?? "")) throw new Error("numeric authenticator countdown is missing");
+          if (!(copy instanceof HTMLButtonElement) || !isVisible(copy) || copy.disabled) throw new Error("current-code copy action is unavailable");
+          return { row: true, currentDigits: current.textContent?.trim().length, nextDigits: next.textContent?.trim().length, countdown: countdown.textContent?.trim(), copy: accessibleName(copy) };
+        })()`));
+        return { ...evidence, metadataId: registration.id, persistedMetadata: true, secretReturned: false };
+      } finally {
+        await cdp.evaluate(pageExpression(`(async () => {
+          const key = "material-download-manager.authenticator.metadata.v1";
+          const raw = localStorage.getItem(key);
+          const records = raw ? JSON.parse(raw) : [];
+          const target = Array.isArray(records) ? records.find((record) => record?.id === ${JSON.stringify(registration.id)}) : null;
+          if (target) await window.api.removeAuthenticator(target);
+          localStorage.removeItem(key);
+        })()`)).catch(() => {});
+      }
     });
     await clickByRole(cdp, "tab", "Downloads", '[role="dialog"]');
 

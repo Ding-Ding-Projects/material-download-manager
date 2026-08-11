@@ -1231,6 +1231,57 @@ textarea {
   background: var(--bg-dialog);
 }
 
+.scheduled-settings {
+  padding: 12px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius);
+  background: var(--bg-dialog);
+}
+.scheduled-rule-list {
+  display: flex;
+  min-width: 0;
+  max-height: min(40vh, 360px);
+  flex-direction: column;
+  gap: 8px;
+  overflow: auto;
+  padding: 2px;
+}
+.scheduled-rule-card,
+.scheduled-rule-editor {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 9px;
+  padding: 11px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  background: var(--bg-app);
+}
+.scheduled-rule-card.active {
+  border-color: var(--accent-solid);
+  box-shadow: 0 0 0 1px var(--accent-solid);
+}
+.scheduled-rule-card-heading {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+.scheduled-weekdays {
+  min-width: 0;
+  margin: 0;
+  padding: 10px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+}
+.scheduled-weekday-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 4px 8px;
+}
+
 .auto-organize-folder-row {
   display: grid;
   min-width: 0;

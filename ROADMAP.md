@@ -3,6 +3,16 @@
 This roadmap is a factual implementation checklist, not a promise that an
 unverified surface has shipped.
 
+## In progress
+
+- Scheduled settings foundation is integrated and verified at
+  `8b6e5f9c71e72cc5f86d8f85460ea6970b1c20fc`: versioned local records, native
+  date/time and weekday editor, timezone and cross-midnight semantics,
+  deterministic precedence, state/history persistence, live IPC propagation,
+  and credential-free HTTPS/loopback/Home Assistant metadata validation.
+  Local suites and the real Settings capture passed; GitHub Actions run
+  `31493449594` published `v0.1.107` from the exact commit.
+
 ## Shipped and verified foundations
 
 - Real Windows Electron download engine with segmented transfers,
@@ -48,7 +58,16 @@ unverified surface has shipped.
   compiled Electron **100/100**, build/typecheck green, and built-artifact
   smoke **42/42** with a secret-free registration capture at
   `docs/screenshots/authenticator/authenticator-settings-empty.png`.
-  Live code/countdown, reorder/group/bulk workflows, per-tab locks, and
+- Authenticator management list at source commit
+  [`9c32741`](https://github.com/Ding-Ding-Projects/material-download-manager/commit/9c3274134e6aa4b2d1de6b9f234fdf680b72f16f): restart-safe metadata reload,
+  vault-backed current/next code display, numeric countdown, copy action, and
+  period-boundary race protection. Local evidence is focused **14/14**,
+  compiled Electron **110/110**, build/typecheck green, and built-artifact
+  smoke **43/43**; the smoke verifies a disposable vault row without recording
+  its digits and removes the entry before exit. A secret-free registration
+  capture remains at `docs/screenshots/authenticator/authenticator-settings-empty.png`;
+  live-code screenshots are not claimed because their digits are
+  credential-bearing. Reorder/group/bulk workflows, per-tab locks, and
   schedules remain separate follow-up work; no signing or CRX artifact was
   introduced.
 - Material-style landing and documentation site, stable unsigned Squirrel
@@ -64,6 +83,10 @@ unverified surface has shipped.
 - Built-artifact UI smoke that fail-closes on the real separate progress
   window, rejects nested interactive labels, and checks narrow Settings layout
   at 2× scale.
+- Main-process updater integrity hardening: bounded HTTPS `RELEASES` parsing,
+  matching full-package SHA-1/size metadata, index SHA-256 evidence, validated
+  ready-state IPC, and a localized unsigned/SmartScreen warning in the ready
+  banner. The path remains unsigned and does not create CRX artifacts.
 - Shared School mode presentation slice at source commit
   [`ecf9bc6`](https://github.com/Ding-Ding-Projects/material-download-manager/commit/ecf9bc65e6f78f08e109abfbed5aa897cbdbb86d): schema-v5 local
   application-data state, user-renamable English-only mode, persisted dialog
@@ -133,6 +156,11 @@ unverified surface has shipped.
   checks, all seven auto-organize gallery frames were replaced, and a
   public-safe browser-extension install/reveal capture was added. Stable
   release `v0.1.54` and Pages run `31464419316` are verified for that commit.
+- A current-main recapture from source commit
+  `84da5e1f2b10b6d88e9b946fe1523ad0295ddb2b` again passed 43/43 real-app
+  checks. All seven fresh auto-organize PNGs matched the tracked bytes exactly,
+  so the gallery remains current while only its verification provenance needed
+  updating. The run created no CRX and used no signing material.
 
 ## Auto-organize foundation integrated
 

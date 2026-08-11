@@ -141,6 +141,18 @@ bound, real preload/IPC persistence, narrow bilingual layout, contrast, and
 touch-target sizing. Final command results and remote evidence remain recorded
 in the project handoff rather than being predicted here.
 
+The current gallery was reproduced from source commit
+`84da5e1f2b10b6d88e9b946fe1523ad0295ddb2b` after a fresh `npm run build`.
+The real hidden-desktop/CDP run passed 43/43 required checks in 13.094 seconds
+and captured all seven documented states: six 1100×900 frames plus the
+520×760 narrow frame. Every image decodes as a 24-bit PNG, has a unique hash,
+and matches the corresponding tracked file byte for byte. The command-palette
+capture shows its search field with the adjacent full regex builder; this
+documentation refresh adds or changes no search field. The disposable profile,
+fixture server, process tree, folder window, and named hidden desktop were
+removed after capture. Exact asset and image hashes are recorded in
+[`HANDOFF.md`](../../../HANDOFF.md).
+
 Run from `design/`:
 
 ```powershell

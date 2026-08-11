@@ -3,6 +3,36 @@
 
   const TONES = Object.freeze(["info", "success", "progress", "warning", "error"]);
   const FILTERS = Object.freeze(["all", "active", "dismissed", "errors"]);
+  const MAX_PATTERN_LENGTH = 2048;
+  const MAX_INPUT_LENGTH = 20000;
+
+  function normalizeFlags(value) {
+    return String(value || "g")
+      .replace(/[^gimsuy]/g, "")
+      .split("")
+      .filter((flag, index, flags) => flags.indexOf(flag) === index)
+      .join("") || "g";
+  }
+
+  function regexSafetyError(pattern, flags) {
+    const source = String(pattern ?? "");
+    const normalizedFlags = String(flags ?? "");
+    if (source.length > MAX_PATTERN_LENGTH) return `Pattern is limited to ${MAX_PATTERN_LENGTH.toLocaleString()} characters.`;
+    if (!/^[gimsuy]*$/.test(normalizedFlags)) return "Supported flags are g, i, m, s, u, and y.";
+    if (new Set(normalizedFlags.split("")).size !== normalizedFlags.length) return "Each flag can appear only once.";
+    // Reject the common exponential forms before the synchronous engine sees them.
+    // This is intentionally conservative: a local search must stay responsive even
+    // when a pattern came from pasted text rather than the guided builder.
+    const quantified = "(?:[+*]|\\{\\d+(?:,\\d*)?\\})";
+    if (new RegExp(`\\((?:[^()\\\\]|\\\\.)*\\|(?:[^()\\\\]|\\\\.)*\\)\\s*${quantified}`).test(source)
+      || new RegExp(`\\((?:[^()\\\\]|\\\\.)*${quantified}(?:[^()\\\\]|\\\\.)*\\)\\s*${quantified}`).test(source)
+      || new RegExp(`\\((?:[^()\\\\]|\\\\.)*(?:\\.\\*|\\.\\+)(?:[^()\\\\]|\\\\.)*\\)\\s*${quantified}`).test(source)
+      || /(?:[+*]|\{\d+(?:,\d*)?\})\s*(?:[+*]|\{\d+(?:,\d*)?\})/.test(source)) {
+      return "Nested or ambiguous quantifiers are rejected before evaluation.";
+    }
+    try { new RegExp(source, normalizedFlags); } catch (error) { return error instanceof Error ? error.message : "Invalid regular expression."; }
+    return null;
+  }
 
   function normalizeText(value, fallback, maxLength) {
     const normalized = String(value ?? "")
@@ -35,7 +65,7 @@
   function normalizeRecords(records, limit = 100) {
     if (!Array.isArray(records)) return [];
     const seen = new Set();
-    return records.map(normalizeRecord).filter((record) => {
+    return records.map((record, index) => normalizeRecord(record, index)).filter((record) => {
       if (!record || seen.has(record.id)) return false;
       seen.add(record.id);
       return true;
@@ -59,6 +89,8 @@
       filter: FILTERS.includes(view?.filter) ? view.filter : "all",
       query: String(view?.query || "").slice(0, 256),
       mode: view?.mode === "regex" ? "regex" : "text",
+      pattern: String(view?.pattern || view?.query || "").slice(0, MAX_PATTERN_LENGTH),
+      flags: normalizeFlags(view?.flags),
       records: normalizeRecords(records)
     };
   }
@@ -66,8 +98,12 @@
   global.MDM_SITE_NOTIFICATION_CONTRACT = Object.freeze({
     tones: TONES,
     filters: FILTERS,
+    maxPatternLength: MAX_PATTERN_LENGTH,
+    maxInputLength: MAX_INPUT_LENGTH,
     normalizeText,
     normalizeTone,
+    normalizeFlags,
+    regexSafetyError,
     normalizeRecord,
     normalizeRecords,
     filterRecords,
