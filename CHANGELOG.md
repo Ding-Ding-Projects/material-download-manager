@@ -116,24 +116,27 @@ of guessing a commit, release, or date.
   settings write, and scrubs verifier validation buffers. Follow-up engine
   verification is **100/100**; the existing real Settings capture is unchanged.
 
-## Unreleased — built-artifact smoke and gallery refresh
+## Unreleased — current auto-organize gallery verification
 
-- **Source commit:** [`92dc67a`](https://github.com/Ding-Ding-Projects/material-download-manager/commit/92dc67a17fbad4f7471cda5d7d85c1b4b78c44a5)
+- **Source commit:** [`84da5e1`](https://github.com/Ding-Ding-Projects/material-download-manager/commit/84da5e1f2b10b6d88e9b946fe1523ad0295ddb2b)
 - **Local verification:** `npm run build` passed; the real hidden-desktop/CDP
-  smoke passed **42/42 required checks** in `10.488` seconds.
-- **Renderer assets:** `index-CUWEWH76.js` SHA-256
-  `34EF8CF409C1C6B5248E7F345CC9F2F58BD17C1A8022014D275C220F448FFCCC` and
-  `index-CL9UO5Fq.css` SHA-256
-  `23FF81988A28774B46E99E5FC38739905D813F8E7098D218325B9AC7974A0D45`.
-- **Gallery:** all seven auto-organize PNGs were replaced from that run; six
-  are 1100×900 and one is 520×760. Per-file hashes are recorded in
+  smoke passed **43/43 required checks** in `13.094` seconds.
+- **Renderer assets:** `index-D6pDySqX.js` SHA-256
+  `5E55A622C73485693527C1BFE35981FDD9BDFBBD940A36DDC79D9CE98C1D7C27` and
+  `index-DCh-PbGs.css` SHA-256
+  `CCA54DDFA9227A90F08E686322973C5358042EE0F7A71B840E8165C85F8AE697`.
+- **Gallery:** all seven auto-organize PNGs were freshly captured and copied
+  from that run. Six are 1100×900 and one is 520×760; all are 24-bit PNGs with
+  unique hashes. Their bytes match the tracked gallery exactly, so the refresh
+  produces no artificial binary diff. Per-file hashes are recorded in
   [`HANDOFF.md`](HANDOFF.md).
-- **Install/reveal capture:** the browser-extension card was recaptured from
-  the same run as a 524×233 PNG, SHA-256
-  `B465ABCB5A4B4BBB605B5289A27E75BF2DB473408481C1AE32EEB9997BE08785`, with
-  a generic temporary staging path and no user name in the image.
-- **Cleanup:** the disposable app/profile/process tree and named headless
-  desktop were removed; the final desktop inventory was zero.
+- **Extension boundary:** the same built-app run verified automatic and manual
+  browser-extension folder reveal, the Settings search's adjacent regex
+  builder, and the narrow bilingual card without overflow or clipped text. It
+  did not create a CRX or introduce signing material.
+- **Cleanup:** the disposable app/profile/process tree, fixture server, folder
+  window, and named headless desktop were removed; the final desktop inventory
+  was zero.
 
 ## Unreleased — protected display-name mutation history
 

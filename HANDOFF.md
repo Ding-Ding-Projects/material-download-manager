@@ -1,5 +1,48 @@
 # Handoff: Material Download Manager
 
+## Current auto-organize gallery verification (2026-08-11)
+
+Issue [#18](https://github.com/Ding-Ding-Projects/material-download-manager/issues/18)
+tracks the universal-feature follow-up that includes this bounded evidence
+refresh. Source commit
+[`84da5e1`](https://github.com/Ding-Ding-Projects/material-download-manager/commit/84da5e1f2b10b6d88e9b946fe1523ad0295ddb2b)
+was rebuilt before the real Electron application was launched on a named cheap
+hidden desktop and driven through the committed CDP smoke harness. The run
+passed **43/43 required checks** in `13.094` seconds and captured all seven
+auto-organize states. Renderer freshness was verified before capture;
+`index-D6pDySqX.js` is 565,125 bytes with SHA-256
+`5E55A622C73485693527C1BFE35981FDD9BDFBBD940A36DDC79D9CE98C1D7C27`, and
+`index-DCh-PbGs.css` is 66,627 bytes with SHA-256
+`CCA54DDFA9227A90F08E686322973C5358042EE0F7A71B840E8165C85F8AE697`.
+
+The fresh PNG bytes were copied into the tracked gallery and match the prior
+tracked bytes exactly. That byte-for-byte result is evidence that the current
+build still renders the documented states; no metadata was injected merely to
+force binary churn. Each image was opened at original resolution and inspected:
+
+| Capture | Dimensions | SHA-256 | Inspected state |
+| --- | ---: | --- | --- |
+| `01-six-category-paths.png` | 1100×900 | `6865326A14705FD4229EFDEA4D2A015F38DD1D36AC4061F31951ADB3C0816013` | Enabled routing and six generic `C:\Downloads` paths |
+| `02-ordered-rule-editor.png` | 1100×900 | `FCD9BD786DD2B51297226FE1B336F18BC5FA0A1AB96F123E59B3C18EB9B1BC06` | Two ordered rules with destination and move controls |
+| `03-anchored-regex-builder.png` | 1100×900 | `5EC02087A536C3096B96AEDB771EC2AB842321011828B58060250961BD0D6AC1` | Rule-local JavaScript regex builder anchored inside Settings |
+| `04-inline-invalid-rule.png` | 1100×900 | `C8C81E557613E3C2C971179CCEABD4A249458854B98F794D9BE6CB061B55711C` | Blank pattern error and disabled Save action |
+| `05-narrow-rule-layout.png` | 520×760 | `E48ECF3AD3786EC600C94D8CA7DEBD3C6A666302862370316E48621B5E374A63` | Narrow builder reflow without horizontal clipping |
+| `06-bilingual-category-settings.png` | 1100×900 | `9E0C7FD9B8F11C0A6AD0597E81B8D38AA4622833102EF2EDB7DBF133D8E74D82` | English and Cantonese Downloads settings |
+| `07-command-palette-destination.png` | 1100×900 | `71324F4523B3D46A47807EE955C8764C2719816016A62D19A6D1C9A1FC6644A5` | Exact auto-organize destination and adjacent full regex builder |
+
+The same run verified both automatic and manual browser-extension folder
+reveal, preserved the Settings search's adjacent regex builder, and found no
+horizontal overflow or clipped text in the 520 CSS-pixel bilingual extension
+card. No search field was added or changed by this refresh. No CRX was created,
+and no signing material or signing operation was introduced.
+
+The harness terminated the Electron process tree with zero survivors, closed
+the fixture server, and removed its disposable profile. The isolated folder
+window opened by the reveal check was then closed through the same cheap
+headless route; the named desktop disappeared and the final cheap desktop
+inventory reported zero entries. The expected invalid-format diagnostics from
+negative History and Changelog export probes did not change the passed result.
+
 ## Authenticator Settings registration surface (2026-08-11)
 
 Issue [#18](https://github.com/Ding-Ding-Projects/material-download-manager/issues/18)
