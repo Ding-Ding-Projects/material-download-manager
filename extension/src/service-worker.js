@@ -24,6 +24,7 @@ import { createCredentialAbstraction } from "./shared/credential.js";
 import { appendDisplayNameMutation } from "./shared/mutation-journal.js";
 import { createNarrator } from "./shared/narrator.js";
 import { createChromeTtsAdapter } from "./shared/chrome-tts.js";
+import { createAuthenticatorStore } from "./shared/authenticator-store.js";
 
 const MENU_ID = "send-to-material-download-manager";
 const STATUS_TIMEOUT_MS = 1_500;
@@ -81,6 +82,7 @@ const narrator = createNarrator({
   isReducedMotion: () => false,
   isScreenReaderActive: () => false,
 });
+const authenticatorStore = createAuthenticatorStore({ local: chrome.storage.local });
 let narratorSettingsGeneration = 0;
 
 function result(code, detail = null) {
@@ -648,6 +650,64 @@ chrome.runtime.onMessage.addListener((rawMessage, sender, sendResponse) => {
   void (async () => {
     if (message.type === "GET_STATE") {
       sendResponse({ ok: true, settings: await readSettings(), lastResult: await readLastResult() });
+      return;
+    }
+    if (message.type === "GET_AUTHENTICATOR_STATE") {
+      try {
+        sendResponse({ ok: true, result: await authenticatorStore.state() });
+      } catch {
+        sendResponse({ ok: false, result: { ok: false, code: "authenticator-storage-corrupt" } });
+      }
+      return;
+    }
+    if (message.type === "PREPARE_AUTHENTICATOR") {
+      try {
+        sendResponse({ ok: true, result: await authenticatorStore.prepare(message.input) });
+      } catch {
+        sendResponse({ ok: false, result: { ok: false, code: "authenticator-invalid-registration" } });
+      }
+      return;
+    }
+    if (message.type === "CANCEL_AUTHENTICATOR") {
+      await authenticatorStore.cancelPending();
+      sendResponse({ ok: true, result: { ok: true, code: "authenticator-pending-cleared" } });
+      return;
+    }
+    if (message.type === "CONFIRM_AUTHENTICATOR") {
+      try {
+        const confirmation = await authenticatorStore.confirm(message.input, message.code);
+        sendResponse({ ok: confirmation.ok, result: confirmation });
+      } catch {
+        sendResponse({ ok: false, result: { ok: false, code: "authenticator-storage-failed" } });
+      }
+      return;
+    }
+    if (message.type === "GET_AUTHENTICATOR_CODE") {
+      try {
+        const code = await authenticatorStore.getCode(message.id);
+        sendResponse({ ok: code.ok, result: code });
+      } catch (error) {
+        const corrupt = /corrupt|safety limit/iu.test(String(error?.message ?? ""));
+        sendResponse({ ok: false, result: { ok: false, code: corrupt ? "authenticator-storage-corrupt" : "authenticator-code-unavailable" } });
+      }
+      return;
+    }
+    if (message.type === "REMOVE_AUTHENTICATOR") {
+      try {
+        const removed = await authenticatorStore.remove(message.id);
+        sendResponse({ ok: removed.ok, result: removed });
+      } catch (error) {
+        const corrupt = /corrupt|safety limit/iu.test(String(error?.message ?? ""));
+        sendResponse({ ok: false, result: { ok: false, code: corrupt ? "authenticator-storage-corrupt" : "authenticator-storage-failed" } });
+      }
+      return;
+    }
+    if (message.type === "EXPORT_AUTHENTICATOR_METADATA") {
+      try {
+        sendResponse({ ok: true, result: { ok: true, code: "authenticator-metadata-export", records: await authenticatorStore.exportMetadata() } });
+      } catch {
+        sendResponse({ ok: false, result: { ok: false, code: "authenticator-storage-corrupt" } });
+      }
       return;
     }
     if (message.type === "TEST_NARRATION") {

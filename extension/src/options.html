@@ -66,6 +66,7 @@
     <nav class="tabs" role="tablist" data-l10n-aria="optionsSections" aria-label="Extension options sections">
       <button id="tab-connection" class="tab" type="button" role="tab" aria-selected="true" aria-controls="panel-connection" tabindex="0" data-tab="connection" data-l10n="connectionTab">Connection</button>
       <button id="tab-preferences" class="tab" type="button" role="tab" aria-selected="false" aria-controls="panel-preferences" tabindex="-1" data-tab="preferences" data-l10n="preferencesTab">Preferences</button>
+      <button id="tab-authenticator" class="tab" type="button" role="tab" aria-selected="false" aria-controls="panel-authenticator" tabindex="-1" data-tab="authenticator" data-l10n="authenticatorTab">Authenticator</button>
       <button id="tab-help" class="tab" type="button" role="tab" aria-selected="false" aria-controls="panel-help" tabindex="-1" data-tab="help" data-l10n="helpTab">Help</button>
     </nav>
 
@@ -166,6 +167,133 @@
           <label for="funny-level-yue" data-l10n="funnyCantoneseLabel">Cantonese funny level</label>
           <div class="range-row"><input id="funny-level-yue" name="funnyLevelYue" type="range" min="1" max="5" step="1"><output id="funny-level-yue-output" for="funny-level-yue">2</output></div>
           <p class="field-help" data-l10n="funnyHelp">1 is fully serious; 5 is maximum playfulness. Facts, affected data, and choices stay explicit.</p>
+        </div>
+      </section>
+
+      <section id="panel-authenticator" class="tab-panel" role="tabpanel" aria-labelledby="tab-authenticator" data-panel="authenticator" hidden>
+        <div class="setting-card authenticator-card" data-search="authenticator TOTP registration QR manual secret pairing local browser storage vault metadata">
+          <h2 data-l10n="authenticatorHeading">Authenticator</h2>
+          <p class="field-help" data-l10n="authenticatorHelp">Register an RFC 6238 account locally. The extension has no operating-system credential vault, so the browser-local secret fallback is separate from metadata, never exported or synced, and is not a security boundary.</p>
+          <p class="field-help" data-l10n="authenticatorStorageProvenance">Metadata is persisted in this extension profile; the secret fallback is also local browser storage, not a vault. Clear this extension's local storage to reset it.</p>
+        </div>
+        <div class="setting-card authenticator-card" data-search="authenticator issuer account otpauth URI base32 secret algorithm digits period prepare generate">
+          <h2 data-l10n="authenticatorRegisterHeading">Register an account</h2>
+          <label for="authenticator-uri" data-l10n="authenticatorUriLabel">Paste an otpauth URI (optional)</label>
+          <input id="authenticator-uri" type="password" autocomplete="off" spellcheck="false" maxlength="8192" aria-describedby="authenticator-uri-help">
+          <p id="authenticator-uri-help" class="field-help" data-l10n="authenticatorUriHelp">The URI is used only to fill this form and is never written to metadata or settings.</p>
+          <div class="inline-actions">
+            <button id="authenticator-parse-uri" class="button button-secondary" type="button" data-l10n="authenticatorParseUri">Use URI values</button>
+            <button id="authenticator-generate-secret" class="button button-secondary" type="button" data-l10n="authenticatorGenerateSecret">Generate local secret</button>
+          </div>
+          <label for="authenticator-issuer" data-l10n="authenticatorIssuerLabel">Issuer</label>
+          <input id="authenticator-issuer" type="text" maxlength="128" autocomplete="off" aria-describedby="authenticator-issuer-help">
+          <p id="authenticator-issuer-help" class="field-help" data-l10n="authenticatorIssuerHelp">Use the service or organization name shown by your authenticator.</p>
+          <label for="authenticator-account" data-l10n="authenticatorAccountLabel">Account</label>
+          <input id="authenticator-account" type="text" maxlength="128" autocomplete="off" aria-describedby="authenticator-account-help">
+          <p id="authenticator-account-help" class="field-help" data-l10n="authenticatorAccountHelp">Use the account label; it stays in local metadata so you can search it.</p>
+          <label for="authenticator-secret" data-l10n="authenticatorSecretLabel">Base32 secret</label>
+          <input id="authenticator-secret" type="password" maxlength="512" autocomplete="off" spellcheck="false" aria-describedby="authenticator-secret-help">
+          <p id="authenticator-secret-help" class="field-help" data-l10n="authenticatorSecretHelp">The secret stays hidden until you explicitly prepare pairing, then it is shown once in this page's memory.</p>
+          <div class="authenticator-fields-grid">
+            <div class="setting-card compact-card" data-search="authenticator algorithm hash">
+              <label for="authenticator-algorithm" data-l10n="authenticatorAlgorithmLabel">Algorithm</label>
+              <select id="authenticator-algorithm" aria-describedby="authenticator-parameters-help"><option value="SHA1">SHA-1</option><option value="SHA256">SHA-256</option><option value="SHA512">SHA-512</option></select>
+            </div>
+            <div class="setting-card compact-card" data-search="authenticator digits code width">
+              <label for="authenticator-digits" data-l10n="authenticatorDigitsLabel">Digits</label>
+              <select id="authenticator-digits" aria-describedby="authenticator-parameters-help"><option value="6">6</option><option value="8">8</option></select>
+            </div>
+            <div class="setting-card compact-card" data-search="authenticator period seconds countdown">
+              <label for="authenticator-period" data-l10n="authenticatorPeriodLabel">Period (seconds)</label>
+              <input id="authenticator-period" type="number" min="1" max="86400" step="1" value="30" aria-describedby="authenticator-parameters-help">
+            </div>
+          </div>
+          <p id="authenticator-parameters-help" class="field-help" data-l10n="authenticatorParametersHelp">Supported values match the shared RFC 6238 semantics: SHA-1, SHA-256, SHA-512, six or eight digits, and a 1–86400 second period.</p>
+          <button id="authenticator-prepare" class="button button-primary" type="button" data-l10n="authenticatorPrepare">Prepare local pairing</button>
+          <p id="authenticator-register-error" class="field-error" role="alert"></p>
+        </div>
+        <div id="authenticator-pairing-card" class="setting-card authenticator-card" data-search="authenticator pairing QR one-time reveal confirmation" hidden>
+          <h2 data-l10n="authenticatorPairingHeading">Scan and confirm pairing</h2>
+          <div class="authenticator-pairing-grid">
+            <div id="authenticator-qr" class="authenticator-qr-wrap" role="status" aria-live="polite"></div>
+            <div class="authenticator-pairing-details">
+              <p id="authenticator-qr-status" class="field-help"></p>
+              <div class="authenticator-secret-reveal">
+                <span class="field-label" data-l10n="authenticatorManualSecretLabel">Manual secret (one-time reveal)</span>
+                <code id="authenticator-manual-secret" class="authenticator-manual-secret" hidden></code>
+                <div class="inline-actions">
+                  <button id="authenticator-reveal-secret" class="button button-secondary" type="button" data-l10n="authenticatorRevealSecret">Reveal manual secret</button>
+                  <button id="authenticator-copy-secret" class="button button-secondary" type="button" data-l10n="authenticatorCopySecret" hidden>Copy secret</button>
+                </div>
+              </div>
+              <p id="authenticator-pairing-facts" class="field-help"></p>
+              <label for="authenticator-pairing-code" data-l10n="authenticatorPairingCodeLabel">Current authenticator code</label>
+              <input id="authenticator-pairing-code" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="8" aria-describedby="authenticator-pairing-help">
+              <p id="authenticator-pairing-help" class="field-help" data-l10n="authenticatorPairingHelp">Confirm the current code before the browser-local fallback secret is stored.</p>
+              <div class="inline-actions">
+                <button id="authenticator-confirm" class="button button-primary" type="button" data-l10n="authenticatorConfirm">Confirm and store</button>
+                <button id="authenticator-cancel" class="button button-secondary" type="button" data-l10n="authenticatorCancel">Cancel reveal</button>
+              </div>
+              <p id="authenticator-pairing-error" class="field-error" role="alert"></p>
+            </div>
+          </div>
+        </div>
+        <div class="setting-card authenticator-card" data-search="authenticator registered metadata list current code next code countdown remove export">
+          <div class="authenticator-list-heading"><h2 data-l10n="authenticatorListHeading">Registered authenticators</h2><button id="authenticator-export" class="button button-secondary" type="button" data-l10n="authenticatorExport">Export metadata</button></div>
+          <p class="field-help" data-l10n="authenticatorListHelp">Codes are computed locally. A code is unavailable when its browser-local secret is missing; metadata remains visible so you can re-register it.</p>
+          <div class="authenticator-list-search-row">
+            <label class="sr-only" for="authenticator-list-search" data-l10n="authenticatorListSearchLabel">Search authenticators</label>
+            <input id="authenticator-list-search" type="search" autocomplete="off" spellcheck="false" aria-describedby="authenticator-list-summary">
+            <button id="authenticator-list-regex-toggle" class="button button-secondary" type="button" aria-expanded="false" aria-controls="authenticator-list-regex" data-l10n="regexBuilder">Regex builder</button>
+          </div>
+          <section id="authenticator-list-regex" class="regex-popover authenticator-list-regex" role="region" aria-labelledby="authenticator-list-regex-title" hidden>
+            <h3 id="authenticator-list-regex-title" data-l10n="authenticatorListRegexHeading">Authenticator list regex builder</h3>
+            <label for="authenticator-list-regex-pattern" data-l10n="pattern">Pattern</label>
+            <input id="authenticator-list-regex-pattern" type="text" maxlength="256" autocomplete="off" spellcheck="false">
+            <label for="authenticator-list-regex-flags" data-l10n="flags">Flags</label>
+            <input id="authenticator-list-regex-flags" type="text" maxlength="12" value="gi" autocomplete="off" spellcheck="false">
+            <label for="authenticator-list-regex-sample" data-l10n="sampleText">Sample text</label>
+            <textarea id="authenticator-list-regex-sample" rows="2" maxlength="2048"></textarea>
+            <fieldset class="fragment-fieldset">
+              <legend data-l10n="guidedFragments">Guided fragments</legend>
+              <div class="fragment-list">
+                <button type="button" class="chip" data-authenticator-fragment="literal" data-l10n="literal">Literal</button>
+                <button type="button" class="chip" data-authenticator-fragment="characterClass" data-l10n="characterClass">Character class</button>
+                <button type="button" class="chip" data-authenticator-fragment="anchorStart" data-l10n="startAnchor">Start anchor</button>
+                <button type="button" class="chip" data-authenticator-fragment="group" data-l10n="group">Group</button>
+                <button type="button" class="chip" data-authenticator-fragment="alternation" data-l10n="alternation">Alternation</button>
+                <button type="button" class="chip" data-authenticator-fragment="quantifier" data-l10n="quantifier">Quantifier</button>
+              </div>
+            </fieldset>
+            <p id="authenticator-list-regex-feedback" class="inline-status" role="status" aria-live="polite"></p>
+            <ol id="authenticator-list-regex-matches" class="match-list"></ol>
+            <div class="regex-actions">
+              <button id="authenticator-list-regex-apply" class="button button-primary" type="button" data-l10n="applyPattern">Use pattern for search</button>
+              <button id="authenticator-list-regex-copy" class="button button-secondary" type="button" data-l10n="copyPattern">Copy pattern</button>
+              <button id="authenticator-list-regex-export" class="button button-secondary" type="button" data-l10n="exportPattern">Export pattern</button>
+            </div>
+            <label class="check-row" for="authenticator-list-regex-mode"><input id="authenticator-list-regex-mode" type="checkbox"><span data-l10n="applyPattern">Use pattern for search</span></label>
+          </section>
+          <p id="authenticator-list-summary" class="inline-status" role="status" aria-live="polite"></p>
+          <ul id="authenticator-list" class="authenticator-list" aria-label="Registered authenticators"></ul>
+          <p id="authenticator-list-status" class="inline-status" role="status" aria-live="polite"></p>
+        </div>
+
+        <div id="authenticator-remove-card" class="setting-card authenticator-card danger-card" hidden role="group" aria-labelledby="authenticator-remove-heading">
+          <h2 id="authenticator-remove-heading" data-l10n="authenticatorRemoveHeading">Confirm authenticator removal</h2>
+          <p class="field-help" data-l10n="authenticatorRemoveHelp">This removes the selected metadata and its browser-local secret. Type both visible labels, then move the confirmation slider all the way across. Escape or Cancel is an emergency exit.</p>
+          <p id="authenticator-remove-target" class="field-help"></p>
+          <label for="authenticator-remove-key-one" data-l10n="authenticatorRemoveKeyOne">Key 1: type the issuer</label>
+          <input id="authenticator-remove-key-one" type="text" autocomplete="off" spellcheck="false">
+          <label for="authenticator-remove-key-two" data-l10n="authenticatorRemoveKeyTwo">Key 2: type the account</label>
+          <input id="authenticator-remove-key-two" type="text" autocomplete="off" spellcheck="false">
+          <label for="authenticator-remove-slider" data-l10n="authenticatorRemoveSlider">Confirmation progress</label>
+          <input id="authenticator-remove-slider" type="range" min="0" max="100" value="0" step="1" aria-describedby="authenticator-remove-status">
+          <p id="authenticator-remove-status" class="inline-status" role="status" aria-live="polite"></p>
+          <div class="inline-actions">
+            <button id="authenticator-remove-confirm" class="button button-danger" type="button" disabled data-l10n="authenticatorRemoveConfirm">Remove selected authenticator</button>
+            <button id="authenticator-remove-cancel" class="button button-secondary" type="button" data-l10n="authenticatorRemoveCancel">Cancel</button>
+          </div>
         </div>
       </section>
 

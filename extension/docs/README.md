@@ -13,3 +13,6 @@ capabilities, credentials, or user-specific paths.
   current slice.
 - [Spoken narrator](narrator.md) — opt-in service-worker narration, language
   order, queue safety, quiet handling, and Chrome TTS boundaries.
+- [Extension authenticator](authenticator.md) — local RFC 6238 registration,
+  QR/manual pairing, browser-local storage boundary, live codes, countdown,
+  metadata export, and the list regex builder.

@@ -1,4 +1,5 @@
 import { HANDOFF_PROTOCOL_VERSION } from "./settings.js";
+import { normalizeTotpRegistration, parseTotpUri } from "./totp.js";
 
 export const HANDOFF_SOURCE = "material-download-manager-extension";
 export const MAX_URL_LENGTH = 8192;
@@ -16,6 +17,35 @@ function boundedText(value, maxLength) {
   if (value === undefined || value === null) return undefined;
   if (typeof value !== "string" || value.length > maxLength) return null;
   return value;
+}
+
+function hasOnlyKeys(value, keys) {
+  return Object.keys(value).every((key) => keys.includes(key));
+}
+
+function normalizeAuthenticatorInput(value) {
+  if (!isRecord(value) || !hasOnlyKeys(value, ["uri", "issuer", "account", "secret", "algorithm", "digits", "period"])) return null;
+  if (typeof value.uri === "string") {
+    if (value.uri.length > 8192) return null;
+    try {
+      parseTotpUri(value.uri);
+    } catch {
+      return null;
+    }
+    return { uri: value.uri };
+  }
+  const issuer = boundedText(value.issuer, 128);
+  const account = boundedText(value.account, 128);
+  const secret = boundedText(value.secret, 512);
+  if (issuer === null || account === null || secret === null || typeof issuer !== "string" || typeof account !== "string" || typeof secret !== "string") return null;
+  if (value.algorithm !== undefined && !["SHA1", "SHA256", "SHA512"].includes(value.algorithm)) return null;
+  if (value.digits !== undefined && value.digits !== 6 && value.digits !== 8) return null;
+  if (value.period !== undefined && (!Number.isSafeInteger(value.period) || value.period < 1 || value.period > 86400)) return null;
+  try {
+    return normalizeTotpRegistration({ issuer, account, secret, ...(value.algorithm === undefined ? {} : { algorithm: value.algorithm }), ...(value.digits === undefined ? {} : { digits: value.digits }), ...(value.period === undefined ? {} : { period: value.period }) });
+  } catch {
+    return null;
+  }
 }
 
 export function normalizeDownloadUrl(rawValue) {
@@ -106,6 +136,24 @@ export function validateIncomingMessage(value) {
   if (value.type === "GET_STATE") return { type: value.type };
   if (value.type === "TEST_HANDOFF") return { type: value.type };
   if (value.type === "TEST_NARRATION") return { type: value.type };
+  if (["GET_AUTHENTICATOR_STATE", "CANCEL_AUTHENTICATOR", "EXPORT_AUTHENTICATOR_METADATA"].includes(value.type)) {
+    return hasOnlyKeys(value, ["type"]) ? { type: value.type } : null;
+  }
+  if (value.type === "PREPARE_AUTHENTICATOR") {
+    const input = normalizeAuthenticatorInput(value.input);
+    return input ? { type: value.type, input } : null;
+  }
+  if (["GET_AUTHENTICATOR_CODE", "REMOVE_AUTHENTICATOR"].includes(value.type)) {
+    return typeof value.id === "string" && /^[A-Za-z0-9_-]{8,128}$/u.test(value.id) && hasOnlyKeys(value, ["type", "id"])
+      ? { type: value.type, id: value.id }
+      : null;
+  }
+  if (value.type === "CONFIRM_AUTHENTICATOR") {
+    const input = normalizeAuthenticatorInput(value.input);
+    return typeof value.code === "string" && /^(?:\d{6}|\d{8})$/u.test(value.code) && hasOnlyKeys(value, ["type", "input", "code"]) && input
+      ? { type: value.type, input, code: value.code }
+      : null;
+  }
   if (value.type === "SAVE_SETTINGS" && isRecord(value.settings)) {
     return { type: value.type, settings: value.settings };
   }

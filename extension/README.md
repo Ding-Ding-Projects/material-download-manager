@@ -137,6 +137,19 @@ then Cantonese. Quiet mode, Muted sound, and the reduced-motion preference can
 suppress speech without changing the visible result. See
 [`docs/narrator.md`](docs/narrator.md) for the browser and final-event boundary.
 
+The options page also includes an **Authenticator** tab. It accepts a local
+`otpauth://totp/` URI or bounded manual registration values, renders a local
+QR with an explicit one-time manual-secret reveal, verifies the current code
+before storing, and shows current/next codes with a readable countdown. The
+list has its own plain-text search and full adjacent regex builder. Metadata and
+the browser-local secret fallback use separate versioned local-storage records;
+the extension has no operating-system vault API, so this fallback is plainly
+not a security boundary and is not synced or exported. Clearing this
+extension's local storage is the reset route. See
+[`docs/authenticator.md`](docs/authenticator.md) for the exact registration,
+QR-size, storage, rollback, and follow-up boundaries. Image/camera/clipboard
+QR import and deliberate secret export are not claimed by this slice.
+
 ## Permissions
 
 | Permission | Reason |
@@ -206,12 +219,13 @@ settings search; this change adds no search field without its own builder.
   wiring, spoken narrator controls, and settings export/import.
 - `src/shared/` — pure validation, protocol-2 proofs, handoff envelope, pairing
   module, regex, settings, localization, the capability-free credential
-  abstraction, redacted display-name journal, serialized narrator, and Chrome
-  TTS adapter. The repository pairing
-  module is intentionally empty; only the app's private staged copy is paired.
-- `docs/README.md`, `docs/settings-foundation.md`, and `docs/narrator.md` —
-  documentation index, shared settings/journal boundary, and spoken narrator
-  contract.
+  abstraction, redacted display-name/authenticator journal, serialized narrator,
+  Chrome TTS adapter, RFC 6238 TOTP core, local QR encoder, and browser-local
+  authenticator store. The repository pairing module is intentionally empty;
+  only the app's private staged copy is paired.
+- `docs/README.md`, `docs/settings-foundation.md`, `docs/narrator.md`, and
+  `docs/authenticator.md` — documentation index, shared settings/journal
+  boundary, spoken narrator contract, and the local authenticator boundary.
 - `docs/handoff-contract.md` — adapter contract and security boundary.
 - `docs/electron-integration-seam.md` — implemented Electron seam and truthful
   failure behavior.

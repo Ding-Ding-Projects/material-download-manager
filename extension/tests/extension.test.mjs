@@ -43,6 +43,24 @@ import {
 } from "../src/shared/mutation-journal.js";
 import { createNarrator, NARRATOR_COOLDOWN_MS, NARRATOR_DEBOUNCE_MS } from "../src/shared/narrator.js";
 import { createChromeTtsAdapter } from "../src/shared/chrome-tts.js";
+import {
+  AUTHENTICATOR_SCHEMA_VERSION,
+  buildTotpUri,
+  createTotpMetadata,
+  createTotpRegistrationModel,
+  generateTotpCode,
+  isTotpMetadata,
+  normalizeTotpRegistration,
+  parseTotpUri,
+  verifyTotpCode,
+} from "../src/shared/totp.js";
+import { createQrMatrix, qrMatrixToSvg, qrPayloadCapacity } from "../src/shared/qr.js";
+import {
+  AUTHENTICATOR_METADATA_KEY,
+  AUTHENTICATOR_SECRETS_KEY,
+  createAuthenticatorStore,
+} from "../src/shared/authenticator-store.js";
+import { appendAuthenticatorMutation } from "../src/shared/mutation-journal.js";
 
 const extensionRoot = dirname(dirname(fileURLToPath(import.meta.url)));
 const read = (relativePath) => readFile(join(extensionRoot, relativePath), "utf8");
@@ -162,6 +180,24 @@ function downloadFingerprint(url, startTime) {
   return createHash("sha256").update(`${url}\n${startTime}`, "utf8").digest("hex");
 }
 
+function base32Encode(value) {
+  const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
+  const bytes = new TextEncoder().encode(value);
+  let buffer = 0;
+  let bits = 0;
+  let output = "";
+  for (const byte of bytes) {
+    buffer = (buffer << 8) | byte;
+    bits += 8;
+    while (bits >= 5) {
+      bits -= 5;
+      output += alphabet[(buffer >>> bits) & 31];
+    }
+  }
+  if (bits > 0) output += alphabet[(buffer << (5 - bits)) & 31];
+  return output;
+}
+
 test("MV3 manifest declares the intended entrypoints and minimized permissions", async () => {
   const manifest = JSON.parse(await read("manifest.json"));
   assert.equal(manifest.manifest_version, 3);
@@ -200,6 +236,8 @@ test("service worker, popup, options, and runtime message boundary are wired", a
   assert.match(worker, /createChromeTtsAdapter/);
   assert.match(worker, /narrateResult/);
   assert.match(worker, /TEST_NARRATION/);
+  assert.match(worker, /createAuthenticatorStore/);
+  for (const message of ["GET_AUTHENTICATOR_STATE", "PREPARE_AUTHENTICATOR", "CONFIRM_AUTHENTICATOR", "GET_AUTHENTICATOR_CODE", "REMOVE_AUTHENTICATOR", "EXPORT_AUTHENTICATOR_METADATA"]) assert.match(worker, new RegExp(message));
   assert.match(worker, /validateIncomingMessage/);
   assert.match(worker, /HANDOFF_URL/);
   assert.match(worker, /sendResponse/);
@@ -223,6 +261,20 @@ test("service worker, popup, options, and runtime message boundary are wired", a
   assert.match(options, /id="narrator-quiet-mode"/);
   assert.match(options, /id="narrator-respect-reduced-motion"/);
   assert.match(options, /id="test-narration"/);
+  assert.match(options, /id="tab-authenticator"/);
+  assert.match(options, /id="panel-authenticator"/);
+  for (const id of ["authenticator-uri", "authenticator-issuer", "authenticator-account", "authenticator-secret", "authenticator-algorithm", "authenticator-digits", "authenticator-period", "authenticator-prepare", "authenticator-pairing-code", "authenticator-confirm", "authenticator-list-search", "authenticator-list-regex-toggle", "authenticator-export", "authenticator-remove-card", "authenticator-remove-key-one", "authenticator-remove-key-two", "authenticator-remove-slider", "authenticator-remove-confirm", "authenticator-remove-cancel"]) assert.match(options, new RegExp(`id="${id}"`));
+  assert.match(options, /id="authenticator-qr"/);
+  assert.match(options, /data-authenticator-fragment="literal"/);
+  assert.match(await read("src/options.js"), /PREPARE_AUTHENTICATOR/);
+  assert.match(await read("src/options.js"), /GET_AUTHENTICATOR_CODE/);
+  assert.match(await read("src/options.js"), /createQrMatrix/);
+  const optionsScript = await read("src/options.js");
+  assert.match(optionsScript, /authenticatorRemoveConfirm\.disabled/);
+  assert.match(optionsScript, /event\.key === "Escape"/);
+  assert.match(optionsScript, /REMOVE_AUTHENTICATOR/);
+  assert.match(optionsScript, /void loadAuthenticatorState\(\)/);
+  assert.match(optionsScript, /await loadState\(\);/);
   assert.match(await read("src/options.js"), /REQUIRED_SEARCHABLE_SETTING_IDS[\s\S]*"auto-capture-downloads"/);
   assert.match(options, /role="tab"/);
   assert.match(options, /id="import-file" type="file"/);
@@ -397,6 +449,27 @@ test("service worker runtime boundary stores settings and reports disabled hando
     managerAccepted = false;
     const unconfirmed = await send({ type: "HANDOFF_URL", url: "https://example.test/file.zip" });
     assert.equal(unconfirmed.result.code, "handoff-failed");
+    const authenticatorInput = { issuer: "Example", account: "runtime", secret: "JBSWY3DPEHPK3PXP", algorithm: "SHA1", digits: 6, period: 30 };
+    const preparedAuthenticator = await send({ type: "PREPARE_AUTHENTICATOR", input: authenticatorInput });
+    assert.equal(preparedAuthenticator.ok, true);
+    assert.equal(preparedAuthenticator.result.kind, "totp");
+    const pairingCode = await generateTotpCode(authenticatorInput, Date.now());
+    const confirmedAuthenticator = await send({ type: "CONFIRM_AUTHENTICATOR", input: authenticatorInput, code: pairingCode });
+    assert.equal(confirmedAuthenticator.ok, true);
+    const authenticatorState = await send({ type: "GET_AUTHENTICATOR_STATE" });
+    assert.equal(authenticatorState.ok, true);
+    assert.equal(authenticatorState.result.metadata.length, 1);
+    const metadata = authenticatorState.result.metadata[0];
+    assert.equal(metadata.secretOmitted, true);
+    const authenticatorCode = await send({ type: "GET_AUTHENTICATOR_CODE", id: metadata.id });
+    assert.equal(authenticatorCode.ok, true);
+    assert.equal(authenticatorCode.result.ok, true);
+    assert.equal(typeof authenticatorCode.result.nextCode, "string");
+    const metadataExport = await send({ type: "EXPORT_AUTHENTICATOR_METADATA" });
+    assert.equal(metadataExport.ok, true);
+    assert.doesNotMatch(JSON.stringify(metadataExport), /JBSWY3DPEHPK3PXP|otpauth:/iu);
+    const removedAuthenticator = await send({ type: "REMOVE_AUTHENTICATOR", id: metadata.id });
+    assert.equal(removedAuthenticator.ok, true);
   } finally {
     await new Promise((resolve) => server.close(resolve));
     if (previousChrome === undefined) delete globalThis.chrome;
@@ -819,6 +892,162 @@ test("narrator settings are opt-in, bounded, and exportable without secrets", ()
   assert.equal(school.narratorLanguage, "both");
   assert.equal(school.funnyLevelEn, 1);
   assert.equal(school.showEmojis, false);
+});
+
+test("authenticator message boundary is strict and secret-bearing only for explicit registration calls", () => {
+  assert.deepEqual(validateIncomingMessage({ type: "GET_AUTHENTICATOR_STATE" }), { type: "GET_AUTHENTICATOR_STATE" });
+  const input = { issuer: "Example", account: "alice", secret: "JBSWY3DPEHPK3PXP", algorithm: "SHA1", digits: 6, period: 30 };
+  assert.deepEqual(validateIncomingMessage({ type: "PREPARE_AUTHENTICATOR", input }), { type: "PREPARE_AUTHENTICATOR", input });
+  assert.deepEqual(validateIncomingMessage({ type: "CONFIRM_AUTHENTICATOR", input, code: "602287" }), { type: "CONFIRM_AUTHENTICATOR", input, code: "602287" });
+  assert.equal(validateIncomingMessage({ type: "CONFIRM_AUTHENTICATOR", input, code: "602287", extra: true }), null);
+  assert.equal(validateIncomingMessage({ type: "PREPARE_AUTHENTICATOR", input: { ...input, secret: "bad!" } }), null);
+  assert.equal(validateIncomingMessage({ type: "GET_AUTHENTICATOR_CODE", id: "bad id" }), null);
+  assert.deepEqual(validateIncomingMessage({ type: "REMOVE_AUTHENTICATOR", id: "authenticator-test-001" }), { type: "REMOVE_AUTHENTICATOR", id: "authenticator-test-001" });
+});
+
+test("extension authenticator mirrors RFC 6238 vectors and compact URI defaults", async () => {
+  const vectors = [
+    { algorithm: "SHA1", secret: base32Encode("12345678901234567890"), digits: 8, expected: ["94287082", "07081804", "14050471", "89005924", "69279037"] },
+    { algorithm: "SHA256", secret: base32Encode("12345678901234567890123456789012"), digits: 8, expected: ["46119246", "68084774", "67062674", "91819424", "90698825"] },
+    { algorithm: "SHA512", secret: base32Encode("1234567890123456789012345678901234567890123456789012345678901234"), digits: 8, expected: ["90693936", "25091201", "99943326", "93441116", "38618901"] },
+  ];
+  const timestamps = [59_000, 1_111_111_109_000, 1_111_111_111_000, 1_234_567_890_000, 2_000_000_000_000];
+  for (const vector of vectors) {
+    const registration = { issuer: "RFC", account: vector.algorithm, secret: vector.secret, algorithm: vector.algorithm, digits: vector.digits, period: 30 };
+    for (let index = 0; index < timestamps.length; index += 1) {
+      assert.equal(await generateTotpCode(registration, timestamps[index]), vector.expected[index]);
+      assert.equal(await verifyTotpCode(registration, vector.expected[index], timestamps[index], 1), true);
+    }
+  }
+  const defaults = normalizeTotpRegistration({ issuer: "Material Download Manager", account: "alice", secret: "JBSWY3DPEHPK3PXP" });
+  const uri = buildTotpUri(defaults);
+  assert.doesNotMatch(uri, /algorithm=|digits=|period=|issuer=/u);
+  assert.deepEqual(parseTotpUri(uri), defaults);
+  const nonDefault = { ...defaults, algorithm: "SHA512", digits: 8, period: 45 };
+  assert.deepEqual(parseTotpUri(buildTotpUri(nonDefault)), nonDefault);
+});
+
+test("extension authenticator QR matrix is local, bounded, and shaped for the shipped issuer", () => {
+  const model = createTotpRegistrationModel({ issuer: "Material Download Manager", account: "alice", secret: "JBSWY3DPEHPK3PXP" });
+  const payloadBytes = new TextEncoder().encode(model.otpauthUri).length;
+  assert.ok(payloadBytes <= qrPayloadCapacity());
+  const matrix = createQrMatrix(model.otpauthUri);
+  assert.equal(matrix.length, 37);
+  assert.equal(matrix.every((row) => row.length === 37 && row.every((value) => value === 0 || value === 1)), true);
+  assert.equal(matrix[29][8], 1, "QR dark module uses the standards coordinate");
+  const svg = qrMatrixToSvg(matrix, "One-time authenticator pairing QR");
+  assert.match(svg, /role="img"/u);
+  assert.match(svg, /shape-rendering="crispEdges"/u);
+  assert.doesNotMatch(svg, /otpauth:|<image/iu);
+});
+
+test("authenticator store keeps metadata and browser-local secrets separate across worker recreation", async () => {
+  const values = new Map();
+  const local = {
+    async get(key) { return { [key]: values.get(key) }; },
+    async set(entries) { Object.entries(entries).forEach(([key, value]) => values.set(key, value)); },
+  };
+  const timestamp = 1_700_000_000_000;
+  const input = { issuer: "Example", account: "alice", secret: "JBSWY3DPEHPK3PXP", algorithm: "SHA1", digits: 6, period: 30 };
+  const first = createAuthenticatorStore({ local, now: () => timestamp, idFactory: () => "authenticator-test-001" });
+  const model = await first.prepare(input);
+  assert.equal(model.kind, "totp");
+  const code = await generateTotpCode(input, timestamp);
+  const confirmed = await first.confirm({ issuer: model.issuer, account: model.account, secret: model.secret, algorithm: model.algorithm, digits: model.digits, period: model.period }, code, timestamp);
+  assert.equal(confirmed.ok, true);
+  assert.equal(isTotpMetadata(confirmed.metadata), true);
+  assert.equal(Object.prototype.hasOwnProperty.call(values.get(AUTHENTICATOR_METADATA_KEY)[0], "secret"), false);
+  assert.equal(values.get(AUTHENTICATOR_SECRETS_KEY)[confirmed.metadata.id], input.secret);
+  const second = createAuthenticatorStore({ local, now: () => timestamp, idFactory: () => "unused-id-000" });
+  const state = await second.state();
+  assert.equal(state.metadata.length, 1);
+  const current = await second.getCode(confirmed.metadata.id, timestamp);
+  assert.equal(current.ok, true);
+  assert.equal(current.code, code);
+  assert.equal(typeof current.nextCode, "string");
+  assert.equal(current.remainingSeconds >= 1 && current.remainingSeconds <= 30, true);
+  const removed = await second.remove(confirmed.metadata.id);
+  assert.equal(removed.ok, true);
+  assert.deepEqual(await second.state(), { metadata: [] });
+  assert.deepEqual(values.get(AUTHENTICATOR_SECRETS_KEY), {});
+});
+
+test("authenticator store fails closed on corrupt or oversized browser-local records and clears pending input", async () => {
+  const values = new Map();
+  const local = {
+    async get(key) { return { [key]: values.get(key) }; },
+    async set(entries) { Object.entries(entries).forEach(([key, value]) => values.set(key, value)); },
+  };
+  const corrupt = createAuthenticatorStore({ local, idFactory: () => "authenticator-test-002" });
+  values.set(AUTHENTICATOR_METADATA_KEY, [{ schemaVersion: AUTHENTICATOR_SCHEMA_VERSION, id: "bad", issuer: "x", account: "y", algorithm: "SHA1", digits: 6, period: 30, secretOmitted: false }]);
+  await assert.rejects(() => corrupt.state(), /corrupt|safety limit/iu);
+  values.delete(AUTHENTICATOR_METADATA_KEY);
+  values.set(AUTHENTICATOR_SECRETS_KEY, Object.fromEntries(Array.from({ length: 65 }, (_item, index) => [`secret-${index.toString().padStart(2, "0")}`, "JBSWY3DPEHPK3PXP"])));
+  values.set(AUTHENTICATOR_METADATA_KEY, [createTotpMetadata("authenticator-test-005", { issuer: "Example", account: "x", secret: "JBSWY3DPEHPK3PXP" })]);
+  await assert.rejects(() => corrupt.getCode("authenticator-test-005", Date.now()), /corrupt|safety limit/iu);
+  values.clear();
+  const pendingStore = createAuthenticatorStore({ local, now: () => 1_700_000_000_000, idFactory: () => "authenticator-test-003" });
+  const model = await pendingStore.prepare({ issuer: "Example", account: "bob", secret: "JBSWY3DPEHPK3PXP" });
+  await pendingStore.cancelPending();
+  const code = await generateTotpCode(model, 1_700_000_000_000);
+  const confirmed = await pendingStore.confirm(model, code, 1_700_000_000_000);
+  assert.equal(confirmed.ok, true, "confirmation carries the in-memory model so worker suspension does not lose it");
+});
+
+test("authenticator storage reconciliation removes orphan secrets and rolls back failed journal writes", async () => {
+  const values = new Map();
+  const local = {
+    async get(key) { return { [key]: values.get(key) }; },
+    async set(entries) { Object.entries(entries).forEach(([key, value]) => values.set(key, value)); },
+  };
+  const timestamp = 1_700_000_000_000;
+  const input = { issuer: "Example", account: "reconcile", secret: "JBSWY3DPEHPK3PXP" };
+  const metadata = createTotpMetadata("authenticator-valid-001", input);
+  values.set(AUTHENTICATOR_METADATA_KEY, [metadata]);
+  values.set(AUTHENTICATOR_SECRETS_KEY, {
+    [metadata.id]: input.secret,
+    "authenticator-orphan-001": input.secret,
+  });
+  const reconciler = createAuthenticatorStore({ local, now: () => timestamp, idFactory: () => "authenticator-valid-001" });
+  assert.deepEqual((await reconciler.state()).metadata, [metadata]);
+  assert.deepEqual(values.get(AUTHENTICATOR_SECRETS_KEY), { [metadata.id]: input.secret });
+
+  const duplicateCode = await generateTotpCode(input, timestamp);
+  const duplicate = await reconciler.confirm(input, duplicateCode, timestamp);
+  assert.deepEqual(duplicate, { ok: false, code: "authenticator-id-collision" });
+  assert.equal(values.get(AUTHENTICATOR_METADATA_KEY).length, 1);
+
+  const failedValues = new Map();
+  let failJournalWrite = true;
+  const flaky = {
+    async get(key) { return { [key]: failedValues.get(key) }; },
+    async set(entries) {
+      if (failJournalWrite && Object.prototype.hasOwnProperty.call(entries, DISPLAY_NAME_MUTATION_JOURNAL_KEY)) {
+        failJournalWrite = false;
+        throw new Error("journal storage unavailable");
+      }
+      Object.entries(entries).forEach(([key, value]) => failedValues.set(key, value));
+    },
+  };
+  const failing = createAuthenticatorStore({ local: flaky, now: () => timestamp, idFactory: () => "authenticator-failed-001" });
+  const failingInput = { ...input, account: "failed" };
+  const failingCode = await generateTotpCode(failingInput, timestamp);
+  await assert.rejects(() => failing.confirm(failingInput, failingCode, timestamp), /journal storage unavailable/iu);
+  assert.deepEqual(await failing.state(), { metadata: [] });
+  assert.deepEqual(failedValues.get(AUTHENTICATOR_SECRETS_KEY), {});
+});
+
+test("authenticator mutation journal is redacted and timestamp-bounded", async () => {
+  const values = new Map();
+  const storage = {
+    async get(key) { return { [key]: values.get(key) }; },
+    async set(entries) { Object.entries(entries).forEach(([key, value]) => values.set(key, value)); },
+  };
+  const entry = await appendAuthenticatorMutation(storage, { action: "authenticator-created", id: "authenticator-test-004", at: "2026-08-11T14:00:00.000Z" });
+  assert.equal(entry.redacted, true);
+  assert.equal(entry.source, "extension-authenticator");
+  assert.doesNotMatch(JSON.stringify(values), /authenticator-test-004/u);
+  await assert.rejects(() => appendAuthenticatorMutation(storage, { action: "authenticator-removed", id: "authenticator-test-004", at: "not-a-date" }), /metadata is invalid/iu);
 });
 
 test("narration parts keep language order and funny-level styling separate", () => {

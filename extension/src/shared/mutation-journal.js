@@ -9,7 +9,10 @@ const JOURNAL_ACTIONS = new Set([
   "display-name-created",
   "display-name-changed",
   "display-name-reset",
+  "authenticator-created",
+  "authenticator-removed",
 ]);
+const JOURNAL_SOURCES = new Set(["extension-settings", "extension-authenticator"]);
 
 function isRecord(value) {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -31,7 +34,7 @@ function validateEntry(value) {
     && /^[a-f0-9]{64}$/u.test(value.id)
     && JOURNAL_ACTIONS.has(value.action)
     && isIsoTimestamp(value.at)
-    && value.source === "extension-settings"
+    && JOURNAL_SOURCES.has(value.source)
     && value.redacted === true
     && isSha256(value.beforeHash)
     && isSha256(value.afterHash);
@@ -122,5 +125,41 @@ export function appendDisplayNameMutation(storage, details) {
   journalMutationQueue = journalMutationQueue
     .catch(() => {})
     .then(() => appendDisplayNameMutationNow(storage, details));
+  return journalMutationQueue;
+}
+
+/** Record authenticator add/remove metadata without persisting its secret or labels. */
+export function appendAuthenticatorMutation(storage, { action, id, at = new Date().toISOString() }) {
+  if (!JOURNAL_ACTIONS.has(action) || !/^authenticator-[a-z]+$/u.test(action) || typeof id !== "string" || !/^[A-Za-z0-9_-]{8,128}$/u.test(id) || !isIsoTimestamp(at)) {
+    const error = new Error("The authenticator mutation journal metadata is invalid.");
+    error.code = "display-name-history-unavailable";
+    return Promise.reject(error);
+  }
+  journalMutationQueue = journalMutationQueue
+    .catch(() => {})
+    .then(async () => {
+      const entries = await readDisplayNameMutationJournal(storage);
+      if (entries.length >= MAX_DISPLAY_NAME_MUTATIONS) {
+        const error = new Error("The local display-name journal reached its retention limit.");
+        error.code = "display-name-history-unavailable";
+        throw error;
+      }
+      const before = action === "authenticator-created" ? "absent" : "present";
+      const after = action === "authenticator-created" ? "present" : "absent";
+      const [beforeHash, afterHash] = await Promise.all([sha256Hex(`${action}\n${id}\n${before}`), sha256Hex(`${action}\n${id}\n${after}`)]);
+      const entry = Object.freeze({
+        schema: DISPLAY_NAME_MUTATION_JOURNAL_SCHEMA,
+        version: DISPLAY_NAME_MUTATION_JOURNAL_VERSION,
+        id: await sha256Hex(`${entries.length}\n${at}\n${action}\n${beforeHash}\n${afterHash}`),
+        action,
+        at,
+        source: "extension-authenticator",
+        redacted: true,
+        beforeHash,
+        afterHash,
+      });
+      await storage.set({ [DISPLAY_NAME_MUTATION_JOURNAL_KEY]: [...entries, entry] });
+      return entry;
+    });
   return journalMutationQueue;
 }
