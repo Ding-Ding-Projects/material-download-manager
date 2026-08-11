@@ -1,11 +1,12 @@
-import { DEFAULT_SETTINGS, sanitizeSettings } from "./shared/settings.js";
+import { DEFAULT_SETTINGS, SETTINGS_KEY, sanitizeSettings } from "./shared/settings.js";
 import { normalizeDownloadUrl } from "./shared/handoff.js";
-import { localize } from "./shared/localization.js";
+import { decorateMessage, localize } from "./shared/localization.js";
 
 let settings = sanitizeSettings(DEFAULT_SETTINGS);
 
 const elements = {
   managerName: document.querySelector("#manager-name"),
+  popupTitle: document.querySelector("#popup-title"),
   statusMessage: document.querySelector("#status-message"),
   recoveryMessage: document.querySelector("#recovery-message"),
   url: document.querySelector("#url"),
@@ -16,10 +17,13 @@ const elements = {
 };
 
 function applyLanguage() {
+  document.documentElement.lang = !settings.schoolModeEnabled && settings.languageMode === "yue" ? "zh-Hant" : "en";
   document.querySelectorAll("[data-l10n]").forEach((element) => {
     element.textContent = localize(element.dataset.l10n, settings);
   });
   elements.managerName.textContent = settings.managerName;
+  elements.popupTitle.textContent = localize("popupTitle", settings, { name: settings.managerName });
+  document.title = elements.popupTitle.textContent;
   elements.recoveryMessage.textContent = settings.handoffEndpoint
     ? localize("readyBody", settings)
     : localize("optionsRecovery", settings);
@@ -27,7 +31,7 @@ function applyLanguage() {
 
 function resultMessage(value) {
   if (!value?.code) return localize("statusReady", settings);
-  const known = ["handoffSuccess", "handoffCleanupWarning", "automaticPauseFailed", "automaticCapacityFull", "automaticResumedFailed", "automaticResumeFailed", "automaticCancelFailedResumed", "automaticCancelFailedOriginalGone", "automaticCancelFailedAlreadyRunning", "automaticCancelRecoveryFailed", "automaticOriginalGone", "automaticOriginalAlreadyRunning", "automaticOwnershipMismatch", "automaticRestartResumeFailed", "handoffDisabled", "handoffUnpaired", "handoffFailed", "connectionSuccess", "connectionDisabled", "connectionUnpaired", "connectionFailed", "settingsSaved", "settingsImported", "settingsExported"];
+  const known = ["handoffSuccess", "handoffCleanupWarning", "automaticPauseFailed", "automaticCapacityFull", "automaticResumedFailed", "automaticResumeFailed", "automaticCancelFailedResumed", "automaticCancelFailedOriginalGone", "automaticCancelFailedAlreadyRunning", "automaticCancelRecoveryFailed", "automaticOriginalGone", "automaticOriginalAlreadyRunning", "automaticOwnershipMismatch", "automaticRestartResumeFailed", "handoffDisabled", "handoffUnpaired", "handoffFailed", "connectionSuccess", "connectionDisabled", "connectionUnpaired", "connectionFailed", "settingsSaved", "settingsImported", "settingsExported", "schoolModeCredentialUnavailable", "displayNameHistoryUnavailable", "settingsSaveFailed"];
   const key = {
     "handoff-success": "handoffSuccess",
     "handoff-cleanup-warning": "handoffCleanupWarning",
@@ -53,14 +57,17 @@ function resultMessage(value) {
     "settings-saved": "settingsSaved",
     "settings-imported": "settingsImported",
     "settings-exported": "settingsExported",
+    "school-mode-reset-unavailable": "schoolModeCredentialUnavailable",
+    "display-name-history-unavailable": "displayNameHistoryUnavailable",
+    "settings-save-failed": "settingsSaveFailed",
   }[value.code];
-  return localize(known.includes(key) ? key : "handoffFailed", settings, { detail: value.detail ?? "" });
+  return localize(known.includes(key) ? key : "handoffFailed", settings, { detail: value.detail ?? "", name: settings.schoolModeName });
 }
 
 function renderState(state) {
   settings = sanitizeSettings(state?.settings ?? DEFAULT_SETTINGS);
   applyLanguage();
-  elements.statusMessage.textContent = resultMessage(state?.lastResult);
+  elements.statusMessage.textContent = decorateMessage(resultMessage(state?.lastResult), settings, state?.lastResult?.ok === false ? "⚠️" : "✅");
   elements.statusMessage.classList.toggle("is-error", state?.lastResult?.ok === false);
   elements.sendButton.disabled = !settings.handoffEndpoint || !normalizeDownloadUrl(elements.url.value);
 }
@@ -71,7 +78,7 @@ async function getState() {
     if (!response?.ok) throw new Error("worker");
     return response;
   } catch {
-    elements.statusMessage.textContent = localize("serviceWorkerUnavailable", settings);
+    elements.statusMessage.textContent = decorateMessage(localize("serviceWorkerUnavailable", settings), settings, "⚠️");
     elements.statusMessage.classList.add("is-error");
     elements.sendButton.disabled = true;
     return null;
@@ -104,10 +111,10 @@ elements.handoffForm.addEventListener("submit", async (event) => {
   try {
     const response = await chrome.runtime.sendMessage({ type: "HANDOFF_URL", url });
     if (!response?.ok) throw new Error("worker");
-    elements.statusMessage.textContent = resultMessage(response.result);
+    elements.statusMessage.textContent = decorateMessage(resultMessage(response.result), settings, response.result?.ok === false ? "⚠️" : "✅");
     elements.statusMessage.classList.toggle("is-error", response.result?.ok === false);
   } catch {
-    elements.statusMessage.textContent = localize("serviceWorkerUnavailable", settings);
+    elements.statusMessage.textContent = decorateMessage(localize("serviceWorkerUnavailable", settings), settings, "⚠️");
     elements.statusMessage.classList.add("is-error");
   } finally {
     elements.sendButton.disabled = !settings.handoffEndpoint || !normalizeDownloadUrl(elements.url.value);
@@ -116,6 +123,13 @@ elements.handoffForm.addEventListener("submit", async (event) => {
 
 elements.optionsButton.addEventListener("click", () => {
   void chrome.runtime.openOptionsPage();
+});
+
+chrome.storage.onChanged.addListener((changes, areaName) => {
+  if (areaName !== "local" || !changes[SETTINGS_KEY]) return;
+  settings = sanitizeSettings(changes[SETTINGS_KEY].newValue);
+  applyLanguage();
+  elements.sendButton.disabled = !settings.handoffEndpoint || !normalizeDownloadUrl(elements.url.value);
 });
 
 const state = await getState();

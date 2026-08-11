@@ -1,12 +1,13 @@
 import {
   DEFAULT_SETTINGS,
+  SETTINGS_KEY,
   makeSettingsExport,
   parseSettingsExport,
   sanitizeSettings,
   validateEndpoint,
 } from "./shared/settings.js";
 import { appendRegexFragment, evaluateRegex, validateRegex } from "./shared/regex.js";
-import { localize } from "./shared/localization.js";
+import { decorateMessage, localize } from "./shared/localization.js";
 
 let settings = sanitizeSettings(DEFAULT_SETTINGS);
 let activeTab = "connection";
@@ -14,6 +15,9 @@ const REQUIRED_SEARCHABLE_SETTING_IDS = Object.freeze([
   "handoff-endpoint",
   "auto-capture-downloads",
   "manager-display-name",
+  "school-mode",
+  "school-mode-name",
+  "show-emojis",
   "language-mode",
   "funny-level-en",
   "funny-level-yue",
@@ -21,6 +25,7 @@ const REQUIRED_SEARCHABLE_SETTING_IDS = Object.freeze([
 
 const elements = {
   managerName: document.querySelector("#manager-name"),
+  optionsTitle: document.querySelector("#options-title"),
   form: document.querySelector("#settings-form"),
   search: document.querySelector("#settings-search"),
   searchSummary: document.querySelector("#search-summary"),
@@ -43,6 +48,14 @@ const elements = {
   connectionStatus: document.querySelector("#connection-status"),
   autoCaptureDownloads: document.querySelector("#auto-capture-downloads"),
   managerDisplayName: document.querySelector("#manager-display-name"),
+  schoolMode: document.querySelector("#school-mode"),
+  schoolModeHeading: document.querySelector("#school-mode-heading"),
+  schoolModeLabel: document.querySelector("#school-mode-label"),
+  schoolModeName: document.querySelector("#school-mode-name"),
+  schoolModeNameLabel: document.querySelector("#school-mode-name-label"),
+  schoolModeHelp: document.querySelector("#school-mode-help"),
+  schoolModeCredentialStatus: document.querySelector("#school-mode-credential-status"),
+  showEmojis: document.querySelector("#show-emojis"),
   languageMode: document.querySelector("#language-mode"),
   funnyEn: document.querySelector("#funny-level-en"),
   funnyEnOutput: document.querySelector("#funny-level-en-output"),
@@ -65,7 +78,7 @@ for (const id of REQUIRED_SEARCHABLE_SETTING_IDS) {
 }
 
 function localizePage() {
-  document.documentElement.lang = settings.languageMode === "yue" ? "zh-Hant" : "en";
+  document.documentElement.lang = !settings.schoolModeEnabled && settings.languageMode === "yue" ? "zh-Hant" : "en";
   document.querySelectorAll("[data-l10n]").forEach((element) => {
     element.textContent = localize(element.dataset.l10n, settings);
   });
@@ -73,6 +86,19 @@ function localizePage() {
     element.setAttribute("aria-label", localize(element.dataset.l10nAria, settings));
   });
   elements.managerName.textContent = settings.managerName;
+  const schoolModeName = settings.schoolModeName;
+  elements.optionsTitle.textContent = localize("optionsTitle", settings, { name: settings.managerName });
+  document.title = elements.optionsTitle.textContent;
+  elements.schoolModeHeading.textContent = localize("schoolModeHeading", settings, { name: schoolModeName });
+  elements.schoolModeLabel.textContent = localize("schoolModeLabel", settings, { name: schoolModeName });
+  elements.schoolModeNameLabel.textContent = localize("schoolModeNameLabel", settings, { name: schoolModeName });
+  elements.schoolModeHelp.textContent = localize("schoolModeHelp", settings, { name: schoolModeName });
+  elements.schoolModeCredentialStatus.textContent = localize("schoolModeCredentialStatus", settings, { name: schoolModeName });
+  const schoolModeCard = document.querySelector("#school-mode-card");
+  if (schoolModeCard) schoolModeCard.dataset.search = `${schoolModeName} name reset credential local mode`;
+  document.querySelectorAll("[data-school-hidden]").forEach((element) => {
+    element.hidden = settings.schoolModeEnabled;
+  });
   elements.funnyEnOutput.value = String(settings.funnyLevelEn);
   elements.funnyEnOutput.textContent = String(settings.funnyLevelEn);
   elements.funnyYueOutput.value = String(settings.funnyLevelYue);
@@ -84,6 +110,9 @@ function fillForm() {
   elements.endpoint.value = settings.handoffEndpoint;
   elements.autoCaptureDownloads.checked = settings.autoCaptureDownloads;
   elements.managerDisplayName.value = settings.managerName;
+  elements.schoolMode.checked = settings.schoolModeEnabled;
+  elements.schoolModeName.value = settings.schoolModeName;
+  elements.showEmojis.checked = settings.showEmojis;
   elements.languageMode.value = settings.languageMode;
   elements.funnyEn.value = String(settings.funnyLevelEn);
   elements.funnyYue.value = String(settings.funnyLevelYue);
@@ -97,6 +126,9 @@ function collectFormSettings() {
     handoffEndpoint: elements.endpoint.value,
     autoCaptureDownloads: elements.autoCaptureDownloads.checked,
     managerName: elements.managerDisplayName.value,
+    schoolModeEnabled: elements.schoolMode.checked,
+    schoolModeName: elements.schoolModeName.value,
+    showEmojis: elements.showEmojis.checked,
     languageMode: elements.languageMode.value,
     funnyLevelEn: Number(elements.funnyEn.value),
     funnyLevelYue: Number(elements.funnyYue.value),
@@ -108,7 +140,7 @@ function markDirty() {
 }
 
 function showToast(text) {
-  elements.toast.textContent = text;
+  elements.toast.textContent = decorateMessage(text, settings);
 }
 
 function resultMessage(value) {
@@ -137,8 +169,11 @@ function resultMessage(value) {
     "settings-saved": "settingsSaved",
     "settings-imported": "settingsImported",
     "settings-exported": "settingsExported",
+    "school-mode-reset-unavailable": "schoolModeCredentialUnavailable",
+    "display-name-history-unavailable": "displayNameHistoryUnavailable",
+    "settings-save-failed": "settingsSaveFailed",
   }[value?.code] ?? "handoffFailed";
-  return localize(key, settings, { detail: value?.detail ?? "" });
+  return localize(key, settings, { detail: value?.detail ?? "", name: settings.schoolModeName });
 }
 
 function updateConnectionState(value = null) {
@@ -194,6 +229,10 @@ function refreshSearch() {
 
   const matches = [];
   cards.forEach((card) => {
+    if (settings.schoolModeEnabled && card.dataset.schoolHidden !== undefined) {
+      card.hidden = true;
+      return;
+    }
     const value = `${card.dataset.search} ${card.textContent} ${settings.managerName} ${settings.handoffEndpoint}`;
     const isMatch = predicate(value);
     card.hidden = !isMatch;
@@ -244,14 +283,22 @@ async function persistSettings(messageKey = "settingsSaved") {
   const endpoint = validateEndpoint(elements.endpoint.value);
   elements.endpointError.textContent = endpoint.valid ? "" : endpoint.error;
   if (!endpoint.valid) return false;
+  const previousManagerName = settings.managerName;
   settings = collectFormSettings();
   try {
     const response = await chrome.runtime.sendMessage({ type: "SAVE_SETTINGS", settings });
-    if (!response?.ok) throw new Error("worker");
+    if (!response?.ok) {
+      showToast(response?.result ? resultMessage(response.result) : localize("settingsSaveFailed", settings));
+      await loadState();
+      return false;
+    }
     settings = sanitizeSettings(response.settings);
     fillForm();
     refreshSearch();
-    showToast(localize(messageKey, settings));
+    const message = previousManagerName !== settings.managerName
+      ? localize("displayNameHistoryRecorded", settings)
+      : localize(messageKey, settings);
+    showToast(message);
     return true;
   } catch {
     showToast(localize("serviceWorkerUnavailable", settings));
@@ -344,7 +391,7 @@ elements.useDefaultEndpoint.addEventListener("click", () => {
   updateConnectionState();
   markDirty();
 });
-[elements.autoCaptureDownloads, elements.managerDisplayName, elements.languageMode, elements.funnyEn, elements.funnyYue].forEach((input) => {
+[elements.autoCaptureDownloads, elements.managerDisplayName, elements.schoolMode, elements.schoolModeName, elements.showEmojis, elements.languageMode, elements.funnyEn, elements.funnyYue].forEach((input) => {
   input.addEventListener("input", () => {
     settings = collectFormSettings();
     localizePage();
@@ -413,6 +460,13 @@ elements.resetSettings.addEventListener("click", async () => {
   settings = sanitizeSettings(DEFAULT_SETTINGS);
   fillForm();
   await persistSettings("settingsReset");
+});
+
+chrome.storage.onChanged.addListener((changes, areaName) => {
+  if (areaName !== "local" || !changes[SETTINGS_KEY]) return;
+  settings = sanitizeSettings(changes[SETTINGS_KEY].newValue);
+  fillForm();
+  refreshSearch();
 });
 
 await loadState();
