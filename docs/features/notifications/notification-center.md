@@ -59,13 +59,15 @@ contract entry outside this slice.
 ## Verification
 
 The desktop project verifies notification wiring through the renderer build and
-cheap headless smoke. The Pages project verifies the persisted record schema,
-tone allowlist and text bounds, School/emoji suppression, independent search
-state, storage sync, selection and inverse selection, bulk actions, typed
-deletion confirmation, export payload, focus return, and the deliberate
-negative manifest probes with `npm --prefix site run check` and `npm --prefix
-site run build`. A complete universal two-key slider, archive export formats,
-and full built-artifact capture matrix remain follow-up work.
+cheap headless smoke. The Pages checks cover the pure record contract (schema,
+tone allowlist, text bounds, filters, and export redaction) plus source, HTML,
+and CSS wiring markers for School/emoji suppression, independent search state,
+storage-event handling, selection, bulk actions, typed deletion confirmation,
+and focus-return paths. They do not yet drive a browser to exercise those
+interactions end to end; the real capture below supplies visual evidence for
+the review panel. A browser smoke for storage sync, keyboard focus, deletion,
+and export behavior, plus the complete universal two-key slider, archive export
+formats, and full built-artifact capture matrix remain follow-up work.
 
 ## Capture evidence
 

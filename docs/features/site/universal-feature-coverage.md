@@ -75,12 +75,13 @@ npm --prefix site run check
 npm --prefix site run build
 ```
 
-The check validates the independent universal inventory, exact runtime probes,
-schema migration markers, emoji-control wiring, School-mode state and reset
-route, and the existing article inventory separately. The browser smoke matrix
-for cross-tab storage, keyboard focus, screen-reader names, narrow layouts,
-and every future contract entry remains a required follow-up as each manifest
-entry moves from planned or partial to implemented.
+The check validates the independent universal inventory, source-level
+runtime-anchor probes, schema migration markers, emoji-control wiring,
+School-mode state and reset route, and the existing article inventory
+separately. The browser smoke matrix for cross-tab storage, keyboard focus,
+screen-reader names, narrow layouts, and every future contract entry remains a
+required follow-up as each manifest entry moves from planned or partial to
+implemented.
 
 ## Suggested articles
 
