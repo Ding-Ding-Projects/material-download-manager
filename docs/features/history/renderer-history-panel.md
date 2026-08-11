@@ -61,7 +61,9 @@ when the required history commit fails. The built-artifact UI smoke records the
 History tab, its locked setup/unlock state, two native date controls, search,
 export, tab activation, and the separate Settings-tab checks. A cheap Lowlevel
 hidden-desktop capture verifies the real application shell and locked History
-surface after the protection flow is bundled.
+surface after the protection flow is bundled. The checked-in capture is
+[`protected-history-locked.png`](../../screenshots/history/protected-history-locked.png)
+and shows the setup form, vault explanation, reset route, and disabled export.
 Injected-evaluator tests separately prove genuine zero matches and worker
 failures for both views and exports. The built-application smoke also forces an
 export validation failure, proves that search remains valid, corrects the

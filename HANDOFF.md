@@ -54,8 +54,13 @@ Local evidence on the branch:
 The repository's GitHub Actions workflow is not a test gate; any remote build,
 release, and Pages results for the pushed documentation follow-up must be read
 from their exact run records. No signing operation or CRX artifact was added.
-No built-artifact screenshot is claimed in this handoff until the real locked
-History surface is captured through the approved hidden-desktop route.
+The real built-artifact locked History surface was captured through the approved
+hidden-desktop/CDP route at
+[`docs/screenshots/history/protected-history-locked.png`](docs/screenshots/history/protected-history-locked.png).
+It shows the password setup form, vault explanation, reset route, and disabled
+export state. The image is a 1150×720 PNG with SHA-256
+`53DBA85C6FED4704995D5D6D7893F3A51590A6A942E870FE6B074E6F9A5C2361`; the
+temporary profile, process, and hidden desktop were cleaned up after capture.
 
 ## Authenticated automatic browser capture and app-prepared extension (2026-08-11)
 

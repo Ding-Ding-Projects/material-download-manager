@@ -32,6 +32,7 @@ AB Download Manager codebase.
 - Auto-organize docs: [`docs/features/download-engine/auto-organize-downloads.md`](docs/features/download-engine/auto-organize-downloads.md)
 - Distributed SSH worker docs: [`docs/features/download-engine/distributed-ssh-workers.md`](docs/features/download-engine/distributed-ssh-workers.md)
 - In-app documentation docs: [`docs/features/documentation/in-app-documentation-browser.md`](docs/features/documentation/in-app-documentation-browser.md)
+- Protected display-name history: [`docs/features/history/display-name-mutation-history.md`](docs/features/history/display-name-mutation-history.md)
 
 <details>
 <summary>Auto-organize screenshot gallery</summary>
@@ -75,6 +76,21 @@ process tree, profile, and hidden desktop were removed after the run.
 ### Exact command-palette destination
 
 ![Command palette result that opens and focuses the auto-organize folder switch](docs/screenshots/auto-organize/07-command-palette-destination.png)
+
+</details>
+
+<details>
+<summary>Protected History surface</summary>
+
+The real built desktop capture below shows the first-run History protection
+surface: password setup, the operating-system vault explanation, the local-data
+folder reset route, and the disabled export action while the tab is locked.
+
+![Locked History setup surface in the built desktop application](docs/screenshots/history/protected-history-locked.png)
+
+This 1150×720 PNG came from the hidden-desktop/CDP capture route at the source
+commit documented in [`HANDOFF.md`](HANDOFF.md). SHA-256:
+`53DBA85C6FED4704995D5D6D7893F3A51590A6A942E870FE6B074E6F9A5C2361`.
 
 </details>
 

@@ -32,10 +32,15 @@ of guessing a commit, release, or date.
 - Focused Node tests — **46/46 passed**, including vault corruption, wrong
   password, locked session, redacted record, migration, validation, and
   required-history rollback cases.
+- Real built-artifact capture:
+  [`protected-history-locked.png`](docs/screenshots/history/protected-history-locked.png)
+  (1150×720 PNG, SHA-256
+  `53DBA85C6FED4704995D5D6D7893F3A51590A6A942E870FE6B074E6F9A5C2361`) shows
+  the locked History setup form from the hidden-desktop/CDP route.
 - Broader `snapshot.json` history revisions remain plaintext local metadata;
   the new UI password is an access lock, not encryption or filesystem access
-  control. Remote build/release evidence and a real locked-surface capture are
-  not claimed until their exact records exist.
+  control. Remote build/release evidence remains pending its exact workflow
+  records.
 
 ## Unreleased — authenticated automatic browser download capture
 

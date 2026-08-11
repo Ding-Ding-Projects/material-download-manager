@@ -66,8 +66,10 @@ Focused coverage includes:
 
 Run `npm run typecheck`, `npm run build:electron`, the focused Node test list,
 and the full local engine/electron suites from `design/`. The built-artifact
-smoke must show the locked History surface and the unlocked metadata path; no
-capture is treated as proof of vault encryption.
+smoke shows the locked History surface in
+[`docs/screenshots/history/protected-history-locked.png`](../../screenshots/history/protected-history-locked.png)
+from the hidden-desktop/CDP route. The capture proves the visible lock state,
+not vault encryption; the image hash is recorded in the handoff and changelog.
 
 ## Suggested articles
 
