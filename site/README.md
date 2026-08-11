@@ -58,6 +58,16 @@ using the local Pages files on an isolated hidden desktop. The PNG is
 It shows the feature catalogue’s coverage-aware heading and the article count
 without claiming that every universal contract entry is implemented.
 
+![School mode suppressing hidden language and notification controls](../docs/screenshots/site/school-mode-suppression.png)
+
+This capture is from source commit
+`c1dca8ad72fed968b2a233cbc16803577ecff25b` at a 929 by 1004 pixel viewport
+using the local Pages files on an isolated hidden desktop. The PNG is
+`docs/screenshots/site/school-mode-suppression.png` and its SHA-256 is
+`1360ddb2d12e795b7284a89666b4f161eefc5dba38790ad15d499fab89c6761b`.
+It shows the user-named School mode active, with the language card and
+notification-centre launcher absent from the visible surface.
+
 The site embeds the categorized feature articles so the documentation remains
 available without a fetch. The source Markdown remains authoritative in
 `docs/features/`; every site article links back to its category article.
