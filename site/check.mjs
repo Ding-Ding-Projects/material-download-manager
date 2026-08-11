@@ -272,6 +272,7 @@ run("notification history contract bounds text, tones, filters, and exports", ()
 run("notification centre is wired to persistence, search, bulk actions, School suppression, and focus", () => {
   for (const marker of ["NOTIFICATION_HISTORY_KEY", "function renderNotificationCentre", "function bulkDismissNotifications", "function openNotificationDeleteConfirm", "function exportVisibleNotifications", "notificationState.selected", "if (!region || isSchoolMode()) return", "window.addEventListener(\"storage\""]) assert.match(app, new RegExp(marker.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
   for (const marker of ["id=\"notification-centre-open\"", "id=\"notification-centre\"", "id=\"notifications-search\"", "data-search-id=\"notifications\"", "id=\"notification-select-all\"", "id=\"notification-select-inverse\"", "id=\"notification-bulk-dismiss\"", "id=\"notification-bulk-delete\"", "id=\"notification-export\"", "id=\"notification-delete-confirm\"", "id=\"notification-delete-ack\"", "id=\"notification-delete-phrase\""]) assert.ok(html.includes(marker), `${marker} is present`);
+  assert.match(app, /if \(active\) clearNotifications\(\);/);
   assert.match(html, /data\/notification-contract\.js/);
   assert.match(css, /\.notification-centre\s*\{/);
   assert.match(css, /\.notification-record\s*\{/);

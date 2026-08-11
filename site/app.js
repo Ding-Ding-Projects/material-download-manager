@@ -751,6 +751,7 @@
     const active = isSchoolMode();
     root.dataset.schoolMode = active ? "true" : "false";
     root.dataset.showEmojis = effectiveShowEmojis() ? "true" : "false";
+    if (active) clearNotifications();
     $$('[data-school-optional]').forEach((element) => {
       element.hidden = active;
       element.setAttribute("aria-hidden", String(active));
