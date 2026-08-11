@@ -11,6 +11,8 @@ export interface NotificationInput {
   message: string;
   tone?: NotificationTone;
   timeoutMs?: number;
+  /** Decorative only; never part of the accessible name or action label. */
+  emoji?: string;
 }
 
 interface NotificationRecord extends Omit<NotificationInput, "tone"> {
@@ -23,10 +25,26 @@ interface NotificationRecord extends Omit<NotificationInput, "tone"> {
 const NOTIFICATION_EVENT = "mdm:notification";
 let nextNotificationId = 0;
 
+function toneEmoji(tone: NotificationTone | undefined): string {
+  switch (tone) {
+    case "success":
+      return "✅";
+    case "warning":
+    case "error":
+      return "⚠️";
+    default:
+      return "💬";
+  }
+}
+
 export function notify(input: NotificationInput): string {
   const id = `notification-${Date.now()}-${++nextNotificationId}`;
   if (typeof window !== "undefined") {
-    window.dispatchEvent(new CustomEvent(NOTIFICATION_EVENT, { detail: { ...input, id } }));
+    const settings = useAppStore.getState().settings;
+    const emoji = settings?.showEmojis && !settings.schoolModeEnabled
+      ? input.emoji ?? toneEmoji(input.tone)
+      : undefined;
+    window.dispatchEvent(new CustomEvent(NOTIFICATION_EVENT, { detail: { ...input, emoji, id } }));
   }
   return id;
 }
@@ -163,7 +181,7 @@ export default function NotificationCenter() {
       <div className="notification-stack" aria-live="polite" aria-atomic="false">
         {activeRecords.map((record) => (
           <section key={record.id} className={`notification-toast notification-toast-${record.tone}`} role={record.tone === "error" || record.tone === "warning" ? "alert" : "status"}>
-            <span className="notification-icon" aria-hidden="true">{record.tone === "error" ? <RefreshIcon size={16} /> : <InfoIcon size={16} />}</span>
+            <span className="notification-icon" aria-hidden="true">{record.emoji ?? (record.tone === "error" ? <RefreshIcon size={16} /> : <InfoIcon size={16} />)}</span>
             <div className="notification-copy"><strong>{record.title}</strong><span>{record.message}</span></div>
             <button type="button" className="notification-dismiss" aria-label={copy.text(`Dismiss ${toneLabel(record.tone, copy)} notification`, `消除${toneLabel(record.tone, copy)}通知`)} onClick={() => dismiss(record.id)}><CloseIcon size={14} /></button>
           </section>

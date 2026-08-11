@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { ExportFormat } from "@shared/export";
 import { createDefaultRegexBuilderState, type RegexBuilderState } from "@shared/regex";
+import { isSchoolModeSuppressedText } from "@shared/settings";
 import type { ChangelogView, ChangelogViewRequest } from "../../electron/history/ChangelogStore";
 import { getUiCopy } from "../i18n/ui";
 import { localizedPrefixedRegexEvaluationError } from "../hooks/useIsolatedRegex";
@@ -53,7 +54,7 @@ export default function ChangelogPanel() {
   const settings = useAppStore((state) => state.settings);
   const copy = useMemo(
     () => getUiCopy(settings),
-    [settings?.funnyLevelCantonese, settings?.funnyLevelEnglish, settings?.languageMode]
+    [settings?.funnyLevelCantonese, settings?.funnyLevelEnglish, settings?.languageMode, settings?.schoolModeEnabled, settings?.schoolModeName, settings?.showEmojis]
   );
   const [builder, setBuilder] = useState<RegexBuilderState>(() => createDefaultRegexBuilderState());
   const [regexOpen, setRegexOpen] = useState(false);
@@ -69,6 +70,19 @@ export default function ChangelogPanel() {
   const [format, setFormat] = useState<ExportFormat>("markdown");
   const [busyAction, setBusyAction] = useState<"export" | "copy" | null>(null);
   const [actionMessage, setActionMessage] = useState<string | null>(null);
+  const displayView = useMemo(() => {
+    if (!view || !settings?.schoolModeEnabled) return view;
+    const entries = view.entries.filter((entry) => !isSchoolModeSuppressedText(
+      [entry.title, ...entry.changes.map((change) => `${change.category} ${change.text}`)].join("\n")
+    ));
+    return {
+      ...view,
+      entries,
+      totalEntries: entries.length,
+      matchingEntries: entries.length,
+      emptyReason: entries.length === 0 ? "School mode omits playful release surfaces." : view.emptyReason,
+    };
+  }, [settings?.schoolModeEnabled, view]);
 
   useLayoutEffect(() => {
     if (previousRegexOpen.current && !regexOpen) regexButtonRef.current?.focus({ preventScroll: true });
@@ -90,11 +104,16 @@ export default function ChangelogPanel() {
     window.api.getChangelogView(request).then((next) => {
       if (!current) return;
       setView(next);
+      const sampleEntries = settings?.schoolModeEnabled
+        ? next.entries.filter((entry) => !isSchoolModeSuppressedText(
+          [entry.title, ...entry.changes.map((change) => `${change.category} ${change.text}`)].join("\n")
+        ))
+        : next.entries;
       setBuilder((state) => state.sample
         ? state
         : {
             ...state,
-            sample: next.entries.map((entry) =>
+            sample: sampleEntries.map((entry) =>
               entry.version + " " + entry.title + " " + entry.changes.map((change) => change.text).join(" ")
             ).join("\n"),
           });
@@ -122,6 +141,7 @@ export default function ChangelogPanel() {
     setActionMessage(null);
     setActionError(null);
     try {
+      if (settings?.schoolModeEnabled) return;
       const result = await window.api.exportChangelog(format, request);
       downloadText("material-download-manager-changelog." + result.extension, result.content, result.mimeType);
       setActionMessage(copy.text(
@@ -144,6 +164,7 @@ export default function ChangelogPanel() {
     setActionMessage(null);
     setActionError(null);
     try {
+      if (settings?.schoolModeEnabled) return;
       const result = await window.api.exportChangelog("markdown", request);
       if (!navigator.clipboard?.writeText) throw new Error(copy.text("Clipboard access is unavailable.", "剪貼簿存取未有提供。"));
       await navigator.clipboard.writeText(result.content);
@@ -208,18 +229,22 @@ export default function ChangelogPanel() {
           </div>
         </div>
         <div className="changelog-panel-actions">
-          <label className="changelog-format-field">
-            <span>{copy.text("Export format", "匯出格式")}</span>
-            <select className="input select" value={format} onChange={(event) => setFormat(event.target.value as ExportFormat)} aria-label={copy.text("Changelog export format", "更新日誌匯出格式")}>
-              {EXPORT_FORMATS.map((option) => <option key={option} value={option}>{option.toUpperCase()}</option>)}
-            </select>
-          </label>
-          <button type="button" className="btn btn-ghost" onClick={() => void copyFiltered()} disabled={busyAction !== null || loading || !view}>
-            {busyAction === "copy" ? copy.text("Copying…", "複製緊…") : copy.text("Copy filtered", "複製篩選結果")}
-          </button>
-          <button type="button" className="btn btn-primary" onClick={() => void exportFiltered()} disabled={busyAction !== null || loading || !view}>
-            {busyAction === "export" ? copy.text("Exporting…", "匯出緊…") : copy.text("Export filtered", "匯出篩選結果")}
-          </button>
+          {settings?.schoolModeEnabled ? (
+            <span className="setting-helper" role="note">{copy.text("School mode omits playful release export surfaces.", "學校模式會隱藏玩味版本匯出表面。")}</span>
+          ) : <>
+            <label className="changelog-format-field">
+              <span>{copy.text("Export format", "匯出格式")}</span>
+              <select className="input select" value={format} onChange={(event) => setFormat(event.target.value as ExportFormat)} aria-label={copy.text("Changelog export format", "更新日誌匯出格式")}>
+                {EXPORT_FORMATS.map((option) => <option key={option} value={option}>{option.toUpperCase()}</option>)}
+              </select>
+            </label>
+            <button type="button" className="btn btn-ghost" onClick={() => void copyFiltered()} disabled={busyAction !== null || loading || !view}>
+              {busyAction === "copy" ? copy.text("Copying…", "複製緊…") : copy.text("Copy filtered", "複製篩選結果")}
+            </button>
+            <button type="button" className="btn btn-primary" onClick={() => void exportFiltered()} disabled={busyAction !== null || loading || !view}>
+              {busyAction === "export" ? copy.text("Exporting…", "匯出緊…") : copy.text("Export filtered", "匯出篩選結果")}
+            </button>
+          </>}
         </div>
       </header>
 
@@ -295,12 +320,12 @@ export default function ChangelogPanel() {
         ["Loading the embedded changelog…", "Loading the embedded changelog; the release ledger is unfolding.", "Loading the embedded changelog — the tiny ledger is stretching.", "Loading the embedded changelog; the version shelf is doing its paperwork.", "Loading the embedded changelog — the release cupboard is putting on its spectacles."],
         ["載入緊嵌入嘅更新日誌…", "載入緊嵌入嘅更新日誌，版本紀錄簿攤開緊。", "載入緊嵌入嘅更新日誌，細細本紀錄簿伸緊懶腰。", "載入緊嵌入嘅更新日誌，版本架做緊文書工作。", "載入緊嵌入嘅更新日誌，版本櫃戴緊眼鏡。"]
       )}</div>}
-      {!loading && !filterError && view?.entries.length === 0 && <div className="changelog-empty" role="status">{emptyMessage}</div>}
-      {!loading && !filterError && view && view.entries.length > 0 && (
+      {!loading && !filterError && displayView?.entries.length === 0 && <div className="changelog-empty" role="status">{emptyMessage}</div>}
+      {!loading && !filterError && displayView && displayView.entries.length > 0 && (
         <div className="changelog-results">
-          <div className="changelog-results-summary" aria-live="polite">{releaseSummary(view, copy)}</div>
+          <div className="changelog-results-summary" aria-live="polite">{releaseSummary(displayView, copy)}</div>
           <ol className="changelog-list" aria-label={copy.text("Published stable releases", "已發布穩定版本")}>
-            {view.entries.map((entry) => (
+            {displayView.entries.map((entry) => (
               <li key={entry.id} className="changelog-entry">
                 <article>
                   <header className="changelog-entry-header">

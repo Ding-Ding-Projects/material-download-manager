@@ -170,6 +170,9 @@ export const SETTING_KEYS = [
   "languageMode",
   "funnyLevelEnglish",
   "funnyLevelCantonese",
+  "schoolModeEnabled",
+  "schoolModeName",
+  "showEmojis",
   "density",
   "accentSeedColor",
   "uiFontFamily",
@@ -183,6 +186,18 @@ export const SETTING_KEYS = [
 
 export type SettingKey = (typeof SETTING_KEYS)[number];
 export type SettingsProvenance = Record<SettingKey, SettingSource>;
+
+export const PRESENTATION_SETTING_KEYS = ["schoolModeEnabled", "schoolModeName", "showEmojis"] as const;
+export type PresentationSettingKey = (typeof PRESENTATION_SETTING_KEYS)[number];
+export type PresentationPatch = Partial<Pick<AppSettings, PresentationSettingKey>>;
+
+export type ResetCredentialState = "unavailable" | "unconfigured" | "configured";
+
+export interface SchoolModeCredentialMetadata {
+  schemaVersion: 1;
+  provider: "os-credential-vault";
+  state: ResetCredentialState;
+}
 
 export interface AppSettings {
   settingsVersion: number;
@@ -199,6 +214,11 @@ export interface AppSettings {
   languageMode: LanguageMode;
   funnyLevelEnglish: FunnyLevel;
   funnyLevelCantonese: FunnyLevel;
+  schoolModeEnabled: boolean;
+  schoolModeName: string;
+  showEmojis: boolean;
+  /** Metadata only; credential material never enters settings state. */
+  schoolModeCredential: SchoolModeCredentialMetadata;
   density: DensityMode;
   accentSeedColor: string;
   uiFontFamily: UIFontFamily;
@@ -213,6 +233,11 @@ export interface AppSettings {
 
 /** Renderer/main mutations may contain only user-editable setting keys. */
 export type SettingsPatch = Partial<Pick<AppSettings, SettingKey>>;
+
+export type PresentationSettings = Pick<
+  AppSettings,
+  "languageMode" | "funnyLevelEnglish" | "funnyLevelCantonese" | "schoolModeEnabled" | "schoolModeName" | "showEmojis"
+> & { schoolModeCredential: SchoolModeCredentialMetadata };
 
 export interface AddDownloadRequest {
   url: string;
@@ -346,6 +371,22 @@ function isOptionalString(value: unknown, maxLength = 512): value is string | nu
   return value === null || (typeof value === "string" && value.length <= maxLength);
 }
 
+export function isPresentationSettings(value: unknown): value is PresentationSettings {
+  if (!isRecord(value)) return false;
+  const credential = value.schoolModeCredential;
+  if (!isRecord(credential)) return false;
+  return (value.languageMode === "english" || value.languageMode === "cantonese" || value.languageMode === "bilingual")
+    && [1, 2, 3, 4, 5].includes(value.funnyLevelEnglish as number)
+    && [1, 2, 3, 4, 5].includes(value.funnyLevelCantonese as number)
+    && typeof value.schoolModeEnabled === "boolean"
+    && typeof value.schoolModeName === "string"
+    && value.schoolModeName.length > 0
+    && typeof value.showEmojis === "boolean"
+    && credential.schemaVersion === 1
+    && credential.provider === "os-credential-vault"
+    && ["unavailable", "unconfigured", "configured"].includes(credential.state as string);
+}
+
 function isSafeHttpsUrl(value: unknown): value is string {
   if (typeof value !== "string" || value.length === 0 || value.length > 2_048) return false;
   try {
@@ -422,6 +463,9 @@ export const IPC = {
   STATE_CHANGED: "state:changed",
   SETTINGS_GET: "settings:get",
   SETTINGS_SET: "settings:set",
+  PRESENTATION_GET: "presentation:get",
+  PRESENTATION_SET: "presentation:set",
+  PRESENTATION_CHANGED: "presentation:changed",
   QUEUE_CREATE: "queue:create",
   QUEUE_UPDATE: "queue:update",
   QUEUE_DELETE: "queue:delete",

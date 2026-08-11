@@ -10,6 +10,8 @@ import type {
   DownloadItem,
   DownloadQueue,
   NewDownloadInfo,
+  PresentationPatch,
+  PresentationSettings,
   SettingKey,
   SettingsPatch,
   StateSnapshot,
@@ -22,8 +24,15 @@ import {
 } from "../../shared/distributedProtocol";
 import type { ExportFormat, ExportResult } from "../../shared/export";
 import { historyFilterRequest, normalizeHistoryFilter, type HistoryFilter, type HistoryView } from "../../shared/history";
-import { createDefaultSettings, validateSettingResetKeys, validateSettingsPatch } from "../../shared/settings";
-import { DEFAULT_QUEUE_ID, SETTING_KEYS } from "../../shared/types";
+import {
+  createDefaultSettings,
+  presentationSettingsFromAppSettings,
+  validatePresentationPatch,
+  validatePresentationResetKeys,
+  validateSettingResetKeys,
+  validateSettingsPatch,
+} from "../../shared/settings";
+import { DEFAULT_QUEUE_ID, PRESENTATION_SETTING_KEYS, SETTING_KEYS } from "../../shared/types";
 import { cloneSshHostConfigs, isSshHostConfigs } from "../../shared/ssh";
 import { StateStore } from "./persistence";
 import { resolveCategoryIsolated, resolveDownloadFolder } from "./categories";
@@ -934,6 +943,23 @@ export class DownloadManager extends EventEmitter {
     return this.settings;
   }
 
+  getPresentationSettings(): PresentationSettings {
+    return presentationSettingsFromAppSettings(this.settings);
+  }
+
+  async setPresentationSettings(
+    partial: PresentationPatch,
+    resetKeys: readonly (typeof PRESENTATION_SETTING_KEYS)[number][] = [],
+  ): Promise<PresentationSettings> {
+    const validated = validatePresentationPatch(partial);
+    const validatedResetKeys = validatePresentationResetKeys(resetKeys);
+    if (validatedResetKeys.some((key) => Object.prototype.hasOwnProperty.call(validated, key))) {
+      throw new Error("A presentation setting cannot be changed and reset in the same mutation");
+    }
+    await this.setSettings(validated, validatedResetKeys);
+    return this.getPresentationSettings();
+  }
+
   async setSettings(partial: SettingsPatch, resetKeysInput: readonly SettingKey[] = []): Promise<AppSettings> {
     const validated = validateSettingsPatch(partial, { allowManagedSshHosts: true });
     const resetKeys = validateSettingResetKeys(resetKeysInput);
@@ -948,6 +974,9 @@ export class DownloadManager extends EventEmitter {
       validated.displayName !== previousDisplayName;
     const displayNameReset = resetKeys.includes("displayName");
     const displayNameMutation = displayNameChanged || displayNameReset;
+    const presentationChanged = PRESENTATION_SETTING_KEYS.some((key) =>
+      Object.prototype.hasOwnProperty.call(validated, key) || resetKeys.includes(key)
+    );
     const provenance = { ...this.settings.settingProvenance };
     const nextSettings = { ...this.settings, ...validated } as AppSettings;
     for (const key of SETTING_KEYS) {
@@ -956,6 +985,11 @@ export class DownloadManager extends EventEmitter {
     for (const key of resetKeys) {
       (nextSettings as unknown as Record<SettingKey, AppSettings[SettingKey]>)[key] = this.compiledSettings[key];
       provenance[key] = "compiled-in";
+    }
+    if (previousSettings.schoolModeEnabled && !nextSettings.schoolModeEnabled) {
+      if (previousSettings.schoolModeCredential.state !== "configured") {
+        throw new Error("School mode cannot be turned off because its locally verified reset credential is unavailable.");
+      }
     }
     this.settings = {
       ...nextSettings,
@@ -990,6 +1024,7 @@ export class DownloadManager extends EventEmitter {
     } else {
       await this.persist("settings-changed", "Changed application settings");
     }
+    if (presentationChanged) this.emit("presentationChanged", this.getPresentationSettings());
     this.scheduleNotify();
     this.processAllQueues();
     return this.settings;

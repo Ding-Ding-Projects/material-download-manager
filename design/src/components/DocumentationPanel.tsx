@@ -1,5 +1,6 @@
-import { useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createDefaultRegexBuilderState, type RegexBuilderState } from "@shared/regex";
+import { isSchoolModeSuppressedText } from "@shared/settings";
 import {
   documentationSearchText,
   resolveDocumentationArticleId,
@@ -21,26 +22,32 @@ export default function DocumentationPanel() {
   const settings = useAppStore((state) => state.settings);
   const copy = useMemo(
     () => getUiCopy(settings),
-    [settings?.funnyLevelCantonese, settings?.funnyLevelEnglish, settings?.languageMode],
+    [settings?.funnyLevelCantonese, settings?.funnyLevelEnglish, settings?.languageMode, settings?.schoolModeEnabled, settings?.schoolModeName, settings?.showEmojis],
+  );
+  const visibleArticles = useMemo(
+    () => settings?.schoolModeEnabled
+      ? DOCUMENTATION_ARTICLES.filter((article) => !isSchoolModeSuppressedText(`${article.title}\n${article.body}`))
+      : DOCUMENTATION_ARTICLES,
+    [settings?.schoolModeEnabled],
   );
   const [builder, setBuilder] = useState<RegexBuilderState>(() => createDefaultRegexBuilderState());
   const [builderOpen, setBuilderOpen] = useState(false);
   const [selectedId, setSelectedId] = useState(
-    DOCUMENTATION_ARTICLES.some((article) => article.id === DEFAULT_ARTICLE_ID)
+    visibleArticles.some((article) => article.id === DEFAULT_ARTICLE_ID)
       ? DEFAULT_ARTICLE_ID
-      : DOCUMENTATION_ARTICLES[0]?.id ?? "",
+      : visibleArticles[0]?.id ?? "",
   );
   const builderButtonRef = useRef<HTMLButtonElement>(null);
   const previousBuilderOpen = useRef(false);
-  const articleIds = useMemo(() => new Set(DOCUMENTATION_ARTICLES.map((article) => article.id)), []);
+  const articleIds = useMemo(() => new Set(visibleArticles.map((article) => article.id)), [visibleArticles]);
   const query = useMemo<DocumentationQuery>(() => ({
     mode: builder.mode,
     pattern: builder.pattern,
     flags: builder.flags,
   }), [builder.flags, builder.mode, builder.pattern]);
   const documentationSamples = useMemo(
-    () => DOCUMENTATION_ARTICLES.map(documentationSearchText),
-    []
+    () => visibleArticles.map(documentationSearchText),
+    [visibleArticles]
   );
   const regexBatch = useIsolatedRegexBatch(
     query.pattern,
@@ -54,16 +61,21 @@ export default function DocumentationPanel() {
     () => {
       if (queryError) return [];
       if (query.mode !== "regex" || query.pattern.length === 0) {
-        return searchDocumentation(DOCUMENTATION_ARTICLES, query);
+        return searchDocumentation(visibleArticles, query);
       }
       if (!regexBatch.evaluations) return [];
-      return DOCUMENTATION_ARTICLES.filter(
+      return visibleArticles.filter(
         (_, index) => (regexBatch.evaluations?.[index]?.matches.length ?? 0) > 0
       );
     },
-    [query, queryError, regexBatch.evaluations],
+    [query, queryError, regexBatch.evaluations, visibleArticles],
   );
-  const selectedArticle = DOCUMENTATION_ARTICLES.find((article) => article.id === selectedId) ?? DOCUMENTATION_ARTICLES[0] ?? null;
+  const selectedArticle = visibleArticles.find((article) => article.id === selectedId) ?? visibleArticles[0] ?? null;
+
+  useEffect(() => {
+    if (selectedArticle?.id === selectedId) return;
+    setSelectedId(selectedArticle?.id ?? "");
+  }, [selectedArticle?.id, selectedId]);
 
   useLayoutEffect(() => {
     if (previousBuilderOpen.current && !builderOpen) builderButtonRef.current?.focus({ preventScroll: true });
@@ -82,7 +94,7 @@ export default function DocumentationPanel() {
     ? copy.text("Evaluating safely…", "安全評估緊…")
     : query.pattern
     ? copy.text(`${results.length} matching bundled article${results.length === 1 ? "" : "s"}`, `${results.length} 篇內置文章相符`)
-    : copy.text(`${DOCUMENTATION_ARTICLES.length} bundled articles`, `內置 ${DOCUMENTATION_ARTICLES.length} 篇文章`);
+    : copy.text(`${visibleArticles.length} bundled articles`, `內置 ${visibleArticles.length} 篇文章`);
 
   function handlePanelKeyDown(event: React.KeyboardEvent<HTMLElement>) {
     if (event.key !== "Escape" || !builderOpen) return;
@@ -152,7 +164,7 @@ export default function DocumentationPanel() {
         <aside className="documentation-index" aria-label={copy.text("Documentation article index", "文件文章索引")} aria-busy={regexBatch.pending || undefined}>
           <div className="documentation-index-heading">
             <strong>{copy.text("Articles", "文章")}</strong>
-            <span>{results.length}/{DOCUMENTATION_ARTICLES.length}</span>
+            <span>{results.length}/{visibleArticles.length}</span>
           </div>
           {regexBatch.pending ? (
             <p className="documentation-empty" role="status">{copy.text("Evaluating safely…", "安全評估緊…")}</p>

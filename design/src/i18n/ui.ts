@@ -1,6 +1,10 @@
 import type { AppSettings, FunnyLevel, LanguageMode } from "@shared/types";
+import { effectivePresentationSettings } from "@shared/settings";
 
-type SettingsLike = Pick<AppSettings, "languageMode" | "funnyLevelEnglish" | "funnyLevelCantonese"> | null | undefined;
+type SettingsLike = Pick<
+  AppSettings,
+  "languageMode" | "funnyLevelEnglish" | "funnyLevelCantonese" | "schoolModeEnabled" | "schoolModeName" | "showEmojis"
+> | null | undefined;
 
 function bilingual(mode: LanguageMode, english: string, cantonese: string): string {
   if (mode === "cantonese") return cantonese;
@@ -45,6 +49,14 @@ export interface UiCopy {
   displayNameHelper: string;
   displayNameInvalid: string;
   resetDisplayName: string;
+  schoolModeTitle: string;
+  schoolModeLabel: string;
+  schoolModeNameLabel: string;
+  schoolModeHelp: string;
+  schoolModeCredentialStatus: string;
+  schoolModeUnavailable: string;
+  showEmojisLabel: string;
+  showEmojisHelp: string;
   funnyPreview: string;
   metadataFallback: string;
   dimSumTitle: (dish: string) => string;
@@ -57,9 +69,11 @@ export interface UiCopy {
 }
 
 export function getUiCopy(settings: SettingsLike): UiCopy {
-  const languageMode = settings?.languageMode ?? "english";
-  const englishLevel = settings?.funnyLevelEnglish ?? 1;
-  const cantoneseLevel = settings?.funnyLevelCantonese ?? 3;
+  const effective = settings ? effectivePresentationSettings(settings) : null;
+  const languageMode = effective?.languageMode ?? "english";
+  const englishLevel = effective?.funnyLevelEnglish ?? 1;
+  const cantoneseLevel = effective?.funnyLevelCantonese ?? 3;
+  const schoolModeName = settings?.schoolModeName ?? "School mode";
   const text = (english: string, cantonese: string) => bilingual(languageMode, english, cantonese);
   const funny = (english: readonly string[], cantonese: readonly string[]) =>
     bilingual(languageMode, choose(englishLevel, english), choose(cantoneseLevel, cantonese));
@@ -100,6 +114,23 @@ export function getUiCopy(settings: SettingsLike): UiCopy {
     ),
     displayNameInvalid: text("Enter a display name with at least one visible character.", "請輸入至少有一個可見字元嘅顯示名稱。"),
     resetDisplayName: text("Reset display name", "重設顯示名稱"),
+    schoolModeTitle: schoolModeName,
+    schoolModeLabel: text(`Use ${schoolModeName}`, `使用${schoolModeName}`),
+    schoolModeNameLabel: text(`${schoolModeName} name`, `${schoolModeName}名稱`),
+    schoolModeHelp: text(
+      `When enabled, ${schoolModeName} uses serious English, hides Cantonese, bilingual, funny-level, and dim sum surfaces, and preserves your previous choices. This is a user-experience lock, not a security boundary.`,
+      `開啟${schoolModeName}之後會用嚴肅英文，隱藏廣東話、雙語、玩味程度同點心表面，之前選擇會保留。呢個係使用體驗鎖，唔係安全邊界。`
+    ),
+    schoolModeCredentialStatus: text("Reset credential metadata", "重設 credential metadata"),
+    schoolModeUnavailable: text(
+      `${schoolModeName} cannot be turned off because its locally verified reset credential is unavailable. Delete the shared application-data folder only as the deliberate recovery route.`,
+      `未能關閉${schoolModeName}，因為本機驗證嘅重設 credential 未有提供。只有刻意恢復先刪除共用應用程式資料夾。`
+    ),
+    showEmojisLabel: text("Show emojis in dialogs and message boxes", "喺對話框同訊息框顯示 emoji"),
+    showEmojisHelp: text(
+      "When enabled, dialogs and message boxes may include a relevant decorative emoji. Buttons, field labels, accessible names, and exports stay factual.",
+      "開啟後，對話框同訊息框可以加入相關裝飾 emoji；按鈕、欄位標籤、讀屏名稱同匯出內容仍然保持事實清楚。"
+    ),
     funnyPreview: funny(
       ["Preview: Settings are ready.", "Preview: Settings are ready; the knobs are behaving.", "Preview: Settings are ready — the knobs have stopped plotting.", "Preview: Settings are ready — even the fussy knobs signed off.", "Preview: Settings are ready — the settings cupboard has achieved inner peace."],
       ["預覽：設定準備好喇。", "預覽：設定準備好喇，啲掣都幾乖。", "預覽：設定準備好喇，啲掣終於唔再搞事。", "預覽：設定準備好喇，連最麻煩嗰粒掣都話得。", "預覽：設定準備好喇，成個設定櫃終於悟道。"]

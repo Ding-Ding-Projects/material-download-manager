@@ -5,7 +5,7 @@ import os from "node:os";
 import path from "node:path";
 
 import { assertQueueCreatePayload, DownloadManager, type DownloadManagerDistributedDependencies } from "../DownloadManager";
-import type { DownloadQueue } from "../../../shared/types";
+import type { DownloadQueue, PresentationSettings } from "../../../shared/types";
 import { SETTING_KEYS } from "../../../shared/types";
 import { startTestServer } from "./testServer";
 import { HistoryStore } from "../../history/HistoryStore";
@@ -276,6 +276,38 @@ test("manager resets values and provenance atomically through the trusted reset 
       /cannot be changed and reset/
     );
   } finally {
+    await manager.shutdown();
+    await removeTestRoot(root);
+    if (previousUserProfile === undefined) delete process.env.USERPROFILE;
+    else process.env.USERPROFILE = previousUserProfile;
+  }
+});
+
+test("presentation settings propagate through one manager event and refuse an unlocked School-mode exit", async () => {
+  const root = await fsp.mkdtemp(path.join(os.tmpdir(), "mdm-presentation-settings-test-"));
+  const previousUserProfile = process.env.USERPROFILE;
+  process.env.USERPROFILE = root;
+  const manager = new DownloadManager(root);
+  const presentationEvents: PresentationSettings[] = [];
+  const onPresentationChanged = (value: PresentationSettings) => {
+    presentationEvents.push(value);
+  };
+  manager.on("presentationChanged", onPresentationChanged);
+  try {
+    await manager.init();
+    const enabled = await manager.setPresentationSettings({ schoolModeEnabled: true, schoolModeName: "Focus time", showEmojis: true });
+    assert.equal(enabled.schoolModeEnabled, true);
+    assert.equal(enabled.schoolModeName, "Focus time");
+    assert.equal(enabled.showEmojis, true, "the stored preference remains available after School mode is enabled");
+    assert.equal(presentationEvents.at(-1)?.schoolModeEnabled, true);
+    assert.equal(presentationEvents.at(-1)?.schoolModeName, "Focus time");
+    await assert.rejects(
+      () => manager.setPresentationSettings({ schoolModeEnabled: false }),
+      /locally verified reset credential is unavailable/
+    );
+    assert.equal(manager.getSettings().schoolModeEnabled, true, "a failed unlock must leave School mode enabled");
+  } finally {
+    manager.off("presentationChanged", onPresentationChanged);
     await manager.shutdown();
     await removeTestRoot(root);
     if (previousUserProfile === undefined) delete process.env.USERPROFILE;

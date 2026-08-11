@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
-import type { AppSettings, AutoOrganizeRule, AutoOrganizeTargetCategory, SettingKey, SettingsPatch } from "@shared/types";
+import type { AppSettings, AutoOrganizeRule, AutoOrganizeTargetCategory, PresentationPatch, PresentationSettingKey, SettingKey, SettingsPatch } from "@shared/types";
 import type { SshHostDraft } from "@shared/ssh";
 import {
   AUTO_ORGANIZE_FOLDERS,
@@ -7,8 +7,9 @@ import {
   AUTO_ORGANIZE_RULE_NAME_MAX_LENGTH,
   AUTO_ORGANIZE_RULE_PATTERN_MAX_LENGTH,
   SETTING_KEYS,
+  PRESENTATION_SETTING_KEYS,
 } from "@shared/types";
-import { createDefaultSettings, isHexColor, isValidDefaultSaveFolder } from "@shared/settings";
+import { createDefaultSettings, isHexColor, isValidDefaultSaveFolder, normalizeSchoolModeName } from "@shared/settings";
 import {
   createDefaultRegexBuilderState,
   normalizeRegexFlags,
@@ -29,6 +30,7 @@ import Dialog from "./Dialog";
 import DestructiveActionGate from "./DestructiveActionGate";
 import { FolderIcon, SettingsIcon } from "./icons";
 import RegexBuilder from "./RegexBuilder";
+import { notify } from "./NotificationCenter";
 
 type SettingsTab = "language" | "appearance" | "downloads" | "advanced";
 
@@ -106,6 +108,18 @@ function settingValuesEqual(
 }
 
 const SETTINGS_SEARCH_INDEX = [
+  {
+    id: "settings-school-mode",
+    targetId: "settings-school-mode-toggle",
+    tab: "language" as const,
+    labels: ["School mode English-only serious reset credential local application data", "學校模式 純英文 嚴肅 重設 credential 本機應用程式資料"],
+  },
+  {
+    id: "settings-show-emojis",
+    targetId: "settings-show-emojis-toggle",
+    tab: "language" as const,
+    labels: ["Show emojis dialogs message boxes decorative accessibility", "顯示 emoji 對話框 訊息框 裝飾 讀屏"],
+  },
   {
     id: "settings-language-heading",
     targetId: "settings-language-mode",
@@ -215,6 +229,7 @@ function createSettingsSearchStates(): Record<SettingsTab, RegexBuilderState> {
 export default function SettingsDialog() {
   const closeSettings = useAppStore((s) => s.closeSettings);
   const setSettings = useAppStore((s) => s.setSettings);
+  const setPresentationSettings = useAppStore((s) => s.setPresentationSettings);
   const pickFolder = useAppStore((s) => s.pickFolder);
   const currentSettings = useAppStore((s) => s.settings);
   const settingsFocus = useAppStore((s) => s.settingsFocus);
@@ -230,7 +245,8 @@ export default function SettingsDialog() {
   const [saving, setSaving] = useState(false);
   const [accentError, setAccentError] = useState<string | null>(null);
   const [activeSettingsTab, setActiveSettingsTab] = useState<SettingsTab>(() => {
-    if (settingsFocus === "language" || settingsFocus === "appearance" || settingsFocus === "downloads" || settingsFocus === "advanced") return settingsFocus;
+    if (settingsFocus === "language" || settingsFocus === "school-mode" || settingsFocus === "show-emojis") return "language";
+    if (settingsFocus === "appearance" || settingsFocus === "downloads" || settingsFocus === "advanced") return settingsFocus;
     if (settingsFocus === "auto-organize" || settingsFocus === "auto-organize-rules") return "downloads";
     return readSettingsTab();
   });
@@ -269,8 +285,8 @@ export default function SettingsDialog() {
   const [sshNotice, setSshNotice] = useState<string | null>(null);
   const [pendingSshRemovalId, setPendingSshRemovalId] = useState<string | null>(null);
 
-  const copy = useMemo(() => getSettingsCopy(form.languageMode), [form.languageMode]);
   const ui = useMemo(() => getUiCopy(form), [form]);
+  const copy = useMemo(() => getSettingsCopy(ui.languageMode), [ui.languageMode]);
   const extensionStatusText = extensionStatus?.kind === "installed-opened"
     ? ui.text(
         `Installed and opened the extension folder automatically. In Chrome open chrome://extensions, turn on Developer mode, click Load unpacked, and choose: ${extensionStatus.path}`,
@@ -373,8 +389,11 @@ export default function SettingsDialog() {
       ] as const,
       searchable: `${AUTO_ORGANIZE_TARGET_LABELS[category].join(" ")} destination path 目的路徑 ${displayAutoOrganizePath(form.defaultSaveFolder, AUTO_ORGANIZE_FOLDERS[category])}`,
     }));
-    return [...baseEntries, ...pathEntries, ...ruleEntries];
-  }, [form.autoOrganizeEnabled, form.autoOrganizeRules, form.defaultSaveFolder, form.displayName]);
+    const visibleBaseEntries = form.schoolModeEnabled
+      ? baseEntries.filter((entry) => entry.id !== "settings-language-heading" && entry.id !== "settings-show-emojis")
+      : baseEntries;
+    return [...visibleBaseEntries, ...pathEntries, ...ruleEntries];
+  }, [form.autoOrganizeEnabled, form.autoOrganizeRules, form.defaultSaveFolder, form.displayName, form.schoolModeEnabled]);
 
   const activeSettingsSearchEntries = useMemo(
     () => settingsSearchEntries.filter((entry) => entry.tab === activeSettingsTab),
@@ -464,9 +483,15 @@ export default function SettingsDialog() {
     appliedSettingsFocus.current = settingsFocus;
     const targetTab: SettingsTab = settingsFocus === "auto-organize" || settingsFocus === "auto-organize-rules"
       ? "downloads"
-      : settingsFocus;
+      : settingsFocus === "school-mode" || settingsFocus === "show-emojis"
+        ? "language"
+        : settingsFocus;
     setActiveSettingsTab(targetTab);
-    const targetId = settingsFocus === "language"
+    const targetId = settingsFocus === "school-mode"
+      ? "settings-school-mode-toggle"
+      : settingsFocus === "show-emojis"
+        ? "settings-show-emojis-toggle"
+        : settingsFocus === "language"
       ? "settings-language-mode"
       : settingsFocus === "appearance"
         ? "settings-theme"
@@ -845,18 +870,41 @@ export default function SettingsDialog() {
       };
       const persistedSettings = currentSettings ?? form;
       const settingsPatch: SettingsPatch = {};
+      const presentationPatch: PresentationPatch = {};
+      const regularResetKeys: SettingKey[] = [];
+      const presentationResetKeys: PresentationSettingKey[] = [];
       for (const key of SETTING_KEYS) {
         if (key === "sshHosts") continue;
-        if (resetSettingKeys.has(key)) continue;
+        if (resetSettingKeys.has(key)) {
+          if ((PRESENTATION_SETTING_KEYS as readonly string[]).includes(key)) {
+            presentationResetKeys.push(key as PresentationSettingKey);
+          } else {
+            regularResetKeys.push(key);
+          }
+          continue;
+        }
         if (!settingValuesEqual(key, desiredSettings[key], persistedSettings[key])) {
-          (settingsPatch as Record<string, unknown>)[key] = desiredSettings[key];
+          if ((PRESENTATION_SETTING_KEYS as readonly string[]).includes(key)) {
+            (presentationPatch as Record<string, unknown>)[key] = desiredSettings[key];
+          } else {
+            (settingsPatch as Record<string, unknown>)[key] = desiredSettings[key];
+          }
         }
       }
-      if (Object.keys(settingsPatch).length > 0 || resetSettingKeys.size > 0) {
-        await setSettings(settingsPatch, [...resetSettingKeys]);
+      if (Object.keys(presentationPatch).length > 0 || presentationResetKeys.length > 0) {
+        await setPresentationSettings(presentationPatch, presentationResetKeys);
+      }
+      if (Object.keys(settingsPatch).length > 0 || regularResetKeys.length > 0) {
+        await setSettings(settingsPatch, regularResetKeys);
       }
       clearLegacyDisplayName();
       closeSettings();
+    } catch (error) {
+      notify({
+        title: ui.text("Settings not saved", "設定未儲存"),
+        message: error instanceof Error ? error.message : ui.schoolModeUnavailable,
+        tone: "error",
+      });
     } finally {
       setSaving(false);
     }
@@ -1008,7 +1056,55 @@ export default function SettingsDialog() {
 
       {activeSettingsTab === "language" && <div className="settings-tab-panel" id="settings-panel-language" role="tabpanel" aria-labelledby="settings-tab-language">
         {renderSettingsSearch()}
-        <section className="settings-section" aria-labelledby="settings-language-heading">
+        <section className="settings-section" aria-labelledby="settings-school-mode-heading">
+          <div className="settings-section-heading" id="settings-school-mode-heading">{ui.schoolModeTitle}</div>
+          <div className="field">
+            <label className="field-label" htmlFor="settings-school-mode-name">{ui.schoolModeNameLabel}</label>
+            <input
+              id="settings-school-mode-name"
+              className="input"
+              type="text"
+              maxLength={80}
+              value={form.schoolModeName}
+              onChange={(event) => update("schoolModeName", normalizeSchoolModeName(event.target.value))}
+            />
+            <span className="setting-source">{source("schoolModeName", "School mode")}</span>
+            <button type="button" className="btn btn-ghost btn-sm setting-reset" onClick={() => resetSetting("schoolModeName")}>
+              {copy.reset}
+            </button>
+          </div>
+          <label className="checkbox-row" htmlFor="settings-school-mode-toggle">
+            <input
+              id="settings-school-mode-toggle"
+              type="checkbox"
+              checked={form.schoolModeEnabled}
+              onChange={(event) => update("schoolModeEnabled", event.target.checked)}
+            />
+            <span>{ui.schoolModeLabel}</span>
+          </label>
+          <p className="setting-helper">{ui.schoolModeHelp}</p>
+          <p className="setting-helper" role="status">
+            {form.schoolModeCredential.state === "configured"
+              ? ui.text("Reset credential metadata is configured.", "重設 credential metadata 已設定。")
+              : `${ui.schoolModeCredentialStatus}: ${ui.schoolModeUnavailable}`}
+          </p>
+        </section>
+
+        {!form.schoolModeEnabled && <section className="settings-section" aria-labelledby="settings-show-emojis-heading">
+          <div className="settings-section-heading" id="settings-show-emojis-heading">{ui.showEmojisLabel}</div>
+          <label className="checkbox-row" htmlFor="settings-show-emojis-toggle">
+            <input
+              id="settings-show-emojis-toggle"
+              type="checkbox"
+              checked={form.showEmojis}
+              onChange={(event) => update("showEmojis", event.target.checked)}
+            />
+            <span>{ui.showEmojisLabel}</span>
+          </label>
+          <p className="setting-helper">{ui.showEmojisHelp}</p>
+        </section>}
+
+        {!form.schoolModeEnabled && <section className="settings-section" aria-labelledby="settings-language-heading">
         <div className="settings-section-heading" id="settings-language-heading">{copy.language}</div>
         <p className="setting-helper">{copy.languageHelper}</p>
         <div className="field">
@@ -1073,6 +1169,7 @@ export default function SettingsDialog() {
         <p className="setting-disclosure" role="note">{copy.funnyDisclosure}</p>
         <p className="setting-preview" role="status">{ui.funnyPreview}</p>
         </section>
+        }
       </div>}
 
       {activeSettingsTab === "appearance" && <div className="settings-tab-panel" id="settings-panel-appearance" role="tabpanel" aria-labelledby="settings-tab-appearance">
