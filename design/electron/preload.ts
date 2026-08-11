@@ -19,6 +19,12 @@ import type {
   HistoryAccessState,
 } from "../shared/types";
 import type { SshHostDraft, SshHostStatus } from "../shared/ssh";
+import type {
+  TotpRegistrationExportRecord,
+  TotpRegistrationInput,
+  TotpRegistrationMetadata,
+} from "../shared/authenticator";
+import { isTotpRegistrationExportRecord, isTotpRegistrationMetadata } from "../shared/authenticator";
 import { isSshHostStatus } from "../shared/ssh";
 import { isExportResult } from "../shared/export";
 import { isHistoryAccessState, isHistoryView } from "../shared/history";
@@ -168,6 +174,39 @@ const api = {
     const state: unknown = await ipcRenderer.invoke(IPC.HISTORY_ACCESS_LOCK);
     if (!isHistoryAccessState(state)) throw new Error("Invalid history lock result from main process");
     return state;
+  },
+  registerAuthenticator: async (input: TotpRegistrationInput): Promise<TotpRegistrationMetadata> => {
+    const result: unknown = await ipcRenderer.invoke(IPC.AUTHENTICATOR_REGISTER, input);
+    if (!isTotpRegistrationMetadata(result)) throw new Error("Invalid authenticator registration from main process");
+    return result;
+  },
+  generateAuthenticatorCode: async (metadata: TotpRegistrationMetadata, timestampMs?: number): Promise<string> => {
+    const result: unknown = await ipcRenderer.invoke(IPC.AUTHENTICATOR_GENERATE_CODE, metadata, timestampMs);
+    if (typeof result !== "string" || !/^(?:\d{6}|\d{8})$/u.test(result)) throw new Error("Invalid authenticator code from main process");
+    return result;
+  },
+  verifyAuthenticatorCode: async (
+    metadata: TotpRegistrationMetadata,
+    candidate: string,
+    timestampMs?: number,
+    skewSteps?: number,
+  ): Promise<boolean> => {
+    const result: unknown = await ipcRenderer.invoke(
+      IPC.AUTHENTICATOR_VERIFY_CODE,
+      metadata,
+      candidate,
+      timestampMs,
+      skewSteps,
+    );
+    if (typeof result !== "boolean") throw new Error("Invalid authenticator verification from main process");
+    return result;
+  },
+  removeAuthenticator: (metadata: TotpRegistrationMetadata): Promise<void> =>
+    ipcRenderer.invoke(IPC.AUTHENTICATOR_REMOVE, metadata),
+  exportAuthenticatorMetadata: async (metadata: TotpRegistrationMetadata): Promise<TotpRegistrationExportRecord> => {
+    const result: unknown = await ipcRenderer.invoke(IPC.AUTHENTICATOR_EXPORT_METADATA, metadata);
+    if (!isTotpRegistrationExportRecord(result)) throw new Error("Invalid authenticator export from main process");
+    return result;
   },
   exportHistory: async (format: ExportFormat, filter?: HistoryFilter): Promise<ExportResult> => {
     const result: unknown = await ipcRenderer.invoke(IPC.HISTORY_EXPORT_VIEW, format, filter);

@@ -16,6 +16,12 @@ import {
 import type { AddDownloadRequest, AppSettings, DownloadItem, DownloadQueue, SettingKey, SettingsPatch } from "../shared/types";
 import { isExportFormat } from "../shared/export";
 import { normalizeHistoryFilter } from "../shared/history";
+import {
+  isTotpRegistrationMetadata,
+  normalizeTotpRegistration,
+  type TotpRegistrationMetadata,
+  type TotpRegistrationInput,
+} from "../shared/authenticator";
 import { validateSettingResetKeys, validateSettingsPatch } from "../shared/settings";
 import {
   isSshHostDraft,
@@ -44,6 +50,7 @@ import {
 } from "./history/ChangelogStore";
 import { HistoryAccessVault } from "./history/HistoryAccessVault";
 import { HistoryAccessSession } from "./history/HistoryAccessSession";
+import { TotpRegistrationService } from "./authenticator/TotpRegistrationService";
 import { isDevelopmentLaunch, resolveRendererPath } from "./runtimePaths";
 import { CredentialVault } from "./download/distributed/CredentialVault";
 import { SshProvisioningService } from "./download/distributed/SshProvisioningService";
@@ -74,6 +81,7 @@ let sshWorkerClient: SshWorkerClient;
 let sshProvisioning: SshProvisioningService;
 let extensionCapabilityVault: ExtensionCapabilityVault;
 let historyAccessVault: HistoryAccessVault;
+let authenticatorService: TotpRegistrationService;
 const historyAccessSession = new HistoryAccessSession();
 let updater: UpdateService | null = null;
 let handoffServer: HandoffServer | null = null;
@@ -645,6 +653,48 @@ function registerIpcHandlers() {
     return manager.exportHistory(format, normalized);
   });
 
+  ipcMain.handle(IPC.AUTHENTICATOR_REGISTER, async (event, input: unknown) => {
+    assertTrustedSender(event);
+    return authenticatorService.register(normalizeTotpRegistration(input));
+  });
+  ipcMain.handle(IPC.AUTHENTICATOR_GENERATE_CODE, async (event, metadata: unknown, timestampMs?: unknown) => {
+    assertTrustedSender(event);
+    if (!isTotpRegistrationMetadata(metadata)) throw new Error("Invalid authenticator registration metadata");
+    if (timestampMs !== undefined && (typeof timestampMs !== "number" || !Number.isFinite(timestampMs))) {
+      throw new Error("Invalid authenticator timestamp");
+    }
+    return authenticatorService.generateCode(metadata, timestampMs as number | undefined);
+  });
+  ipcMain.handle(
+    IPC.AUTHENTICATOR_VERIFY_CODE,
+    async (event, metadata: unknown, candidate: unknown, timestampMs?: unknown, skewSteps?: unknown) => {
+      assertTrustedSender(event);
+      if (!isTotpRegistrationMetadata(metadata)) throw new Error("Invalid authenticator registration metadata");
+      if (timestampMs !== undefined && (typeof timestampMs !== "number" || !Number.isFinite(timestampMs))) {
+        throw new Error("Invalid authenticator timestamp");
+      }
+      if (skewSteps !== undefined && (typeof skewSteps !== "number" || !Number.isSafeInteger(skewSteps))) {
+        throw new Error("Invalid authenticator clock-skew window");
+      }
+      return authenticatorService.verifyCode(
+        metadata,
+        candidate,
+        timestampMs as number | undefined,
+        skewSteps as number | undefined,
+      );
+    },
+  );
+  ipcMain.handle(IPC.AUTHENTICATOR_REMOVE, async (event, metadata: unknown) => {
+    assertTrustedSender(event);
+    if (!isTotpRegistrationMetadata(metadata)) throw new Error("Invalid authenticator registration metadata");
+    await authenticatorService.remove(metadata);
+  });
+  ipcMain.handle(IPC.AUTHENTICATOR_EXPORT_METADATA, (event, metadata: unknown) => {
+    assertTrustedSender(event);
+    if (!isTotpRegistrationMetadata(metadata)) throw new Error("Invalid authenticator registration metadata");
+    return authenticatorService.exportMetadata(metadata);
+  });
+
   ipcMain.handle(IPC.CHANGELOG_GET_VIEW, (event, request: unknown) => {
     assertTrustedSender(event);
     return changelogHandlers.getView(request);
@@ -788,6 +838,7 @@ app.on("second-instance", (_event, commandLine) => {
 app.whenReady().then(async () => {
   extensionCapabilityVault = new ExtensionCapabilityVault();
   historyAccessVault = new HistoryAccessVault();
+  authenticatorService = new TotpRegistrationService();
   sshVault = new CredentialVault();
   sshWorkerClient = new SshWorkerClient({ vault: sshVault });
   const workerBundlePath = app.isPackaged
