@@ -1,5 +1,44 @@
 # Handoff: Material Download Manager
 
+## Scheduled settings foundation (2026-08-11)
+
+Issue [#18](https://github.com/Ding-Ding-Projects/material-download-manager/issues/18)
+tracks this bounded desktop slice. Source commit
+[`8b6e5f9`](https://github.com/Ding-Ding-Projects/material-download-manager/commit/8b6e5f9c71e72cc5f86d8f85460ea6970b1c20fc)
+adds versioned local schedule records, native date/time and weekday editing,
+timezone and cross-midnight semantics, deterministic priority resolution,
+local persistence/history, and live main-process IPC updates for both windows.
+External-source metadata is credential-free in renderer state: HTTPS API,
+explicit loopback development, and Home Assistant boolean records cross the
+main-process validation boundary, while access tokens remain outside settings,
+exports, logs, and history.
+
+### Changed files and verification
+
+- `design/shared/scheduledSettings.ts` and
+  `design/src/components/ScheduledSettingsPanel.tsx`: bounded schedule schema,
+  editor, timezone/date semantics, precedence, and source metadata.
+- `design/electron/download/DownloadManager.ts`, persistence, `main.ts`,
+  `preload.ts`, shared types, and Settings wiring: persistence, history, IPC,
+  and live two-window propagation.
+- `design/electron/__tests__/scheduledSettings.test.ts` and
+  `design/ui-tests/smoke.mjs`: schedule/resolver and real built-artifact proof.
+- `docs/features/settings/scheduled-settings.md` and
+  `docs/screenshots/settings/scheduled-settings.png`: behavior, security,
+  failure modes, and the captured Settings surface.
+
+Local evidence:
+
+- `npm run typecheck` and `npm run build` — passed.
+- Scheduled settings **5/5**, schedule-source resolver **11/11**, full
+  compiled Electron **113/113**, engine **100/100**, documentation **2/2**.
+- Real built-artifact smoke **43/43**. The 524×738 Settings capture has
+  SHA-256 `471166F2C1DBBF3BDDD48603DBF5A4D573E60EDD9032B8E904D5727DF337E4C6`.
+- GitHub Actions run
+  [31493449594](https://github.com/Ding-Ding-Projects/material-download-manager/actions/runs/31493449594)
+  succeeded for the exact commit and published `v0.1.107`; artifacts remain
+  unsigned and no CRX was created.
+
 ## Authenticator management list and live codes (2026-08-11)
 
 Issue [#18](https://github.com/Ding-Ding-Projects/material-download-manager/issues/18)

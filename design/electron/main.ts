@@ -16,6 +16,7 @@ import {
   resolveBundledExtensionRoot,
 } from "./extension/installExtension";
 import type { AddDownloadRequest, AppSettings, DownloadItem, DownloadQueue, SettingKey, SettingsPatch } from "../shared/types";
+import { isScheduledSettingsRecords, type ScheduledSettingsRecord } from "../shared/scheduledSettings";
 import { isExportFormat } from "../shared/export";
 import { normalizeHistoryFilter } from "../shared/history";
 import {
@@ -124,6 +125,7 @@ function createWindow() {
   mainWindow.webContents.once("did-finish-load", () => {
     if (mainWindow && !mainWindow.isDestroyed()) {
       mainWindow.webContents.send(IPC.PRESENTATION_CHANGED, manager.getPresentationSettings());
+      mainWindow.webContents.send(IPC.SCHEDULE_CHANGED, manager.getScheduleRules());
     }
   });
 
@@ -152,6 +154,7 @@ function createProgressWindow(itemId: string): boolean {
     progressWindow.webContents.send(IPC.PROGRESS_TARGET_CHANGED, itemId);
     progressWindow.webContents.send(IPC.STATE_CHANGED, manager.getState());
     progressWindow.webContents.send(IPC.PRESENTATION_CHANGED, manager.getPresentationSettings());
+    progressWindow.webContents.send(IPC.SCHEDULE_CHANGED, manager.getScheduleRules());
     return true;
   }
 
@@ -178,6 +181,7 @@ function createProgressWindow(itemId: string): boolean {
       progressWindow.webContents.send(IPC.PROGRESS_TARGET_CHANGED, itemId);
       progressWindow.webContents.send(IPC.STATE_CHANGED, manager.getState());
       progressWindow.webContents.send(IPC.PRESENTATION_CHANGED, manager.getPresentationSettings());
+      progressWindow.webContents.send(IPC.SCHEDULE_CHANGED, manager.getScheduleRules());
     }
   });
   if (isDev) {
@@ -289,6 +293,11 @@ function broadcastState() {
 function broadcastPresentation(presentation: PresentationSettings) {
   if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send(IPC.PRESENTATION_CHANGED, presentation);
   if (progressWindow && !progressWindow.isDestroyed()) progressWindow.webContents.send(IPC.PRESENTATION_CHANGED, presentation);
+}
+
+function broadcastScheduleRules(records: ScheduledSettingsRecord[]) {
+  if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send(IPC.SCHEDULE_CHANGED, records);
+  if (progressWindow && !progressWindow.isDestroyed()) progressWindow.webContents.send(IPC.SCHEDULE_CHANGED, records);
 }
 
 async function processBrowserHandoffs(commandLine: readonly string[]) {
@@ -464,6 +473,15 @@ function registerIpcHandlers() {
       throw new Error("A setting cannot be changed and reset in the same mutation");
     }
     return manager.setSettings(settings, validatedResetKeys);
+  });
+  ipcMain.handle(IPC.SCHEDULE_GET, (event) => {
+    assertTrustedSender(event);
+    return manager.getScheduleRules();
+  });
+  ipcMain.handle(IPC.SCHEDULE_SET, async (event, records: unknown) => {
+    assertTrustedSender(event);
+    if (!isScheduledSettingsRecords(records)) throw new Error("Invalid scheduled settings records");
+    return manager.setScheduleRules(records);
   });
   ipcMain.handle(IPC.PRESENTATION_GET, (event) => {
     assertTrustedSender(event);
@@ -925,6 +943,7 @@ app.whenReady().then(async () => {
   });
   manager.on("stateChanged", broadcastState);
   manager.on("presentationChanged", broadcastPresentation);
+  manager.on("scheduleChanged", broadcastScheduleRules);
   manager.on("itemCompleted", notifyDownloadComplete);
   await processBrowserHandoffs(process.argv);
   handoffServer = new HandoffServer({

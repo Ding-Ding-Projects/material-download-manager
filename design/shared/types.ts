@@ -5,6 +5,7 @@
 import type { ExportFormat, ExportResult } from "./export";
 import type { HistoryFilter, HistoryView, HistoryAccessState } from "./history";
 import type { DistributedDownloadSelection, SourceIdentity } from "./distributedProtocol";
+import type { ScheduledSettingsRecord } from "./scheduledSettings";
 
 export type DownloadCategory =
   | "image"
@@ -317,6 +318,8 @@ export interface StateSnapshot {
   items: DownloadItem[];
   queues: DownloadQueue[];
   settings: AppSettings;
+  /** Shared local schedule metadata; credentials are never represented here. */
+  scheduleRules?: ScheduledSettingsRecord[];
 }
 
 export type UpdateState =
@@ -463,6 +466,9 @@ export const IPC = {
   STATE_CHANGED: "state:changed",
   SETTINGS_GET: "settings:get",
   SETTINGS_SET: "settings:set",
+  SCHEDULE_GET: "schedule:get",
+  SCHEDULE_SET: "schedule:set",
+  SCHEDULE_CHANGED: "schedule:changed",
   PRESENTATION_GET: "presentation:get",
   PRESENTATION_SET: "presentation:set",
   PRESENTATION_CHANGED: "presentation:changed",

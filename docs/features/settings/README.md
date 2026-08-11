@@ -10,3 +10,7 @@
 - [School-mode reset credential](school-mode-reset-credential.md) — local
   enrollment, change, reset, turn-off verification, OS-vault verifier storage,
   deleted-profile recovery, and live metadata propagation.
+- [Scheduled settings](scheduled-settings.md) — versioned local records,
+  native date/time and weekday editing, timezone and cross-midnight semantics,
+  deterministic precedence, local history, and credential-free external-source
+  metadata for HTTPS/loopback and Home Assistant boolean states.

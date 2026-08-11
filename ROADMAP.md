@@ -3,6 +3,16 @@
 This roadmap is a factual implementation checklist, not a promise that an
 unverified surface has shipped.
 
+## In progress
+
+- Scheduled settings foundation is integrated and verified at
+  `8b6e5f9c71e72cc5f86d8f85460ea6970b1c20fc`: versioned local records, native
+  date/time and weekday editor, timezone and cross-midnight semantics,
+  deterministic precedence, state/history persistence, live IPC propagation,
+  and credential-free HTTPS/loopback/Home Assistant metadata validation.
+  Local suites and the real Settings capture passed; GitHub Actions run
+  `31493449594` published `v0.1.107` from the exact commit.
+
 ## Shipped and verified foundations
 
 - Real Windows Electron download engine with segmented transfers,

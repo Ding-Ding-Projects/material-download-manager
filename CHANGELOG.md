@@ -5,6 +5,30 @@ or have reached a stable release. Published entries must link the exact commit
 that completed the change. An Unreleased entry names missing evidence instead
 of guessing a commit, release, or date.
 
+## Unreleased — scheduled settings foundation
+
+- **Source issue:** [#18 — Implement the universal feature contract](https://github.com/Ding-Ding-Projects/material-download-manager/issues/18)
+- **Source commit:** [`8b6e5f9`](https://github.com/Ding-Ding-Projects/material-download-manager/commit/8b6e5f9c71e72cc5f86d8f85460ea6970b1c20fc)
+- **Scope:** versioned local schedule records, native date/time and weekday
+  editing, timezone and cross-midnight semantics, deterministic priority
+  precedence, state/history persistence, live two-window IPC, and safe
+  credential-free external-source metadata.
+
+### Verification
+
+- `npm run typecheck` and `npm run build` — passed.
+- Scheduled-settings tests — **5/5 passed**; schedule-source resolver —
+  **11/11 passed**.
+- Full compiled Electron tests — **113/113 passed**; download-engine tests —
+  **100/100 passed**; documentation tests — **2/2 passed**.
+- Real built-artifact smoke — **43/43 passed**. The Settings capture is
+  [`scheduled-settings.png`](docs/screenshots/settings/scheduled-settings.png)
+  (524×738 PNG, SHA-256
+  `471166F2C1DBBF3BDDD48603DBF5A4D573E60EDD9032B8E904D5727DF337E4C6`).
+- GitHub Actions run [31493449594](https://github.com/Ding-Ding-Projects/material-download-manager/actions/runs/31493449594)
+  succeeded for the exact source commit and published `v0.1.107`; the release
+  is unsigned and contains no CRX artifact.
+
 ## Unreleased — authenticator management list and live codes
 
 - **Source issue:** [#18 — Implement the universal feature contract](https://github.com/Ding-Ding-Projects/material-download-manager/issues/18)

@@ -32,6 +32,7 @@ import { FolderIcon, SettingsIcon } from "./icons";
 import RegexBuilder from "./RegexBuilder";
 import { notify } from "./NotificationCenter";
 import AuthenticatorPanel from "./AuthenticatorPanel";
+import ScheduledSettingsPanel from "./ScheduledSettingsPanel";
 
 type SettingsTab = "language" | "appearance" | "downloads" | "authenticator" | "advanced";
 
@@ -194,6 +195,12 @@ const SETTINGS_SEARCH_INDEX = [
     targetId: "settings-install-extension",
     tab: "downloads" as const,
     labels: ["Install browser extension Chrome Chromium load unpacked automatic downloads open reveal extension folder handoff", "安裝 瀏覽器 擴充功能 Chrome Chromium load unpacked 自動 下載 打開 顯示 擴充功能 資料夾 交接"],
+  },
+  {
+    id: "settings-scheduled-settings",
+    targetId: "settings-scheduled-settings",
+    tab: "downloads" as const,
+    labels: ["Scheduled settings date time weekdays timezone priority HTTPS loopback Home Assistant", "排程設定 日期 時間 星期 時區 優先次序 HTTPS loopback Home Assistant"],
   },
   {
     id: "settings-advanced",
@@ -1500,6 +1507,7 @@ export default function SettingsDialog() {
 
       {activeSettingsTab === "downloads" && <div className="settings-tab-panel" id="settings-panel-downloads" role="tabpanel" aria-labelledby="settings-tab-downloads">
         {renderSettingsSearch()}
+        <ScheduledSettingsPanel />
         <section className="settings-section" aria-labelledby="settings-downloads-heading">
           <div className="settings-section-heading" id="settings-downloads-heading">{ui.downloads}</div>
       <div className="field" id="settings-default-save-folder" tabIndex={-1}>

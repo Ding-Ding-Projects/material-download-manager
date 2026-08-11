@@ -34,6 +34,10 @@ import {
   validateSettingsPatch,
 } from "../../shared/settings";
 import { DEFAULT_QUEUE_ID, PRESENTATION_SETTING_KEYS, SETTING_KEYS } from "../../shared/types";
+import {
+  validateScheduledSettingsRecords,
+  type ScheduledSettingsRecord,
+} from "../../shared/scheduledSettings";
 import { cloneSshHostConfigs, isSshHostConfigs } from "../../shared/ssh";
 import { StateStore } from "./persistence";
 import { resolveCategoryIsolated, resolveDownloadFolder } from "./categories";
@@ -56,6 +60,10 @@ import {
 } from "./downloadMetadata";
 import { isQueueScheduleActive, QueueScheduleClock } from "./queueSchedule";
 import { HistoryStore, type HistoryAction } from "../history/HistoryStore";
+import {
+  isSafeScheduleUrl,
+  validateScheduledSettings,
+} from "./scheduleSources";
 
 const MAX_QUEUE_NAME_LENGTH = 512;
 const MAX_QUEUE_ID_LENGTH = 256;
@@ -64,6 +72,37 @@ const MAX_QUEUE_ITEM_IDS = 10_000;
 export type LoginItemSettingsWriter = (openAtLogin: boolean) => void;
 
 type ManagedDownloadTask = DownloadTask | DistributedDownloadTask;
+
+function cloneScheduleRules(records: readonly ScheduledSettingsRecord[]): ScheduledSettingsRecord[] {
+  return records.map((record) => ({
+    ...record,
+    weekdays: [...record.weekdays],
+    source: record.source.kind === "local"
+      ? { kind: "local", settings: { ...record.source.settings } }
+      : record.source.kind === "home-assistant"
+        ? { kind: "home-assistant", baseUrl: record.source.baseUrl, entityId: record.source.entityId, settings: { ...record.source.settings } }
+        : { kind: "api", url: record.source.url, ...(record.source.allowLoopbackHttp ? { allowLoopbackHttp: true } : {}) },
+  }));
+}
+
+function validateManagedScheduleRules(value: unknown): ScheduledSettingsRecord[] {
+  const records = validateScheduledSettingsRecords(value);
+  for (const record of records) {
+    if (record.source.kind === "local") {
+      validateScheduledSettings(record.source.settings);
+    } else if (record.source.kind === "api") {
+      if (!isSafeScheduleUrl(record.source.url, { allowLoopbackHttp: record.source.allowLoopbackHttp === true })) {
+        throw new Error("API schedule URL is not an allowed credential-free HTTPS or bounded loopback URL");
+      }
+    } else {
+      if (!isSafeScheduleUrl(record.source.baseUrl, { allowLoopbackHttp: true, allowPrivateHttps: true })) {
+        throw new Error("Home Assistant URL is not an allowed credential-free HTTPS or loopback URL");
+      }
+      validateScheduledSettings(record.source.settings);
+    }
+  }
+  return records;
+}
 
 export interface DownloadManagerDistributedDependencies {
   credentialVault?: CredentialVault;
@@ -161,6 +200,7 @@ export class DownloadManager extends EventEmitter {
   private queues: Map<string, DownloadQueue> = new Map();
   private settings!: AppSettings;
   private compiledSettings!: AppSettings;
+  private scheduleRules: ScheduledSettingsRecord[] = [];
   private tasks: Map<string, ManagedDownloadTask> = new Map();
   private itemHeaders: Map<string, Record<string, string>> = new Map();
   /** Raw source URLs materialize only in memory; protected values persist only in the operating-system vault. */
@@ -233,6 +273,11 @@ export class DownloadManager extends EventEmitter {
     this.compiledSettings = createDefaultSettings(defaultSaveFolder);
     const state = await this.store.load(defaultSaveFolder);
     this.settings = state.settings;
+    try {
+      this.scheduleRules = validateManagedScheduleRules(state.scheduleRules ?? []);
+    } catch {
+      this.scheduleRules = [];
+    }
     this.globalSpeedLimiter = new SpeedLimiter(this.settings.globalSpeedLimitBytes);
     for (const q of state.queues) this.queues.set(q.id, q);
     if (!this.queues.has(DEFAULT_QUEUE_ID)) {
@@ -320,6 +365,7 @@ export class DownloadManager extends EventEmitter {
       items: this.itemOrder.map((id) => this.items.get(id)!).filter(Boolean),
       queues: Array.from(this.queues.values()),
       settings: this.settings,
+      scheduleRules: cloneScheduleRules(this.scheduleRules),
     };
   }
 
@@ -374,6 +420,7 @@ export class DownloadManager extends EventEmitter {
       ),
       queues: Array.from(this.queues.values()),
       settings: this.settings,
+      scheduleRules: cloneScheduleRules(this.scheduleRules),
     });
   }
 
@@ -942,6 +989,28 @@ export class DownloadManager extends EventEmitter {
 
   getSettings(): AppSettings {
     return this.settings;
+  }
+
+  getScheduleRules(): ScheduledSettingsRecord[] {
+    return cloneScheduleRules(this.scheduleRules);
+  }
+
+  async setScheduleRules(value: unknown): Promise<ScheduledSettingsRecord[]> {
+    const nextRules = validateManagedScheduleRules(value);
+    const previousRules = cloneScheduleRules(this.scheduleRules);
+    const previousSerialized = JSON.stringify(previousRules);
+    if (JSON.stringify(nextRules) === previousSerialized) return this.getScheduleRules();
+    this.scheduleRules = cloneScheduleRules(nextRules);
+    try {
+      await this.persist("settings-changed", "Changed scheduled settings");
+    } catch (error) {
+      this.scheduleRules = previousRules;
+      await this.saveState().catch(() => undefined);
+      throw error;
+    }
+    this.emit("scheduleChanged", this.getScheduleRules());
+    this.scheduleNotify();
+    return this.getScheduleRules();
   }
 
   getPresentationSettings(): PresentationSettings {
