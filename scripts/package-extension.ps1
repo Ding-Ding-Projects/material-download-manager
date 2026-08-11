@@ -16,6 +16,169 @@ function Stop-WithMessage([string]$Message) {
   throw "Chromium extension packaging failed: $Message"
 }
 
+$maxArchiveEntries = 1024
+$maxArchiveEntryBytes = 16MB
+$maxArchiveUncompressedBytes = 64MB
+$maxArchiveSignatureCandidates = 32
+$maxManifestBytes = 16KB
+$maxPairingBytes = 4KB
+$forbiddenMaterialExtensionPattern = '(?i)\.(?:pem|key|pfx|p12|cer|crt|der|jks|keystore|pk8|crx)$'
+$forbiddenKeyMarkerPattern = '(?im)-----BEGIN (?:[A-Z0-9-]+ )*(?:PRIVATE KEY|CERTIFICATE)-----'
+$crxMagic = [byte[]](0x43, 0x72, 0x32, 0x34)
+$zipMagic = [byte[]](0x50, 0x4b, 0x03, 0x04)
+Add-Type -AssemblyName System.IO.Compression.FileSystem
+
+function Find-MagicOffset([byte[]]$Bytes, [byte[]]$Magic, [int]$MaximumOffset, [int]$StartOffset = 0) {
+  if ($null -eq $Bytes -or $Bytes.Length -lt $Magic.Length) {
+    return -1
+  }
+  $firstOffset = [Math]::Max(0, $StartOffset)
+  $lastOffset = [Math]::Min($Bytes.Length - $Magic.Length, $MaximumOffset)
+  for ($offset = $firstOffset; $offset -le $lastOffset; $offset += 1) {
+    $matches = $true
+    for ($index = 0; $index -lt $Magic.Length; $index += 1) {
+      if ($Bytes[$offset + $index] -ne $Magic[$index]) {
+        $matches = $false
+        break
+      }
+    }
+    if ($matches) {
+      return $offset
+    }
+  }
+  return -1
+}
+
+function Read-StreamBytes([System.IO.Stream]$Stream, [string]$Label) {
+  $buffer = [System.IO.MemoryStream]::new()
+  try {
+    $Stream.CopyTo($buffer)
+    return $buffer.ToArray()
+  } finally {
+    $buffer.Dispose()
+  }
+}
+
+function Inspect-PayloadBytes([byte[]]$Bytes, [string]$Label, [int]$Depth = 0) {
+  if ($null -eq $Bytes -or $Bytes.Length -eq 0) {
+    return
+  }
+  if ((Find-MagicOffset $Bytes $crxMagic $maxArchiveEntryBytes) -ge 0) {
+    Stop-WithMessage "Payload contains forbidden signing or CRX material: $Label"
+  }
+  $payloadText = [System.Text.Encoding]::UTF8.GetString($Bytes)
+  $payloadUnicodeText = [System.Text.Encoding]::Unicode.GetString($Bytes)
+  $payloadBigEndianText = [System.Text.Encoding]::BigEndianUnicode.GetString($Bytes)
+  if ($payloadText -match $forbiddenKeyMarkerPattern -or
+      $payloadUnicodeText -match $forbiddenKeyMarkerPattern -or
+      $payloadBigEndianText -match $forbiddenKeyMarkerPattern) {
+    Stop-WithMessage "Payload contains forbidden signing or CRX material: $Label"
+  }
+  $searchOffset = 0
+  $candidateAttempts = 0
+  $nestedStream = $null
+  $nestedArchive = $null
+  $nestedEntries = @()
+  try {
+    while ($null -eq $nestedArchive) {
+      $zipOffset = Find-MagicOffset $Bytes $zipMagic $maxArchiveEntryBytes $searchOffset
+      if ($zipOffset -lt 0) {
+        return
+      }
+      $candidateAttempts += 1
+      if ($candidateAttempts -gt $maxArchiveSignatureCandidates) {
+        Stop-WithMessage "Payload contains too many malformed nested archive signatures: $Label"
+      }
+      $zipBytes = [byte[]]::new($Bytes.Length - $zipOffset)
+      [System.Array]::Copy($Bytes, $zipOffset, $zipBytes, 0, $zipBytes.Length)
+      $candidateStream = [System.IO.MemoryStream]::new($zipBytes, $false)
+      $candidateArchive = $null
+      $candidateEntries = @()
+      try {
+        $candidateArchive = [System.IO.Compression.ZipArchive]::new(
+          $candidateStream,
+          [System.IO.Compression.ZipArchiveMode]::Read,
+          $true
+        )
+        $candidateEntries = @($candidateArchive.Entries)
+      } catch {
+        if ($null -ne $candidateArchive) {
+          $candidateArchive.Dispose()
+        }
+        $candidateStream.Dispose()
+        $searchOffset = $zipOffset + 1
+        continue
+      }
+      $candidateEntriesAreUsable = $candidateEntries.Count -gt 0 -and
+        @($candidateEntries | Where-Object {
+          $null -eq $_ -or
+          -not ($_.PSObject.Properties.Name -contains 'FullName') -or
+          -not ($_.PSObject.Properties.Name -contains 'Length')
+        }).Count -eq 0
+      if (-not $candidateEntriesAreUsable) {
+        $candidateArchive.Dispose()
+        $candidateStream.Dispose()
+        $searchOffset = $zipOffset + 1
+        continue
+      }
+      if ($Depth -ge 3) {
+        $candidateArchive.Dispose()
+        $candidateStream.Dispose()
+        Stop-WithMessage "Payload contains nested archives beyond the supported depth: $Label"
+      }
+      $nestedStream = $candidateStream
+      $nestedArchive = $candidateArchive
+      $nestedEntries = $candidateEntries
+    }
+    if ($nestedEntries.Count -gt $maxArchiveEntries) {
+      Stop-WithMessage "Payload contains an oversized nested archive: $Label"
+    }
+    $nestedUncompressedBytes = [int64]0
+    foreach ($nestedEntry in $nestedEntries) {
+      $nestedName = $nestedEntry.FullName.Replace('\', '/')
+      if ([string]::IsNullOrWhiteSpace($nestedName) -or $nestedName.StartsWith('/') -or
+          $nestedName -match '(^|/)\.\.(/|$)' -or $nestedName.Contains(':')) {
+        Stop-WithMessage "Payload contains an unsafe nested archive path: $Label!$nestedName"
+      }
+      if ($nestedName -match $forbiddenMaterialExtensionPattern) {
+        Stop-WithMessage "Payload contains forbidden signing or CRX material: $Label!$nestedName"
+      }
+      if ([int64]$nestedEntry.Length -gt $maxArchiveEntryBytes) {
+        Stop-WithMessage "Payload contains an oversized nested archive entry: $Label!$nestedName"
+      }
+      $nestedUncompressedBytes += [int64]$nestedEntry.Length
+      if ($nestedUncompressedBytes -gt $maxArchiveUncompressedBytes) {
+        Stop-WithMessage "Payload contains an oversized nested archive: $Label"
+      }
+      if ([int64]$nestedEntry.Length -le 0) {
+        continue
+      }
+      $nestedEntryStream = $nestedEntry.Open()
+      try {
+        $nestedEntryBytes = Read-StreamBytes $nestedEntryStream "$Label!$nestedName"
+      } finally {
+        $nestedEntryStream.Dispose()
+      }
+      Inspect-PayloadBytes $nestedEntryBytes "$Label!$nestedName" ($Depth + 1)
+    }
+  } finally {
+    if ($null -ne $nestedArchive) {
+      $nestedArchive.Dispose()
+    }
+    if ($null -ne $nestedStream) {
+      $nestedStream.Dispose()
+    }
+  }
+}
+
+function Inspect-PayloadFile([string]$Path, [string]$Label) {
+  $file = Get-Item -LiteralPath $Path
+  if ([int64]$file.Length -gt $maxArchiveEntryBytes) {
+    Stop-WithMessage "Extension payload file exceeds the $maxArchiveEntryBytes-byte bound: $Label"
+  }
+  Inspect-PayloadBytes ([System.IO.File]::ReadAllBytes($Path)) $Label
+}
+
 if ($Version -notmatch '^(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)$') {
   Stop-WithMessage "Release version is not stable semantic version syntax: $Version"
 }
@@ -108,24 +271,36 @@ try {
     Stop-WithMessage 'The packaged extension staging area contains an installed handoff capability.'
   }
 
-  $forbiddenPayloadFiles = @(
-    Get-ChildItem -LiteralPath $stagingDirectory -Recurse -File |
-      Where-Object {
-        $_.Name -match '(?i)\.(?:pem|key|pfx|p12|cer|crt|der|jks|keystore|pk8|crx)$'
-      }
-  )
-  if ($forbiddenPayloadFiles.Count -gt 0) {
-    $forbiddenRelativePath = $forbiddenPayloadFiles[0].FullName.Substring($stagingDirectory.Length).TrimStart('\', '/')
-    Stop-WithMessage "Extension payload contains forbidden signing or CRX material: $forbiddenRelativePath"
+  $stagingFiles = @(Get-ChildItem -LiteralPath $stagingDirectory -Recurse -File)
+  $stagingUncompressedBytes = [int64]0
+  foreach ($stagingFile in $stagingFiles) {
+    $stagingUncompressedBytes += [int64]$stagingFile.Length
+  }
+  if ($stagingUncompressedBytes -gt $maxArchiveUncompressedBytes) {
+    Stop-WithMessage "Extension payload exceeds the $maxArchiveUncompressedBytes-byte uncompressed bound."
+  }
+  foreach ($payloadFile in $stagingFiles) {
+    $payloadRelativePath = $payloadFile.FullName.Substring($stagingDirectory.Length).TrimStart('\', '/')
+    if ($payloadFile.Name -match $forbiddenMaterialExtensionPattern) {
+      Stop-WithMessage "Extension payload contains forbidden signing or CRX material: $payloadRelativePath"
+    }
+    Inspect-PayloadFile $payloadFile.FullName $payloadRelativePath
   }
 
   # manifest.json sits at the archive root, so unzip-then-Load-unpacked works
   # on the extracted folder without hunting for a nested directory.
-  Compress-Archive -Path (Join-Path $stagingDirectory '*') -DestinationPath $assetPath -CompressionLevel Optimal
+  try {
+    Compress-Archive -Path (Join-Path $stagingDirectory '*') -DestinationPath $assetPath -CompressionLevel Optimal
+  } catch {
+    Remove-Item -LiteralPath $assetPath -Force -ErrorAction SilentlyContinue
+    throw
+  }
 } finally {
   Remove-Item -LiteralPath $stagingDirectory -Recurse -Force -ErrorAction SilentlyContinue
 }
 
+$assetValidationSucceeded = $false
+try {
 if (-not (Test-Path -LiteralPath $assetPath -PathType Leaf)) {
   Stop-WithMessage "Packaging produced no archive at $assetPath"
 }
@@ -139,23 +314,45 @@ if ($assetInfo.Length -le 0) {
 Add-Type -AssemblyName System.IO.Compression.FileSystem
 $archive = [System.IO.Compression.ZipFile]::OpenRead($assetPath)
 try {
+  if ($archive.Entries.Count -eq 0 -or $archive.Entries.Count -gt $maxArchiveEntries) {
+    Stop-WithMessage "The packaged archive has an invalid entry count (maximum $maxArchiveEntries)."
+  }
   $entryNames = @($archive.Entries | ForEach-Object { $_.FullName.Replace('\', '/') })
   $entryNamesByCase = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
-  foreach ($entryName in $entryNames) {
+  $totalUncompressedBytes = [int64]0
+  foreach ($entry in $archive.Entries) {
+    $entryName = $entry.FullName.Replace('\', '/')
     if ([string]::IsNullOrWhiteSpace($entryName) -or $entryName.StartsWith('/') -or $entryName -match '(^|/)\.\.(/|$)' -or $entryName.Contains(':')) {
       Stop-WithMessage "The packaged archive contains an unsafe entry path: $entryName"
     }
     if (-not $entryNamesByCase.Add($entryName)) {
       Stop-WithMessage "The packaged archive contains a duplicate entry path: $entryName"
     }
-    if ($entryName -match '(?i)\.(?:pem|key|pfx|p12|cer|crt|der|jks|keystore|pk8|crx)$') {
+    if ($entryName -match $forbiddenMaterialExtensionPattern) {
       Stop-WithMessage "The packaged archive contains forbidden signing or CRX material: $entryName"
+    }
+    $entryLength = [int64]$entry.Length
+    if ($entryLength -gt $maxArchiveEntryBytes) {
+      Stop-WithMessage "The packaged archive entry exceeds the $maxArchiveEntryBytes-byte bound: $entryName"
+    }
+    $totalUncompressedBytes += $entryLength
+    if ($totalUncompressedBytes -gt $maxArchiveUncompressedBytes) {
+      Stop-WithMessage "The packaged archive exceeds the $maxArchiveUncompressedBytes-byte uncompressed bound."
+    }
+    if ($entryLength -gt 0) {
+      $entryStream = $entry.Open()
+      try {
+        $entryBytes = Read-StreamBytes $entryStream $entryName
+      } finally {
+        $entryStream.Dispose()
+      }
+      Inspect-PayloadBytes $entryBytes $entryName
     }
   }
 
   $embeddedManifestEntry = $archive.GetEntry('manifest.json')
-  if ($null -eq $embeddedManifestEntry) {
-    Stop-WithMessage 'The packaged archive does not carry manifest.json at its root.'
+  if ($null -eq $embeddedManifestEntry -or $embeddedManifestEntry.Length -le 0 -or $embeddedManifestEntry.Length -gt $maxManifestBytes) {
+    Stop-WithMessage 'The packaged archive has no bounded root manifest.json.'
   }
   $manifestStream = $embeddedManifestEntry.Open()
   $manifestReader = [System.IO.StreamReader]::new($manifestStream, [System.Text.Encoding]::UTF8, $true)
@@ -176,6 +373,11 @@ try {
   }
   if ($embeddedManifest.PSObject.Properties.Name -contains 'key') {
     Stop-WithMessage 'The packaged manifest must not embed a signing key.'
+  }
+
+  $pairingEntry = $archive.GetEntry('src/shared/pairing.js')
+  if ($null -eq $pairingEntry -or $pairingEntry.Length -le 0 -or $pairingEntry.Length -gt $maxPairingBytes) {
+    Stop-WithMessage 'The packaged archive has no bounded empty pairing capability module.'
   }
 
   $requiredArchiveEntries = @('manifest.json', 'src/shared/pairing.js')
@@ -246,4 +448,11 @@ if (-not ($manifest.PSObject.Properties.Name -contains 'artifacts')) {
 }
 $manifest | ConvertTo-Json -Depth 10 | Set-Content -LiteralPath $ManifestPath -Encoding utf8NoBOM
 
+$assetValidationSucceeded = $true
 Write-Output "Packaged Chromium extension ZIP: $assetName ($($assetInfo.Length) bytes, SHA-256 $assetSha256, version $Version, $($entryNames.Count) entries)"
+} catch {
+  if (-not $assetValidationSucceeded) {
+    Remove-Item -LiteralPath $assetPath -Force -ErrorAction SilentlyContinue
+  }
+  throw
+}
