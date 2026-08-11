@@ -40,6 +40,17 @@ unverified surface has shipped.
   focused 8/8 TOTP tests, existing Electron 95/95 tests, and documentation
   bundle tests 2/2. The full authenticator UI, QR rendering, locks, schedules,
   and list management remain open and are not claimed here.
+- Authenticator Settings registration surface at source commit
+  [`385e040`](https://github.com/Ding-Ding-Projects/material-download-manager/commit/385e04030b0eebc6df5afa1370571226b9dd9d56): local QR matrix rendering,
+  explicit one-time manual-secret reveal, code confirmation before vault
+  mutation, responsive Settings tab/search wiring, metadata-only list/export,
+  and no-network source/runtime checks. Local evidence is focused **12/12**,
+  compiled Electron **100/100**, build/typecheck green, and built-artifact
+  smoke **42/42** with a secret-free registration capture at
+  `docs/screenshots/authenticator/authenticator-settings-empty.png`.
+  Live code/countdown, reorder/group/bulk workflows, per-tab locks, and
+  schedules remain separate follow-up work; no signing or CRX artifact was
+  introduced.
 - Material-style landing and documentation site, stable unsigned Squirrel
   packaging, pinned GitHub-hosted build/package/publication automation, GitHub
   Pages publication, and monotonic real releases. GitHub Actions runs no tests

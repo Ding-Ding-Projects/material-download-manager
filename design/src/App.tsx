@@ -219,6 +219,14 @@ export default function App() {
         onSelect: () => openSettings("auto-organize-rules"),
       },
       {
+        id: "settings.authenticator",
+        label: copy.text("Settings · Authenticator", "設定 · Authenticator 驗證器"),
+        description: copy.text("Open local TOTP QR pairing and secret-free metadata export", "開啟本機 TOTP QR 配對同無 secret 資料標籤匯出"),
+        keywords: ["authenticator", "totp", "qr", "otpauth", "pairing", "metadata", "export"],
+        section: copy.text("Settings", "設定"),
+        onSelect: () => openSettings("authenticator"),
+      },
+      {
         id: "destination.all-downloads",
         label: "Downloads · All",
         description: "Show every download in the list",

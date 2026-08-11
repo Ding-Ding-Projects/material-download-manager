@@ -23,6 +23,11 @@ import type {
 import type { ChangelogView, ChangelogViewRequest } from "../electron/history/ChangelogStore";
 import type { RegexEvaluation } from "@shared/regex";
 import type { SshHostDraft, SshHostStatus } from "@shared/ssh";
+import type {
+  TotpRegistrationExportRecord,
+  TotpRegistrationInput,
+  TotpRegistrationMetadata,
+} from "@shared/authenticator";
 
 export interface MaterialDownloadManagerAPI {
   getState(): Promise<StateSnapshot>;
@@ -68,6 +73,12 @@ export interface MaterialDownloadManagerAPI {
   unlockHistory(password: string): Promise<HistoryAccessState>;
   lockHistory(): Promise<HistoryAccessState>;
   exportHistory(format: ExportFormat, filter?: HistoryFilter): Promise<ExportResult>;
+  registerAuthenticator(input: TotpRegistrationInput): Promise<TotpRegistrationMetadata>;
+  confirmAuthenticatorRegistration(input: TotpRegistrationInput, candidate: string, timestampMs?: number, skewSteps?: number): Promise<boolean>;
+  generateAuthenticatorCode(metadata: TotpRegistrationMetadata, timestampMs?: number): Promise<string>;
+  verifyAuthenticatorCode(metadata: TotpRegistrationMetadata, candidate: string, timestampMs?: number, skewSteps?: number): Promise<boolean>;
+  removeAuthenticator(metadata: TotpRegistrationMetadata): Promise<void>;
+  exportAuthenticatorMetadata(metadata: TotpRegistrationMetadata): Promise<TotpRegistrationExportRecord>;
   getChangelogView(request?: ChangelogViewRequest): Promise<ChangelogView>;
   exportChangelog(format: ExportFormat, request?: ChangelogViewRequest): Promise<ExportResult>;
   createQueue(queue: Partial<DownloadQueue>): Promise<DownloadQueue>;

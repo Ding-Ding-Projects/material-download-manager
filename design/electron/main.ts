@@ -708,6 +708,25 @@ function registerIpcHandlers() {
     assertTrustedSender(event);
     return authenticatorService.register(normalizeTotpRegistration(input));
   });
+  ipcMain.handle(
+    IPC.AUTHENTICATOR_CONFIRM_REGISTRATION,
+    (event, input: unknown, candidate: unknown, timestampMs?: unknown, skewSteps?: unknown) => {
+      assertTrustedSender(event);
+      const normalized = normalizeTotpRegistration(input);
+      if (timestampMs !== undefined && (typeof timestampMs !== "number" || !Number.isFinite(timestampMs))) {
+        throw new Error("Invalid authenticator timestamp");
+      }
+      if (skewSteps !== undefined && (typeof skewSteps !== "number" || !Number.isSafeInteger(skewSteps))) {
+        throw new Error("Invalid authenticator clock-skew window");
+      }
+      return authenticatorService.verifyPendingRegistration(
+        normalized,
+        candidate,
+        timestampMs as number | undefined,
+        skewSteps as number | undefined,
+      );
+    },
+  );
   ipcMain.handle(IPC.AUTHENTICATOR_GENERATE_CODE, async (event, metadata: unknown, timestampMs?: unknown) => {
     assertTrustedSender(event);
     if (!isTotpRegistrationMetadata(metadata)) throw new Error("Invalid authenticator registration metadata");

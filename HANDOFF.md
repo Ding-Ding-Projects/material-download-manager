@@ -1,5 +1,67 @@
 # Handoff: Material Download Manager
 
+## Authenticator Settings registration surface (2026-08-11)
+
+Issue [#18](https://github.com/Ding-Ding-Projects/material-download-manager/issues/18)
+tracks this bounded desktop UI slice. Source commit
+[`385e040`](https://github.com/Ding-Ding-Projects/material-download-manager/commit/385e04030b0eebc6df5afa1370571226b9dd9d56)
+adds the real Settings authenticator tab, local QR rendering, explicit
+one-time manual-secret reveal, pairing confirmation before vault mutation, and
+secret-free metadata list/export. The Settings tab has its own search and
+regex-builder state, and the command palette can open it directly.
+
+The QR matrix is rendered in-process from the bundled `qrcode` dependency; the
+registration surface makes no network request. A pending registration lives
+only in renderer memory until the main-process confirmation handler verifies a
+current code. Only then does the existing credential-vault service write the
+secret and return metadata. The renderer profile stores validated metadata
+only; ordinary export states `secretOmitted: true` and contains neither a
+secret nor an `otpauth://` URI. Cancel and successful pairing clear the
+secret-bearing model and the manual-reveal state.
+
+This is intentionally not the full authenticator product: live code display and
+countdown, reorder/group/bulk management, per-tab locks, and schedules remain
+separate follow-up work. No signing or CRX artifact was added.
+
+### Changed files and verification
+
+- `design/src/components/AuthenticatorPanel.tsx` and
+  `design/src/styles/authenticator.css`: Settings registration/list/export
+  surface, local QR SVG, one-time manual reveal, responsive layout, and
+  secret-free empty/list states.
+- `design/electron/main.ts`, `preload.ts`, shared IPC types, and
+  `TotpRegistrationService.ts`: typed pending-code confirmation that runs
+  before vault mutation.
+- `design/electron/__tests__/authenticatorSurface.test.ts` and
+  `totp.test.ts`: no-network/source-boundary, Settings wiring,
+  secret-free export, and wrong-code/no-vault-write coverage.
+- `design/ui-tests/smoke.mjs`: built-artifact Authenticator surface check and
+  secret-free capture option.
+
+Local evidence from the source commit:
+
+- `npm run typecheck` — passed.
+- `npm run build` — passed (renderer and Electron output).
+- Focused TOTP/UI list — **12/12 passed**.
+- Full compiled Electron list — **100/100 passed**.
+- Real built-artifact smoke — **42/42 required checks passed** in `11.119`
+  seconds; the new `settings-authenticator-surface` check verified nine
+  registration/list controls, hidden pairing/manual-secret state, no URI in
+  ordinary text, and an active Authenticator tab.
+- Secret-free registration capture:
+  [`docs/screenshots/authenticator/authenticator-settings-empty.png`](docs/screenshots/authenticator/authenticator-settings-empty.png)
+  (captured from the built app's registration card at 1100×900; 524×462 PNG,
+  SHA-256
+  `92DCE765FF7B8D07854C15D34FAED2708EB5C29C827DA26879E02DEACFD4DDC`). The
+  capture contains no QR, manual secret, URI, metadata entry, or credential
+  bytes; the explicit reveal control is visible in the tested pairing flow but
+  not photographed.
+
+The GitHub Actions workflow remains a build/package/publication path and does
+not run tests or lint; the local results above are the test evidence. The
+remote run and release for the pushed branch must be read from their exact
+records.
+
 ## Local TOTP and QR registration core (2026-08-11)
 
 Issue [#18](https://github.com/Ding-Ding-Projects/material-download-manager/issues/18)

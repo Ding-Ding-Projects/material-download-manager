@@ -152,6 +152,23 @@ test("registration service stores secrets only through the vault and returns met
   assert.equal(adapter.values.has("totp:fixed-test-id"), false);
 });
 
+test("pending pairing confirms before vault mutation and rejects a wrong code", async () => {
+  const adapter = new MemoryVaultAdapter();
+  const service = new TotpRegistrationService({ vault: new TotpSecretVault(adapter), idFactory: () => "pending-test-id" });
+  const secret = base32("12345678901234567890");
+  const input = { issuer: "Example", account: "pending", secret, algorithm: "SHA1" as const, digits: 6 as const, period: 30 };
+  const currentCode = generateTotpCode(input, 60_000);
+
+  assert.equal(service.verifyPendingRegistration(input, "000000", 60_000, 1), false);
+  assert.equal(adapter.values.size, 0, "a wrong code must not write to the vault");
+  assert.equal(service.verifyPendingRegistration(input, currentCode, 60_000, 1), true);
+  assert.equal(adapter.values.size, 0, "confirmation only verifies; registration performs the write");
+
+  const metadata = await service.register(input);
+  assert.equal(metadata.id, "pending-test-id");
+  assert.equal(adapter.values.size, 1);
+});
+
 test("secret and URI validation fails closed at the model boundary", () => {
   assert.throws(() => normalizeTotpRegistration({ issuer: "", account: "x", secret: "JBSWY3DPEHPK3PXP" }), /issuer/iu);
   assert.throws(() => normalizeTotpRegistration({ issuer: "x", account: "y", secret: "not-base32-0" }), /secret/iu);

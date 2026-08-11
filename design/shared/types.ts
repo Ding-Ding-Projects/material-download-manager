@@ -502,6 +502,7 @@ export const IPC = {
   HISTORY_ACCESS_UNLOCK: "historyAccess:unlock",
   HISTORY_ACCESS_LOCK: "historyAccess:lock",
   AUTHENTICATOR_REGISTER: "authenticator:register",
+  AUTHENTICATOR_CONFIRM_REGISTRATION: "authenticator:confirmRegistration",
   AUTHENTICATOR_GENERATE_CODE: "authenticator:generateCode",
   AUTHENTICATOR_VERIFY_CODE: "authenticator:verifyCode",
   AUTHENTICATOR_REMOVE: "authenticator:remove",
