@@ -100,8 +100,12 @@ export function createAuthenticatorStore({ local, now = () => Date.now(), idFact
     return { metadata, secrets: reconciled };
   }
 
+  function normalizeInput(input) {
+    return typeof input?.uri === "string" ? parseTotpUri(input.uri) : normalizeTotpRegistration(input);
+  }
+
   async function prepare(input) {
-    const registration = typeof input?.uri === "string" ? parseTotpUri(input.uri) : normalizeTotpRegistration(input);
+    const registration = normalizeInput(input);
     return createTotpRegistrationModel(registration);
   }
 
@@ -111,7 +115,7 @@ export function createAuthenticatorStore({ local, now = () => Date.now(), idFact
 
   async function confirm(input, candidate, timestampMs = now()) {
     return serialize(async () => {
-      const registration = normalizeTotpRegistration(input);
+      const registration = normalizeInput(input);
       if (!(await verifyTotpCode(registration, candidate, timestampMs, 1))) return { ok: false, code: "authenticator-code-mismatch" };
       const metadata = createTotpMetadata(idFactory(), registration);
       const { metadata: metadataList, secrets } = await readConsistentState();

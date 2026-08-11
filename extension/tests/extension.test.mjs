@@ -970,6 +970,17 @@ test("authenticator store keeps metadata and browser-local secrets separate acro
   assert.equal(removed.ok, true);
   assert.deepEqual(await second.state(), { metadata: [] });
   assert.deepEqual(values.get(AUTHENTICATOR_SECRETS_KEY), {});
+
+  const uriValues = new Map();
+  const uriLocal = {
+    async get(key) { return { [key]: uriValues.get(key) }; },
+    async set(entries) { Object.entries(entries).forEach(([key, value]) => uriValues.set(key, value)); },
+  };
+  const uriStore = createAuthenticatorStore({ local: uriLocal, now: () => timestamp, idFactory: () => "authenticator-uri-001" });
+  const uri = buildTotpUri(input);
+  const uriCode = await generateTotpCode(input, timestamp);
+  const uriConfirmed = await uriStore.confirm({ uri }, uriCode, timestamp);
+  assert.equal(uriConfirmed.ok, true, "URI-bearing confirmation uses the same normalized registration path");
 });
 
 test("authenticator store fails closed on corrupt or oversized browser-local records and clears pending input", async () => {
