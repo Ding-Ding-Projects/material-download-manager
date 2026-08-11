@@ -538,6 +538,10 @@ export const IPC = {
   SSH_HOST_TRUST: "ssh:hostTrust",
   HISTORY_GET_VIEW: "history:getView",
   HISTORY_EXPORT_VIEW: "history:exportView",
+  HISTORY_DIFF: "history:diff",
+  HISTORY_RESTORE: "history:restore",
+  HISTORY_LABEL: "history:label",
+  HISTORY_PRUNE: "history:prune",
   HISTORY_ACCESS_GET_STATE: "historyAccess:getState",
   HISTORY_ACCESS_SETUP: "historyAccess:setup",
   HISTORY_ACCESS_UNLOCK: "historyAccess:unlock",
@@ -556,4 +560,12 @@ export const IPC = {
   EXTERNAL_EDITOR_OPEN_WORKSPACE: "externalEditor:openWorkspace",
 } as const;
 
-export type { ExportFormat, ExportResult, HistoryFilter, HistoryView, HistoryAccessState };
+export type {
+  HistoryDiff,
+  HistoryFilter,
+  HistoryPruneRequest,
+  HistoryPruneResult,
+  HistoryView,
+  HistoryAccessState,
+} from "./history";
+export type { ExportFormat, ExportResult } from "./export";

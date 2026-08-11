@@ -24,7 +24,18 @@ import {
   type SourceIdentity,
 } from "../../shared/distributedProtocol";
 import type { ExportFormat, ExportResult } from "../../shared/export";
-import { historyFilterRequest, normalizeHistoryFilter, type HistoryFilter, type HistoryView } from "../../shared/history";
+import {
+  historyFilterRequest,
+  normalizeHistoryFilter,
+  normalizeHistoryLabel,
+  normalizeHistoryPruneRequest,
+  normalizeHistoryRevisionId,
+  type HistoryDiff,
+  type HistoryFilter,
+  type HistoryPruneResult,
+  type HistoryRevision,
+  type HistoryView,
+} from "../../shared/history";
 import {
   createDefaultSettings,
   presentationSettingsFromAppSettings,
@@ -39,7 +50,7 @@ import {
   type ScheduledSettingsRecord,
 } from "../../shared/scheduledSettings";
 import { cloneSshHostConfigs, isSshHostConfigs } from "../../shared/ssh";
-import { StateStore } from "./persistence";
+import { migrateSettings, StateStore } from "./persistence";
 import { resolveCategoryIsolated, resolveDownloadFolder } from "./categories";
 import { probeUrl as httpProbeUrl, proveDownloadReadable, redactErrorMessage, redactUrl, sanitizeFileName } from "./HttpProbe";
 import { DownloadTask } from "./DownloadTask";
@@ -1198,12 +1209,133 @@ export class DownloadManager extends EventEmitter {
       totalRevisions: allRevisions.length,
       matchingRevisions: revisions.length,
       request,
+      prunedRevisions: await this.history.prunedCount(),
       emptyReason: revisions.length > 0
         ? null
         : allRevisions.length === 0
           ? "No revisions are recorded yet."
           : "No revisions match the active filters.",
     };
+  }
+
+  async getHistoryDiff(revisionId: unknown): Promise<HistoryDiff> {
+    return this.history.getDiff(normalizeHistoryRevisionId(revisionId));
+  }
+
+  async labelHistoryRevision(revisionId: unknown, label: unknown): Promise<HistoryRevision | null> {
+    return this.history.setLabel(normalizeHistoryRevisionId(revisionId), normalizeHistoryLabel(label));
+  }
+
+  async pruneHistory(request: unknown): Promise<HistoryPruneResult> {
+    return this.history.prune(normalizeHistoryPruneRequest(request).keep);
+  }
+
+  /**
+   * Restore a validated state snapshot into the live manager and append the
+   * restore action. A restore never rewrites its source revision. Active
+   * transfers are refused because replacing their state would strand work.
+   */
+  async restoreHistoryRevision(revisionId: unknown): Promise<HistoryRevision> {
+    const id = normalizeHistoryRevisionId(revisionId);
+    if (this.tasks.size > 0) throw new Error("Pause or finish active downloads before restoring history");
+    const snapshot = await this.history.readSnapshot(id);
+    if (snapshot === null) throw new Error("History revision has no restorable state snapshot");
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(snapshot);
+    } catch {
+      throw new Error("History revision state is not valid JSON");
+    }
+    if (!isRecord(parsed) || !Array.isArray(parsed.items) || !Array.isArray(parsed.queues)) {
+      throw new Error("History revision state has an invalid shape");
+    }
+    if (parsed.items.length > 10_000 || parsed.queues.length > MAX_QUEUE_ITEM_IDS) {
+      throw new Error("History revision state exceeds the supported record limit");
+    }
+    const restoredItems: DownloadItem[] = [];
+    const seenItemIds = new Set<string>();
+    for (const candidate of parsed.items) {
+      if (!isRecord(candidate) || typeof candidate.id !== "string" || candidate.id.length === 0 || candidate.id.length > 256 ||
+        typeof candidate.fileName !== "string" || typeof candidate.folder !== "string") {
+        throw new Error("History revision contains an invalid download record");
+      }
+      if (seenItemIds.has(candidate.id)) throw new Error("History revision contains duplicate download ids");
+      seenItemIds.add(candidate.id);
+      const item = { ...candidate } as unknown as DownloadItem;
+      item.fileName = sanitizeFileName(item.fileName);
+      item.url = redactUrl(item.url);
+      if (item.error !== null && typeof item.error === "string") item.error = redactErrorMessage(item.error, item.url, item.url);
+      if (item.status === "downloading" || item.status === "queued") item.status = "paused";
+      item.speed = 0;
+      restoredItems.push(item);
+    }
+    const restoredQueues: DownloadQueue[] = [];
+    const seenQueueIds = new Set<string>();
+    for (const candidate of parsed.queues) {
+      if (!isRecord(candidate) || typeof candidate.id !== "string" || candidate.id.length === 0 ||
+        typeof candidate.name !== "string" || !Array.isArray(candidate.itemIds)) {
+        throw new Error("History revision contains an invalid queue record");
+      }
+      if (seenQueueIds.has(candidate.id)) throw new Error("History revision contains duplicate queue ids");
+      seenQueueIds.add(candidate.id);
+      restoredQueues.push({ ...candidate, itemIds: candidate.itemIds.filter((id): id is string => typeof id === "string") } as DownloadQueue);
+    }
+    const defaultSaveFolder = this.settings?.defaultSaveFolder ?? path.join(this.userDataPath, "Downloads");
+    const restoredSettings = migrateSettings(parsed.settings, defaultSaveFolder);
+    const restoredRules = validateManagedScheduleRules(parsed.scheduleRules ?? []);
+    const previous = {
+      items: this.items,
+      itemOrder: this.itemOrder,
+      queues: this.queues,
+      settings: this.settings,
+      scheduleRules: this.scheduleRules,
+      globalSpeedLimiter: this.globalSpeedLimiter,
+      itemHeaders: this.itemHeaders,
+      itemSourceUrls: this.itemSourceUrls,
+      distributedSources: this.distributedSources,
+    };
+    const nextItems = new Map(restoredItems.map((item) => [item.id, item] as const));
+    const nextHeaders = new Map<string, Record<string, string>>();
+    const nextSourceUrls = new Map<string, string>();
+    const nextDistributedSources = new Map<string, DistributedSourceSecret>();
+    for (const item of restoredItems) {
+      const headers = previous.itemHeaders.get(item.id);
+      if (headers) nextHeaders.set(item.id, headers);
+      const sourceUrl = previous.itemSourceUrls.get(item.id);
+      if (sourceUrl) nextSourceUrls.set(item.id, sourceUrl);
+      const distributed = previous.distributedSources.get(item.id);
+      if (distributed) nextDistributedSources.set(item.id, distributed);
+    }
+    this.items = nextItems;
+    this.itemOrder = restoredItems.map((item) => item.id);
+    this.queues = new Map(restoredQueues.map((queue) => [queue.id, queue] as const));
+    this.settings = restoredSettings;
+    this.scheduleRules = restoredRules;
+    this.itemHeaders = nextHeaders;
+    this.itemSourceUrls = nextSourceUrls;
+    this.distributedSources = nextDistributedSources;
+    this.globalSpeedLimiter = new SpeedLimiter(this.settings.globalSpeedLimitBytes);
+    try {
+      await this.saveState();
+      const revision = await this.history.restore(id);
+      if (!revision) throw new Error("History restore did not create an audit revision");
+      this.emit("presentationChanged", this.getPresentationSettings());
+      this.scheduleNotify();
+      this.processAllQueues();
+      return revision;
+    } catch (error) {
+      this.items = previous.items;
+      this.itemOrder = previous.itemOrder;
+      this.queues = previous.queues;
+      this.settings = previous.settings;
+      this.scheduleRules = previous.scheduleRules;
+      this.globalSpeedLimiter = previous.globalSpeedLimiter;
+      this.itemHeaders = previous.itemHeaders;
+      this.itemSourceUrls = previous.itemSourceUrls;
+      this.distributedSources = previous.distributedSources;
+      await this.saveState().catch(() => undefined);
+      throw error;
+    }
   }
 
   async exportHistory(format: ExportFormat, filter: unknown = undefined): Promise<ExportResult> {

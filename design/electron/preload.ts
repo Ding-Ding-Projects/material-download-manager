@@ -17,7 +17,9 @@ import type {
   UpdateUnsavedWorkState,
   ExportFormat,
   ExportResult,
+  HistoryDiff,
   HistoryFilter,
+  HistoryPruneResult,
   HistoryView,
   HistoryAccessState,
 } from "../shared/types";
@@ -30,7 +32,7 @@ import type {
 import { isTotpRegistrationExportRecord, isTotpRegistrationMetadata } from "../shared/authenticator";
 import { isSshHostStatus } from "../shared/ssh";
 import { isExportResult } from "../shared/export";
-import { isHistoryAccessState, isHistoryView } from "../shared/history";
+import { isHistoryAccessState, isHistoryDiff, isHistoryPruneResult, isHistoryRevision, isHistoryView } from "../shared/history";
 import { isDownloadCategory } from "../shared/settings";
 import { isRegexEvaluation, type RegexEvaluation } from "../shared/regex";
 import { isPresentationSettings, isUpdateInstallResult, isUpdateState, isUpdateUnsavedWorkState } from "../shared/types";
@@ -229,6 +231,27 @@ const api = {
     const view: unknown = await ipcRenderer.invoke(IPC.HISTORY_GET_VIEW, filter);
     if (!isHistoryView(view)) throw new Error("Invalid history view from main process");
     return view;
+  },
+  getHistoryDiff: async (revisionId: string): Promise<HistoryDiff> => {
+    const diff: unknown = await ipcRenderer.invoke(IPC.HISTORY_DIFF, revisionId);
+    if (!isHistoryDiff(diff)) throw new Error("Invalid history diff from main process");
+    return diff;
+  },
+  restoreHistoryRevision: async (revisionId: string) => {
+    const revision: unknown = await ipcRenderer.invoke(IPC.HISTORY_RESTORE, revisionId);
+    if (!isHistoryRevision(revision)) throw new Error("Invalid history restore result from main process");
+    return revision as import("../shared/history").HistoryRevision;
+  },
+  labelHistoryRevision: async (revisionId: string, label: string | null) => {
+    const revision: unknown = await ipcRenderer.invoke(IPC.HISTORY_LABEL, revisionId, label);
+    if (revision === null) return null;
+    if (!isHistoryRevision(revision)) throw new Error("Invalid history label result from main process");
+    return revision as import("../shared/history").HistoryRevision;
+  },
+  pruneHistory: async (keep: number): Promise<HistoryPruneResult> => {
+    const result: unknown = await ipcRenderer.invoke(IPC.HISTORY_PRUNE, { keep });
+    if (!isHistoryPruneResult(result)) throw new Error("Invalid history prune result from main process");
+    return result;
   },
   getHistoryAccessState: async (): Promise<HistoryAccessState> => {
     const state: unknown = await ipcRenderer.invoke(IPC.HISTORY_ACCESS_GET_STATE);

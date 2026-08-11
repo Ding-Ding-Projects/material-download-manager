@@ -17,6 +17,9 @@ import type {
   ExportFormat,
   ExportResult,
   HistoryFilter,
+  HistoryDiff,
+  HistoryPruneResult,
+  HistoryRevision,
   HistoryView,
   HistoryAccessState,
 } from "@shared/types";
@@ -76,6 +79,10 @@ export interface MaterialDownloadManagerAPI {
   setSshHostSecretTrust(hostId: string, trusted: boolean): Promise<AppSettings>;
   removeSshHost(hostId: string): Promise<AppSettings>;
   getHistoryView(filter?: HistoryFilter): Promise<HistoryView>;
+  getHistoryDiff(revisionId: string): Promise<HistoryDiff>;
+  restoreHistoryRevision(revisionId: string): Promise<HistoryRevision>;
+  labelHistoryRevision(revisionId: string, label: string | null): Promise<HistoryRevision | null>;
+  pruneHistory(keep: number): Promise<HistoryPruneResult>;
   getHistoryAccessState(): Promise<HistoryAccessState>;
   setupHistoryAccess(password: string): Promise<HistoryAccessState>;
   unlockHistory(password: string): Promise<HistoryAccessState>;

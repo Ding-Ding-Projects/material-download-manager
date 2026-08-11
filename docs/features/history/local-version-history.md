@@ -15,13 +15,34 @@ settings changes through this store. Custom request-header values remain out of
 the renderer state and out of these snapshots.
 
 The store supports date range, action, plain-text, and bounded local regex
-filters, revision diff, and export through the shared serializer.
+filters, revision diff, user labels, restore, retention, and export through the
+shared serializer. A diff is computed in the main process and returned only as
+a bounded redacted patch; credential-like fields and query values are replaced
+before the renderer sees them.
+
+Labels live in a bounded `labels.json` sidecar. Saving or clearing a label
+creates a new `labeled` commit and never edits the revision being labelled.
+Restore validates the selected state, applies it only when no transfer is
+active, and appends a `restored` revision after the state save succeeds. If the
+state save or audit write fails, the manager rolls back its in-memory and
+durable state and reports the failure.
+
+Retention uses a user-selected count of newest state revisions. Pruning writes
+a `pruned.json` tombstone and appends a `pruned` audit revision; it never
+rewrites, deletes, or force-moves an earlier Git commit. Label, prune, and
+protected display-name audit revisions stay visible so the retention decision
+and rename history remain auditable. Hidden state commits remain physically
+present in the isolated local repository and can be counted by the store's
+internal audit view.
 
 The renderer exposes this store through the History browser tab. Its action
 filters are derived from the actions actually present in the returned history,
-and its date inputs cover complete local calendar days. The tab exports the
-filtered revision index as JSON, JSONL, YAML, TOML, CSV, Markdown, or HTML; it
-does not export raw snapshots through the renderer.
+and its date inputs cover complete local calendar days. Each row offers a
+redacted diff review, a bounded label editor, and a restore action. The header
+offers retention pruning; only that destructive action opens the app's blocking
+two-key confirmation gate. The tab exports the filtered revision index as JSON,
+JSONL, YAML, TOML, CSV, Markdown, or HTML; it does not export raw snapshots
+through the renderer.
 
 The application display name is a main-process-owned setting. Renderer requests
 cannot write it through local storage: the validated settings IPC path
@@ -60,10 +81,13 @@ ordinary operating-system account and disk protection.
 The repository is initialized with local-only Git configuration and never
 contacts a remote. Every commit disables hooks, signing, and system Git
 configuration, bounds the child process, unstages unrelated index entries,
-and commits only `snapshot.json`; an unrelated staged file therefore remains
-uncommitted instead of leaking into the history snapshot. Git failures return
-an empty read result or a clear null restore result rather than claiming a
-revision exists. Revision subjects sanitize newlines. Snapshot encryption remains the caller's responsibility;
+and commits only the intended snapshot or bounded metadata sidecar; an
+unrelated staged file therefore remains uncommitted instead of leaking into
+history. Git failures return an empty read result or a clear null restore
+result rather than claiming a revision exists. Revision subjects sanitize
+newlines. Label and retention sidecars are schema-checked and bounded;
+corrupt metadata fails closed instead of being treated as an empty map.
+Snapshot encryption remains the caller's responsibility;
 the manager currently records non-secret metadata as local JSON. A display-name
 mutation is the stricter exception: its dedicated hash record is required before
 the settings IPC call succeeds, and a failed required history write rolls the

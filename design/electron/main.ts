@@ -18,7 +18,12 @@ import {
 import type { AddDownloadRequest, AppSettings, DownloadItem, DownloadQueue, SettingKey, SettingsPatch } from "../shared/types";
 import { isScheduledSettingsRecords, type ScheduledSettingsRecord } from "../shared/scheduledSettings";
 import { isExportFormat } from "../shared/export";
-import { normalizeHistoryFilter } from "../shared/history";
+import {
+  normalizeHistoryFilter,
+  normalizeHistoryLabel,
+  normalizeHistoryPruneRequest,
+  normalizeHistoryRevisionId,
+} from "../shared/history";
 import {
   isTotpRegistrationMetadata,
   normalizeTotpRegistration,
@@ -728,6 +733,22 @@ function registerIpcHandlers() {
     if (!isExportFormat(format)) throw new Error("Invalid history export format");
     const normalized = normalizeHistoryFilter(filter);
     return manager.exportHistory(format, normalized);
+  });
+  ipcMain.handle(IPC.HISTORY_DIFF, (event, revisionId: unknown) => {
+    assertHistoryUnlocked(event);
+    return manager.getHistoryDiff(normalizeHistoryRevisionId(revisionId));
+  });
+  ipcMain.handle(IPC.HISTORY_RESTORE, (event, revisionId: unknown) => {
+    assertHistoryUnlocked(event);
+    return manager.restoreHistoryRevision(normalizeHistoryRevisionId(revisionId));
+  });
+  ipcMain.handle(IPC.HISTORY_LABEL, (event, revisionId: unknown, label: unknown) => {
+    assertHistoryUnlocked(event);
+    return manager.labelHistoryRevision(normalizeHistoryRevisionId(revisionId), normalizeHistoryLabel(label));
+  });
+  ipcMain.handle(IPC.HISTORY_PRUNE, (event, request: unknown) => {
+    assertHistoryUnlocked(event);
+    return manager.pruneHistory(normalizeHistoryPruneRequest(request));
   });
 
   ipcMain.handle(IPC.AUTHENTICATOR_REGISTER, async (event, input: unknown) => {

@@ -1,12 +1,13 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
 import type { ExportFormat } from "@shared/export";
 import { createDefaultRegexBuilderState, type RegexBuilderState } from "@shared/regex";
-import { HISTORY_ACTIONS, type HistoryAccessState, type HistoryAction, type HistoryFilter, type HistoryView } from "@shared/history";
+import { HISTORY_ACTIONS, type HistoryAccessState, type HistoryAction, type HistoryDiff, type HistoryFilter, type HistoryRevision, type HistoryView } from "@shared/history";
 import { getUiCopy } from "../i18n/ui";
 import { localizedPrefixedRegexEvaluationError } from "../hooks/useIsolatedRegex";
 import { useAppStore } from "../store/useAppStore";
 import RegexBuilder from "./RegexBuilder";
 import { HistoryIcon } from "./icons";
+import DestructiveActionGate, { type DestructiveActionRequest } from "./DestructiveActionGate";
 
 const EXPORT_FORMATS: readonly ExportFormat[] = ["json", "jsonl", "yaml", "toml", "csv", "markdown", "html"];
 
@@ -38,6 +39,8 @@ function actionLabel(action: string, copy: ReturnType<typeof getUiCopy>): string
     "settings-changed": copy.text("Settings changed", "設定變更"),
     "display-name-changed": copy.text("Display name changed", "顯示名稱變更"),
     "display-name-reset": copy.text("Display name reset", "顯示名稱重設"),
+    labeled: copy.text("Label updated", "標籤更新"),
+    pruned: copy.text("Retention pruned", "保留清理"),
   };
   return labels[action as HistoryAction] ?? action;
 }
@@ -85,6 +88,20 @@ export default function HistoryPanel() {
   const [editorExport, setEditorExport] = useState<{ content: string; fileName: string } | null>(null);
   const [editorBusy, setEditorBusy] = useState(false);
   const [editorMessage, setEditorMessage] = useState<string | null>(null);
+  const [selectedDiff, setSelectedDiff] = useState<HistoryDiff | null>(null);
+  const [diffBusyId, setDiffBusyId] = useState<string | null>(null);
+  const [diffError, setDiffError] = useState<string | null>(null);
+  const [labelDrafts, setLabelDrafts] = useState<Record<string, string>>({});
+  const [labelBusyId, setLabelBusyId] = useState<string | null>(null);
+  const [labelError, setLabelError] = useState<string | null>(null);
+  const [restoreBusyId, setRestoreBusyId] = useState<string | null>(null);
+  const [restoreMessage, setRestoreMessage] = useState<string | null>(null);
+  const [restoreError, setRestoreError] = useState<string | null>(null);
+  const [pruneKeep, setPruneKeep] = useState("50");
+  const [pruneRequest, setPruneRequest] = useState<DestructiveActionRequest | null>(null);
+  const [pruneBusy, setPruneBusy] = useState(false);
+  const [pruneMessage, setPruneMessage] = useState<string | null>(null);
+  const [pruneError, setPruneError] = useState<string | null>(null);
 
   useEffect(() => {
     let current = true;
@@ -247,6 +264,73 @@ export default function HistoryPanel() {
     }
   }
 
+  async function viewDiff(revision: HistoryRevision) {
+    setDiffBusyId(revision.id);
+    setDiffError(null);
+    try {
+      setSelectedDiff(await window.api.getHistoryDiff(revision.id));
+    } catch (reason: unknown) {
+      setSelectedDiff(null);
+      setDiffError(reason instanceof Error ? reason.message : copy.text("Revision diff could not be loaded.", "未能載入修訂差異。"));
+    } finally {
+      setDiffBusyId(null);
+    }
+  }
+
+  async function saveLabel(revision: HistoryRevision) {
+    setLabelBusyId(revision.id);
+    setLabelError(null);
+    try {
+      await window.api.labelHistoryRevision(revision.id, labelDrafts[revision.id] ?? "");
+      setReloadGeneration((value) => value + 1);
+    } catch (reason: unknown) {
+      setLabelError(reason instanceof Error ? reason.message : copy.text("Revision label could not be saved.", "未能儲存修訂標籤。"));
+    } finally {
+      setLabelBusyId(null);
+    }
+  }
+
+  async function restoreRevision(revision: HistoryRevision) {
+    setRestoreBusyId(revision.id);
+    setRestoreError(null);
+    setRestoreMessage(null);
+    try {
+      const restored = await window.api.restoreHistoryRevision(revision.id);
+      setRestoreMessage(copy.text(
+        `Restored revision ${revision.id.slice(0, 8)} and recorded ${restored.id.slice(0, 8)} as a new audit revision.`,
+        `已還原修訂 ${revision.id.slice(0, 8)}，並以新嘅 ${restored.id.slice(0, 8)} 審計修訂記錄。`,
+      ));
+      setReloadGeneration((value) => value + 1);
+    } catch (reason: unknown) {
+      setRestoreError(reason instanceof Error ? reason.message : copy.text("Revision could not be restored.", "未能還原修訂。"));
+    } finally {
+      setRestoreBusyId(null);
+    }
+  }
+
+  async function confirmPrune() {
+    const keep = Number(pruneKeep);
+    if (!Number.isSafeInteger(keep) || keep < 1 || keep > 5_000) {
+      setPruneError(copy.text("Keep a whole number from 1 to 5,000 revisions.", "請保留 1 至 5,000 條修訂嘅整數。"));
+      return;
+    }
+    setPruneBusy(true);
+    setPruneError(null);
+    setPruneMessage(null);
+    try {
+      const result = await window.api.pruneHistory(keep);
+      setPruneMessage(result.prunedRevisionIds.length === 0
+        ? copy.text(`No older revisions needed pruning; ${result.remainingRevisions} visible revisions remain.`, `冇舊修訂需要清理；而家有 ${result.remainingRevisions} 條可見修訂。`)
+        : copy.text(`Pruned ${result.prunedRevisionIds.length} older revisions; ${result.remainingRevisions} remain visible.`, `已清理 ${result.prunedRevisionIds.length} 條舊修訂；仲有 ${result.remainingRevisions} 條可見。`));
+      setPruneRequest(null);
+      setReloadGeneration((value) => value + 1);
+    } catch (reason: unknown) {
+      setPruneError(reason instanceof Error ? reason.message : copy.text("History retention could not be applied.", "未能套用紀錄保留設定。"));
+    } finally {
+      setPruneBusy(false);
+    }
+  }
+
   const availableActions = Object.entries(view?.actionCounts ?? {})
     .filter(([action, count]) => (HISTORY_ACTIONS as readonly string[]).includes(action) && count > 0)
     .sort(([left], [right]) => left.localeCompare(right));
@@ -277,6 +361,15 @@ export default function HistoryPanel() {
           {editorExport && <button type="button" className="btn btn-ghost" onClick={() => void openLastExportInEditor()} disabled={editorBusy || exporting}>
             {editorBusy ? copy.text("Opening editor…", "開緊編輯器…") : copy.text("Open last export in Visual Studio Code", "用 Visual Studio Code 開啟上次匯出")}
           </button>}
+          {accessState?.unlocked && <div className="history-retention-controls" role="group" aria-label={copy.text("History retention", "紀錄保留") }>
+            <label className="history-retention-field">
+              <span>{copy.text("Keep newest", "保留最新")}</span>
+              <input className="input" type="number" min={1} max={5000} step={1} value={pruneKeep} onChange={(event) => setPruneKeep(event.target.value)} aria-label={copy.text("Number of revisions to keep", "要保留嘅修訂數量")} />
+            </label>
+            <button type="button" className="btn btn-danger btn-sm" disabled={pruneBusy || !view?.available} onClick={() => setPruneRequest({ itemIds: [pruneKeep], deleteFile: false })}>
+              {pruneBusy ? copy.text("Pruning…", "清理緊…") : copy.text("Prune older revisions", "清理舊修訂")}
+            </button>
+          </div>}
         </div>
       </header>
 
@@ -370,6 +463,20 @@ export default function HistoryPanel() {
       </div>}
       {exportMessage && <div className="history-status" role="status">{exportMessage}</div>}
       {editorMessage && <div className="history-status" role="status">{editorMessage}</div>}
+      {diffError && <div className="history-status history-status-error" role="alert">{diffError}</div>}
+      {labelError && <div className="history-status history-status-error" role="alert">{labelError}</div>}
+      {restoreError && <div className="history-status history-status-error" role="alert">{restoreError}</div>}
+      {pruneError && <div className="history-status history-status-error" role="alert">{pruneError}</div>}
+      {restoreMessage && <div className="history-status" role="status">{restoreMessage}</div>}
+      {pruneMessage && <div className="history-status" role="status">{pruneMessage}</div>}
+      {selectedDiff && <section className="history-diff" aria-label={copy.text("Selected revision diff", "選取修訂差異")}>
+        <div className="history-diff-header">
+          <strong>{copy.text(`Diff for ${selectedDiff.revisionId.slice(0, 8)}`, `修訂 ${selectedDiff.revisionId.slice(0, 8)} 嘅差異`)}</strong>
+          <button type="button" className="btn btn-ghost btn-sm" onClick={() => setSelectedDiff(null)}>{copy.text("Close diff", "關閉差異")}</button>
+        </div>
+        <p className="setting-helper">{selectedDiff.redacted ? copy.text("Sensitive history fields are redacted in this review.", "呢次檢視已遮蓋敏感紀錄欄位。") : null}</p>
+        <pre className="history-diff-content">{selectedDiff.hasChanges ? selectedDiff.patch : copy.text("No snapshot changes are present for this revision.", "呢條修訂冇快照變更。")}</pre>
+      </section>}
       {accessState?.unlocked && loading && <div className="history-empty" role="status">{copy.text("Loading local history…", "載入緊本機紀錄…")}</div>}
       {accessState?.unlocked && !loading && view && !view.available && <div className="history-empty history-status-error" role="alert">{view.emptyReason}</div>}
       {accessState?.unlocked && !loading && view?.available && view.revisions.length === 0 && <div className="history-empty" role="status">{view.emptyReason}</div>}
@@ -381,15 +488,47 @@ export default function HistoryPanel() {
           <ol className="history-list" aria-label={copy.text("Revision list", "修訂清單")}>
             {view.revisions.map((revision) => (
               <li key={revision.id} className="history-row">
-                <time dateTime={revision.timestamp}>{new Date(revision.timestamp).toLocaleString()}</time>
-                <span className="history-action">{actionLabel(revision.action, copy)}</span>
-                <span className="history-summary">{revision.summary}</span>
-                <code title={revision.id}>{revision.id.slice(0, 8)}</code>
+                <div className="history-row-main">
+                  <time dateTime={revision.timestamp}>{new Date(revision.timestamp).toLocaleString()}</time>
+                  <span className="history-action">{actionLabel(revision.action, copy)}</span>
+                  <span className="history-summary">{revision.summary}</span>
+                  <code title={revision.id}>{revision.id.slice(0, 8)}</code>
+                </div>
+                <div className="history-row-actions" role="group" aria-label={copy.text(`Actions for revision ${revision.id.slice(0, 8)}`, `修訂 ${revision.id.slice(0, 8)} 嘅操作`)}>
+                  <label className="history-label-field">
+                    <span className="sr-only">{copy.text("Revision label", "修訂標籤")}</span>
+                    <input
+                      className="input"
+                      type="text"
+                      maxLength={120}
+                      value={labelDrafts[revision.id] ?? revision.label ?? ""}
+                      placeholder={copy.text("Optional label", "可選標籤")}
+                      aria-label={copy.text(`Label revision ${revision.id.slice(0, 8)}`, `標記修訂 ${revision.id.slice(0, 8)}`)}
+                      onChange={(event) => setLabelDrafts((current) => ({ ...current, [revision.id]: event.target.value }))}
+                    />
+                  </label>
+                  <button type="button" className="btn btn-ghost btn-sm" disabled={labelBusyId === revision.id} onClick={() => void saveLabel(revision)}>
+                    {labelBusyId === revision.id ? copy.text("Saving…", "儲存緊…") : copy.text("Save label", "儲存標籤")}
+                  </button>
+                  <button type="button" className="btn btn-ghost btn-sm" disabled={diffBusyId === revision.id} onClick={() => void viewDiff(revision)}>
+                    {diffBusyId === revision.id ? copy.text("Loading diff…", "載入緊差異…") : copy.text("View diff", "檢視差異")}
+                  </button>
+                  <button type="button" className="btn btn-ghost btn-sm" disabled={restoreBusyId === revision.id} onClick={() => void restoreRevision(revision)}>
+                    {restoreBusyId === revision.id ? copy.text("Restoring…", "還原緊…") : copy.text("Restore", "還原")}
+                  </button>
+                </div>
               </li>
             ))}
           </ol>
         </div>
       )}
+      {pruneRequest && <DestructiveActionGate
+        request={pruneRequest}
+        actionName={copy.text("hide older local history revisions", "隱藏較舊嘅本機修訂紀錄")}
+        affectedLabel={copy.text("revision retention set", "修訂保留設定")}
+        onCancel={() => setPruneRequest(null)}
+        onConfirm={() => { setPruneRequest(null); void confirmPrune(); }}
+      />}
     </section>
   );
 }
