@@ -354,7 +354,7 @@ export class DownloadManager extends EventEmitter {
     }
   }
 
-  private async persist(action?: HistoryAction, summary?: string) {
+  private async saveState() {
     this.sanitizeItems();
     await this.store.save({
       items: Array.from(this.items.values()).map((item) =>
@@ -365,6 +365,10 @@ export class DownloadManager extends EventEmitter {
       queues: Array.from(this.queues.values()),
       settings: this.settings,
     });
+  }
+
+  private async persist(action?: HistoryAction, summary?: string) {
+    await this.saveState();
     if (action && summary) await this.recordHistory(action, summary);
   }
 
@@ -938,6 +942,12 @@ export class DownloadManager extends EventEmitter {
     }
     if (Object.keys(validated).length === 0 && resetKeys.length === 0) return this.settings;
 
+    const previousSettings = this.settings;
+    const previousDisplayName = previousSettings.displayName;
+    const displayNameChanged = Object.prototype.hasOwnProperty.call(validated, "displayName") &&
+      validated.displayName !== previousDisplayName;
+    const displayNameReset = resetKeys.includes("displayName");
+    const displayNameMutation = displayNameChanged || displayNameReset;
     const provenance = { ...this.settings.settingProvenance };
     const nextSettings = { ...this.settings, ...validated } as AppSettings;
     for (const key of SETTING_KEYS) {
@@ -956,7 +966,30 @@ export class DownloadManager extends EventEmitter {
     if ((validated.startOnSystemStartup !== undefined || resetKeys.includes("startOnSystemStartup")) && process.platform !== "linux") {
       this.writeLoginItemSettings(this.settings.startOnSystemStartup);
     }
-    await this.persist("settings-changed", "Changed application settings");
+    if (displayNameMutation) {
+      try {
+        // Persist the new canonical state first, then require a dedicated
+        // redacted audit commit before this IPC call can report success.
+        await this.saveState();
+        const action = this.settings.displayName === this.compiledSettings.displayName
+          ? "display-name-reset"
+          : "display-name-changed";
+        await this.history.appendDisplayNameMutation(previousDisplayName, this.settings.displayName, action);
+        // Keep the existing broad settings revision as a best-effort context
+        // record, but never let it replace the required display-name commit.
+        await this.recordHistory("settings-changed", "Changed application settings");
+      } catch (error) {
+        this.settings = previousSettings;
+        this.globalSpeedLimiter.setLimit(previousSettings.globalSpeedLimitBytes);
+        if ((validated.startOnSystemStartup !== undefined || resetKeys.includes("startOnSystemStartup")) && process.platform !== "linux") {
+          this.writeLoginItemSettings(previousSettings.startOnSystemStartup);
+        }
+        await this.saveState().catch(() => undefined);
+        throw error;
+      }
+    } else {
+      await this.persist("settings-changed", "Changed application settings");
+    }
     this.scheduleNotify();
     this.processAllQueues();
     return this.settings;

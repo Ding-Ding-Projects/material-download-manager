@@ -15,6 +15,7 @@ import type {
   ExportResult,
   HistoryFilter,
   HistoryView,
+  HistoryAccessState,
 } from "@shared/types";
 import type { ChangelogView, ChangelogViewRequest } from "../electron/history/ChangelogStore";
 import type { RegexEvaluation } from "@shared/regex";
@@ -52,6 +53,10 @@ export interface MaterialDownloadManagerAPI {
   setSshHostSecretTrust(hostId: string, trusted: boolean): Promise<AppSettings>;
   removeSshHost(hostId: string): Promise<AppSettings>;
   getHistoryView(filter?: HistoryFilter): Promise<HistoryView>;
+  getHistoryAccessState(): Promise<HistoryAccessState>;
+  setupHistoryAccess(password: string): Promise<HistoryAccessState>;
+  unlockHistory(password: string): Promise<HistoryAccessState>;
+  lockHistory(): Promise<HistoryAccessState>;
   exportHistory(format: ExportFormat, filter?: HistoryFilter): Promise<ExportResult>;
   getChangelogView(request?: ChangelogViewRequest): Promise<ChangelogView>;
   exportChangelog(format: ExportFormat, request?: ChangelogViewRequest): Promise<ExportResult>;

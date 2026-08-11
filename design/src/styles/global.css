@@ -1493,6 +1493,35 @@ textarea {
   border-left: 3px solid var(--danger);
   color: var(--danger);
 }
+.history-access {
+  display: flex;
+  max-width: 620px;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px;
+  border: 1px solid var(--border-color-strong);
+  border-radius: var(--radius);
+  background: var(--bg-dialog);
+  box-shadow: var(--shadow-card);
+}
+.history-access h2 {
+  margin: 0;
+  font-size: 16px;
+}
+.history-access p {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.5;
+}
+.history-access .field {
+  margin: 0;
+}
+.history-access-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
 .history-results {
   min-width: 0;
   overflow: auto;

@@ -21,9 +21,8 @@ import { getUiCopy } from "../i18n/ui";
 import { useAppStore } from "../store/useAppStore";
 import {
   DEFAULT_DISPLAY_NAME,
+  clearLegacyDisplayName,
   normalizeDisplayName,
-  readDisplayName,
-  saveDisplayName,
 } from "../store/displayPreferences";
 import { settingSourceLabel } from "../store/settingsAppearance";
 import Dialog from "./Dialog";
@@ -241,7 +240,7 @@ export default function SettingsDialog() {
   const settingsSearch = settingsSearches[activeSettingsTab];
   const [settingsRegexOpen, setSettingsRegexOpen] = useState(false);
   const settingsRegexButtonRef = useRef<HTMLButtonElement>(null);
-  const [displayName, setDisplayName] = useState(readDisplayName);
+  const [displayName, setDisplayName] = useState(currentSettings?.displayName ?? DEFAULT_DISPLAY_NAME);
   const [displayNameError, setDisplayNameError] = useState<string | null>(null);
   const [activeAutoOrganizeRuleId, setActiveAutoOrganizeRuleId] = useState<string | null>(null);
   const [autoOrganizeRuleSamples, setAutoOrganizeRuleSamples] = useState<Map<string, string>>(() => new Map());
@@ -330,6 +329,7 @@ export default function SettingsDialog() {
   const settingsSearchEntries = useMemo(() => {
     const baseEntries = SETTINGS_SEARCH_INDEX.map((entry) => {
     const dynamicValues: string[] = [];
+    if (entry.id === "settings-display-name") dynamicValues.push(form.displayName);
     if (entry.id === "settings-default-save-folder") dynamicValues.push(form.defaultSaveFolder);
     if (entry.id === "settings-auto-organize") {
       dynamicValues.push(form.autoOrganizeEnabled ? "enabled on 開啟" : "disabled off 關閉");
@@ -374,7 +374,7 @@ export default function SettingsDialog() {
       searchable: `${AUTO_ORGANIZE_TARGET_LABELS[category].join(" ")} destination path 目的路徑 ${displayAutoOrganizePath(form.defaultSaveFolder, AUTO_ORGANIZE_FOLDERS[category])}`,
     }));
     return [...baseEntries, ...pathEntries, ...ruleEntries];
-  }, [form.autoOrganizeEnabled, form.autoOrganizeRules, form.defaultSaveFolder]);
+  }, [form.autoOrganizeEnabled, form.autoOrganizeRules, form.defaultSaveFolder, form.displayName]);
 
   const activeSettingsSearchEntries = useMemo(
     () => settingsSearchEntries.filter((entry) => entry.tab === activeSettingsTab),
@@ -839,6 +839,7 @@ export default function SettingsDialog() {
       }));
       const desiredSettings: AppSettings = {
         ...form,
+        displayName: normalizeDisplayName(displayName),
         globalSpeedLimitBytes: unlimitedSpeed ? 0 : Math.round(speedMBs * 1024 * 1024),
         autoOrganizeRules: normalizedRules,
       };
@@ -854,7 +855,7 @@ export default function SettingsDialog() {
       if (Object.keys(settingsPatch).length > 0 || resetSettingKeys.size > 0) {
         await setSettings(settingsPatch, [...resetSettingKeys]);
       }
-      saveDisplayName(normalizeDisplayName(displayName));
+      clearLegacyDisplayName();
       closeSettings();
     } finally {
       setSaving(false);

@@ -12,6 +12,7 @@ test("default settings are versioned and mark every value as compiled-in", () =>
   assert.equal(SETTINGS_SCHEMA_VERSION, 4);
   assert.equal(settings.settingsVersion, SETTINGS_SCHEMA_VERSION);
   assert.equal(settings.languageMode, "english");
+  assert.equal(settings.displayName, "Material Download Manager");
   assert.equal(settings.funnyLevelEnglish, 1);
   assert.equal(settings.funnyLevelCantonese, 3);
   assert.equal(settings.density, "comfortable");
@@ -39,6 +40,7 @@ test("legacy settings migrate safely and preserve provenance per field", () => {
   assert.equal(migrated.settingsVersion, SETTINGS_SCHEMA_VERSION);
   assert.equal(migrated.theme, "light");
   assert.equal(migrated.languageMode, "english");
+  assert.equal(migrated.displayName, "Material Download Manager");
   assert.equal(migrated.funnyLevelEnglish, 5);
   assert.equal(migrated.uiFontSize, 13);
   assert.equal(migrated.accentSeedColor, "#123456");
@@ -51,6 +53,22 @@ test("legacy settings migrate safely and preserve provenance per field", () => {
   assert.equal(migrated.settingProvenance.accentSeedColor, "persisted");
   assert.equal(migrated.settingProvenance.autoOrganizeEnabled, "compiled-in");
   assert.equal(migrated.settingProvenance.autoOrganizeRules, "compiled-in");
+});
+
+test("display name migration accepts only canonical bounded labels", () => {
+  const migrated = migrateSettings(
+    { displayName: "  My   Downloads  " },
+    "C:/Downloads/MaterialDownloadManager",
+  );
+  assert.equal(migrated.displayName, "Material Download Manager", "non-canonical persisted values fall back safely");
+  assert.equal(migrated.settingProvenance.displayName, "compiled-in");
+
+  const canonical = migrateSettings(
+    { displayName: "My Downloads" },
+    "C:/Downloads/MaterialDownloadManager",
+  );
+  assert.equal(canonical.displayName, "My Downloads");
+  assert.equal(canonical.settingProvenance.displayName, "persisted");
 });
 
 test("StateStore loads malformed settings without spreading invalid values", async () => {

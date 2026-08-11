@@ -29,6 +29,7 @@ import ChangelogPanel from "./components/ChangelogPanel";
 import DocumentationPanel from "./components/DocumentationPanel";
 import { setActiveTab } from "@shared/tabModel";
 import { useFilteredItems } from "./hooks/useFilteredItems";
+import { clearLegacyDisplayName, readLegacyDisplayName } from "./store/displayPreferences";
 
 const DESTRUCTIVE_REQUEST_EVENT = "mdm:request-destructive-action";
 const CLOSE_CONTEXT_MENU_EVENT = "mdm:close-context-menus";
@@ -57,6 +58,7 @@ export default function App() {
   const [tabState, setTabState] = useState<TabState>(() => loadTabState());
   const [dimSumSurprise, setDimSumSurprise] = useState<DimSumDish | null>(null);
   const dimSumDrawn = useRef(false);
+  const displayNameMigrationAttempted = useRef(false);
   const copy = useMemo(
     () => getUiCopy(settings),
     [settings?.funnyLevelCantonese, settings?.funnyLevelEnglish, settings?.languageMode]
@@ -253,6 +255,32 @@ export default function App() {
     const unsubscribe = useAppStore.getState().init();
     return unsubscribe;
   }, []);
+
+  useEffect(() => {
+    if (!ready || !settings || displayNameMigrationAttempted.current) return;
+    const legacyDisplayName = readLegacyDisplayName();
+    if (!legacyDisplayName) {
+      clearLegacyDisplayName();
+      displayNameMigrationAttempted.current = true;
+      return;
+    }
+    if (settings.displayName !== "Material Download Manager") {
+      clearLegacyDisplayName();
+      displayNameMigrationAttempted.current = true;
+      return;
+    }
+    displayNameMigrationAttempted.current = true;
+    void window.api.setSettings({ displayName: legacyDisplayName }).then(() => {
+      clearLegacyDisplayName();
+    }).catch(() => {
+      displayNameMigrationAttempted.current = false;
+      notify({
+        tone: "error",
+        title: copy.text("Display name migration failed", "顯示名稱搬遷失敗"),
+        message: copy.text("The previous display name was kept; try saving it again in Settings.", "之前嘅顯示名稱保留住，請喺設定再儲存一次。"),
+      });
+    });
+  }, [copy, ready, settings]);
 
   useEffect(() => {
     const root = document.documentElement;

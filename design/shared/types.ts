@@ -3,7 +3,7 @@
 // consumed from either side without pulling in Node or DOM specific code.
 
 import type { ExportFormat, ExportResult } from "./export";
-import type { HistoryFilter, HistoryView } from "./history";
+import type { HistoryFilter, HistoryView, HistoryAccessState } from "./history";
 import type { DistributedDownloadSelection, SourceIdentity } from "./distributedProtocol";
 
 export type DownloadCategory =
@@ -164,6 +164,7 @@ export const SETTING_KEYS = [
   "globalSpeedLimitBytes",
   "showCompleteDialog",
   "startOnSystemStartup",
+  "displayName",
   "theme",
   "minConnectionPartSize",
   "languageMode",
@@ -191,6 +192,8 @@ export interface AppSettings {
   globalSpeedLimitBytes: number; // 0 = unlimited
   showCompleteDialog: boolean;
   startOnSystemStartup: boolean;
+  /** User-facing label only; it never changes appData, package, or update identity. */
+  displayName: string;
   theme: "dark" | "light" | "system";
   minConnectionPartSize: number; // bytes, minimum size worth splitting further
   languageMode: LanguageMode;
@@ -446,8 +449,12 @@ export const IPC = {
   SSH_HOST_TRUST: "ssh:hostTrust",
   HISTORY_GET_VIEW: "history:getView",
   HISTORY_EXPORT_VIEW: "history:exportView",
+  HISTORY_ACCESS_GET_STATE: "historyAccess:getState",
+  HISTORY_ACCESS_SETUP: "historyAccess:setup",
+  HISTORY_ACCESS_UNLOCK: "historyAccess:unlock",
+  HISTORY_ACCESS_LOCK: "historyAccess:lock",
   CHANGELOG_GET_VIEW: "changelog:getView",
   CHANGELOG_EXPORT_VIEW: "changelog:exportView",
 } as const;
 
-export type { ExportFormat, ExportResult, HistoryFilter, HistoryView };
+export type { ExportFormat, ExportResult, HistoryFilter, HistoryView, HistoryAccessState };

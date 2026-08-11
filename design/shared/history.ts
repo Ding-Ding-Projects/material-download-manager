@@ -10,6 +10,8 @@ export const HISTORY_ACTIONS = [
   "discarded",
   "imported",
   "settings-changed",
+  "display-name-changed",
+  "display-name-reset",
 ] as const;
 
 export type HistoryAction = (typeof HISTORY_ACTIONS)[number];
@@ -48,6 +50,11 @@ export interface HistoryView {
   matchingRevisions: number;
   request: HistoryFilterRequest;
   emptyReason: string | null;
+}
+
+export interface HistoryAccessState {
+  configured: boolean;
+  unlocked: boolean;
 }
 
 const MAX_FILTER_TEXT = 2_048;
@@ -133,6 +140,10 @@ export function isHistoryView(value: unknown): value is HistoryView {
   return value.revisions.every(isHistoryRevision) && Object.entries(value.actionCounts).every(([action, count]) =>
     isHistoryAction(action) && typeof count === "number" && Number.isInteger(count) && count >= 0
   );
+}
+
+export function isHistoryAccessState(value: unknown): value is HistoryAccessState {
+  return isRecord(value) && typeof value.configured === "boolean" && typeof value.unlocked === "boolean";
 }
 
 function isHistoryFilterRequest(value: Record<string, unknown>): value is Record<string, unknown> & HistoryFilterRequest {

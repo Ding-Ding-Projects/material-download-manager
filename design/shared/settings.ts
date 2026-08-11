@@ -24,6 +24,7 @@ import { cloneSshHostConfigs, isSshHostConfigs } from "./ssh";
 
 export const SETTINGS_SCHEMA_VERSION = 4;
 export const APP_DISPLAY_NAME_MAX_LENGTH = 64;
+export const DEFAULT_APP_DISPLAY_NAME = "Material Download Manager";
 
 export const COMPILED_IN_DEFAULTS = {
   maxConnectionsPerDownload: 8,
@@ -31,6 +32,7 @@ export const COMPILED_IN_DEFAULTS = {
   globalSpeedLimitBytes: 0,
   showCompleteDialog: true,
   startOnSystemStartup: false,
+  displayName: DEFAULT_APP_DISPLAY_NAME,
   theme: "dark" as const,
   minConnectionPartSize: 2 * 1024 * 1024,
   languageMode: "english" as LanguageMode,
@@ -86,6 +88,21 @@ export function isUIFontWeight(value: unknown): value is UIFontWeight {
 
 export function isHexColor(value: unknown): value is string {
   return typeof value === "string" && /^#[\da-fA-F]{6}(?:[\da-fA-F]{2})?$/.test(value);
+}
+
+/** Canonicalize the user-facing label without ever changing app identity. */
+export function normalizeAppDisplayName(value: unknown): string {
+  const normalized = String(value ?? "")
+    .replace(/[\u0000-\u001f\u007f]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, APP_DISPLAY_NAME_MAX_LENGTH);
+  return normalized || DEFAULT_APP_DISPLAY_NAME;
+}
+
+export function isValidAppDisplayName(value: unknown): value is string {
+  return typeof value === "string" && value.length > 0 && value.length <= APP_DISPLAY_NAME_MAX_LENGTH &&
+    value === normalizeAppDisplayName(value);
 }
 
 export function isBoundedNumber(value: unknown, min: number, max: number): value is number {
@@ -199,6 +216,8 @@ export function validateSettingsPatch(
         case "showCompleteDialog":
         case "startOnSystemStartup":
           return typeof settingValue === "boolean";
+        case "displayName":
+          return isValidAppDisplayName(settingValue);
         case "theme":
           return settingValue === "dark" || settingValue === "light" || settingValue === "system";
         case "minConnectionPartSize":

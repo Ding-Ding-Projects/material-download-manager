@@ -876,3 +876,59 @@ test("manager records download creation and deletion in local history", async ()
     else process.env.USERPROFILE = previousUserProfile;
   }
 });
+
+test("manager canonicalizes display-name mutations and records a redacted revision before returning", async () => {
+  const root = await fsp.mkdtemp(path.join(os.tmpdir(), "mdm-display-name-manager-test-"));
+  const manager = new DownloadManager(root);
+  try {
+    await manager.init();
+    const updated = await manager.setSettings({ displayName: "Local Downloads" });
+    assert.equal(updated.displayName, "Local Downloads");
+    assert.equal(updated.settingProvenance.displayName, "persisted");
+
+    const stateText = await fsp.readFile(path.join(root, "state.json"), "utf8");
+    assert.match(stateText, /"displayName": "Local Downloads"/u);
+    const redactedRecord = await fsp.readFile(path.join(root, "local-history", "display-name.json"), "utf8");
+    assert.match(redactedRecord, /"kind": "display-name"/u);
+    assert.equal(redactedRecord.includes("Local Downloads"), false);
+    const revisions = await new HistoryStore(root).listRevisions();
+    assert.ok(revisions.some((revision) => revision.action === "display-name-changed"));
+
+    const reset = await manager.setSettings({}, ["displayName"]);
+    assert.equal(reset.displayName, "Material Download Manager");
+    assert.ok((await new HistoryStore(root).listRevisions()).some((revision) => revision.action === "display-name-reset"));
+  } finally {
+    await manager.shutdown();
+    await removeTestRoot(root);
+  }
+});
+
+test("manager fails closed when the required display-name history commit cannot be written", async () => {
+  const root = await fsp.mkdtemp(path.join(os.tmpdir(), "mdm-display-name-history-fail-closed-test-"));
+  const manager = new DownloadManager(root);
+  try {
+    await manager.init();
+    const internals = manager as unknown as { history: HistoryStore };
+    Object.defineProperty(internals.history, "appendDisplayNameMutation", {
+      configurable: true,
+      value: async () => {
+        throw new Error("history backend unavailable");
+      },
+    });
+
+    await assert.rejects(
+      () => manager.setSettings({ displayName: "Should Not Stick" }),
+      /history backend unavailable/,
+    );
+    assert.equal(manager.getSettings().displayName, "Material Download Manager");
+    const stateText = await fsp.readFile(path.join(root, "state.json"), "utf8");
+    assert.equal(stateText.includes("Should Not Stick"), false);
+    await assert.rejects(
+      () => fsp.access(path.join(root, "local-history", "display-name.json")),
+      /ENOENT/,
+    );
+  } finally {
+    await manager.shutdown();
+    await removeTestRoot(root);
+  }
+});

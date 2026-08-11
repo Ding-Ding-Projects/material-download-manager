@@ -1,9 +1,8 @@
-import { useSyncExternalStore } from "react";
-import { APP_DISPLAY_NAME_MAX_LENGTH } from "@shared/settings";
+import { DEFAULT_APP_DISPLAY_NAME, normalizeAppDisplayName } from "@shared/settings";
 
-export const DEFAULT_DISPLAY_NAME = "Material Download Manager";
+/** Legacy renderer storage key kept only for one-time migration. */
 export const DISPLAY_NAME_STORAGE_KEY = "material-download-manager.display-name";
-const DISPLAY_NAME_EVENT = "mdm:display-name-changed";
+export const DEFAULT_DISPLAY_NAME = DEFAULT_APP_DISPLAY_NAME;
 
 function storage(): Storage | null {
   try {
@@ -14,52 +13,22 @@ function storage(): Storage | null {
 }
 
 export function normalizeDisplayName(value: string): string {
-  const normalized = value.replace(/\s+/g, " ").trim().slice(0, APP_DISPLAY_NAME_MAX_LENGTH);
-  return normalized || DEFAULT_DISPLAY_NAME;
+  return normalizeAppDisplayName(value);
 }
 
-export function readDisplayName(): string {
+/** Read the pre-IPC renderer value without making it authoritative. */
+export function readLegacyDisplayName(): string | null {
   const value = storage()?.getItem(DISPLAY_NAME_STORAGE_KEY);
-  return value ? normalizeDisplayName(value) : DEFAULT_DISPLAY_NAME;
-}
-
-function notifyChange(): void {
-  if (typeof window !== "undefined") window.dispatchEvent(new Event(DISPLAY_NAME_EVENT));
-}
-
-export function saveDisplayName(value: string): string {
+  if (!value) return null;
   const normalized = normalizeDisplayName(value);
-  const store = storage();
-  try {
-    if (normalized === DEFAULT_DISPLAY_NAME) store?.removeItem(DISPLAY_NAME_STORAGE_KEY);
-    else store?.setItem(DISPLAY_NAME_STORAGE_KEY, normalized);
-  } catch {
-    // A read-only storage implementation must not prevent the settings dialog
-    // from saving the IPC-backed application settings.
-  }
-  notifyChange();
-  return normalized;
+  return normalized === DEFAULT_DISPLAY_NAME ? null : normalized;
 }
 
-export function resetDisplayName(): void {
+/** Remove the legacy renderer value only after main-process migration succeeds. */
+export function clearLegacyDisplayName(): void {
   try {
     storage()?.removeItem(DISPLAY_NAME_STORAGE_KEY);
   } catch {
-    // See saveDisplayName: display-name persistence is best effort and local.
+    // A locked-down profile can keep the stale key; the canonical value is already in main state.
   }
-  notifyChange();
-}
-
-function subscribe(onStoreChange: () => void): () => void {
-  if (typeof window === "undefined") return () => undefined;
-  window.addEventListener(DISPLAY_NAME_EVENT, onStoreChange);
-  window.addEventListener("storage", onStoreChange);
-  return () => {
-    window.removeEventListener(DISPLAY_NAME_EVENT, onStoreChange);
-    window.removeEventListener("storage", onStoreChange);
-  };
-}
-
-export function useDisplayName(): string {
-  return useSyncExternalStore(subscribe, readDisplayName, () => DEFAULT_DISPLAY_NAME);
 }

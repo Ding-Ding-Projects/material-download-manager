@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from "react";
 import { readProgressWindowItemId } from "@shared/progressWindow";
 import type { DownloadItem, DownloadStatus } from "@shared/types";
 import { useAppStore } from "../store/useAppStore";
-import { useDisplayName } from "../store/displayPreferences";
 import { getUiCopy } from "../i18n/ui";
 import { formatBytes, formatEta, formatSpeed } from "../utils/format";
 import { CloseIcon, LogoIcon, MinimizeIcon, PauseIcon, ResumeIcon, StopIcon } from "./icons";
@@ -37,7 +36,7 @@ export default function ProgressWindow() {
   const ready = useAppStore((state) => state.ready);
   const items = useAppStore((state) => state.items);
   const settings = useAppStore((state) => state.settings);
-  const displayName = useDisplayName();
+  const displayName = settings?.displayName ?? "Material Download Manager";
   const pauseDownload = useAppStore((state) => state.pauseDownload);
   const resumeDownload = useAppStore((state) => state.resumeDownload);
   const cancelDownload = useAppStore((state) => state.cancelDownload);

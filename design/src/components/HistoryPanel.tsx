@@ -1,7 +1,7 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
 import type { ExportFormat } from "@shared/export";
 import { createDefaultRegexBuilderState, type RegexBuilderState } from "@shared/regex";
-import { HISTORY_ACTIONS, type HistoryAction, type HistoryFilter, type HistoryView } from "@shared/history";
+import { HISTORY_ACTIONS, type HistoryAccessState, type HistoryAction, type HistoryFilter, type HistoryView } from "@shared/history";
 import { getUiCopy } from "../i18n/ui";
 import { localizedPrefixedRegexEvaluationError } from "../hooks/useIsolatedRegex";
 import { useAppStore } from "../store/useAppStore";
@@ -36,6 +36,8 @@ function actionLabel(action: string, copy: ReturnType<typeof getUiCopy>): string
     discarded: copy.text("Discarded", "丟棄"),
     imported: copy.text("Imported", "匯入"),
     "settings-changed": copy.text("Settings changed", "設定變更"),
+    "display-name-changed": copy.text("Display name changed", "顯示名稱變更"),
+    "display-name-reset": copy.text("Display name reset", "顯示名稱重設"),
   };
   return labels[action as HistoryAction] ?? action;
 }
@@ -74,6 +76,31 @@ export default function HistoryPanel() {
   const [format, setFormat] = useState<ExportFormat>("jsonl");
   const [exporting, setExporting] = useState(false);
   const [exportMessage, setExportMessage] = useState<string | null>(null);
+  const [accessState, setAccessState] = useState<HistoryAccessState | null>(null);
+  const [accessLoading, setAccessLoading] = useState(true);
+  const [accessBusy, setAccessBusy] = useState(false);
+  const [accessPassword, setAccessPassword] = useState("");
+  const [accessConfirmation, setAccessConfirmation] = useState("");
+  const [accessError, setAccessError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let current = true;
+    setAccessLoading(true);
+    setAccessError(null);
+    window.api.getHistoryAccessState().then((next) => {
+      if (!current) return;
+      setAccessState(next);
+      setAccessLoading(false);
+    }).catch((reason: unknown) => {
+      if (!current) return;
+      setAccessState(null);
+      setAccessError(reason instanceof Error ? reason.message : copy.text("History protection is unavailable.", "紀錄保護暫時不可用。"));
+      setAccessLoading(false);
+    });
+    return () => {
+      current = false;
+    };
+  }, [copy]);
 
   useLayoutEffect(() => {
     if (previousRegexOpen.current && !regexOpen) regexButtonRef.current?.focus({ preventScroll: true });
@@ -97,6 +124,11 @@ export default function HistoryPanel() {
   }), [builder.flags, builder.mode, builder.pattern, fromDate, selectedActions, toDate]);
 
   useEffect(() => {
+    if (!accessState?.unlocked) {
+      setView(null);
+      setLoading(false);
+      return;
+    }
     let current = true;
     setLoading(true);
     setFilterError(null);
@@ -124,7 +156,48 @@ export default function HistoryPanel() {
     return () => {
       current = false;
     };
-  }, [copy, filter, reloadGeneration]);
+  }, [accessState?.unlocked, copy, filter, reloadGeneration]);
+
+  async function submitAccess(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (accessBusy) return;
+    if (accessPassword.length < 8) {
+      setAccessError(copy.text("Use at least 8 characters for the history password.", "紀錄密碼至少要有 8 個字元。"));
+      return;
+    }
+    if (!accessState?.configured && accessPassword !== accessConfirmation) {
+      setAccessError(copy.text("The two history passwords do not match.", "兩次紀錄密碼唔一致。"));
+      return;
+    }
+    setAccessBusy(true);
+    setAccessError(null);
+    try {
+      const next = accessState?.configured
+        ? await window.api.unlockHistory(accessPassword)
+        : await window.api.setupHistoryAccess(accessPassword);
+      setAccessState(next);
+      setAccessPassword("");
+      setAccessConfirmation("");
+    } catch (reason: unknown) {
+      setAccessError(reason instanceof Error ? reason.message : copy.text("History access could not be changed.", "紀錄存取未能更新。"));
+    } finally {
+      setAccessBusy(false);
+    }
+  }
+
+  async function lockAccess() {
+    if (accessBusy) return;
+    setAccessBusy(true);
+    setAccessError(null);
+    try {
+      setAccessState(await window.api.lockHistory());
+      setView(null);
+    } catch (reason: unknown) {
+      setAccessError(reason instanceof Error ? reason.message : copy.text("History could not be locked.", "紀錄未能鎖定。"));
+    } finally {
+      setAccessBusy(false);
+    }
+  }
 
   function toggleAction(action: HistoryAction) {
     setSelectedActions((current) => current.includes(action) ? current.filter((item) => item !== action) : [...current, action]);
@@ -167,19 +240,50 @@ export default function HistoryPanel() {
           </div>
         </div>
         <div className="history-panel-actions">
+          {accessState?.unlocked && <button type="button" className="btn btn-ghost" onClick={() => void lockAccess()} disabled={accessBusy}>
+            {copy.text("Lock history", "鎖定紀錄")}
+          </button>}
           <label className="history-format-field">
             <span>{copy.text("Export format", "匯出格式")}</span>
             <select className="input select" value={format} onChange={(event) => setFormat(event.target.value as ExportFormat)}>
               {EXPORT_FORMATS.map((option) => <option key={option} value={option}>{option.toUpperCase()}</option>)}
             </select>
           </label>
-          <button type="button" className="btn btn-primary" onClick={() => void exportFiltered()} disabled={exporting || !view?.available}>
+          <button type="button" className="btn btn-primary" onClick={() => void exportFiltered()} disabled={exporting || !view?.available || !accessState?.unlocked}>
             {exporting ? copy.text("Exporting…", "匯出緊…") : copy.text("Export filtered history", "匯出篩選後紀錄")}
           </button>
         </div>
       </header>
 
-      <div className="history-filters" aria-label={copy.text("History filters", "紀錄篩選") }>
+      {accessLoading && <div className="history-empty" role="status">{copy.text("Checking local history protection…", "檢查緊本機紀錄保護…")}</div>}
+      {!accessLoading && accessError && <div className="history-status history-status-error" role="alert">{accessError}</div>}
+      {!accessLoading && !accessError && accessState && !accessState.unlocked && (
+        <form className="history-access" onSubmit={(event) => void submitAccess(event)}>
+          <h2>{accessState.configured
+            ? copy.text("Unlock local history", "解鎖本機紀錄")
+            : copy.text("Create a local history password", "建立本機紀錄密碼")}</h2>
+          <p>{copy.text(
+            "History metadata is protected by a credential stored in the operating-system vault. The password itself is never written to settings or history.",
+            "紀錄資料由儲存在作業系統保管庫嘅憑證保護；密碼本身唔會寫入設定或者紀錄。"
+          )}</p>
+          <label className="field">
+            <span className="field-label">{copy.text("History password", "紀錄密碼")}</span>
+            <input className="input" type="password" autoComplete={accessState.configured ? "current-password" : "new-password"} value={accessPassword} onChange={(event) => setAccessPassword(event.target.value)} />
+          </label>
+          {!accessState.configured && <label className="field">
+            <span className="field-label">{copy.text("Confirm history password", "確認紀錄密碼")}</span>
+            <input className="input" type="password" autoComplete="new-password" value={accessConfirmation} onChange={(event) => setAccessConfirmation(event.target.value)} />
+          </label>}
+          <div className="history-access-actions">
+            <button type="submit" className="btn btn-primary" disabled={accessBusy}>
+              {accessState.configured ? copy.text("Unlock history", "解鎖紀錄") : copy.text("Protect history", "保護紀錄")}
+            </button>
+          </div>
+          <p className="setting-helper">{copy.text("Deleting the app's local application-data folder resets this local protection.", "刪除程式嘅本機應用程式資料夾就可以重設呢個本機保護。")}</p>
+        </form>
+      )}
+
+      {accessState?.unlocked && <div className="history-filters" aria-label={copy.text("History filters", "紀錄篩選") }>
         <div className="history-search">
           <label className="history-search-label" htmlFor="history-search-input">{copy.text("Search history", "搜尋紀錄")}</label>
           <div className="history-search-row">
@@ -225,7 +329,7 @@ export default function HistoryPanel() {
             </div>
           </fieldset>
         )}
-      </div>
+      </div>}
 
       {filterError && <div id="history-filter-error" className="history-status history-status-error" role="alert">
         <span>{filterError}</span>
@@ -240,10 +344,10 @@ export default function HistoryPanel() {
         </button>
       </div>}
       {exportMessage && <div className="history-status" role="status">{exportMessage}</div>}
-      {loading && <div className="history-empty" role="status">{copy.text("Loading local history…", "載入緊本機紀錄…")}</div>}
-      {!loading && view && !view.available && <div className="history-empty history-status-error" role="alert">{view.emptyReason}</div>}
-      {!loading && view?.available && view.revisions.length === 0 && <div className="history-empty" role="status">{view.emptyReason}</div>}
-      {!loading && view?.available && view.revisions.length > 0 && (
+      {accessState?.unlocked && loading && <div className="history-empty" role="status">{copy.text("Loading local history…", "載入緊本機紀錄…")}</div>}
+      {accessState?.unlocked && !loading && view && !view.available && <div className="history-empty history-status-error" role="alert">{view.emptyReason}</div>}
+      {accessState?.unlocked && !loading && view?.available && view.revisions.length === 0 && <div className="history-empty" role="status">{view.emptyReason}</div>}
+      {accessState?.unlocked && !loading && view?.available && view.revisions.length > 0 && (
         <div className="history-results">
           <div className="history-results-summary" aria-live="polite">
             {copy.text(`${view.matchingRevisions} of ${view.totalRevisions} revisions`, `${view.totalRevisions} 條入面 ${view.matchingRevisions} 條修訂`)}

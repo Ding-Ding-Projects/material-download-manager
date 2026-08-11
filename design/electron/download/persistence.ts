@@ -12,6 +12,7 @@ import {
   isDensityMode,
   isFunnyLevel,
   isHexColor,
+  isValidAppDisplayName,
   isLanguageMode,
   isValidDefaultSaveFolder,
   isUIFontFamily,
@@ -135,6 +136,7 @@ export function migrateSettings(input: unknown, defaultSaveFolder: string): AppS
   adopt("globalSpeedLimitBytes", (value): value is number => isBoundedNumber(value, 0, Number.MAX_SAFE_INTEGER));
   adopt("showCompleteDialog", (value): value is boolean => typeof value === "boolean");
   adopt("startOnSystemStartup", (value): value is boolean => typeof value === "boolean");
+  adopt("displayName", isValidAppDisplayName);
   adopt("theme", (value): value is AppSettings["theme"] => value === "dark" || value === "light" || value === "system");
   adopt("minConnectionPartSize", (value): value is number => isBoundedNumber(value, 1, Number.MAX_SAFE_INTEGER) && Number.isInteger(value));
   adopt("languageMode", isLanguageMode);

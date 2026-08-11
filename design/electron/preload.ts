@@ -16,11 +16,12 @@ import type {
   ExportResult,
   HistoryFilter,
   HistoryView,
+  HistoryAccessState,
 } from "../shared/types";
 import type { SshHostDraft, SshHostStatus } from "../shared/ssh";
 import { isSshHostStatus } from "../shared/ssh";
 import { isExportResult } from "../shared/export";
-import { isHistoryView } from "../shared/history";
+import { isHistoryAccessState, isHistoryView } from "../shared/history";
 import { isDownloadCategory } from "../shared/settings";
 import { isRegexEvaluation, type RegexEvaluation } from "../shared/regex";
 import { isUpdateInstallResult, isUpdateState, isUpdateUnsavedWorkState } from "../shared/types";
@@ -147,6 +148,26 @@ const api = {
     const view: unknown = await ipcRenderer.invoke(IPC.HISTORY_GET_VIEW, filter);
     if (!isHistoryView(view)) throw new Error("Invalid history view from main process");
     return view;
+  },
+  getHistoryAccessState: async (): Promise<HistoryAccessState> => {
+    const state: unknown = await ipcRenderer.invoke(IPC.HISTORY_ACCESS_GET_STATE);
+    if (!isHistoryAccessState(state)) throw new Error("Invalid history access state from main process");
+    return state;
+  },
+  setupHistoryAccess: async (password: string): Promise<HistoryAccessState> => {
+    const state: unknown = await ipcRenderer.invoke(IPC.HISTORY_ACCESS_SETUP, password);
+    if (!isHistoryAccessState(state)) throw new Error("Invalid history setup result from main process");
+    return state;
+  },
+  unlockHistory: async (password: string): Promise<HistoryAccessState> => {
+    const state: unknown = await ipcRenderer.invoke(IPC.HISTORY_ACCESS_UNLOCK, password);
+    if (!isHistoryAccessState(state)) throw new Error("Invalid history unlock result from main process");
+    return state;
+  },
+  lockHistory: async (): Promise<HistoryAccessState> => {
+    const state: unknown = await ipcRenderer.invoke(IPC.HISTORY_ACCESS_LOCK);
+    if (!isHistoryAccessState(state)) throw new Error("Invalid history lock result from main process");
+    return state;
   },
   exportHistory: async (format: ExportFormat, filter?: HistoryFilter): Promise<ExportResult> => {
     const result: unknown = await ipcRenderer.invoke(IPC.HISTORY_EXPORT_VIEW, format, filter);

@@ -101,3 +101,33 @@ test("local history isolates hooks and unrelated staged files", async () => {
   await assert.rejects(fsp.access(marker));
   assert.equal((await execFileAsync("git", ["status", "--short"], { cwd: history.repositoryPath, windowsHide: true })).stdout.trim(), "A  unrelated.txt");
 });
+
+test("display-name mutations append a redacted hash record without the user name", async () => {
+  const root = await fsp.mkdtemp(path.join(os.tmpdir(), "mdm-display-name-history-"));
+  try {
+    const history = new HistoryStore(root);
+    const privateName = "A private local title";
+    const revision = await history.appendDisplayNameMutation(
+      "Material Download Manager",
+      privateName,
+      "display-name-changed",
+    );
+    assert.equal(revision.action, "display-name-changed");
+    const record = await fsp.readFile(path.join(root, "local-history", "display-name.json"), "utf8");
+    assert.match(record, /"kind": "display-name"/);
+    assert.match(record, /"previousSha256": "[0-9a-f]{64}"/);
+    assert.match(record, /"nextSha256": "[0-9a-f]{64}"/);
+    assert.equal(record.includes(privateName), false);
+    assert.equal((await history.listRevisions()).length, 1);
+
+    const reset = await history.appendDisplayNameMutation(privateName, "Material Download Manager", "display-name-reset");
+    assert.equal(reset.action, "display-name-reset");
+    assert.deepEqual((await history.listRevisions()).map((item) => item.action), ["display-name-reset", "display-name-changed"]);
+    assert.deepEqual(
+      (await execFileAsync("git", ["ls-tree", "-r", "--name-only", "HEAD"], { cwd: history.repositoryPath, windowsHide: true })).stdout.trim().split(/\r?\n/),
+      ["display-name.json"],
+    );
+  } finally {
+    await fsp.rm(root, { recursive: true, force: true });
+  }
+});

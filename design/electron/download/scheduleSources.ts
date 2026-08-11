@@ -9,6 +9,7 @@ import {
   isDensityMode,
   isFunnyLevel,
   isHexColor,
+  isValidAppDisplayName,
   isAutoOrganizeRules,
   isValidDefaultSaveFolder,
   isLanguageMode,
@@ -307,6 +308,9 @@ function validateScheduledSetting(key: string, value: unknown): void {
     case "startOnSystemStartup":
     case "autoOrganizeEnabled":
       if (typeof value !== "boolean") throw new Error(`Invalid scheduled ${key}`);
+      return;
+    case "displayName":
+      if (!isValidAppDisplayName(value)) throw new Error("Invalid scheduled displayName");
       return;
     case "autoOrganizeRules":
       if (!isAutoOrganizeRules(value)) throw new Error("Invalid scheduled autoOrganizeRules");

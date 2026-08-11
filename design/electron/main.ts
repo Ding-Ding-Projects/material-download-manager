@@ -42,6 +42,8 @@ import {
   createChangelogIpcHandlers,
   DEFAULT_CHANGELOG_ENTRIES,
 } from "./history/ChangelogStore";
+import { HistoryAccessVault } from "./history/HistoryAccessVault";
+import { HistoryAccessSession } from "./history/HistoryAccessSession";
 import { isDevelopmentLaunch, resolveRendererPath } from "./runtimePaths";
 import { CredentialVault } from "./download/distributed/CredentialVault";
 import { SshProvisioningService } from "./download/distributed/SshProvisioningService";
@@ -71,6 +73,8 @@ let sshVault: CredentialVault;
 let sshWorkerClient: SshWorkerClient;
 let sshProvisioning: SshProvisioningService;
 let extensionCapabilityVault: ExtensionCapabilityVault;
+let historyAccessVault: HistoryAccessVault;
+const historyAccessSession = new HistoryAccessSession();
 let updater: UpdateService | null = null;
 let handoffServer: HandoffServer | null = null;
 let rendererWorkState: { hasUnsavedWork: boolean; reason: string; receivedAt: number } | null = null;
@@ -108,6 +112,7 @@ function createWindow() {
   }
 
   mainWindow.on("closed", () => {
+    if (mainWindow) historyAccessSession.remove(mainWindow.webContents.id);
     rendererWorkState = null;
     mainWindow = null;
   });
@@ -157,6 +162,7 @@ function createProgressWindow(itemId: string): boolean {
     progressWindow.loadFile(resolveRendererPath(__dirname), { query: { view: "progress", progressItem: itemId } });
   }
   progressWindow.on("closed", () => {
+    if (progressWindow) historyAccessSession.remove(progressWindow.webContents.id);
     progressWindow = null;
   });
   return true;
@@ -171,6 +177,11 @@ function assertTrustedSender(event: { sender: Electron.WebContents; senderFrame?
   if (event.senderFrame && event.senderFrame !== trustedWindow.webContents.mainFrame) {
     throw new Error("Untrusted renderer IPC frame");
   }
+}
+
+function assertHistoryUnlocked(event: { sender: Electron.WebContents; senderFrame?: Electron.WebFrameMain | null }) {
+  assertTrustedSender(event);
+  historyAccessSession.assertUnlocked(event.sender.id);
 }
 
 function assertString(value: unknown, field: string, maxLength = 4_096): asserts value is string {
@@ -597,13 +608,38 @@ function registerIpcHandlers() {
     });
   });
 
-  ipcMain.handle(IPC.HISTORY_GET_VIEW, (event, filter: unknown) => {
+  ipcMain.handle(IPC.HISTORY_ACCESS_GET_STATE, async (event) => {
     assertTrustedSender(event);
+    const configured = await historyAccessVault.isConfigured();
+    return historyAccessSession.state(event.sender.id, configured);
+  });
+  ipcMain.handle(IPC.HISTORY_ACCESS_SETUP, async (event, password: unknown) => {
+    assertTrustedSender(event);
+    if (typeof password !== "string") throw new Error("Invalid history password");
+    await historyAccessVault.configure(password);
+    historyAccessSession.unlock(event.sender.id);
+    return historyAccessSession.state(event.sender.id, true);
+  });
+  ipcMain.handle(IPC.HISTORY_ACCESS_UNLOCK, async (event, password: unknown) => {
+    assertTrustedSender(event);
+    if (typeof password !== "string") throw new Error("Invalid history password");
+    const configured = await historyAccessVault.isConfigured();
+    if (!configured || !(await historyAccessVault.verify(password))) throw new Error("History password did not match");
+    historyAccessSession.unlock(event.sender.id);
+    return historyAccessSession.state(event.sender.id, true);
+  });
+  ipcMain.handle(IPC.HISTORY_ACCESS_LOCK, async (event) => {
+    assertTrustedSender(event);
+    historyAccessSession.lock(event.sender.id);
+    return historyAccessSession.state(event.sender.id, await historyAccessVault.isConfigured());
+  });
+  ipcMain.handle(IPC.HISTORY_GET_VIEW, (event, filter: unknown) => {
+    assertHistoryUnlocked(event);
     const normalized = normalizeHistoryFilter(filter);
     return manager.getHistoryView(normalized);
   });
   ipcMain.handle(IPC.HISTORY_EXPORT_VIEW, (event, format: unknown, filter: unknown) => {
-    assertTrustedSender(event);
+    assertHistoryUnlocked(event);
     if (!isExportFormat(format)) throw new Error("Invalid history export format");
     const normalized = normalizeHistoryFilter(filter);
     return manager.exportHistory(format, normalized);
@@ -751,6 +787,7 @@ app.on("second-instance", (_event, commandLine) => {
 
 app.whenReady().then(async () => {
   extensionCapabilityVault = new ExtensionCapabilityVault();
+  historyAccessVault = new HistoryAccessVault();
   sshVault = new CredentialVault();
   sshWorkerClient = new SshWorkerClient({ vault: sshVault });
   const workerBundlePath = app.isPackaged

@@ -1,10 +1,11 @@
 import fsp from "node:fs/promises";
 import path from "node:path";
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { exportRecords, type ExportFormat, type ExportResult } from "../../shared/export";
 import { HISTORY_ACTIONS, type HistoryAction, type HistoryFilter, type HistoryRevision } from "../../shared/history";
+import { APP_DISPLAY_NAME_MAX_LENGTH, normalizeAppDisplayName } from "../../shared/settings";
 import { evaluateRegexBatchIsolated } from "../regex/RegexWorkerClient";
 
 const execFileAsync = promisify(execFile);
@@ -13,11 +14,19 @@ const MAX_SNAPSHOT_BYTES = 8 * 1024 * 1024;
 const MAX_SUMMARY_LENGTH = 1_024;
 const SAFE_REVISION_ID = /^(?:HEAD|[0-9a-f]{7,64})$/i;
 const GIT_COMMAND_TIMEOUT_MS = 10_000;
+const DISPLAY_NAME_HISTORY_SCHEMA_VERSION = 1 as const;
 
 export type { HistoryAction, HistoryFilter, HistoryRevision } from "../../shared/history";
 
 export interface HistoryActionCounts {
   [action: string]: number;
+}
+
+export interface RedactedDisplayNameMutation {
+  schemaVersion: typeof DISPLAY_NAME_HISTORY_SCHEMA_VERSION;
+  kind: "display-name";
+  previousSha256: string | null;
+  nextSha256: string;
 }
 
 function isHistoryAction(value: string): value is HistoryAction {
@@ -163,8 +172,8 @@ export class HistoryStore {
     await this.mutationChain.catch(() => undefined);
   }
 
-  private async writeSnapshot(snapshot: string): Promise<void> {
-    const snapshotPath = path.join(this.repositoryPath, "snapshot.json");
+  private async writeSnapshot(fileName: string, snapshot: string): Promise<void> {
+    const snapshotPath = path.join(this.repositoryPath, fileName);
     const temporaryPath = `${snapshotPath}.${randomUUID()}.tmp`;
     await fsp.writeFile(temporaryPath, snapshot, "utf8");
     try {
@@ -174,7 +183,8 @@ export class HistoryStore {
     }
   }
 
-  async appendSnapshot(
+  private async appendFileSnapshot(
+    fileName: string,
     snapshot: string,
     action: HistoryAction,
     summary: string,
@@ -187,7 +197,7 @@ export class HistoryStore {
 
     await this.ensureInitialized();
     return this.enqueueMutation(async () => {
-      const snapshotPath = path.join(this.repositoryPath, "snapshot.json");
+      const snapshotPath = path.join(this.repositoryPath, fileName);
       let previous: string | null = null;
       try {
         previous = await fsp.readFile(snapshotPath, "utf8");
@@ -196,18 +206,18 @@ export class HistoryStore {
       }
       if (previous === snapshot && !force) return null;
 
-      await this.writeSnapshot(snapshot);
+      await this.writeSnapshot(fileName, snapshot);
       const subject = `history: ${action} — ${cleanSummary(summary)}`;
       try {
         // --only commits this path from the working tree and preserves any
         // unrelated staged entries in the isolated repository's index.
-        await this.git(["add", "--", "snapshot.json"]);
-        await this.git(["commit", "--quiet", "--no-verify", "--only", ...(force ? ["--allow-empty"] : []), "-m", subject, "--", "snapshot.json"]);
+        await this.git(["add", "--", fileName]);
+        await this.git(["commit", "--quiet", "--no-verify", "--only", ...(force ? ["--allow-empty"] : []), "-m", subject, "--", fileName]);
       } catch (error) {
         // Keep a failed write recoverable and do not leave an uncommitted
         // replacement masquerading as the current committed state.
         if (previous === null) await fsp.rm(snapshotPath, { force: true }).catch(() => undefined);
-        else await this.writeSnapshot(previous).catch(() => undefined);
+        else await this.writeSnapshot(fileName, previous).catch(() => undefined);
         throw error;
       }
 
@@ -215,6 +225,51 @@ export class HistoryStore {
       const timestamp = await this.git(["show", "-s", "--format=%aI", id]);
       return { id, action, summary: cleanSummary(summary), timestamp };
     });
+  }
+
+  async appendSnapshot(
+    snapshot: string,
+    action: HistoryAction,
+    summary: string,
+    force = false,
+  ): Promise<HistoryRevision | null> {
+    return this.appendFileSnapshot("snapshot.json", snapshot, action, summary, force);
+  }
+
+  /**
+   * Record only hashes for a display-name mutation. The name itself never
+   * enters the Git history, so the record is useful for audit/counting while
+   * remaining redacted and free of user-authored text.
+   */
+  async appendDisplayNameMutation(
+    previousName: string | null,
+    nextName: string,
+    action: Extract<HistoryAction, "display-name-changed" | "display-name-reset">,
+  ): Promise<HistoryRevision> {
+    const normalizedNext = normalizeAppDisplayName(nextName);
+    if (normalizedNext !== nextName || normalizedNext.length > APP_DISPLAY_NAME_MAX_LENGTH) {
+      throw new Error("Invalid display name history value");
+    }
+    const normalizedPrevious = previousName === null ? null : normalizeAppDisplayName(previousName);
+    if (normalizedPrevious !== null && normalizedPrevious !== previousName) {
+      throw new Error("Invalid previous display name history value");
+    }
+    const digest = (value: string) => createHash("sha256").update(value, "utf8").digest("hex");
+    const record: RedactedDisplayNameMutation = {
+      schemaVersion: DISPLAY_NAME_HISTORY_SCHEMA_VERSION,
+      kind: "display-name",
+      previousSha256: normalizedPrevious === null ? null : digest(normalizedPrevious),
+      nextSha256: digest(normalizedNext),
+    };
+    const revision = await this.appendFileSnapshot(
+      "display-name.json",
+      JSON.stringify(record, null, 2),
+      action,
+      action === "display-name-reset" ? "Reset the application display name" : "Changed the application display name",
+      true,
+    );
+    if (!revision) throw new Error("Display-name history did not create a revision");
+    return revision;
   }
 
   /** Serialize an arbitrary JSON-compatible state envelope before appending it. */

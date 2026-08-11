@@ -12,11 +12,14 @@ const validRule = {
 
 test("settings IPC validation rejects unknown and non-finite values", () => {
   assert.deepEqual(validateSettingsPatch({ maxActiveDownloads: 4, theme: "light" }), { maxActiveDownloads: 4, theme: "light" });
+  assert.deepEqual(validateSettingsPatch({ displayName: "My Downloads" }), { displayName: "My Downloads" });
   assert.throws(() => validateSettingsPatch({ unknownSetting: true }), /Invalid setting key/);
   assert.throws(() => validateSettingsPatch({ maxActiveDownloads: Number.NaN }), /Invalid value for setting/);
   assert.throws(() => validateSettingsPatch({ uiFontSize: 200 }), /Invalid value for setting/);
   assert.throws(() => validateSettingsPatch({ settingsVersion: 3 }), /Invalid setting key/);
   assert.throws(() => validateSettingsPatch({ settingProvenance: {} }), /Invalid setting key/);
+  assert.throws(() => validateSettingsPatch({ displayName: "  My Downloads  " }), /Invalid value for setting/);
+  assert.throws(() => validateSettingsPatch({ displayName: "x".repeat(65) }), /Invalid value for setting/);
 });
 
 test("setting reset keys are bounded, unique, and allowlisted", () => {
