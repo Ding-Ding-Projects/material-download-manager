@@ -755,7 +755,9 @@
       const records = notificationContract.normalizeRecords(incoming.records, NOTIFICATION_LIMIT);
       const view = incoming.view && typeof incoming.view === "object" ? incoming.view : {};
       if (revision === Number(notificationState.revision || 0)) {
-        const merged = notificationContract.normalizeRecords([...notificationState.records, ...records], NOTIFICATION_LIMIT);
+        const recordsById = new Map(notificationState.records.map((record) => [record.id, record]));
+        records.forEach((record) => recordsById.set(record.id, record));
+        const merged = notificationContract.normalizeRecords([...recordsById.values()], NOTIFICATION_LIMIT);
         if (JSON.stringify(merged) === JSON.stringify(notificationState.records)) return false;
         notificationState.records = merged;
         notificationState.selected = new Set();
