@@ -9,6 +9,8 @@ and
 [`1c5273d`](https://github.com/Ding-Ding-Projects/material-download-manager/commit/1c5273dfc77f23659d8aa2d0ed168c54bd22a04d),
 plus the refresh/accessibility hardening in
 [`e0b8c39`](https://github.com/Ding-Ding-Projects/material-download-manager/commit/e0b8c39f55982df59b2690f45c9cd9480b89ec73),
+and focus/localization cleanup in
+[`d3822a7`](https://github.com/Ding-Ding-Projects/material-download-manager/commit/d3822a7d521ffaf9ea762896748f7910289a223e),
 add the real Chromium extension Authenticator options destination. It accepts
 manual or `otpauth://totp/` registration values, draws the QR locally, reveals
 the manual secret only on explicit request, verifies a current code before
