@@ -162,7 +162,7 @@ run("release manifest JSON and browser form agree", () => {
   assert.equal(manifestFromJson.stable, null);
 });
 
-const universalSourceCorpus = `${html}\n${css}\n${app}\n${contentSource}\n${universalFeatureManifestSource}\n${notificationContractSource}`;
+const universalSourceCorpus = `${html}\n${css}\n${app}\n${contentSource}\n${notificationContractSource}`;
 const universalFeatureEntries = validateUniversalFeatureManifest(universalFeatureManifest, universalSourceCorpus);
 run("universal feature manifest is explicit and independently validated", () => {
   assert.equal(universalFeatureEntries.length, universalFeatureManifest.requiredIds.length);
@@ -185,6 +185,8 @@ run("universal manifest validator rejects missing records, duplicates, unsafe do
   const emojiFeature = missingProbe.features.find((feature) => feature.id === "emoji-toggle");
   emojiFeature.runtimeAnchors = [];
   assert.throws(() => validateUniversalFeatureManifest(missingProbe, universalSourceCorpus), /needs runtime anchors/);
+  const missingRuntimeAnchorSource = universalSourceCorpus.replace('id="show-emojis"', 'id="show-emojis-removed"');
+  assert.throws(() => validateUniversalFeatureManifest(universalFeatureManifest, missingRuntimeAnchorSource), /emoji-toggle runtime anchor is missing/);
 });
 for (const feature of universalFeatureEntries) {
   await stat(path.resolve(siteRoot, feature.docsPath));
