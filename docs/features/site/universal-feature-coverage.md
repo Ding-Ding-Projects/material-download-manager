@@ -19,6 +19,16 @@ playful release and article text, clears notifications, and prevents the dim
 sum surprise. Turning it off restores the saved language, funny-level, emoji,
 and surprise choices rather than overwriting them.
 
+The notification-centre slice adds a persisted, bounded local history behind
+the top-bar launcher. Toasts receive stable IDs, timestamps, bounded text, an
+allowlisted tone, and a dismissed state before they disappear. The centre has
+its own search and anchored regex builder, status/tone filter, visible-scope
+select-all and inverse selection, bulk dismiss, a typed two-control delete
+confirmation, JSON export, and keyboard focus return. The universal manifest
+still marks the feature `partial`: the full two-key destructive slider,
+complete notification-centre bulk surface across every product, and the
+real-artifact capture matrix remain open.
+
 ## Configuration
 
 Settings use schema version 2 under the `mdm-site-settings-v2` browser-storage

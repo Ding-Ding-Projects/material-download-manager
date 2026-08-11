@@ -29,6 +29,13 @@ user-renamable School mode name/state. School mode is an English-only
 user-experience setting: it removes the playful controls and local surprise,
 and clearing this site's browser storage is the documented reset route.
 
+The top-bar Notification centre now keeps up to 100 text-only toast records in
+browser storage. Dismissed messages remain reviewable, with an independent
+search/regex builder, status filter, visible-scope selection and inverse
+selection, bulk dismiss, typed delete confirmation, and JSON export. The
+manifest continues to mark this universal feature partial while the complete
+two-key destructive confirmation and full capture matrix remain outstanding.
+
 The site embeds the categorized feature articles so the documentation remains
 available without a fetch. The source Markdown remains authoritative in
 `docs/features/`; every site article links back to its category article.
