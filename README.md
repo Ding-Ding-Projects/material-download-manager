@@ -102,20 +102,24 @@ commit documented in [`HANDOFF.md`](HANDOFF.md). SHA-256:
 <details>
 <summary>Authenticator Settings registration surface</summary>
 
-The current bounded authenticator slice adds a real Settings registration tab
+The bounded authenticator surface now includes a real Settings registration tab
 with local QR rendering, an explicit one-time manual-secret reveal, pairing
-confirmation before credential-vault storage, and a metadata-only list/export.
-This capture comes from the built Electron renderer at source commit
-`385e04030b0eebc6df5afa1370571226b9dd9d56` through the CDP smoke harness. It
+confirmation before credential-vault storage, and a metadata-only list/export,
+plus a restart-safe management list with vault-backed current/next codes, a
+numeric countdown, and a copy action. This registration capture comes from the
+built Electron renderer at source commit
+`9c3274134e6aa4b2d1de6b9f234fdf680b72f16f` through the CDP smoke harness. It
 shows the complete registration card with an empty secret field; no QR, manual
-secret, URI, or metadata record was photographed.
+secret, URI, metadata record, or live code was photographed.
 
 ![Authenticator Settings registration card with local QR pairing controls and an empty secret field](docs/screenshots/authenticator/authenticator-settings-empty.png)
 
 The 524×462 PNG has SHA-256
-`92DCE765FF7B8D07854C15D34FAED2708EB5C29C827DA26879E02DEACFD4DDC`. Live
-code/countdown, reorder/group/bulk management, per-tab locks, and schedules are
-not part of this bounded slice.
+`92DCE765FF7B8D07854C15D34FAED2708EB5C29C827DA26879E02DEACFD4DDC`. The
+same built smoke run verified the management row without recording its current
+or next digits; live-code screenshots are intentionally not claimed because
+those values are credential-bearing. Reorder/group/bulk management, per-tab
+locks, and schedules remain outside this bounded slice.
 
 </details>
 

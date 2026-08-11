@@ -48,7 +48,16 @@ unverified surface has shipped.
   compiled Electron **100/100**, build/typecheck green, and built-artifact
   smoke **42/42** with a secret-free registration capture at
   `docs/screenshots/authenticator/authenticator-settings-empty.png`.
-  Live code/countdown, reorder/group/bulk workflows, per-tab locks, and
+- Authenticator management list at source commit
+  [`9c32741`](https://github.com/Ding-Ding-Projects/material-download-manager/commit/9c3274134e6aa4b2d1de6b9f234fdf680b72f16f): restart-safe metadata reload,
+  vault-backed current/next code display, numeric countdown, copy action, and
+  period-boundary race protection. Local evidence is focused **14/14**,
+  compiled Electron **110/110**, build/typecheck green, and built-artifact
+  smoke **43/43**; the smoke verifies a disposable vault row without recording
+  its digits and removes the entry before exit. A secret-free registration
+  capture remains at `docs/screenshots/authenticator/authenticator-settings-empty.png`;
+  live-code screenshots are not claimed because their digits are
+  credential-bearing. Reorder/group/bulk workflows, per-tab locks, and
   schedules remain separate follow-up work; no signing or CRX artifact was
   introduced.
 - Material-style landing and documentation site, stable unsigned Squirrel

@@ -5,6 +5,43 @@ or have reached a stable release. Published entries must link the exact commit
 that completed the change. An Unreleased entry names missing evidence instead
 of guessing a commit, release, or date.
 
+## Unreleased — authenticator management list and live codes
+
+- **Source issue:** [#18 — Implement the universal feature contract](https://github.com/Ding-Ding-Projects/material-download-manager/issues/18)
+- **Source commit:** [`9c32741`](https://github.com/Ding-Ding-Projects/material-download-manager/commit/9c3274134e6aa4b2d1de6b9f234fdf680b72f16f)
+- **Scope:** bounded management follow-up to the authenticator Settings
+  registration surface. It adds restart-safe metadata loading, vault-backed
+  current/next TOTP codes, a numeric period countdown, copy action, and
+  period-boundary request ordering. Reorder/group/bulk management, per-tab
+  locks, and schedules remain separate work.
+
+### Added
+
+- Live current and next code rows fed only by the existing main-process
+  `generateAuthenticatorCode` IPC method; the renderer never reads a secret.
+- Numeric seconds-remaining countdown that refreshes at each period boundary,
+  clears stale values when a vault entry is unavailable, and keeps the copy
+  action disabled until a current code is ready.
+- A real built-artifact smoke check that creates a disposable vault entry,
+  reloads the app, verifies the live row, and removes the entry without writing
+  its secret or code to evidence.
+
+### Verification boundary
+
+- `npm run typecheck` — passed.
+- `npm run build` — passed.
+- Focused TOTP/UI tests — **14/14 passed**.
+- Full compiled Electron tests — **110/110 passed**.
+- Real built-artifact smoke — **43/43 required checks passed**. The existing
+  secret-free registration capture remains
+  [`authenticator-settings-empty.png`](docs/screenshots/authenticator/authenticator-settings-empty.png)
+  (524×462 PNG, SHA-256
+  `92DCE765FF7B8D07854C15D34FAED2708EB5C29C827DA26879E02DEACFD4DDC`). No
+  live-code screenshot is claimed because the displayed digits are
+  credential-bearing.
+- GitHub Actions does not run tests or lint; local results are the test
+  evidence. No signing operation or CRX artifact was added.
+
 ## Unreleased — authenticator Settings registration surface
 
 - **Source issue:** [#18 — Implement the universal feature contract](https://github.com/Ding-Ding-Projects/material-download-manager/issues/18)
