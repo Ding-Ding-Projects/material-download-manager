@@ -12,12 +12,21 @@ const pagesManifestPreparer = await readFile(path.join(repoRoot, "scripts", "pre
 const prototypeMockup = await readFile(path.join(repoRoot, "prototype", "AB Download Manager M3.dc.html"), "utf8");
 const featureCatalogueCaptureRelative = "docs/screenshots/site/feature-catalogue-coverage.png";
 const featureCatalogueCaptureAbsolute = path.resolve(repoRoot, featureCatalogueCaptureRelative);
+const notificationHardeningCaptureRelative = "docs/screenshots/site/notification-centre-hardening.png";
+const notificationHardeningCaptureAbsolute = path.resolve(repoRoot, notificationHardeningCaptureRelative);
 let featureCatalogueCaptureBytes = null;
 let featureCatalogueCaptureError = null;
+let notificationHardeningCaptureBytes = null;
+let notificationHardeningCaptureError = null;
 try {
   featureCatalogueCaptureBytes = await readFile(featureCatalogueCaptureAbsolute);
 } catch (error) {
   featureCatalogueCaptureError = error;
+}
+try {
+  notificationHardeningCaptureBytes = await readFile(notificationHardeningCaptureAbsolute);
+} catch (error) {
+  notificationHardeningCaptureError = error;
 }
 
 async function read(relativePath) {
@@ -375,6 +384,18 @@ run("feature catalogue capture is pinned to a safe path, hash, and dimensions", 
   assert.equal(featureCatalogueCaptureBytes.readUInt32BE(16), 929, "capture width is 929 pixels");
   assert.equal(featureCatalogueCaptureBytes.readUInt32BE(20), 1004, "capture height is 1004 pixels");
   assert.equal(createHash("sha256").update(featureCatalogueCaptureBytes).digest("hex"), "d5e2f347de788242039436a14d8cff6acd62caf6016a67e0764a8c447ee5d284", "capture hash matches provenance");
+});
+
+run("notification hardening capture is pinned to a safe path, hash, and dimensions", () => {
+  const relative = path.relative(repoRoot, notificationHardeningCaptureAbsolute);
+  assert.ok(relative && relative !== ".." && !relative.startsWith(".." + path.sep), "capture path stays inside the repository");
+  assert.ok(Buffer.isBuffer(notificationHardeningCaptureBytes), notificationHardeningCaptureError?.message || "capture file is present");
+  const signature = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+  assert.deepEqual([...notificationHardeningCaptureBytes.subarray(0, 8)], [...signature], "capture is a PNG");
+  assert.equal(notificationHardeningCaptureBytes.toString("ascii", 12, 16), "IHDR", "PNG has an IHDR header");
+  assert.equal(notificationHardeningCaptureBytes.readUInt32BE(16), 945, "capture width is 945 pixels");
+  assert.equal(notificationHardeningCaptureBytes.readUInt32BE(20), 1012, "capture height is 1012 pixels");
+  assert.equal(createHash("sha256").update(notificationHardeningCaptureBytes).digest("hex"), "a4213067c25b0ef639957dc264d30c6eb78d86db88cdee98de5ef6f73471757c", "capture hash matches provenance");
 });
 
  run("feature article inventory covers every embedded feature", () => {

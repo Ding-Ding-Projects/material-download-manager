@@ -92,15 +92,16 @@ remain follow-up work.
 
 ## Capture evidence
 
-![Notification centre showing a persisted dismissed record](../../screenshots/site/notification-centre-history.png)
+![Notification centre showing a persisted dismissed record after the safety hardening](../../screenshots/site/notification-centre-hardening.png)
 
 The image above is a real local Pages capture from commit
-`a790fe937092c75c0d766365223cc6ed2ea9e95d`, taken at a 1384 by 892 pixel
-viewport on an isolated hidden desktop. It shows the Settings-triggered toast
-retained as a dismissed history row, the centre's search and regex-builder
-controls, the status filter, and the bulk-action controls. The checked file is
-`docs/screenshots/site/notification-centre-history.png` with SHA-256
-`0fcbb0d1e65eb667bc4b83e3bba20535c518b40196abc16967b054a19872ebce`.
+`cb4db4525677a85e7ce79cc29e45cba36de560c8`, taken at a 945 by 1012 pixel
+viewport on an isolated hidden desktop. It shows a real Settings-triggered
+toast retained as a dismissed history row, the centre's search and
+regex-builder controls, the status filter, the bulk-action controls, and the
+localized active-count badge. The checked file is
+`docs/screenshots/site/notification-centre-hardening.png` with SHA-256
+`a4213067c25b0ef639957dc264d30c6eb78d86db88cdee98de5ef6f73471757c`.
 
 ## Suggested articles
 
