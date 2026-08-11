@@ -82,6 +82,9 @@ export default function HistoryPanel() {
   const [accessPassword, setAccessPassword] = useState("");
   const [accessConfirmation, setAccessConfirmation] = useState("");
   const [accessError, setAccessError] = useState<string | null>(null);
+  const [editorExport, setEditorExport] = useState<{ content: string; fileName: string } | null>(null);
+  const [editorBusy, setEditorBusy] = useState(false);
+  const [editorMessage, setEditorMessage] = useState<string | null>(null);
 
   useEffect(() => {
     let current = true;
@@ -209,7 +212,10 @@ export default function HistoryPanel() {
     setActionError(null);
     try {
       const result = await window.api.exportHistory(format, filter);
-      downloadText(`material-download-manager-history.${result.extension}`, result.content, result.mimeType);
+      const fileName = `material-download-manager-history.${result.extension}`;
+      downloadText(fileName, result.content, result.mimeType);
+      setEditorExport({ content: result.content, fileName });
+      setEditorMessage(null);
       const warnings = result.warnings.length > 0
         ? ` Warnings: ${result.warnings.join(" ")}`
         : "";
@@ -222,6 +228,22 @@ export default function HistoryPanel() {
       setActionError(historyExportError(message, copy));
     } finally {
       setExporting(false);
+    }
+  }
+
+  async function openLastExportInEditor() {
+    if (!editorExport) return;
+    setEditorBusy(true);
+    setEditorMessage(null);
+    try {
+      const result = await window.api.openExportInEditor(editorExport.content, editorExport.fileName);
+      setEditorMessage(result.opened
+        ? copy.text("Opened the exported file in Visual Studio Code; its export folder is the workspace root.", "已用 Visual Studio Code 開啟匯出檔案；匯出資料夾係 workspace root。")
+        : copy.text(result.error ?? "Visual Studio Code could not be opened.", result.error ?? "未能開啟 Visual Studio Code。"));
+    } catch (reason: unknown) {
+      setEditorMessage(reason instanceof Error ? reason.message : copy.text("Visual Studio Code could not be opened.", "未能開啟 Visual Studio Code。"));
+    } finally {
+      setEditorBusy(false);
     }
   }
 
@@ -252,6 +274,9 @@ export default function HistoryPanel() {
           <button type="button" className="btn btn-primary" onClick={() => void exportFiltered()} disabled={exporting || !view?.available || !accessState?.unlocked}>
             {exporting ? copy.text("Exporting…", "匯出緊…") : copy.text("Export filtered history", "匯出篩選後紀錄")}
           </button>
+          {editorExport && <button type="button" className="btn btn-ghost" onClick={() => void openLastExportInEditor()} disabled={editorBusy || exporting}>
+            {editorBusy ? copy.text("Opening editor…", "開緊編輯器…") : copy.text("Open last export in Visual Studio Code", "用 Visual Studio Code 開啟上次匯出")}
+          </button>}
         </div>
       </header>
 
@@ -344,6 +369,7 @@ export default function HistoryPanel() {
         </button>
       </div>}
       {exportMessage && <div className="history-status" role="status">{exportMessage}</div>}
+      {editorMessage && <div className="history-status" role="status">{editorMessage}</div>}
       {accessState?.unlocked && loading && <div className="history-empty" role="status">{copy.text("Loading local history…", "載入緊本機紀錄…")}</div>}
       {accessState?.unlocked && !loading && view && !view.available && <div className="history-empty history-status-error" role="alert">{view.emptyReason}</div>}
       {accessState?.unlocked && !loading && view?.available && view.revisions.length === 0 && <div className="history-empty" role="status">{view.emptyReason}</div>}

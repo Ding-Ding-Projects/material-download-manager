@@ -21,6 +21,7 @@ import {
   isUIFontWeight,
   SETTINGS_SCHEMA_VERSION,
 } from "../../shared/settings";
+import { isSafeEditorExecutable } from "../../shared/externalEditor";
 import { normalizeRegexFlags } from "../../shared/regex";
 import { cloneSshHostConfigs, isSshHostConfigs } from "../../shared/ssh";
 import { validateScheduledSettingsRecords, type ScheduledSettingsRecord } from "../../shared/scheduledSettings";
@@ -172,6 +173,9 @@ export function migrateSettings(input: unknown, defaultSaveFolder: string): AppS
   }
   adopt("sshDefaultWorkerCount", (value): value is number =>
     isBoundedNumber(value, 1, 16) && Number.isInteger(value)
+  );
+  adopt("externalEditorPath", (value): value is AppSettings["externalEditorPath"] =>
+    value === null || isSafeEditorExecutable(value)
   );
 
   // A newer file is read conservatively: known keys are still validated, but

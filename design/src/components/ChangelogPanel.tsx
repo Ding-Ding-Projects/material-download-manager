@@ -70,6 +70,9 @@ export default function ChangelogPanel() {
   const [format, setFormat] = useState<ExportFormat>("markdown");
   const [busyAction, setBusyAction] = useState<"export" | "copy" | null>(null);
   const [actionMessage, setActionMessage] = useState<string | null>(null);
+  const [editorExport, setEditorExport] = useState<{ content: string; fileName: string } | null>(null);
+  const [editorBusy, setEditorBusy] = useState(false);
+  const [editorMessage, setEditorMessage] = useState<string | null>(null);
   const displayView = useMemo(() => {
     if (!view || !settings?.schoolModeEnabled) return view;
     const entries = view.entries.filter((entry) => !isSchoolModeSuppressedText(
@@ -143,7 +146,10 @@ export default function ChangelogPanel() {
     try {
       if (settings?.schoolModeEnabled) return;
       const result = await window.api.exportChangelog(format, request);
-      downloadText("material-download-manager-changelog." + result.extension, result.content, result.mimeType);
+      const fileName = "material-download-manager-changelog." + result.extension;
+      downloadText(fileName, result.content, result.mimeType);
+      setEditorExport({ content: result.content, fileName });
+      setEditorMessage(null);
       setActionMessage(copy.text(
         "Exported " + result.metadata.recordCount + " filtered release records as " + format.toUpperCase() + ".",
         "已匯出 " + result.metadata.recordCount + " 條篩選後版本紀錄，格式係 " + format.toUpperCase() + "。"
@@ -156,6 +162,22 @@ export default function ChangelogPanel() {
       });
     } finally {
       setBusyAction(null);
+    }
+  }
+
+  async function openLastExportInEditor() {
+    if (!editorExport) return;
+    setEditorBusy(true);
+    setEditorMessage(null);
+    try {
+      const result = await window.api.openExportInEditor(editorExport.content, editorExport.fileName);
+      setEditorMessage(result.opened
+        ? copy.text("Opened the exported changelog in Visual Studio Code; its export folder is the workspace root.", "已用 Visual Studio Code 開啟匯出更新日誌；匯出資料夾係 workspace root。")
+        : copy.text(result.error ?? "Visual Studio Code could not be opened.", result.error ?? "未能開啟 Visual Studio Code。"));
+    } catch (reason: unknown) {
+      setEditorMessage(reason instanceof Error ? reason.message : copy.text("Visual Studio Code could not be opened.", "未能開啟 Visual Studio Code。"));
+    } finally {
+      setEditorBusy(false);
     }
   }
 
@@ -244,6 +266,9 @@ export default function ChangelogPanel() {
             <button type="button" className="btn btn-primary" onClick={() => void exportFiltered()} disabled={busyAction !== null || loading || !view}>
               {busyAction === "export" ? copy.text("Exporting…", "匯出緊…") : copy.text("Export filtered", "匯出篩選結果")}
             </button>
+            {editorExport && <button type="button" className="btn btn-ghost" onClick={() => void openLastExportInEditor()} disabled={editorBusy || busyAction !== null}>
+              {editorBusy ? copy.text("Opening editor…", "開緊編輯器…") : copy.text("Open last export in Visual Studio Code", "用 Visual Studio Code 開啟上次匯出")}
+            </button>}
           </>}
         </div>
       </header>
@@ -316,6 +341,7 @@ export default function ChangelogPanel() {
         </button>
       </div>}
       {actionMessage && <div className="changelog-status" role="status">{actionMessage}</div>}
+      {editorMessage && <div className="changelog-status" role="status">{editorMessage}</div>}
       {loading && <div className="changelog-empty" role="status">{copy.funny(
         ["Loading the embedded changelog…", "Loading the embedded changelog; the release ledger is unfolding.", "Loading the embedded changelog — the tiny ledger is stretching.", "Loading the embedded changelog; the version shelf is doing its paperwork.", "Loading the embedded changelog — the release cupboard is putting on its spectacles."],
         ["載入緊嵌入嘅更新日誌…", "載入緊嵌入嘅更新日誌，版本紀錄簿攤開緊。", "載入緊嵌入嘅更新日誌，細細本紀錄簿伸緊懶腰。", "載入緊嵌入嘅更新日誌，版本架做緊文書工作。", "載入緊嵌入嘅更新日誌，版本櫃戴緊眼鏡。"]

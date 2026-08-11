@@ -27,6 +27,7 @@ const RUNTIME_CHECK_IDS = [
   "changelog-action-error-separation",
   "progress-window",
   "settings-open",
+  "settings-external-editor",
   "settings-scheduled-settings",
   "settings-authenticator-surface",
   "settings-authenticator-live-management",
@@ -77,6 +78,7 @@ function usage() {
     "  --screenshot <path>    Capture a PNG of the installed browser-extension card after automatic folder reveal",
     "  --scheduled-screenshot <path>  Capture the built Settings scheduled-settings surface",
     "  --authenticator-screenshot <path>  Capture the secret-free Authenticator Settings registration surface",
+    "  --external-editor-screenshot <path>  Capture the Settings external-editor selector",
     "  --progress-screenshot <path>  Capture a separate progress page when one exists",
     "  --gallery-dir <path>    Capture the seven auto-organize documentation states into this directory",
     "  --json <path>          Write the same stable JSON summary to a file",
@@ -99,6 +101,7 @@ function parseArgs(argv) {
     screenshotPath: null,
     scheduledScreenshotPath: null,
     authenticatorScreenshotPath: null,
+    externalEditorScreenshotPath: null,
     progressScreenshotPath: null,
     galleryDirectory: null,
     jsonPath: null,
@@ -125,6 +128,7 @@ function parseArgs(argv) {
     else if (argument === "--screenshot") options.screenshotPath = path.resolve(value);
     else if (argument === "--scheduled-screenshot") options.scheduledScreenshotPath = path.resolve(value);
     else if (argument === "--authenticator-screenshot") options.authenticatorScreenshotPath = path.resolve(value);
+    else if (argument === "--external-editor-screenshot") options.externalEditorScreenshotPath = path.resolve(value);
     else if (argument === "--progress-screenshot") options.progressScreenshotPath = path.resolve(value);
     else if (argument === "--gallery-dir") options.galleryDirectory = path.resolve(value);
     else if (argument === "--json") options.jsonPath = path.resolve(value);
@@ -917,6 +921,9 @@ function createResult(options) {
     authenticator: options.authenticatorScreenshotPath
       ? { requested: true, status: "not-run", path: options.authenticatorScreenshotPath }
       : { requested: false, status: "not-requested", path: null },
+    externalEditor: options.externalEditorScreenshotPath
+      ? { requested: true, status: "not-run", path: options.externalEditorScreenshotPath }
+      : { requested: false, status: "not-requested", path: null },
     gallery: options.galleryDirectory
       ? { requested: true, status: "not-run", directory: options.galleryDirectory, expected: GALLERY_ITEMS.map((item) => item.name), items: [] }
       : { requested: false, status: "not-requested", directory: null, expected: [], items: [] },
@@ -1494,7 +1501,9 @@ async function main(argv) {
       const recovery = await cdp.evaluate(pageExpression(`
         const status = document.querySelector('.history-status[role="status"]');
         if (!status) throw new Error("History export success status is missing after retry");
-        return status.textContent?.replace(/\\s+/g, " ").trim() ?? "";
+        const editor = findByRole("button", "Open last export in Visual Studio Code");
+        if (!editor || !isVisible(editor)) throw new Error("History export did not expose the Visual Studio Code handoff action");
+        return { status: status.textContent?.replace(/\\s+/g, " ").trim() ?? "", editor: accessibleName(editor) };
       `));
       await clickByRole(cdp, "tab", "Downloads");
       return { failure, recovery };
@@ -1523,7 +1532,9 @@ async function main(argv) {
       const recovery = await cdp.evaluate(pageExpression(`
         const status = document.querySelector('.changelog-status[role="status"]');
         if (!status) throw new Error("Changelog export success status is missing after retry");
-        return status.textContent?.replace(/\\s+/g, " ").trim() ?? "";
+        const editor = findByRole("button", "Open last export in Visual Studio Code");
+        if (!editor || !isVisible(editor)) throw new Error("Changelog export did not expose the Visual Studio Code handoff action");
+        return { status: status.textContent?.replace(/\\s+/g, " ").trim() ?? "", editor: accessibleName(editor) };
       `));
       await clickByRole(cdp, "tab", "Downloads");
       return { failure, recovery };
@@ -1538,6 +1549,34 @@ async function main(argv) {
         if (!dialog || !isVisible(dialog)) throw new Error("Settings dialog is not visible after activating Settings");
         return { className: dialog.className, visible: true };
       `));
+    });
+
+    await runCheck(result, "settings-external-editor", async () => {
+      await clickByRole(cdp, "tab", "Advanced", '[role="dialog"]');
+      await waitForPage(cdp, `Boolean(document.querySelector("#settings-external-editor-select"))`, "external editor selector", options.timeoutMs);
+      await cdp.evaluate(`(() => { const details = document.getElementById("settings-advanced"); if (details instanceof HTMLDetailsElement) details.open = true; })()`);
+      await waitForPage(cdp, `Boolean(document.querySelector("#settings-external-editor")) && getComputedStyle(document.querySelector("#settings-external-editor")).display !== "none"`, "visible external editor settings", options.timeoutMs);
+      const discovery = await cdp.evaluate("window.api.discoverExternalEditors()");
+      const evidence = await cdp.evaluate(pageExpression(`
+        const field = document.getElementById("settings-external-editor");
+        const select = document.getElementById("settings-external-editor-select");
+        const refresh = [...(field?.querySelectorAll("button") ?? [])].find((button) => /Refresh editors|重新探索編輯器/.test(accessibleName(button)));
+        const browse = [...(field?.querySelectorAll("button") ?? [])].find((button) => /Browse|瀏覽/.test(accessibleName(button)));
+        const workspace = [...(field?.querySelectorAll("button") ?? [])].find((button) => /Open a folder|開啟資料夾/.test(accessibleName(button)));
+        const reset = [...(field?.querySelectorAll("button") ?? [])].find((button) => /Reset|重設/.test(accessibleName(button)));
+        if (!(field instanceof HTMLElement) || !isVisible(field)) throw new Error("external editor Settings field is missing or hidden");
+        if (!(select instanceof HTMLSelectElement) || !isVisible(select)) throw new Error("external editor selector is missing or hidden");
+        if (!refresh || !browse || !workspace || !reset) throw new Error("external editor discovery, Browse, workspace, or Reset action is missing");
+        if ((select.getAttribute("aria-describedby") ?? "") !== "settings-external-editor-help") throw new Error("external editor selector lacks its provenance description");
+        return { options: select.options.length, refresh: accessibleName(refresh), browse: accessibleName(browse), workspace: accessibleName(workspace), reset: accessibleName(reset), discoveryEditors: ${JSON.stringify(discovery?.editors?.length ?? 0)} };
+      `));
+      if (options.externalEditorScreenshotPath) {
+        const capturedPath = await captureScreenshot(cdp, options.externalEditorScreenshotPath, "#settings-external-editor");
+        result.externalEditor = { requested: true, status: "captured", path: capturedPath };
+        evidence.screenshotPath = capturedPath;
+      }
+      await clickByRole(cdp, "tab", "Downloads", '[role="dialog"]');
+      return evidence;
     });
 
     await runCheck(result, "settings-scheduled-settings", async () => {

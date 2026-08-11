@@ -21,6 +21,10 @@ import type {
   HistoryAccessState,
 } from "@shared/types";
 import type { ScheduledSettingsRecord } from "@shared/scheduledSettings";
+import type {
+  ExternalEditorDiscovery,
+  ExternalEditorOpenResult,
+} from "@shared/externalEditor";
 import type { ChangelogView, ChangelogViewRequest } from "../electron/history/ChangelogStore";
 import type { RegexEvaluation } from "@shared/regex";
 import type { SshHostDraft, SshHostStatus } from "@shared/ssh";
@@ -85,6 +89,10 @@ export interface MaterialDownloadManagerAPI {
   exportAuthenticatorMetadata(metadata: TotpRegistrationMetadata): Promise<TotpRegistrationExportRecord>;
   getChangelogView(request?: ChangelogViewRequest): Promise<ChangelogView>;
   exportChangelog(format: ExportFormat, request?: ChangelogViewRequest): Promise<ExportResult>;
+  discoverExternalEditors(): Promise<ExternalEditorDiscovery>;
+  pickExternalEditor(): Promise<string | null>;
+  openExportInEditor(content: string, fileName: string): Promise<ExternalEditorOpenResult>;
+  openWorkspaceInEditor(): Promise<ExternalEditorOpenResult>;
   createQueue(queue: Partial<DownloadQueue>): Promise<DownloadQueue>;
   updateQueue(queue: DownloadQueue): Promise<void>;
   deleteQueue(id: string): Promise<void>;
