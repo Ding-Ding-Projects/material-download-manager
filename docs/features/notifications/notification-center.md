@@ -67,6 +67,18 @@ negative manifest probes with `npm --prefix site run check` and `npm --prefix
 site run build`. A complete universal two-key slider, archive export formats,
 and full built-artifact capture matrix remain follow-up work.
 
+## Capture evidence
+
+![Notification centre showing a persisted dismissed record](../../screenshots/site/notification-centre-history.png)
+
+The image above is a real local Pages capture from commit
+`a790fe937092c75c0d766365223cc6ed2ea9e95d`, taken at a 1384 by 892 pixel
+viewport on an isolated hidden desktop. It shows the Settings-triggered toast
+retained as a dismissed history row, the centre's search and regex-builder
+controls, the status filter, and the bulk-action controls. The checked file is
+`docs/screenshots/site/notification-centre-history.png` with SHA-256
+`0fcbb0d1e65eb667bc4b83e3bba20535c518b40196abc16967b054a19872ebce`.
+
 ## Suggested articles
 
 - Renderer accessibility: ../accessibility/renderer-accessibility.md
