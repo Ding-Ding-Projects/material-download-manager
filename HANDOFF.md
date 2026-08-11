@@ -1,5 +1,29 @@
 # Handoff: Material Download Manager
 
+## Local TOTP and QR registration core (2026-08-11)
+
+Issue [#18](https://github.com/Ding-Ding-Projects/material-download-manager/issues/18)
+tracks this bounded model/main-process slice. Source commit
+[`ce09797`](https://github.com/Ding-Ding-Projects/material-download-manager/commit/ce09797e6c230cbb1fa9d1594fc2660655aa0cdf)
+is on `codex/uh-totp-core`; it is intentionally not merged into the default
+branch by this handoff.
+
+The slice adds `design/shared/authenticator.ts`, the RFC 6238 engine and
+credential-vault boundary under `design/electron/authenticator/`, focused tests
+at `design/electron/__tests__/totp.test.ts`, and typed main/preload IPC channels.
+Registration metadata is the only ordinary renderer/export result. The one-time
+QR/manual-secret model is main-process memory; it is not persisted, logged,
+snapshotted, or returned by metadata export. The operating-system vault is the
+only secret persistence boundary.
+
+Verification is complete locally: `npm run typecheck`,
+`npm run build:electron`, focused TOTP **8/8**, existing Electron **95/95**,
+`npm run docs:bundle:check`, and documentation tests **2/2**. This model-only
+slice has no user-facing QR/authenticator surface, so no visual capture is
+claimed. The next owner should build the full authenticator tab and QR image
+renderer only after preserving the secret-free IPC/export boundary; per-tab
+locks, schedules, and authenticator-list workflows remain separate work.
+
 ## Built-artifact smoke and gallery refresh (2026-08-11)
 
 Commit [`92dc67a`](https://github.com/Ding-Ding-Projects/material-download-manager/commit/92dc67a17fbad4f7471cda5d7d85c1b4b78c44a5)

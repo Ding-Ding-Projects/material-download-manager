@@ -5,6 +5,36 @@ or have reached a stable release. Published entries must link the exact commit
 that completed the change. An Unreleased entry names missing evidence instead
 of guessing a commit, release, or date.
 
+## Unreleased — local TOTP and QR registration core
+
+- **Source issue:** [#18 — Implement the universal feature contract](https://github.com/Ding-Ding-Projects/material-download-manager/issues/18)
+- **Source commit:** [`ce09797`](https://github.com/Ding-Ding-Projects/material-download-manager/commit/ce09797e6c230cbb1fa9d1594fc2660655aa0cdf)
+- **Scope:** bounded main-process/model foundation only; the full authenticator
+  tab, QR image renderer, per-tab locks, schedules, and list management remain
+  follow-up work.
+
+### Added
+
+- RFC 6238 TOTP generation and verification for SHA-1, SHA-256, and SHA-512,
+  six/eight-digit output, configurable periods, and bounded clock skew.
+- Strict `otpauth://totp/` parsing/building with issuer consistency checks,
+  duplicate/unknown query rejection, and a one-time in-memory QR/manual-secret
+  registration model.
+- Main-process IPC registration, generation, verification, removal, and
+  metadata-export seam. Secrets are stored only through the operating-system
+  credential vault; ordinary metadata/export records set `secretOmitted: true`
+  and contain neither the secret nor an `otpauth://` URI.
+
+### Verification boundary
+
+- `npm run typecheck` — passed.
+- `npm run build:electron` — passed.
+- Focused TOTP suite — **8/8 passed**.
+- Existing Electron suite — **95/95 passed**.
+- Documentation bundle and docs tests — **2/2 passed**.
+- No visual capture is claimed because this slice exposes no user-facing QR or
+  authenticator surface yet.
+
 ## Unreleased — built-artifact smoke and gallery refresh
 
 - **Source commit:** [`92dc67a`](https://github.com/Ding-Ding-Projects/material-download-manager/commit/92dc67a17fbad4f7471cda5d7d85c1b4b78c44a5)

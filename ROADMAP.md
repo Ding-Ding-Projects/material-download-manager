@@ -32,6 +32,14 @@ unverified surface has shipped.
   from source commit `2bbcb5993c001e35fbdacd8a0f9266cc2424f2a4` with unsigned
   Squirrel and extension ZIP assets. The workflow does not run tests; local
   test evidence remains authoritative.
+- Local TOTP foundation at source commit
+  [`ce09797`](https://github.com/Ding-Ding-Projects/material-download-manager/commit/ce09797e6c230cbb1fa9d1594fc2660655aa0cdf): RFC 6238 SHA-1/SHA-256/SHA-512
+  generation and verification, strict `otpauth://totp/` parsing, one-time QR
+  registration model, OS credential-vault storage, metadata-only IPC, and
+  secret-free ordinary export. Local verification is typecheck, Electron build,
+  focused 8/8 TOTP tests, existing Electron 95/95 tests, and documentation
+  bundle tests 2/2. The full authenticator UI, QR rendering, locks, schedules,
+  and list management remain open and are not claimed here.
 - Material-style landing and documentation site, stable unsigned Squirrel
   packaging, pinned GitHub-hosted build/package/publication automation, GitHub
   Pages publication, and monotonic real releases. GitHub Actions runs no tests
