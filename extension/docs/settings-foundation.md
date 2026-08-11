@@ -83,12 +83,15 @@ The local suite covers sanitized School mode defaults and presentation,
 emoji-setting persistence, fail-closed credential behavior, display-name
 action classification, journal hashing and redaction, malformed-storage
 failure, live settings-listener wiring, and the existing automatic handoff
-contract. The current local result is 18/18 tests passed.
+contract. The current local result is 26/26 tests passed, including the
+service-worker narrator settings and queue boundary.
 
 ## Suggested articles
 
 - [Handoff contract](handoff-contract.md) — automatic browser capture and
   recovery semantics.
+- [Spoken narrator](narrator.md) — opt-in spoken event delivery and queue
+  safety.
 - [Electron integration seam](electron-integration-seam.md) — trusted pairing
   and folder preparation.
 - [Root browser-integration feature article](../../docs/features/integrations/browser-extension.md)

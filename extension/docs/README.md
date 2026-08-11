@@ -11,3 +11,5 @@ capabilities, credentials, or user-specific paths.
 - [Settings foundation](settings-foundation.md) — School mode, the emoji
   preference, and the redacted display-name mutation journal introduced in the
   current slice.
+- [Spoken narrator](narrator.md) — opt-in service-worker narration, language
+  order, queue safety, quiet handling, and Chrome TTS boundaries.

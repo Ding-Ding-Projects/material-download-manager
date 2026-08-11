@@ -21,6 +21,9 @@ function applyLanguage() {
   document.querySelectorAll("[data-l10n]").forEach((element) => {
     element.textContent = localize(element.dataset.l10n, settings);
   });
+  document.querySelectorAll("[data-school-hidden]").forEach((element) => {
+    element.hidden = settings.schoolModeEnabled;
+  });
   elements.managerName.textContent = settings.managerName;
   elements.popupTitle.textContent = localize("popupTitle", settings, { name: settings.managerName });
   document.title = elements.popupTitle.textContent;
