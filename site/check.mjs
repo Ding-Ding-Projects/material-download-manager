@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { readFile, readdir, stat } from "node:fs/promises";
 import path from "node:path";
 import vm from "node:vm";
@@ -9,6 +10,15 @@ const repoRoot = path.resolve(siteRoot, "..");
 const checks = [];
 const pagesManifestPreparer = await readFile(path.join(repoRoot, "scripts", "prepare-pages-release-manifest.ps1"), "utf8");
 const prototypeMockup = await readFile(path.join(repoRoot, "prototype", "AB Download Manager M3.dc.html"), "utf8");
+const featureCatalogueCaptureRelative = "docs/screenshots/site/feature-catalogue-coverage.png";
+const featureCatalogueCaptureAbsolute = path.resolve(repoRoot, featureCatalogueCaptureRelative);
+let featureCatalogueCaptureBytes = null;
+let featureCatalogueCaptureError = null;
+try {
+  featureCatalogueCaptureBytes = await readFile(featureCatalogueCaptureAbsolute);
+} catch (error) {
+  featureCatalogueCaptureError = error;
+}
 
 async function read(relativePath) {
   return readFile(path.join(siteRoot, relativePath), "utf8");
@@ -132,6 +142,22 @@ run("site builder never recursively removes a caller-selected output path", () =
   assert.match(buildSource, /outside the repository and its ancestors/);
 });
 
+run("site build preserves every local runtime script", () => {
+  const scripts = [
+    "./content.js",
+    "./data/universal-feature-manifest.js",
+    "./data/settings-contract.js",
+    "./data/notification-contract.js",
+    "./data/release-manifest.js",
+    "./app.js"
+  ];
+  for (const script of scripts) {
+    const marker = '<script src="' + script + '"></script>';
+    assert.ok(html.includes(marker), marker + " is present in source HTML");
+    assert.ok(buildSource.includes(script), script + " is copied by the build");
+  }
+});
+
 run("HTML has language, viewport, skip link, main landmark, and tab semantics", () => {
   assert.match(html, /<html lang="en"/);
   assert.match(html, /name="viewport"/);
@@ -237,6 +263,7 @@ run("emoji and School settings have an executable versioned state contract", () 
   assert.equal(migrated.unknownSecret, undefined, "unknown storage fields are not copied into runtime state");
   assert.deepEqual(JSON.parse(JSON.stringify(settingsContract.effectiveSettings(migrated))), { language: "en", funnyEn: 1, funnyYue: 1, showEmojis: false, schoolMode: true });
   assert.equal(settingsContract.filterSchoolCopy("Cantonese · bilingual · funny · emoji · 蝦餃 · School mode", migrated, "Focus mode"), "English-only · English-only · English-only · English-only · · Focus mode");
+  assert.equal(settingsContract.filterSchoolCopy("playful dim-sum surprise", migrated, "Focus mode"), "English-only English-only English-only");
   assert.equal(settingsContract.normalizeLabel("\r\n", "School mode", 48), "School mode");
   assert.equal(settingsContract.normalizeLabel("\u202EFocus\u202C", "School mode", 48), "Focus");
 });
@@ -245,6 +272,8 @@ run("emoji and School controls are wired to persistence, reset, and live suppres
   for (const marker of ["SETTINGS_SCHEMA_VERSION = 2", "mdm-site-settings-v2", "showEmojis", "schoolMode", "setSchoolMode", "resetSchoolMode", "bindSettingsSync", "applySchoolModeSurface", "effectiveShowEmojis"]) assert.match(app, new RegExp(marker.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
   for (const marker of ["id=\"show-emojis\"", "id=\"school-mode-name\"", "id=\"school-mode-enabled\"", "id=\"reset-school-mode\"", "data-school-optional", "data-school-language-option"]) assert.ok(html.includes(marker), `${marker} is present`);
   assert.match(html, /data\/settings-contract\.js/);
+  const languageCard = html.match(/<article class="settings-card" data-setting-search="language[^>]+>/);
+  assert.ok(languageCard?.[0].includes("data-school-optional"), "language settings card is removed from School mode");
   assert.match(html, /data\/universal-feature-manifest\.js/);
   assert.match(app, /window\.addEventListener\("storage"/);
   assert.match(app, /marker\.setAttribute\("aria-hidden", "true"\)/);
@@ -313,8 +342,23 @@ run("local image asset has meaningful alternative text", () => {
   assert.ok(image[2].length > 10, "image alternative text is descriptive");
 });
 
+run("feature catalogue capture is pinned to a safe path, hash, and dimensions", () => {
+  const relative = path.relative(repoRoot, featureCatalogueCaptureAbsolute);
+  assert.ok(relative && relative !== ".." && !relative.startsWith(".." + path.sep), "capture path stays inside the repository");
+  assert.ok(Buffer.isBuffer(featureCatalogueCaptureBytes), featureCatalogueCaptureError?.message || "capture file is present");
+  const signature = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
+  assert.deepEqual([...featureCatalogueCaptureBytes.subarray(0, 8)], [...signature], "capture is a PNG");
+  assert.equal(featureCatalogueCaptureBytes.toString("ascii", 12, 16), "IHDR", "PNG has an IHDR header");
+  assert.equal(featureCatalogueCaptureBytes.readUInt32BE(16), 929, "capture width is 929 pixels");
+  assert.equal(featureCatalogueCaptureBytes.readUInt32BE(20), 1004, "capture height is 1004 pixels");
+  assert.equal(createHash("sha256").update(featureCatalogueCaptureBytes).digest("hex"), "d5e2f347de788242039436a14d8cff6acd62caf6016a67e0764a8c447ee5d284", "capture hash matches provenance");
+});
+
 run("feature article inventory covers every embedded feature", () => {
-  assert.equal(content.features.length, 16);
+  assert.ok(content.features.length >= 16, "the shipped article inventory must retain its baseline");
+  assert.match(html, /id="feature-metric-count">—<\/span>/);
+  assert.match(html, /id="feature-count">— articles<\/span>/);
+  assert.match(app, /feature-metric-count/);
   const ids = new Set(content.features.map((feature) => feature.id));
   assert.ok(ids.has("auto-organize-downloads"), "auto-organize article is in the explicit feature inventory");
   for (const feature of content.features) {
