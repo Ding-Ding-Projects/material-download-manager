@@ -1,209 +1,127 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "runnerContract": {
-    "labels": [
-      "self-hosted",
-      "windows",
-      "x64",
-      "material-download-manager-windows-x64"
-    ],
+    "githubHostedImage": "windows-2025",
     "operatingSystem": "Windows",
     "architecture": "X64",
-    "selectionRule": "Every job in the repository must match all labels. GitHub-hosted labels are not valid fallbacks."
+    "selectionRule": "Inspect live repository and organization self-hosted runner availability before changing workflow routing. Use a compatible online self-hosted runner when available; otherwise use the pinned windows-2025 GitHub-hosted fallback. The current workflows use the fallback because no compatible repository runner was online when this contract was refreshed."
   },
   "workflows": {
-    "verification": {
-      "file": ".github/workflows/ci.yml",
-      "jobs": ["verify"],
-      "dependencies": [
-        {
-          "name": "GitHub Actions runner",
-          "version": "Current runner compatible with Windows x64",
-          "source": "GitHub Actions runner registration",
-          "bootstrap": "Registered by the runner owner before workflow dispatch; the job verifies RUNNER_OS and RUNNER_ARCH."
-        },
-        {
-          "name": "Git",
-          "version": "2.x or newer",
-          "source": "git-scm.com",
-          "bootstrap": "Runner base dependency; preflight verifies git is available."
-        },
-        {
-          "name": "PowerShell",
-          "version": "7.x",
-          "source": "Microsoft PowerShell",
-          "bootstrap": "Runner base dependency; preflight verifies pwsh is available."
-        },
-        {
-          "name": "Node.js",
-          "version": "22.x",
-          "source": "actions/setup-node@v4",
-          "bootstrap": "Installed or selected by the workflow before the first project command."
-        },
-        {
-          "name": "npm",
-          "version": "Bundled with the selected Node.js 22.x runtime",
-          "source": "Node.js distribution",
-          "bootstrap": "Provided by actions/setup-node@v4 and verified before npm ci."
-        },
-        {
-          "name": "GitHub CLI",
-          "version": "2.x or newer",
-          "source": "cli.github.com",
-          "bootstrap": "Runner base dependency; preflight verifies gh is available for release metadata and evidence."
-        },
-        {
-          "name": "Material Download Manager dependencies",
-          "version": "design/package-lock.json lockfileVersion 3",
-          "source": "npm registry through npm ci",
-          "bootstrap": "npm ci from design/ on every job; the lockfile is the only dependency authority."
-        },
-        {
-          "name": "Real Electron UI smoke harness",
-          "version": "Node.js built-ins plus the built Electron application",
-          "source": "Repository design/ui-tests/smoke.mjs",
-          "bootstrap": "npm run test:ui launches only the freshly built application and fails when the renderer, preload bridge, or separate window is missing."
-        },
-        {
-          "name": "Chromium extension contract tests",
-          "version": "Node.js built-ins; extension has no runtime dependencies",
-          "source": "Repository extension/tests/extension.test.mjs",
-          "bootstrap": "npm test from extension/ runs after checkout without a browser or external service."
-        }
-      ]
-    },
     "stable-release": {
       "file": ".github/workflows/release.yml",
-      "jobs": ["release"],
+      "jobs": [
+        "release"
+      ],
       "dependencies": [
-        {
-          "name": "GitHub Actions runner",
-          "version": "Current runner compatible with Windows x64",
-          "source": "GitHub Actions runner registration",
-          "bootstrap": "Registered by the runner owner before workflow dispatch; the job verifies RUNNER_OS and RUNNER_ARCH."
-        },
         {
           "name": "Git",
           "version": "2.x or newer",
-          "source": "git-scm.com",
-          "bootstrap": "Runner base dependency; preflight verifies git is available."
+          "source": "git-for-windows/git canonical releases",
+          "bootstrap": "actions/checkout@v4 obtains the source; scripts/bootstrap-actions-tools.ps1 supplies verified portable MinGit when git or tar is missing."
         },
         {
           "name": "PowerShell",
           "version": "7.x",
-          "source": "Microsoft PowerShell",
-          "bootstrap": "Runner base dependency; preflight verifies pwsh is available."
+          "source": "Microsoft PowerShell through the Windows runner image",
+          "bootstrap": "The workflow uses the pwsh shell for every repository PowerShell helper."
         },
         {
-          "name": "Node.js",
-          "version": "22.x",
+          "name": "Node.js and npm",
+          "version": "Node.js 22.x with its bundled npm",
           "source": "actions/setup-node@v4",
-          "bootstrap": "Installed or selected by the workflow before the first project command."
-        },
-        {
-          "name": "npm",
-          "version": "Bundled with the selected Node.js 22.x runtime",
-          "source": "Node.js distribution",
-          "bootstrap": "Provided by actions/setup-node@v4 and verified before npm ci."
+          "bootstrap": "The workflow selects Node.js 22 before npm ci and caches only the npm package cache."
         },
         {
           "name": "GitHub CLI",
           "version": "2.x or newer",
-          "source": "cli.github.com",
-          "bootstrap": "Runner base dependency; preflight verifies gh is available for reservations and release publication."
+          "source": "cli/cli canonical GitHub releases",
+          "bootstrap": "scripts/bootstrap-actions-tools.ps1 downloads and SHA-256-verifies the official portable GitHub CLI only when gh is missing."
         },
         {
           "name": "Material Download Manager dependencies",
           "version": "design/package-lock.json lockfileVersion 3",
           "source": "npm registry through npm ci",
-          "bootstrap": "npm ci from design/ on every job; the lockfile is the only dependency authority."
+          "bootstrap": "npm ci from design/ on every release job; the lockfile is the dependency authority."
         },
         {
-          "name": "electron-builder",
+          "name": "Electron and esbuild native binaries",
+          "version": "Versions declared by design/package-lock.json",
+          "source": "Canonical npm packages and their declared install scripts",
+          "bootstrap": "scripts/complete-node-binary-bootstrap.ps1 completes and verifies the native binary install after npm ci."
+        },
+        {
+          "name": "electron-builder Squirrel.Windows target",
           "version": "24.13.3 from design/package-lock.json",
           "source": "npm registry through npm ci",
-          "bootstrap": "The post-install check runs npx --no-install electron-builder --version before packaging."
+          "bootstrap": "The post-install check proves electron-builder is available before the unsigned package helper builds Setup.exe, RELEASES, and full or delta .nupkg files."
         },
         {
-          "name": "Squirrel.Windows target",
-          "version": "electron-builder target declared by design/package.json",
-          "source": "electron-builder package",
-          "bootstrap": "Resolved by npm ci; the artifact check requires Setup.exe, RELEASES, and every referenced full or delta .nupkg."
+          "name": "Chromium extension ZIP packaging",
+          "version": "Manifest V3 with the reserved stable release version",
+          "source": "Repository scripts/package-extension.ps1",
+          "bootstrap": "PowerShell and System.IO.Compression stamp and validate the Load unpacked ZIP, reject signing material, and record size plus SHA-256 evidence."
         },
         {
-          "name": "Real Electron UI smoke harness",
-          "version": "Node.js built-ins plus the built Electron application",
-          "source": "Repository design/ui-tests/smoke.mjs",
-          "bootstrap": "npm run test:ui launches only the freshly built application and fails when the renderer, preload bridge, or separate window is missing."
-        },
-        {
-          "name": "Chromium extension contract tests",
-          "version": "Node.js built-ins; extension has no runtime dependencies",
-          "source": "Repository extension/tests/extension.test.mjs",
-          "bootstrap": "npm test from extension/ runs after checkout without a browser or external service."
+          "name": "Release line counter",
+          "version": "Repository committed counter",
+          "source": "Repository scripts/count-lines.mjs",
+          "bootstrap": "Node.js runs the committed counter against the full checkout so release notes carry reproducible surviving-line attribution."
         }
       ]
     },
     "pages": {
       "file": ".github/workflows/pages.yml",
-      "jobs": ["deploy"],
+      "jobs": [
+        "deploy"
+      ],
       "dependencies": [
-        {
-          "name": "GitHub Actions runner",
-          "version": "Current runner compatible with Windows x64",
-          "source": "GitHub Actions runner registration",
-          "bootstrap": "Registered by the runner owner before workflow dispatch; the job verifies RUNNER_OS and RUNNER_ARCH."
-        },
         {
           "name": "Git",
           "version": "2.x or newer",
-          "source": "git-scm.com",
-          "bootstrap": "Runner base dependency; preflight verifies git is available."
+          "source": "git-for-windows/git canonical releases",
+          "bootstrap": "actions/checkout@v4 obtains the source; scripts/bootstrap-actions-tools.ps1 supplies verified portable MinGit when git or tar is missing."
         },
         {
           "name": "PowerShell",
           "version": "7.x",
-          "source": "Microsoft PowerShell",
-          "bootstrap": "Runner base dependency; preflight verifies pwsh is available."
+          "source": "Microsoft PowerShell through the Windows runner image",
+          "bootstrap": "The workflow stages release metadata and the deployment archive with pwsh."
         },
         {
           "name": "Node.js",
           "version": "22.x",
           "source": "actions/setup-node@v4",
-          "bootstrap": "Installed or selected by the workflow before the site check."
+          "bootstrap": "The workflow selects Node.js before running the dependency-free site build."
         },
         {
-          "name": "GitHub Pages actions",
+          "name": "GitHub CLI",
+          "version": "2.x or newer",
+          "source": "cli/cli canonical GitHub releases",
+          "bootstrap": "scripts/bootstrap-actions-tools.ps1 installs the official portable GitHub CLI only when missing; scripts/prepare-pages-release-manifest.ps1 then injects the exact completed release."
+        },
+        {
+          "name": "GitHub Pages actions and tar.exe",
           "version": "configure-pages@v5, actions/upload-artifact@v4, deploy-pages@v4, Windows tar.exe",
-          "source": "GitHub Actions plus the runner's canonical Windows tar implementation",
-          "bootstrap": "Resolved by GitHub Actions on the contracted runner; the Pages job archives the site with PowerShell and tar.exe, uploads an artifact named github-pages, and deploys that artifact."
-        },
-        {
-          "name": "Material Download Manager site",
-          "version": "site/package.json with no runtime dependencies",
-          "source": "Repository source",
-          "bootstrap": "node site/check.mjs and node site/build.mjs validate and stage only the repository's local assets; scripts/prepare-pages-release-manifest.ps1 uses the GitHub CLI to inject only an immutable stable release record after the source build."
-        },
-        {
-          "name": "Pages release manifest helper",
-          "version": "PowerShell 7 and GitHub CLI JSON output",
-          "source": "Repository scripts/prepare-pages-release-manifest.ps1",
-          "bootstrap": "The workflow supplies GH_TOKEN through the GitHub Actions secret fallback and writes the generated manifest only inside runner-temporary Pages staging output."
+          "source": "GitHub Actions plus git-for-windows/git canonical releases",
+          "bootstrap": "The tool bootstrap supplies tar from verified portable MinGit when the pinned image lacks it; the job then archives, uploads, deploys, and records safe evidence."
         }
       ]
     }
   },
   "bootstrap": {
+    "toolBootstrapCommand": "pwsh -NoProfile -File scripts/bootstrap-actions-tools.ps1",
     "preInstallCommand": "pwsh -NoProfile -File scripts/verify-self-hosted-bootstrap.ps1 -Phase preinstall",
     "nativeBinaryCommand": "pwsh -NoProfile -File scripts/complete-node-binary-bootstrap.ps1",
     "postInstallCommand": "pwsh -NoProfile -File scripts/verify-self-hosted-bootstrap.ps1 -Phase postinstall",
-    "freshEnvironmentProof": "Run both phases on a disposable Windows x64 runner with an empty npm cache and no design/node_modules directory. A cache hit may accelerate the run, but npm ci must remain the supported cache-miss path.",
+    "freshEnvironmentProof": "Run both phases on a disposable Windows x64 environment with an empty npm cache and no design/node_modules directory. Cache misses remain supported; no manual preparation or pre-populated node_modules directory is allowed.",
     "manualPreparationForbidden": true,
-    "cacheMissPolicy": "Do not rely on a pre-populated node_modules directory or globally installed project dependencies."
+    "cacheMissPolicy": "Every workflow declares and bootstraps its own dependencies. Caches may accelerate downloads but never replace the install path."
   },
   "policy": {
-    "codeSigning": "Prohibited. The workflow clears inherited signing inputs, disables forceCodeSigning only in a temporary build copy, and verifies Setup.exe is NotSigned.",
-    "releaseChannel": "Stable release only: draft=false and isPrerelease=false after tests and artifact checks pass.",
-    "pages": "The Pages workflow is present and self-hosted; it remains unverified until a matching runner deploys the site and the live URL is checked."
+    "codeSigning": "Prohibited. The workflow clears inherited signing inputs, keeps forceCodeSigning and signAndEditExecutable false, and verifies Setup.exe is NotSigned.",
+    "qualityChecks": "GitHub Actions runs no tests, lint, type checking, static analysis, coverage, accessibility checks, or screenshots. Those checks remain local task evidence and never gate publication.",
+    "releaseChannel": "Every successful push or manual release workflow publishes one unique stable release after build, package, publication, and remote asset checks.",
+    "extension": "Publish a version-stamped ZIP for Chrome's Load unpacked flow. Do not create or require a CRX while signing and private keys remain prohibited.",
+    "pages": "The Pages workflow builds, deploys, verifies the live response, and collects safe evidence without a quality-check step."
   }
 }

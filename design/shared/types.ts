@@ -235,17 +235,44 @@ export type BrowserHandoffRequest = Omit<AddDownloadRequest, "ssh"> & { ssh?: ne
 export interface BrowserExtensionInstallResult {
   installed: true;
   path: string;
+  folderOpened: boolean;
+  folderOpenError: string | null;
 }
 
 export function isBrowserExtensionInstallResult(value: unknown): value is BrowserExtensionInstallResult {
-  return (
-    typeof value === "object" &&
-    value !== null &&
-    !Array.isArray(value) &&
-    (value as Record<string, unknown>).installed === true &&
-    typeof (value as Record<string, unknown>).path === "string" &&
-    ((value as Record<string, unknown>).path as string).length > 0
-  );
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
+  const record = value as Record<string, unknown>;
+  if (record.installed !== true || typeof record.path !== "string" || record.path.length === 0) return false;
+  if (typeof record.folderOpened !== "boolean") return false;
+  if (record.folderOpenError !== null && (typeof record.folderOpenError !== "string" || record.folderOpenError.length === 0)) {
+    return false;
+  }
+  return record.folderOpened ? record.folderOpenError === null : typeof record.folderOpenError === "string";
+}
+
+/**
+ * Report a completed extension staging operation without letting a file-manager
+ * launch failure turn the successful install into a failed install.
+ */
+export async function createBrowserExtensionInstallResult(
+  installedPath: string,
+  openFolder: (folderPath: string) => Promise<string>,
+): Promise<BrowserExtensionInstallResult> {
+  if (typeof installedPath !== "string" || installedPath.length === 0) {
+    throw new Error("The installed extension path is missing.");
+  }
+  try {
+    const failure = await openFolder(installedPath);
+    if (failure) {
+      return { installed: true, path: installedPath, folderOpened: false, folderOpenError: failure };
+    }
+    return { installed: true, path: installedPath, folderOpened: true, folderOpenError: null };
+  } catch (error) {
+    const message = error instanceof Error && error.message
+      ? error.message
+      : "The extension folder could not be opened.";
+    return { installed: true, path: installedPath, folderOpened: false, folderOpenError: message };
+  }
 }
 
 export interface NewDownloadInfo {

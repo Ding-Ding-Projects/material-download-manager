@@ -167,8 +167,13 @@ export class DownloadTask extends EventEmitter {
     this.destroyed = false;
     this.fatalError = null;
     await this.loadPersistedParts();
+    if (this.stopped || this.destroyed) return;
     this.ensurePartsLayout();
     await this.openFile();
+    if (this.stopped || this.destroyed) {
+      await this.closeFileHandle();
+      return;
+    }
     this.item.status = "downloading";
     this.startProgressTimer();
 

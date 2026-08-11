@@ -1,18 +1,35 @@
 import {
   HANDOFF_PROTOCOL_VERSION,
+  DOWNLOAD_CLAIMS_KEY,
   LAST_RESULT_KEY,
   SETTINGS_KEY,
   sanitizeSettings,
   statusEndpoint,
 } from "./shared/settings.js";
-import { createHandoffEnvelope, validateIncomingMessage } from "./shared/handoff.js";
+import {
+  AUTH_PROOF_PATTERN,
+  challengeProofInput,
+  createHandoffEnvelope,
+  deriveDownloadFileName,
+  handoffRequestProofInput,
+  handoffResponseProofInput,
+  normalizeDownloadUrl,
+  validateIncomingMessage,
+} from "./shared/handoff.js";
 import { localize } from "./shared/localization.js";
+import { HANDOFF_CAPABILITY } from "./shared/pairing.js";
 
 const MENU_ID = "send-to-material-download-manager";
-const REQUEST_TIMEOUT_MS = 1_500;
+const STATUS_TIMEOUT_MS = 1_500;
+const HANDOFF_TIMEOUT_MS = 35_000;
 const MAX_STATUS_BODY = 4_096;
-const SUCCESS_CODES = new Set(["handoff-success", "handoff-pending", "connection-success", "settings-saved", "settings-imported"]);
+const MAX_DOWNLOAD_CLAIMS = 64;
+const HANDOFF_CAPABILITY_KEY = "handoffCapability";
+const SUCCESS_CODES = new Set(["handoff-success", "connection-success", "settings-saved", "settings-imported"]);
 let contextMenuRefresh = Promise.resolve();
+let downloadClaimMutation = Promise.resolve();
+let initializationPromise = null;
+const automaticDownloadsInFlight = new Set();
 
 function result(code, detail = null) {
   return { ok: SUCCESS_CODES.has(code), code, detail, at: new Date().toISOString() };
@@ -46,9 +63,282 @@ async function saveSettings(patch) {
   return settings;
 }
 
-async function fetchWithTimeout(url, options = {}) {
+function isHandoffCapability(value) {
+  return typeof value === "string" && /^[A-Za-z0-9_-]{43}$/u.test(value);
+}
+
+async function readHandoffCapability() {
+  const stored = await chrome.storage.local.get(HANDOFF_CAPABILITY_KEY);
+  if (isHandoffCapability(HANDOFF_CAPABILITY)) {
+    if (stored[HANDOFF_CAPABILITY_KEY] !== HANDOFF_CAPABILITY) {
+      await chrome.storage.local.set({ [HANDOFF_CAPABILITY_KEY]: HANDOFF_CAPABILITY });
+    }
+    return HANDOFF_CAPABILITY;
+  }
+  return isHandoffCapability(stored[HANDOFF_CAPABILITY_KEY]) ? stored[HANDOFF_CAPABILITY_KEY] : null;
+}
+
+function randomAuthNonce() {
+  const bytes = crypto.getRandomValues(new Uint8Array(32));
+  return [...bytes].map((value) => value.toString(16).padStart(2, "0")).join("");
+}
+
+async function hmacHex(capability, input) {
+  const key = await crypto.subtle.importKey(
+    "raw",
+    new TextEncoder().encode(capability),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"],
+  );
+  const signature = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(input));
+  return [...new Uint8Array(signature)].map((value) => value.toString(16).padStart(2, "0")).join("");
+}
+
+function challengeEndpoint(handoffEndpoint, nonce) {
+  try {
+    const endpoint = new URL(handoffEndpoint);
+    endpoint.pathname = "/v2/challenge";
+    endpoint.search = "";
+    endpoint.hash = "";
+    endpoint.searchParams.set("nonce", nonce);
+    return endpoint.toString();
+  } catch {
+    return null;
+  }
+}
+
+async function readDownloadClaims() {
+  const stored = await chrome.storage.local.get(DOWNLOAD_CLAIMS_KEY);
+  const source = stored[DOWNLOAD_CLAIMS_KEY];
+  if (!source || typeof source !== "object" || Array.isArray(source)) return {};
+  const entries = Object.entries(source);
+  if (entries.length > MAX_DOWNLOAD_CLAIMS) throw new Error("Automatic download claim storage exceeds its safety limit.");
+  const claims = {};
+  for (const [rawId, rawClaim] of entries) {
+    const id = Number(rawId);
+    if (!Number.isInteger(id) || id < 0 || !rawClaim || typeof rawClaim !== "object") continue;
+    if (rawClaim.phase !== "intent" && rawClaim.phase !== "paused" && rawClaim.phase !== "accepted") continue;
+    if (typeof rawClaim.fingerprint !== "string" || !/^[a-f0-9]{64}$/.test(rawClaim.fingerprint)) continue;
+    claims[String(id)] = { phase: rawClaim.phase, fingerprint: rawClaim.fingerprint };
+  }
+  return claims;
+}
+
+function mutateDownloadClaims(mutator) {
+  downloadClaimMutation = downloadClaimMutation.catch(() => {}).then(async () => {
+    const claims = await readDownloadClaims();
+    const mutationResult = mutator(claims);
+    if (Object.keys(claims).length > MAX_DOWNLOAD_CLAIMS) throw new Error("Automatic download claim capacity was exceeded.");
+    await chrome.storage.local.set({ [DOWNLOAD_CLAIMS_KEY]: claims });
+    return mutationResult;
+  });
+  return downloadClaimMutation;
+}
+
+function reserveDownloadClaim(id, fingerprint) {
+  return mutateDownloadClaims((claims) => {
+    const key = String(id);
+    if (claims[key] || Object.keys(claims).length >= MAX_DOWNLOAD_CLAIMS) return false;
+    claims[key] = { phase: "intent", fingerprint };
+    return true;
+  });
+}
+
+function setDownloadClaim(id, phase, fingerprint) {
+  return mutateDownloadClaims((claims) => {
+    const key = String(id);
+    if (!claims[key] || claims[key].fingerprint !== fingerprint) throw new Error("Automatic download ownership claim changed unexpectedly.");
+    claims[key] = { phase, fingerprint };
+  });
+}
+
+function clearDownloadClaim(id) {
+  return mutateDownloadClaims((claims) => { delete claims[String(id)]; });
+}
+
+async function findDownload(id) {
+  const matches = await chrome.downloads.search({ id });
+  return Array.isArray(matches) ? matches.find((item) => item?.id === id) ?? null : null;
+}
+
+function downloadIdentityMaterial(item) {
+  const url = normalizeDownloadUrl(item?.url);
+  const startTime = typeof item?.startTime === "string" && item.startTime.length > 0 && item.startTime.length <= 64
+    ? item.startTime
+    : null;
+  return url && startTime ? `${url}\n${startTime}` : null;
+}
+
+async function fingerprintDownload(item) {
+  const material = downloadIdentityMaterial(item);
+  if (!material) return null;
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(material));
+  return [...new Uint8Array(digest)].map((value) => value.toString(16).padStart(2, "0")).join("");
+}
+
+async function matchesOwnedDownload(item, fingerprint) {
+  return Boolean(item) && await fingerprintDownload(item) === fingerprint;
+}
+
+async function resumeOwnedDownload(id, fingerprint) {
+  try {
+    const item = await findDownload(id);
+    if (!item || item.state !== "in_progress") {
+      await clearDownloadClaim(id);
+      return "gone";
+    }
+    if (!(await matchesOwnedDownload(item, fingerprint))) {
+      await clearDownloadClaim(id);
+      return "mismatch";
+    }
+    if (item.paused !== true) {
+      await clearDownloadClaim(id);
+      return "already-running";
+    }
+    await chrome.downloads.resume(id);
+    await clearDownloadClaim(id);
+    return "resumed";
+  } catch {
+    return "failed";
+  }
+}
+
+function recoveryResultCode(recovery, resumedCode) {
+  if (recovery === "resumed") return resumedCode;
+  if (recovery === "gone") return "automatic-original-gone";
+  if (recovery === "already-running") return "automatic-original-already-running";
+  if (recovery === "mismatch") return "automatic-ownership-mismatch";
+  return "automatic-resume-failed";
+}
+
+async function finishAcceptedDownload(id, acceptedResult, fingerprint) {
+  const item = await findDownload(id);
+  if (!item || item.state !== "in_progress" || item.paused !== true || !(await matchesOwnedDownload(item, fingerprint))) {
+    await clearDownloadClaim(id);
+    return result("automatic-ownership-mismatch");
+  }
+  try {
+    await chrome.downloads.cancel(id);
+  } catch {
+    const recovery = await resumeOwnedDownload(id, fingerprint);
+    if (recovery === "resumed") return result("automatic-cancel-failed-resumed");
+    if (recovery === "gone") return result("automatic-cancel-failed-original-gone");
+    if (recovery === "already-running") return result("automatic-cancel-failed-already-running");
+    if (recovery === "mismatch") return result("automatic-ownership-mismatch");
+    return result("automatic-cancel-recovery-failed");
+  }
+
+  let eraseFailed = false;
+  try {
+    await chrome.downloads.erase({ id });
+  } catch {
+    eraseFailed = true;
+  }
+  await clearDownloadClaim(id);
+  return eraseFailed
+    ? result("handoff-cleanup-warning")
+    : acceptedResult;
+}
+
+function automaticDownloadUrl(item) {
+  return normalizeDownloadUrl(item?.finalUrl || item?.url);
+}
+
+function isEligibleAutomaticDownload(item, settings) {
+  return settings.autoCaptureDownloads === true
+    && Boolean(settings.handoffEndpoint)
+    && Number.isInteger(item?.id)
+    && item.id >= 0
+    && item.incognito !== true
+    && item.exists !== false
+    && item.paused !== true
+    && item.state === "in_progress"
+    && !item.byExtensionId
+    && Boolean(automaticDownloadUrl(item))
+    && Boolean(downloadIdentityMaterial(item));
+}
+
+async function captureAutomaticDownload(item) {
+  if (!Number.isInteger(item?.id) || automaticDownloadsInFlight.has(item.id)) return;
+  automaticDownloadsInFlight.add(item.id);
+  let fingerprint = null;
+  let claimReserved = false;
+  let pauseCompleted = false;
+  try {
+    const settings = await readSettings();
+    if (!isEligibleAutomaticDownload(item, settings)) return;
+    const url = automaticDownloadUrl(item);
+    fingerprint = await fingerprintDownload(item);
+    if (!fingerprint) return;
+    claimReserved = await reserveDownloadClaim(item.id, fingerprint);
+    if (!claimReserved) {
+      await recordResult(result("automatic-capacity-full"));
+      return;
+    }
+    await chrome.downloads.pause(item.id);
+    pauseCompleted = true;
+    await setDownloadClaim(item.id, "paused", fingerprint);
+
+    const handoffResult = await handoffUrl({
+      url,
+      fileName: deriveDownloadFileName(url),
+    }, settings);
+    if (handoffResult.code === "handoff-success") {
+      await setDownloadClaim(item.id, "accepted", fingerprint);
+      const finalResult = await finishAcceptedDownload(item.id, handoffResult, fingerprint);
+      await recordResult(finalResult);
+      return;
+    }
+
+    const recovery = await resumeOwnedDownload(item.id, fingerprint);
+    await recordResult(result(recoveryResultCode(recovery, "automatic-resumed-failed")));
+  } catch {
+    if (!claimReserved || !fingerprint) {
+      await recordResult(result("automatic-pause-failed"));
+      return;
+    }
+    const recovery = await resumeOwnedDownload(item.id, fingerprint);
+    await recordResult(result(
+      pauseCompleted
+        ? recoveryResultCode(recovery, "automatic-resumed-failed")
+        : (recovery === "resumed" || recovery === "already-running"
+          ? "automatic-pause-failed"
+          : recoveryResultCode(recovery, "automatic-pause-failed")),
+    ));
+  } finally {
+    automaticDownloadsInFlight.delete(item.id);
+  }
+}
+
+async function recoverAutomaticDownloads() {
+  const claims = await readDownloadClaims();
+  for (const [rawId, claim] of Object.entries(claims)) {
+    const id = Number(rawId);
+    if (automaticDownloadsInFlight.has(id)) continue;
+    automaticDownloadsInFlight.add(id);
+    try {
+      if (claim.phase === "accepted") {
+        await recordResult(await finishAcceptedDownload(id, result("handoff-success"), claim.fingerprint));
+      } else {
+        const recovery = await resumeOwnedDownload(id, claim.fingerprint);
+        if (recovery !== "resumed") {
+          await recordResult(result(
+            recovery === "failed"
+              ? "automatic-restart-resume-failed"
+              : recoveryResultCode(recovery, "automatic-restart-resumed"),
+          ));
+        }
+      }
+    } finally {
+      automaticDownloadsInFlight.delete(id);
+    }
+  }
+}
+
+async function fetchWithTimeout(url, options = {}, timeoutMs = STATUS_TIMEOUT_MS) {
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
   try {
     return await fetch(url, {
       ...options,
@@ -82,6 +372,23 @@ async function readLimitedText(response) {
   return text + decoder.decode();
 }
 
+async function authenticateEndpoint(settings, capability) {
+  const nonce = randomAuthNonce();
+  const endpoint = challengeEndpoint(settings.handoffEndpoint, nonce);
+  if (!endpoint) throw new Error("The loopback challenge endpoint is invalid.");
+  const response = await fetchWithTimeout(endpoint, { method: "GET", headers: { Accept: "application/json" } });
+  if (!response.ok) throw new Error(`The loopback challenge returned HTTP ${response.status}.`);
+  const text = await readLimitedText(response);
+  if (!text) throw new Error("The loopback challenge response was empty or too large.");
+  const body = JSON.parse(text);
+  if (body?.protocol !== HANDOFF_PROTOCOL_VERSION || body?.nonce !== nonce || typeof body?.proof !== "string" || !AUTH_PROOF_PATTERN.test(body.proof)) {
+    throw new Error("The loopback challenge response was invalid.");
+  }
+  const expectedProof = await hmacHex(capability, challengeProofInput(nonce));
+  if (body.proof !== expectedProof) throw new Error("The loopback peer could not prove the app-installed capability.");
+  return nonce;
+}
+
 async function checkConnection(settings) {
   const endpoint = statusEndpoint(settings.handoffEndpoint);
   if (!endpoint) return result("connection-disabled");
@@ -92,8 +399,11 @@ async function checkConnection(settings) {
     if (!body) return result("connection-failed", "The status response was empty or too large.");
     const parsed = JSON.parse(body);
     if (parsed?.protocol !== HANDOFF_PROTOCOL_VERSION || parsed?.acceptingUrls !== true) {
-      return result("connection-failed", "The status response did not advertise protocol 1.");
+      return result("connection-failed", `The status response did not advertise protocol ${HANDOFF_PROTOCOL_VERSION}.`);
     }
+    const capability = await readHandoffCapability();
+    if (!capability) return result("connection-unpaired");
+    await authenticateEndpoint(settings, capability);
     return result("connection-success");
   } catch (error) {
     return result("connection-failed", error instanceof Error && error.name === "AbortError" ? "Timed out after 1500 ms." : "The loopback endpoint could not be reached.");
@@ -102,22 +412,31 @@ async function checkConnection(settings) {
 
 async function handoffUrl(message, settings) {
   if (!settings.handoffEndpoint) return result("handoff-disabled");
+  const capability = await readHandoffCapability();
+  if (!capability) return result("handoff-unpaired");
   let body;
   try {
     body = createHandoffEnvelope(message.url, {
       title: message.title,
       selectionText: message.selectionText,
+      fileName: message.fileName,
     });
   } catch {
     return result("handoff-failed", "The URL or metadata failed local validation.");
   }
 
   try {
+    const authNonce = await authenticateEndpoint(settings, capability);
+    body = {
+      ...body,
+      authNonce,
+      authProof: await hmacHex(capability, handoffRequestProofInput(body, authNonce)),
+    };
     const response = await fetchWithTimeout(settings.handoffEndpoint, {
       method: "POST",
       headers: { "Content-Type": "application/json", Accept: "application/json" },
       body: JSON.stringify(body),
-    });
+    }, HANDOFF_TIMEOUT_MS);
     if (!response.ok) return result("handoff-failed", `HTTP ${response.status}`);
     const responseText = await readLimitedText(response);
     if (!responseText) return result("handoff-failed", "The manager returned an empty handoff response.");
@@ -127,13 +446,19 @@ async function handoffUrl(message, settings) {
     } catch {
       return result("handoff-failed", "The manager returned an invalid handoff response.");
     }
-    if (responseBody?.protocol !== HANDOFF_PROTOCOL_VERSION || responseBody?.accepted !== true) {
+    if (responseBody?.protocol !== HANDOFF_PROTOCOL_VERSION) {
+      return result("handoff-failed", "The manager returned an unsupported handoff protocol.");
+    }
+    if (responseBody.accepted !== true || typeof responseBody.downloadId !== "string" || typeof responseBody.proof !== "string" || !AUTH_PROOF_PATTERN.test(responseBody.proof)) {
       return result("handoff-failed", "The manager did not confirm that the URL was queued.");
     }
-    if (responseBody.pending === true) return result("handoff-pending");
+    const expectedResponseProof = await hmacHex(capability, handoffResponseProofInput(body.authNonce, responseBody.downloadId));
+    if (responseBody.proof !== expectedResponseProof) {
+      return result("handoff-failed", "The loopback response did not prove the app-installed capability.");
+    }
     return result("handoff-success");
   } catch (error) {
-    return result("handoff-failed", error instanceof Error && error.name === "AbortError" ? "Timed out after 1500 ms." : "The loopback endpoint could not be reached.");
+    return result("handoff-failed", error instanceof Error && error.name === "AbortError" ? `Timed out after ${HANDOFF_TIMEOUT_MS} ms.` : "The authenticated loopback endpoint could not be reached.");
   }
 }
 
@@ -150,22 +475,45 @@ function refreshContextMenu(settings) {
   return contextMenuRefresh;
 }
 
-async function initialize() {
-  const settings = await readSettings();
-  await chrome.storage.local.set({ [SETTINGS_KEY]: settings });
-  await refreshContextMenu(settings);
+function initialize() {
+  if (!initializationPromise) {
+    initializationPromise = (async () => {
+      const settings = await readSettings();
+      await chrome.storage.local.set({ [SETTINGS_KEY]: settings });
+      await refreshContextMenu(settings);
+      await recoverAutomaticDownloads();
+    })();
+  }
+  return initializationPromise;
+}
+
+async function initializeSafely() {
+  try {
+    await initialize();
+  } catch {
+    initializationPromise = null;
+    try {
+      await recordResult(result("handoff-failed", "The extension worker could not initialize its local state."));
+    } catch {
+      // Storage may itself be unavailable. A later worker event retries initialization.
+    }
+  }
 }
 
 chrome.runtime.onInstalled.addListener(() => {
-  void initialize();
+  void initializeSafely();
 });
 
 chrome.runtime.onStartup.addListener(() => {
-  void initialize();
+  void initializeSafely();
 });
 
 chrome.storage.onChanged.addListener((changes, areaName) => {
   if (areaName === "local" && changes[SETTINGS_KEY]) void refreshContextMenu(sanitizeSettings(changes[SETTINGS_KEY].newValue));
+});
+
+chrome.downloads.onCreated.addListener((item) => {
+  void captureAutomaticDownload(item);
 });
 
 chrome.contextMenus.onClicked.addListener((info, tab) => {
@@ -218,3 +566,5 @@ chrome.runtime.onMessage.addListener((rawMessage, sender, sendResponse) => {
   });
   return true;
 });
+
+void initializeSafely();

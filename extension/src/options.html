@@ -86,6 +86,13 @@
             <p id="connection-status" class="inline-status" role="status" aria-live="polite"></p>
           </div>
         </div>
+        <div class="setting-card" data-search="automatic capture catch browser downloads pause resume handoff">
+          <label class="check-row" for="auto-capture-downloads">
+            <input id="auto-capture-downloads" name="autoCaptureDownloads" type="checkbox" aria-describedby="auto-capture-downloads-help">
+            <span data-l10n="autoCaptureLabel">Automatically send browser downloads to the local manager</span>
+          </label>
+          <p class="field-help" id="auto-capture-downloads-help" data-l10n="autoCaptureHelp">Enabled by default. Eligible downloads pause before handoff; the browser resumes them if the local manager does not accept them.</p>
+        </div>
       </section>
 
       <section id="panel-preferences" class="tab-panel" role="tabpanel" aria-labelledby="tab-preferences" data-panel="preferences" hidden>

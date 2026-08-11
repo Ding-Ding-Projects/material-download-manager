@@ -309,6 +309,40 @@ test("pause then resume continues from saved progress and yields an identical fi
   }
 });
 
+test("pause racing asynchronous startup does not rearm the progress timer", async () => {
+  const folder = await tmpDir();
+  const item = makeItem({
+    url: "http://127.0.0.1:1/file.bin",
+    folder,
+    totalSize: 1024,
+    resumeSupport: true,
+  });
+  const task = new DownloadTask(item, {
+    maxConnections: 1,
+    minPartSize: 512 * 1024,
+    speedLimiters: [new SpeedLimiter(0)],
+  });
+
+  try {
+    const startPromise = task.start();
+    await task.pause();
+    await startPromise;
+
+    const internals = task as unknown as {
+      progressTimer: NodeJS.Timeout | null;
+      fileHandle: fsp.FileHandle | null;
+      activeRequests: Set<unknown>;
+    };
+    assert.equal(item.status, "paused");
+    assert.equal(internals.progressTimer, null, "a completed pause must not be followed by a new progress interval");
+    assert.equal(internals.fileHandle, null, "a completed pause must not leave a late-opened file handle");
+    assert.equal(internals.activeRequests.size, 0, "a completed pause must not start a late network request");
+  } finally {
+    await task.pause();
+    await fsp.rm(folder, { recursive: true, force: true });
+  }
+});
+
 test("non-resumable server falls back to a single streamed connection", async () => {
   const size = 512 * 1024;
   const srv = await startTestServer(size, { supportRanges: false });

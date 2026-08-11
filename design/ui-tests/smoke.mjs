@@ -41,6 +41,8 @@ const RUNTIME_CHECK_IDS = [
   "settings-search-interaction",
   "settings-regex-builder",
   "escape-closes-builder-and-restores-focus",
+  "settings-browser-extension-install-and-reveal",
+  "settings-browser-extension-manual-reveal",
   "settings-dialog-escape",
   "settings-auto-organize-command-palette",
   "settings-auto-organize-preview-ipc",
@@ -59,7 +61,8 @@ function usage() {
     "  --electron <path>      Electron executable (default: app-dir/node_modules/electron/dist)",
     "  --port <number>        CDP port; 0 chooses a free loopback port",
     "  --timeout <ms>         Per-run timeout (default: 30000)",
-    "  --screenshot <path>    Capture a PNG while the Settings regex builder is open",
+    "  --temp-root <path>     Parent for the disposable app profile (default: OS temp directory)",
+    "  --screenshot <path>    Capture a PNG of the installed browser-extension card after automatic folder reveal",
     "  --progress-screenshot <path>  Capture a separate progress page when one exists",
     "  --json <path>          Write the same stable JSON summary to a file",
     "  --keep-user-data-dir   Preserve the temporary Electron profile for debugging",
@@ -77,6 +80,7 @@ function parseArgs(argv) {
     electronPath: null,
     port: 0,
     timeoutMs: DEFAULT_TIMEOUT_MS,
+    tempRoot: null,
     screenshotPath: null,
     progressScreenshotPath: null,
     jsonPath: null,
@@ -99,6 +103,7 @@ function parseArgs(argv) {
     else if (argument === "--electron") options.electronPath = path.resolve(value);
     else if (argument === "--port") options.port = parseBoundedInteger(value, "port", 0, 65_535);
     else if (argument === "--timeout") options.timeoutMs = parseBoundedInteger(value, "timeout", 1_000, 300_000);
+    else if (argument === "--temp-root") options.tempRoot = path.resolve(value);
     else if (argument === "--screenshot") options.screenshotPath = path.resolve(value);
     else if (argument === "--progress-screenshot") options.progressScreenshotPath = path.resolve(value);
     else if (argument === "--json") options.jsonPath = path.resolve(value);
@@ -824,9 +829,29 @@ async function dispatchEscape(client) {
   await dispatchKey(client, "Escape", "Escape", 27);
 }
 
-async function captureScreenshot(client, screenshotPath) {
+async function captureScreenshot(client, screenshotPath, selector = null) {
   await mkdir(path.dirname(screenshotPath), { recursive: true });
-  const response = await client.send("Page.captureScreenshot", { format: "png", captureBeyondViewport: false });
+  let clip;
+  if (selector) {
+    const bounds = await client.evaluate(`(() => {
+      const element = document.querySelector(${JSON.stringify(selector)});
+      if (!(element instanceof HTMLElement)) throw new Error("Screenshot target is missing");
+      const box = element.getBoundingClientRect();
+      const padding = 24;
+      const x = Math.max(0, box.left - padding);
+      const y = Math.max(0, box.top - padding);
+      const right = Math.min(window.innerWidth, box.right + padding);
+      const bottom = Math.min(window.innerHeight, box.bottom + padding);
+      if (right <= x || bottom <= y) throw new Error("Screenshot target has empty bounds");
+      return { x, y, width: right - x, height: bottom - y, scale: 1 };
+    })()`);
+    clip = bounds;
+  }
+  const response = await client.send("Page.captureScreenshot", {
+    format: "png",
+    captureBeyondViewport: false,
+    ...(clip ? { clip } : {}),
+  });
   if (typeof response.data !== "string" || response.data.length === 0) throw new Error("CDP returned no screenshot data");
   await writeFile(screenshotPath, Buffer.from(response.data, "base64"));
   await requireNonEmptyFile(screenshotPath, "captured screenshot");
@@ -1045,7 +1070,9 @@ async function main(argv) {
     if (!build) throw new Error("build-output check failed; refusing to launch an unverified, missing, or stale build");
 
     port = await allocateLoopbackPort(options.port);
-    userDataDirectory = await mkdtemp(path.join(os.tmpdir(), "material-download-manager-ui-smoke-"));
+    const tempRoot = options.tempRoot ?? os.tmpdir();
+    await mkdir(tempRoot, { recursive: true });
+    userDataDirectory = await mkdtemp(path.join(tempRoot, "material-download-manager-ui-smoke-"));
     const launchEvidence = await runCheck(result, "launch-built-electron", async () => {
       launch = spawnBuiltApp(build, userDataDirectory, port);
       if (!launch.child.pid) throw new Error("Electron child process did not expose a PID");
@@ -2005,16 +2032,6 @@ async function main(argv) {
       `));
     });
 
-    if (options.screenshotPath) {
-      const screenshot = await runCheck(result, "screenshot-captured", async () => {
-        if (!cdp) throw new Error("CDP is not connected");
-        const capturedPath = await captureScreenshot(cdp, options.screenshotPath);
-        result.screenshot = { requested: true, status: "captured", path: capturedPath };
-        return { path: capturedPath, format: "png" };
-      });
-      if (!screenshot) result.screenshot = { requested: true, status: "failed", path: options.screenshotPath };
-    }
-
     await runCheck(result, "escape-closes-builder-and-restores-focus", async () => {
       await dispatchEscape(cdp);
       await waitForPage(
@@ -2037,6 +2054,134 @@ async function main(argv) {
         const controlledId = toggle.getAttribute("aria-controls");
         if (!controlledId || document.getElementById(controlledId)) throw new Error("Settings Regex controlled panel remained mounted after Escape");
         return { expanded: false, focusRestored: true, controlledId, controlledPanelRemoved: true };
+      `));
+    });
+
+    await runCheck(result, "settings-browser-extension-install-and-reveal", async () => {
+      await clickByRole(cdp, "tab", "Downloads", '[role="dialog"]');
+      await waitForPage(cdp, `document.getElementById("settings-tab-downloads")?.getAttribute("aria-selected") === "true"`, "Downloads settings tab for browser extension install", options.timeoutMs);
+      const before = await cdp.evaluate(pageExpression(`
+        const panel = document.getElementById("settings-panel-downloads");
+        const card = document.getElementById("settings-browser-extension");
+        const helper = document.getElementById("settings-install-extension-helper");
+        const install = document.getElementById("settings-install-extension");
+        const search = panel?.querySelector('input[aria-label="Search settings"]');
+        const regex = panel?.querySelector('.settings-search-row button[aria-expanded]');
+        if (!(panel instanceof HTMLElement) || !isVisible(panel)) throw new Error("Downloads settings panel is not visible");
+        if (!(card instanceof HTMLElement) || !isVisible(card)) throw new Error("browser-extension install card is missing or hidden");
+        if (!(helper instanceof HTMLElement) || !/opens that folder automatically/.test(helper.textContent ?? "")) throw new Error("browser-extension helper does not explain automatic folder reveal");
+        if (!(install instanceof HTMLButtonElement) || !isVisible(install) || install.disabled) throw new Error("browser-extension install action is missing, hidden, or disabled");
+        if (accessibleName(install) !== "Install browser extension") throw new Error("browser-extension install action has the wrong accessible name");
+        if (!(search instanceof HTMLInputElement) || !(regex instanceof HTMLButtonElement)) throw new Error("Downloads Settings search or its anchored regex-builder action is missing");
+        return {
+          card: card.id,
+          helper: helper.textContent?.replace(/\\s+/g, " ").trim() ?? "",
+          installAction: accessibleName(install),
+          settingsSearch: accessibleName(search),
+          regexBuilderPreserved: regex.getAttribute("aria-controls")?.startsWith("settings-search-builder-") === true,
+        };
+      `));
+      await clickByRole(cdp, "button", "Install browser extension", "#settings-browser-extension");
+      await waitForPage(cdp, `(() => {
+        const status = document.querySelector("#settings-browser-extension [role=status]");
+        return /Installed and opened the extension folder automatically/.test(status?.textContent ?? "");
+      })()`, "automatic browser-extension folder reveal status", options.timeoutMs);
+      const after = await cdp.evaluate(pageExpression(`
+        const card = document.getElementById("settings-browser-extension");
+        const status = card?.querySelector('[role="status"]');
+        const alert = card?.querySelector('[role="alert"]');
+        const manual = card ? findByRole("button", "Open extension folder", card) : null;
+        const install = document.getElementById("settings-install-extension");
+        if (!(card instanceof HTMLElement) || !(status instanceof HTMLElement) || !isVisible(status)) throw new Error("automatic folder-reveal status is missing or hidden");
+        if (status.getAttribute("aria-live") !== "polite") throw new Error("automatic folder-reveal status is not a polite live region");
+        if (alert) throw new Error("successful automatic folder reveal rendered an error alert");
+        if (!(manual instanceof HTMLButtonElement) || !isVisible(manual)) throw new Error("manual Open extension folder fallback is missing after install");
+        if (!(install instanceof HTMLButtonElement) || install.disabled) throw new Error("install action did not leave its busy state");
+        card.scrollIntoView({ block: "center", inline: "nearest" });
+        const box = card.getBoundingClientRect();
+        if (box.top < 0 || box.bottom > window.innerHeight) throw new Error("browser-extension card could not be framed inside the viewport");
+        return {
+          status: status.textContent?.replace(/\\s+/g, " ").trim() ?? "",
+          live: status.getAttribute("aria-live"),
+          manualFallback: accessibleName(manual),
+          alert: false,
+          framed: true,
+          bounds: { top: box.top, bottom: box.bottom, viewportHeight: window.innerHeight },
+        };
+      `));
+      let narrowBilingual;
+      try {
+        await clickByRole(cdp, "tab", "Language", '[role="dialog"]');
+        await setSelectValue(cdp, "#settings-language-mode", "bilingual");
+        await cdp.evaluate(`document.getElementById("settings-tab-downloads")?.click()`);
+        await cdp.send("Emulation.setDeviceMetricsOverride", { width: 520, height: 900, deviceScaleFactor: 2, mobile: false });
+        await waitForPage(cdp, `Boolean(document.getElementById("settings-browser-extension"))`, "bilingual browser-extension card at 520px/200%", options.timeoutMs);
+        narrowBilingual = await cdp.evaluate(pageExpression(`
+          const dialog = document.querySelector('[role="dialog"]');
+          const card = document.getElementById("settings-browser-extension");
+          if (!(dialog instanceof HTMLElement) || !(card instanceof HTMLElement) || !isVisible(card)) throw new Error("bilingual browser-extension card is not visible at 520px/200%");
+          card.scrollIntoView({ block: "center", inline: "nearest" });
+          const overflow = {
+            document: document.documentElement.scrollWidth - window.innerWidth,
+            body: document.body.scrollWidth - window.innerWidth,
+            dialog: dialog.scrollWidth - dialog.clientWidth,
+            card: card.scrollWidth - card.clientWidth,
+          };
+          if (Math.max(...Object.values(overflow)) > 1) throw new Error("520px/200% bilingual browser-extension card overflows horizontally: " + JSON.stringify(overflow));
+          const cardBox = card.getBoundingClientRect();
+          const controls = [...card.querySelectorAll("button")].filter(isVisible);
+          const outside = controls.filter((control) => {
+            const box = control.getBoundingClientRect();
+            return box.left < cardBox.left - 1 || box.right > cardBox.right + 1;
+          });
+          if (outside.length > 0) throw new Error("520px/200% browser-extension actions escape the card");
+          const textNodes = [...card.querySelectorAll(".field-label,.setting-helper,.field-error")].filter(isVisible);
+          const clipped = textNodes.filter((element) => element.clientWidth > 0 && element.scrollWidth > element.clientWidth + 1);
+          if (clipped.length > 0) throw new Error("520px/200% bilingual browser-extension text is clipped: " + JSON.stringify(clipped.map((element) => normalise(element.textContent)).slice(0, 4)));
+          const statusText = card.querySelector('[role="status"]')?.textContent ?? "";
+          if (!/Installed and opened/.test(statusText) || !/安裝好兼自動打開/.test(statusText)) throw new Error("bilingual install/reveal status is incomplete");
+          return { width: window.innerWidth, deviceScaleFactor: window.devicePixelRatio, overflow, controlsInsideCard: controls.length, clippedText: 0, bilingualStatus: true };
+        `));
+      } finally {
+        await cdp.send("Emulation.clearDeviceMetricsOverride").catch(() => undefined);
+        await cdp.evaluate(`document.getElementById("settings-tab-language")?.click()`).catch(() => undefined);
+        await setSelectValue(cdp, "#settings-language-mode", "english").catch(() => undefined);
+        await cdp.evaluate(`document.getElementById("settings-tab-downloads")?.click()`).catch(() => undefined);
+        await waitForPage(cdp, `Boolean(document.getElementById("settings-browser-extension"))`, "browser-extension card after restoring smoke metrics", options.timeoutMs).catch(() => undefined);
+      }
+      return { before, after, narrowBilingual };
+    });
+
+    if (options.screenshotPath) {
+      const screenshot = await runCheck(result, "screenshot-captured", async () => {
+        if (!cdp) throw new Error("CDP is not connected");
+        const capturedPath = await captureScreenshot(cdp, options.screenshotPath, "#settings-browser-extension");
+        result.screenshot = { requested: true, status: "captured", path: capturedPath };
+        return { path: capturedPath, format: "png", surface: "Downloads settings browser-extension install and automatic-reveal status" };
+      });
+      if (!screenshot) result.screenshot = { requested: true, status: "failed", path: options.screenshotPath };
+    }
+
+    await runCheck(result, "settings-browser-extension-manual-reveal", async () => {
+      await cdp.evaluate(pageExpression(`
+        const card = document.getElementById("settings-browser-extension");
+        const install = document.getElementById("settings-install-extension");
+        const manual = card ? findByRole("button", "Open extension folder", card) : null;
+        if (!(manual instanceof HTMLButtonElement) || !(install instanceof HTMLButtonElement)) throw new Error("manual reveal controls are missing");
+        manual.click();
+        manual.click();
+        if (/Installing/.test(install.textContent ?? "")) throw new Error("manual reveal mislabeled the install action as Installing");
+      `));
+      await waitForPage(cdp, `/Opened the installed extension folder/.test(document.querySelector("#settings-browser-extension [role=status]")?.textContent ?? "")`, "manual extension-folder reveal", options.timeoutMs);
+      return cdp.evaluate(pageExpression(`
+        const card = document.getElementById("settings-browser-extension");
+        const status = card?.querySelector('[role="status"]');
+        const alert = card?.querySelector('[role="alert"]');
+        const install = document.getElementById("settings-install-extension");
+        const manual = card ? findByRole("button", "Open extension folder", card) : null;
+        if (!(status instanceof HTMLElement) || alert) throw new Error("manual reveal did not leave exactly one success outcome");
+        if (!(install instanceof HTMLButtonElement) || !(manual instanceof HTMLButtonElement) || install.disabled || manual.disabled) throw new Error("manual reveal did not release the shared busy state");
+        return { status: normalise(status.textContent), installAction: accessibleName(install), manualAction: accessibleName(manual), oneOutcome: true };
       `));
     });
 

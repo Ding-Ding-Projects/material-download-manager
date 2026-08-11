@@ -4,7 +4,9 @@ param(
   [Parameter(Mandatory = $true)]
   [string]$OutputDirectory,
   [Parameter(Mandatory = $true)]
-  [string]$ManifestPath
+  [string]$ManifestPath,
+  [Parameter(Mandatory = $true)]
+  [string]$OwnedOutputRoot
 )
 
 Set-StrictMode -Version Latest
@@ -14,6 +16,29 @@ function Stop-WithMessage([string]$Message) {
   throw "Squirrel.Windows artifact validation failed: $Message"
 }
 
+function Test-StrictDescendant([string]$Child, [string]$Parent) {
+  $normalizedParent = $Parent.TrimEnd([System.IO.Path]::DirectorySeparatorChar, [System.IO.Path]::AltDirectorySeparatorChar)
+  return $Child.StartsWith("$normalizedParent$([System.IO.Path]::DirectorySeparatorChar)", [System.StringComparison]::OrdinalIgnoreCase)
+}
+
+function Assert-NoReparseTraversal([string]$Path, [string]$Boundary) {
+  $current = $Path
+  while ($true) {
+    if (Test-Path -LiteralPath $current) {
+      $item = Get-Item -LiteralPath $current -Force
+      if (($item.Attributes -band [System.IO.FileAttributes]::ReparsePoint) -ne 0) {
+        Stop-WithMessage "The owned output path traverses a reparse point: $current"
+      }
+    }
+    if ($current.Equals($Boundary, [System.StringComparison]::OrdinalIgnoreCase)) { break }
+    $parent = [System.IO.Path]::GetDirectoryName($current)
+    if ([string]::IsNullOrWhiteSpace($parent) -or $parent -eq $current) {
+      Stop-WithMessage 'The owned output path escaped its declared boundary.'
+    }
+    $current = $parent
+  }
+}
+
 if (-not (Test-Path -LiteralPath $SourceRoot -PathType Container)) {
   Stop-WithMessage "Expected output directory is missing: $SourceRoot"
 }
@@ -21,9 +46,28 @@ if (-not (Test-Path -LiteralPath $SourceRoot -PathType Container)) {
 $sourceRootFull = [System.IO.Path]::GetFullPath((Resolve-Path -LiteralPath $SourceRoot).Path)
 $outputDirectoryFull = [System.IO.Path]::GetFullPath($OutputDirectory)
 $manifestPathFull = [System.IO.Path]::GetFullPath($ManifestPath)
+$ownedOutputRootFull = [System.IO.Path]::GetFullPath((Resolve-Path -LiteralPath $OwnedOutputRoot).Path).TrimEnd([System.IO.Path]::DirectorySeparatorChar, [System.IO.Path]::AltDirectorySeparatorChar)
+$repositoryRootFull = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..')).TrimEnd([System.IO.Path]::DirectorySeparatorChar, [System.IO.Path]::AltDirectorySeparatorChar)
 if ($sourceRootFull -eq $outputDirectoryFull) {
   Stop-WithMessage 'The staging directory must not be the builder output directory.'
 }
+if (-not (Test-StrictDescendant $outputDirectoryFull $ownedOutputRootFull) -or
+    -not (Test-StrictDescendant $manifestPathFull $ownedOutputRootFull)) {
+  Stop-WithMessage 'The staging directory and manifest must be strict descendants of OwnedOutputRoot.'
+}
+if ($manifestPathFull.Equals($outputDirectoryFull, [System.StringComparison]::OrdinalIgnoreCase) -or
+    (Test-StrictDescendant $manifestPathFull $outputDirectoryFull)) {
+  Stop-WithMessage 'The artifact manifest must live outside the replaceable staging directory.'
+}
+if ($outputDirectoryFull.Equals([System.IO.Path]::GetPathRoot($outputDirectoryFull), [System.StringComparison]::OrdinalIgnoreCase) -or
+    $outputDirectoryFull.Equals($repositoryRootFull, [System.StringComparison]::OrdinalIgnoreCase) -or
+    (Test-StrictDescendant $outputDirectoryFull $repositoryRootFull) -or
+    (Test-StrictDescendant $repositoryRootFull $outputDirectoryFull) -or
+    (Test-StrictDescendant $sourceRootFull $outputDirectoryFull)) {
+  Stop-WithMessage 'The staging directory must not be a filesystem root or overlap the repository or builder output.'
+}
+Assert-NoReparseTraversal $outputDirectoryFull $ownedOutputRootFull
+Assert-NoReparseTraversal $manifestPathFull $ownedOutputRootFull
 
 if (Test-Path -LiteralPath $outputDirectoryFull) {
   Remove-Item -LiteralPath $outputDirectoryFull -Recurse -Force
@@ -106,9 +150,17 @@ $manifestDirectory = Split-Path -Parent $manifestPathFull
 if (-not (Test-Path -LiteralPath $manifestDirectory -PathType Container)) {
   New-Item -ItemType Directory -Path $manifestDirectory -Force | Out-Null
 }
+[object[]]$artifactEvidence = @($assetFiles | ForEach-Object {
+  [pscustomobject]@{
+    name = $_.Name
+    sizeBytes = [int64]$_.Length
+    sha256 = (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+  }
+})
 [pscustomobject]@{
   directory = $outputDirectoryFull
   names = @($assetFiles.Name)
+  artifacts = $artifactEvidence
   unsigned = $true
   setupSignatureStatus = [string]$setupSignature.Status
   fullPackages = @($fullPackages.Name)

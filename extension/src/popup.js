@@ -27,14 +27,28 @@ function applyLanguage() {
 
 function resultMessage(value) {
   if (!value?.code) return localize("statusReady", settings);
-  const known = ["handoffSuccess", "handoffPending", "handoffDisabled", "handoffFailed", "connectionSuccess", "connectionDisabled", "connectionFailed", "settingsSaved", "settingsImported", "settingsExported"];
+  const known = ["handoffSuccess", "handoffCleanupWarning", "automaticPauseFailed", "automaticCapacityFull", "automaticResumedFailed", "automaticResumeFailed", "automaticCancelFailedResumed", "automaticCancelFailedOriginalGone", "automaticCancelFailedAlreadyRunning", "automaticCancelRecoveryFailed", "automaticOriginalGone", "automaticOriginalAlreadyRunning", "automaticOwnershipMismatch", "automaticRestartResumeFailed", "handoffDisabled", "handoffUnpaired", "handoffFailed", "connectionSuccess", "connectionDisabled", "connectionUnpaired", "connectionFailed", "settingsSaved", "settingsImported", "settingsExported"];
   const key = {
     "handoff-success": "handoffSuccess",
-    "handoff-pending": "handoffPending",
+    "handoff-cleanup-warning": "handoffCleanupWarning",
+    "automatic-pause-failed": "automaticPauseFailed",
+    "automatic-capacity-full": "automaticCapacityFull",
+    "automatic-resumed-failed": "automaticResumedFailed",
+    "automatic-resume-failed": "automaticResumeFailed",
+    "automatic-cancel-failed-resumed": "automaticCancelFailedResumed",
+    "automatic-cancel-failed-original-gone": "automaticCancelFailedOriginalGone",
+    "automatic-cancel-failed-already-running": "automaticCancelFailedAlreadyRunning",
+    "automatic-cancel-recovery-failed": "automaticCancelRecoveryFailed",
+    "automatic-original-gone": "automaticOriginalGone",
+    "automatic-original-already-running": "automaticOriginalAlreadyRunning",
+    "automatic-ownership-mismatch": "automaticOwnershipMismatch",
+    "automatic-restart-resume-failed": "automaticRestartResumeFailed",
     "handoff-disabled": "handoffDisabled",
+    "handoff-unpaired": "handoffUnpaired",
     "handoff-failed": "handoffFailed",
     "connection-success": "connectionSuccess",
     "connection-disabled": "connectionDisabled",
+    "connection-unpaired": "connectionUnpaired",
     "connection-failed": "connectionFailed",
     "settings-saved": "settingsSaved",
     "settings-imported": "settingsImported",

@@ -2,11 +2,12 @@
   "manifest_version": 3,
   "name": "Material Download Manager Handoff",
   "version": "0.1.0",
-  "description": "Send a page or link to a locally configured Material Download Manager endpoint.",
+  "description": "Automatically hand browser downloads, pages, and links to a locally configured Material Download Manager endpoint.",
   "minimum_chrome_version": "109",
   "permissions": [
     "activeTab",
     "contextMenus",
+    "downloads",
     "storage"
   ],
   "host_permissions": [

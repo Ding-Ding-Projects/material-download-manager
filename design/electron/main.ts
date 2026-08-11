@@ -1,7 +1,13 @@
 import { app, autoUpdater, BrowserWindow, ipcMain, shell, dialog, Notification } from "electron";
 import fsp from "node:fs/promises";
 import path from "node:path";
-import { IPC, isUpdateUnsavedWorkState, type UpdateInstallResult, type UpdateState } from "../shared/types";
+import {
+  createBrowserExtensionInstallResult,
+  IPC,
+  isUpdateUnsavedWorkState,
+  type UpdateInstallResult,
+  type UpdateState,
+} from "../shared/types";
 import {
   installBrowserExtension,
   installedExtensionPath,
@@ -28,6 +34,7 @@ import { notifyDownloadComplete as showCompletionNotification, type CompletionNo
 import { extractBrowserHandoffRequests } from "./download/browserHandoff";
 import { assertQueueCreatePayload, DownloadManager } from "./download/DownloadManager";
 import { HandoffServer } from "./extension/HandoffServer";
+import { ExtensionCapabilityVault } from "./extension/ExtensionCapabilityVault";
 import { evaluateRegexBatchIsolated } from "./regex/RegexWorkerClient";
 import {
   CHANGELOG_REPOSITORY_URL,
@@ -63,6 +70,7 @@ let manager: DownloadManager;
 let sshVault: CredentialVault;
 let sshWorkerClient: SshWorkerClient;
 let sshProvisioning: SshProvisioningService;
+let extensionCapabilityVault: ExtensionCapabilityVault;
 let updater: UpdateService | null = null;
 let handoffServer: HandoffServer | null = null;
 let rendererWorkState: { hasUnsavedWork: boolean; reason: string; receivedAt: number } | null = null;
@@ -385,8 +393,9 @@ function registerIpcHandlers() {
       resourcesPath: process.resourcesPath,
       appRoot: app.getAppPath(),
     });
-    const installedPath = await installBrowserExtension(sourceRoot, app.getPath("userData"));
-    return { installed: true, path: installedPath };
+    const capability = await extensionCapabilityVault.rotate();
+    const installedPath = await installBrowserExtension(sourceRoot, app.getPath("userData"), capability);
+    return createBrowserExtensionInstallResult(installedPath, (folderPath) => shell.openPath(folderPath));
   });
 
   ipcMain.handle(IPC.EXTENSION_REVEAL, async (event) => {
@@ -741,6 +750,7 @@ app.on("second-instance", (_event, commandLine) => {
 });
 
 app.whenReady().then(async () => {
+  extensionCapabilityVault = new ExtensionCapabilityVault();
   sshVault = new CredentialVault();
   sshWorkerClient = new SshWorkerClient({ vault: sshVault });
   const workerBundlePath = app.isPackaged
@@ -754,6 +764,7 @@ app.whenReady().then(async () => {
   await processBrowserHandoffs(process.argv);
   handoffServer = new HandoffServer({
     manager,
+    loadCapability: () => extensionCapabilityVault.load(),
     logger: (message) => console.warn(message),
   });
   await handoffServer.start();

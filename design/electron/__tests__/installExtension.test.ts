@@ -4,12 +4,58 @@ import fsp from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import {
+  createBrowserExtensionInstallResult,
+  isBrowserExtensionInstallResult,
+} from "../../shared/types";
+import {
   BROWSER_EXTENSION_DIRECTORY_NAME,
   browserExtensionTarget,
   installBrowserExtension,
   installedExtensionPath,
   resolveBundledExtensionRoot,
 } from "../extension/installExtension";
+
+const TEST_CAPABILITY = "a".repeat(43);
+
+test("extension install result keeps staging success separate from folder-open state", async () => {
+  const openedPaths: string[] = [];
+  const opened = await createBrowserExtensionInstallResult("C:/AppData/browser-extension", async (folderPath) => {
+    openedPaths.push(folderPath);
+    return "";
+  });
+  assert.deepEqual(openedPaths, ["C:/AppData/browser-extension"]);
+  assert.deepEqual(opened, {
+    installed: true,
+    path: "C:/AppData/browser-extension",
+    folderOpened: true,
+    folderOpenError: null,
+  });
+  assert.equal(isBrowserExtensionInstallResult(opened), true);
+
+  const refused = await createBrowserExtensionInstallResult("C:/AppData/browser-extension", async () => "No file manager is available");
+  assert.deepEqual(refused, {
+    installed: true,
+    path: "C:/AppData/browser-extension",
+    folderOpened: false,
+    folderOpenError: "No file manager is available",
+  });
+  assert.equal(isBrowserExtensionInstallResult(refused), true);
+
+  const rejected = await createBrowserExtensionInstallResult("C:/AppData/browser-extension", async () => {
+    throw new Error("Folder launch was refused");
+  });
+  assert.deepEqual(rejected, {
+    installed: true,
+    path: "C:/AppData/browser-extension",
+    folderOpened: false,
+    folderOpenError: "Folder launch was refused",
+  });
+  assert.equal(isBrowserExtensionInstallResult(rejected), true);
+
+  assert.equal(isBrowserExtensionInstallResult({ installed: true, path: "C:/extension" }), false);
+  assert.equal(isBrowserExtensionInstallResult({ installed: true, path: "C:/extension", folderOpened: true, folderOpenError: "contradiction" }), false);
+  assert.equal(isBrowserExtensionInstallResult({ installed: true, path: "C:/extension", folderOpened: false, folderOpenError: null }), false);
+});
 
 async function makeSource(root: string): Promise<string> {
   const source = path.join(root, "extension");
@@ -31,13 +77,14 @@ test("installBrowserExtension stages a loadable payload and reports it installed
 
     assert.equal(await installedExtensionPath(userData), null);
 
-    const installed = await installBrowserExtension(source, userData);
+    const installed = await installBrowserExtension(source, userData, TEST_CAPABILITY);
     assert.equal(installed, browserExtensionTarget(userData));
     assert.equal(path.basename(installed), BROWSER_EXTENSION_DIRECTORY_NAME);
 
     // manifest.json sits at the target root so Load unpacked works directly.
     await fsp.access(path.join(installed, "manifest.json"));
     await fsp.access(path.join(installed, "src", "service-worker.js"));
+    assert.match(await fsp.readFile(path.join(installed, "src", "shared", "pairing.js"), "utf8"), new RegExp(TEST_CAPABILITY));
     await fsp.access(path.join(installed, "README.md"));
 
     assert.equal(await installedExtensionPath(userData), installed);
@@ -53,12 +100,12 @@ test("installBrowserExtension replaces stale files on reinstall", async () => {
     const userData = path.join(root, "userData");
     await fsp.mkdir(userData, { recursive: true });
 
-    const installed = await installBrowserExtension(source, userData);
+    const installed = await installBrowserExtension(source, userData, TEST_CAPABILITY);
     const stale = path.join(installed, "src", "stale-file.js");
     await fsp.writeFile(stale, "// left over from an older version");
     await fsp.access(stale);
 
-    await installBrowserExtension(source, userData);
+    await installBrowserExtension(source, userData, "b".repeat(43));
     await assert.rejects(() => fsp.access(stale), "reinstall must clear stale files");
   } finally {
     await fsp.rm(root, { recursive: true, force: true });
@@ -74,7 +121,7 @@ test("installBrowserExtension refuses an incomplete source", async () => {
     const userData = path.join(root, "userData");
     await fsp.mkdir(userData, { recursive: true });
 
-    await assert.rejects(() => installBrowserExtension(source, userData), /service-worker\.js|missing/);
+    await assert.rejects(() => installBrowserExtension(source, userData, TEST_CAPABILITY), /service-worker\.js|missing/);
     // A refused install leaves nothing half-staged that would look installed.
     assert.equal(await installedExtensionPath(userData), null);
   } finally {

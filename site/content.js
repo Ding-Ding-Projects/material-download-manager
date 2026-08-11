@@ -358,7 +358,7 @@ window.MDM_SITE_CONTENT = {
         ],
         configuration: [
           "The stable feed is a public HTTPS latest-release path unless MDM_UPDATE_FEED_URL overrides it in the main process. Release-notes URLs are validated with the same HTTPS, credential-free boundary.",
-          "The normal workflow publishes a stable unsigned Squirrel release after tests and artifact validation. Code signing is permanently prohibited; the release notes identify the unsigned status and SmartScreen warning plainly."
+          "Local task checks are recorded separately. GitHub Actions builds, packages, and publishes the stable unsigned Squirrel release without running tests or lint. Code signing is permanently prohibited; the release notes identify the unsigned status and SmartScreen warning plainly."
         ],
         failureModes: [
           "Missing feed configuration, development launches, unsupported platforms, network failures, malformed candidates, equal/older versions, stale operation leases, and overlapping checks fail closed.",
@@ -378,30 +378,36 @@ window.MDM_SITE_CONTENT = {
       id: "browser-extension",
       category: "Integration",
       title: "Chromium extension handoff",
-      summary: "Manifest V3 page and link capture through a credential-free loopback bridge owned by the desktop download manager.",
+      summary: "Default-on automatic browser-download capture through an app-prepared protocol-2 pairing, with final durable acceptance and fail-safe browser recovery.",
       docsPath: "../docs/features/integrations/browser-extension.md",
-      tags: ["extension", "chromium", "capture", "loopback"],
+      tags: ["extension", "chromium", "capture", "loopback", "downloads", "folders"],
       sections: {
         behavior: [
-          "The extension captures the active page or link from its popup or context menu and sends one validated envelope to the desktop app.",
-          "The desktop app owns queue persistence and progress, so an accepted handoff joins the same download state as an in-app URL.",
+          "Automatic capture defaults on. For an eligible HTTP(S) browser download, the extension pauses the exact item, asks GET /v2/challenge to prove the app-prepared pairing before any download URL is sent, and then submits a one-use authenticated protocol-2 request.",
+          "The app performs a credential-free ranged GET, durably creates and starts the manager record, and returns an authenticated final 202. Only then does the extension cancel and erase the browser copy; every unpaired, rejected, overloaded, invalid, disconnected, timed-out, offline, or source-unreadable route resumes and retains the extension-owned item.",
+          "The toolbar popup and context menu retain manual page, link, and selection capture. The desktop app owns queue persistence and progress, so a final accepted handoff joins the same download state as an in-app URL.",
+          "The desktop Install browser extension action creates a private paired copy beneath stable application data and automatically opens that exact folder; Open extension folder remains the manual fallback."
         ],
         configuration: [
-          "Options persist the manager name, loopback endpoint, language mode, independent funny levels, and versioned import/export settings.",
-          "The endpoint defaults to http://127.0.0.1:43771/v1/downloads and can be tested from the popup.",
+          "Options persist the default-on automatic-capture checkbox, manager name, loopback endpoint, language mode, independent funny levels, and versioned import/export settings. Turning automatic capture off leaves manual handoffs available.",
+          "The endpoint defaults to http://127.0.0.1:43771/v1/downloads and can be tested from the popup. Plain-text settings search retains its adjacent anchored full regex builder.",
+          "The generic release ZIP is a version-stamped source/reference package with an empty pairing module. Use the app-prepared folder for a working Load unpacked installation; loading the generic ZIP in a fresh profile reports an unpaired state."
         ],
         failureModes: [
-          "The extension times out, rejects credentials and redirects, bounds response bodies, and records an explicit recovery result when the desktop app is unavailable.",
-          "The desktop endpoint rejects non-loopback clients, oversized bodies, unsupported protocol versions, and invalid URLs.",
+          "If Chrome cannot pause the item, no handoff is sent. Failed app proof, expired or reused challenges, rejection, overload, source-read failure, client-disconnect rollback, unreachable app, invalid response, and timeout resume the exact extension-owned item; service-worker restart recovers bounded paused and accepted claims.",
+          "The desktop endpoint rejects non-loopback clients, website or malformed browser origins, oversized bodies, unsupported protocol versions, unsafe filename hints, invalid URLs, more than 8 in-flight handoffs, and more than 60 challenge/POST requests per rolling minute. Challenges are one-use, expire after 30 seconds, and occupy at most 64 table entries.",
+          "A folder-open failure is reported separately from successful extension staging, so users can retry Open extension folder without copying again."
         ],
         security: [
-          "The bridge uses loopback-only HTTP, no tokens, no request-body logging, no third-party endpoint, and no arbitrary page-content fetch.",
+          "The bridge uses loopback-only HTTP, accepts only exact Chromium extension origins or originless local diagnostics, and authenticates the nonce-only challenge, every request field, and the final accepted response with the app-prepared capability. It logs no request bodies and contacts no third-party endpoint.",
+          "Automatic payloads contain only a credential-free URL and optional URL-derived safe basename—never cookies, authorization headers, referrers, browser request headers, or the absolute browser destination path. Accepted query-bearing URLs persist only in the operating-system credential vault, stay redacted elsewhere, and are removed on terminal cleanup.",
+          "Releases provide a version-stamped, size/SHA-verified source/reference ZIP whose pairing module is empty. A CRX is not published because genuine CRX3 packages require signing and this repository permanently prohibits signing keys and signing operations."
         ],
         verification: [
-          "The extension suite covers the local contract; the compiled Electron suite covers the real loopback status and handoff server; a hidden-desktop run queried /v1/status and submitted a real protocol-v1 envelope that received a 202 accepted/pending response.",
+          "Local extension tests cover app-prepared pairing, protocol-2 proofs, final-only acceptance, automatic lifecycle, privacy payload, eligibility, restart recovery, and manual capture. Electron tests cover challenges, rate/concurrency bounds, ranged source proof, durable acceptance, disconnect rollback, protected URL cleanup, origin/basename validation, preparation, automatic folder opening, and truthful folder-open failure. GitHub Actions publishes without running tests or lint."
         ],
       },
-      suggested: ["reliable-transfers", "local-history", "site-foundation"],
+      suggested: ["reliable-transfers", "squirrel-updates", "site-foundation"],
     },
     {
       id: "progress-window",

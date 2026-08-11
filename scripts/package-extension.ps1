@@ -16,8 +16,15 @@ function Stop-WithMessage([string]$Message) {
   throw "Chromium extension packaging failed: $Message"
 }
 
-if ($Version -notmatch '^\d+\.\d+\.\d+$') {
+if ($Version -notmatch '^(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)$') {
   Stop-WithMessage "Release version is not stable semantic version syntax: $Version"
+}
+$versionParts = @($Version.Split('.') | ForEach-Object { [int64]$_ })
+if (@($versionParts | Where-Object { $_ -gt 65535 }).Count -gt 0) {
+  Stop-WithMessage "Release version is outside Chromium's 0-65535 component range: $Version"
+}
+if (@($versionParts | Where-Object { $_ -ne 0 }).Count -eq 0) {
+  Stop-WithMessage 'Chromium extension version 0.0.0 is not installable.'
 }
 if (-not (Test-Path -LiteralPath $ExtensionRoot -PathType Container)) {
   Stop-WithMessage "Extension source directory is missing: $ExtensionRoot"
@@ -47,6 +54,18 @@ if ([int]$extensionManifest.manifest_version -ne 3) {
 if ([string]::IsNullOrWhiteSpace([string]$extensionManifest.name)) {
   Stop-WithMessage 'Extension manifest has no name.'
 }
+if ($extensionManifest.PSObject.Properties.Name -contains 'key') {
+  Stop-WithMessage 'Extension manifest must not embed a signing key.'
+}
+$pairingSourcePath = Join-Path $extensionRootFull 'src/shared/pairing.js'
+if (-not (Test-Path -LiteralPath $pairingSourcePath -PathType Leaf)) {
+  Stop-WithMessage 'Extension source is missing the empty pairing capability module.'
+}
+$pairingSource = Get-Content -LiteralPath $pairingSourcePath -Raw
+if ($pairingSource -notmatch '(?m)^\s*export const HANDOFF_CAPABILITY = "";\s*$' -or
+    $pairingSource -match '[A-Za-z0-9_-]{43}') {
+  Stop-WithMessage 'The public extension source must not contain an installed handoff capability.'
+}
 
 # The zip carries exactly what "Load unpacked" needs, plus the extension's own
 # documentation. Tests and npm metadata stay out of the installable payload.
@@ -73,6 +92,33 @@ try {
     }
     Copy-Item -LiteralPath $sourcePath -Destination (Join-Path $stagingDirectory $entry) -Recurse
   }
+
+  $stagedManifestPath = Join-Path $stagingDirectory 'manifest.json'
+  $stagedManifest = Get-Content -LiteralPath $stagedManifestPath -Raw | ConvertFrom-Json -Depth 20
+  if ($stagedManifest.PSObject.Properties.Name -contains 'version') {
+    $stagedManifest.version = $Version
+  } else {
+    $stagedManifest | Add-Member -MemberType NoteProperty -Name 'version' -Value $Version
+  }
+  $stagedManifest | ConvertTo-Json -Depth 20 | Set-Content -LiteralPath $stagedManifestPath -Encoding utf8NoBOM
+  $stagedPairingPath = Join-Path $stagingDirectory 'src/shared/pairing.js'
+  $stagedPairing = Get-Content -LiteralPath $stagedPairingPath -Raw
+  if ($stagedPairing -notmatch '(?m)^\s*export const HANDOFF_CAPABILITY = "";\s*$' -or
+      $stagedPairing -match '[A-Za-z0-9_-]{43}') {
+    Stop-WithMessage 'The packaged extension staging area contains an installed handoff capability.'
+  }
+
+  $forbiddenPayloadFiles = @(
+    Get-ChildItem -LiteralPath $stagingDirectory -Recurse -File |
+      Where-Object {
+        $_.Name -match '(?i)\.(?:pem|key|pfx|p12|cer|crt|der|jks|keystore|pk8|crx)$'
+      }
+  )
+  if ($forbiddenPayloadFiles.Count -gt 0) {
+    $forbiddenRelativePath = $forbiddenPayloadFiles[0].FullName.Substring($stagingDirectory.Length).TrimStart('\', '/')
+    Stop-WithMessage "Extension payload contains forbidden signing or CRX material: $forbiddenRelativePath"
+  }
+
   # manifest.json sits at the archive root, so unzip-then-Load-unpacked works
   # on the extracted folder without hunting for a nested directory.
   Compress-Archive -Path (Join-Path $stagingDirectory '*') -DestinationPath $assetPath -CompressionLevel Optimal
@@ -94,15 +140,64 @@ Add-Type -AssemblyName System.IO.Compression.FileSystem
 $archive = [System.IO.Compression.ZipFile]::OpenRead($assetPath)
 try {
   $entryNames = @($archive.Entries | ForEach-Object { $_.FullName.Replace('\', '/') })
+  $entryNamesByCase = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+  foreach ($entryName in $entryNames) {
+    if ([string]::IsNullOrWhiteSpace($entryName) -or $entryName.StartsWith('/') -or $entryName -match '(^|/)\.\.(/|$)' -or $entryName.Contains(':')) {
+      Stop-WithMessage "The packaged archive contains an unsafe entry path: $entryName"
+    }
+    if (-not $entryNamesByCase.Add($entryName)) {
+      Stop-WithMessage "The packaged archive contains a duplicate entry path: $entryName"
+    }
+    if ($entryName -match '(?i)\.(?:pem|key|pfx|p12|cer|crt|der|jks|keystore|pk8|crx)$') {
+      Stop-WithMessage "The packaged archive contains forbidden signing or CRX material: $entryName"
+    }
+  }
+
+  $embeddedManifestEntry = $archive.GetEntry('manifest.json')
+  if ($null -eq $embeddedManifestEntry) {
+    Stop-WithMessage 'The packaged archive does not carry manifest.json at its root.'
+  }
+  $manifestStream = $embeddedManifestEntry.Open()
+  $manifestReader = [System.IO.StreamReader]::new($manifestStream, [System.Text.Encoding]::UTF8, $true)
+  try {
+    $embeddedManifest = $manifestReader.ReadToEnd() | ConvertFrom-Json -Depth 20
+  } catch {
+    Stop-WithMessage 'The packaged manifest.json is malformed JSON.'
+  } finally {
+    $manifestReader.Dispose()
+    $manifestStream.Dispose()
+  }
+
+  if ([string]$embeddedManifest.version -ne $Version) {
+    Stop-WithMessage "The packaged manifest version '$($embeddedManifest.version)' does not match release version '$Version'."
+  }
+  if ([int]$embeddedManifest.manifest_version -ne 3) {
+    Stop-WithMessage "The packaged manifest_version is $($embeddedManifest.manifest_version); expected Manifest V3."
+  }
+  if ($embeddedManifest.PSObject.Properties.Name -contains 'key') {
+    Stop-WithMessage 'The packaged manifest must not embed a signing key.'
+  }
+
+  $requiredArchiveEntries = @('manifest.json', 'src/shared/pairing.js')
+  foreach ($referencedPath in @(
+      [string]$embeddedManifest.background.service_worker,
+      [string]$embeddedManifest.action.default_popup,
+      [string]$embeddedManifest.options_page
+    )) {
+    if (-not [string]::IsNullOrWhiteSpace($referencedPath)) {
+      $requiredArchiveEntries += $referencedPath.Replace('\', '/')
+    }
+  }
+  foreach ($requiredArchiveEntry in @($requiredArchiveEntries | Select-Object -Unique)) {
+    if (-not $entryNamesByCase.Contains($requiredArchiveEntry)) {
+      Stop-WithMessage "The packaged archive is missing manifest-referenced file: $requiredArchiveEntry"
+    }
+  }
 } finally {
   $archive.Dispose()
 }
-if ($entryNames -notcontains 'manifest.json') {
-  Stop-WithMessage 'The packaged archive does not carry manifest.json at its root.'
-}
-if (-not ($entryNames | Where-Object { $_ -eq 'src/service-worker.js' })) {
-  Stop-WithMessage 'The packaged archive does not carry src/service-worker.js.'
-}
+
+$assetSha256 = (Get-FileHash -LiteralPath $assetPath -Algorithm SHA256).Hash.ToLowerInvariant()
 
 try {
   $manifest = Get-Content -LiteralPath $ManifestPath -Raw | ConvertFrom-Json -Depth 50
@@ -119,6 +214,36 @@ if (-not ($manifest.PSObject.Properties.Name -contains 'extensionAsset')) {
 } else {
   $manifest.extensionAsset = $assetName
 }
+$extensionArtifact = [pscustomobject]@{
+  kind = 'chromium-extension-load-unpacked'
+  format = 'zip'
+  name = $assetName
+  version = $Version
+  sizeBytes = [int64]$assetInfo.Length
+  sha256 = $assetSha256
+  manifestVersion = 3
+  installMethod = 'load-unpacked'
+  signed = $false
+}
+if (-not ($manifest.PSObject.Properties.Name -contains 'extensionArtifact')) {
+  $manifest | Add-Member -MemberType NoteProperty -Name 'extensionArtifact' -Value $extensionArtifact
+} else {
+  $manifest.extensionArtifact = $extensionArtifact
+}
+$artifactEvidence = if ($manifest.PSObject.Properties.Name -contains 'artifacts') { @($manifest.artifacts) } else { @() }
+$artifactEvidence = @($artifactEvidence | Where-Object { [string]$_.name -ne $assetName }) + @(
+  [pscustomobject]@{
+    name = $assetName
+    sizeBytes = [int64]$assetInfo.Length
+    sha256 = $assetSha256
+  }
+)
+$artifactEvidence = @($artifactEvidence | Sort-Object { [string]$_.name })
+if (-not ($manifest.PSObject.Properties.Name -contains 'artifacts')) {
+  $manifest | Add-Member -MemberType NoteProperty -Name 'artifacts' -Value $artifactEvidence
+} else {
+  $manifest.artifacts = $artifactEvidence
+}
 $manifest | ConvertTo-Json -Depth 10 | Set-Content -LiteralPath $ManifestPath -Encoding utf8NoBOM
 
-Write-Output "Packaged Chromium extension asset: $assetName ($($assetInfo.Length) bytes, $($entryNames.Count) entries)"
+Write-Output "Packaged Chromium extension ZIP: $assetName ($($assetInfo.Length) bytes, SHA-256 $assetSha256, version $Version, $($entryNames.Count) entries)"

@@ -1,5 +1,77 @@
 # Handoff: Material Download Manager
 
+## Authenticated automatic browser capture and app-prepared extension (2026-08-11)
+
+Issue [#14](https://github.com/Ding-Ding-Projects/material-download-manager/issues/14)
+tracks the current implementation. The task checkout changes the Chromium
+extension from manual page/link capture only to default-on automatic browser-
+download capture while preserving the manual popup and context-menu paths.
+
+For an eligible new HTTP(S) download, the service worker pauses the exact
+Chrome item before handoff and stores a bounded identity claim. It sends only a
+fresh nonce to `GET /v2/challenge`; the app must prove the app-prepared pairing
+with HMAC-SHA-256 before the extension sends any download URL. The subsequent
+protocol-2 POST carries a one-use proof over every request field, and its final
+accepted response carries a separate proof over the returned download id.
+
+The app accepts a takeover only after a credential-free ranged GET succeeds
+and the real manager record is durably persisted and started. Protocol 2 has no
+provisional acknowledgement: only that final state returns authenticated
+`202`. If the client disconnects before the response is delivered, the app
+rolls the new record and protected source back. An unpaired client, rejection,
+overload, invalid proof/response, source-read failure, timeout, offline app, or
+another handoff failure resumes and retains the exact item that the extension
+paused. Startup recovery finishes accepted claims or resumes paused claims; it
+does not inspect and alter unrelated paused downloads.
+
+The automatic request contains only a credential-free URL and, when the URL
+path yields one safely, a basename limited to 512 characters. It never forwards
+cookies, authorization headers, referrers, browser request headers, or the
+absolute Chrome destination path. The desktop adapter validates that optional
+basename independently. It also rejects website and malformed browser origins,
+echoes only a valid 32-character `chrome-extension://` origin with
+`Vary: Origin`, and retains originless loopback access for local process-
+boundary diagnostics without granting cross-origin access. Query-bearing URLs
+that the app accepts persist only in the operating-system credential vault,
+remain redacted in state/history/renderer data, and are removed on terminal
+cleanup.
+
+Capacity is finite: at most 8 handoff POSTs may be active and at most 60
+challenge/POST requests are admitted per rolling minute. Challenges are
+one-use, expire after 30 seconds, and occupy a table capped at 64 entries.
+
+The extension's Options page persists the default-on automatic-capture switch.
+Turning it off leaves the manual handoff paths intact. The existing settings
+search keeps its adjacent full regex builder; this feature added no unpaired
+search field.
+
+The desktop **Install browser extension** action rotates a local pairing
+capability, keeps the app-side value in the operating-system credential vault,
+writes its match only into the private staged extension beneath the stable
+application-data directory, and automatically opens that exact folder.
+Preparation and file-manager launch are reported as separate facts, so a
+folder-open failure does not undo or misreport a completed copy. **Open
+extension folder** remains the manual fallback.
+
+Release automation now stamps the reserved stable version into only the staged
+extension `manifest.json`, validates the archive root and manifest entry points,
+requires the public pairing module to remain empty, rejects embedded
+capabilities plus signing/CRX material, records structured size/SHA-256
+metadata, and verifies the published ZIP by downloading it again. The generic
+ZIP is a versioned source/reference artifact until the app prepares its private
+paired copy. A genuine CRX3 is not published: it requires a persistent signing
+key, while this repository permanently prohibits signing keys and signing
+operations. The supported ordinary-user route is the app-prepared folder with
+Chrome's **Developer mode → Load unpacked** flow.
+
+GitHub Actions no longer runs tests, lint, type checking, static analysis,
+coverage, accessibility checks, or screenshots. Local checks remain required
+task evidence, while the workflows build, package, publish, deploy, verify
+external assets, and retain safe failure evidence. At this documentation
+checkpoint the implementation is not yet merged or remotely verified. Its
+integrating commit, exact local check counts, release run, Pages run, and
+public-safe Settings capture must be added here before issue #14 is closed.
+
 ## CI moved to GitHub-hosted runners (2026-08-08)
 
 The three workflows (`ci.yml`, `pages.yml`, `release.yml`) now run on
@@ -46,17 +118,18 @@ than rewritten.
 
 The release helpers and workflows preserve the stable updater feed, the
 reproducible line-count and dim-sum metadata helpers, and Squirrel.Windows
-packaging. Lane E makes the current automation contract explicit: all jobs use
-the labelled self-hosted Windows runner documented in [`CI.md`](CI.md), the
-dependency inventory is committed, and fresh bootstrap is checked before and
-after `npm ci`.
+packaging. The current automation contract is documented in [`CI.md`](CI.md):
+the release and Pages jobs use a pinned GitHub-hosted Windows image, the
+dependency inventory is committed, and the release path performs a complete
+native bootstrap after `npm ci`.
 
 Code signing is prohibited. The stable release workflow clears inherited
 signing inputs, temporarily disables `forceCodeSigning` only in the runner copy
 of `design/package.json`, restores that file byte-for-byte, verifies
 `Setup.exe` is `NotSigned`, and publishes a stable release only when the
-published record reports `isPrerelease=false`, after tests and Squirrel
-artifact checks pass. There is no alternate distribution path.
+published record reports `isPrerelease=false`, after build, package, and
+Squirrel artifact checks pass. GitHub Actions runs no tests or lint. There is
+no alternate distribution path.
 
 The release workflow reserves a monotonic version tag and, when the public
 catalog is available, a unique dim-sum code-name ref through the GitHub ref API.
@@ -72,9 +145,9 @@ failure. The engine test command also runs with `--test-concurrency=1
 --test-timeout=60000` because its manager tests intentionally exercise
 process-global Windows profile state and Node applies the timeout to each
 compiled test file as a whole. The 60-second file budget accommodates the
-deliberately serialized cases while still bounding a blocked file. Both current
-workflows use the self-hosted runner contract;
-the current runner and its fresh bootstrap evidence are recorded below.
+deliberately serialized cases while still bounding a blocked file. The
+self-hosted workflow references below are historical evidence for those exact
+commits; they do not describe the current pinned-hosted automation contract.
 Historical run
 [31129129233](https://github.com/Ding-Ding-Projects/material-download-manager/actions/runs/31129129233)
 was canceled after recording the race. The fix was verified by the historical
@@ -480,7 +553,7 @@ On the current verification tree, the following checks passed locally:
 | `npm run typecheck` | Passed renderer and Electron TypeScript checks. |
 | `npm run build` | Passed Vite renderer and Electron main-process compilation. |
 | `npm run test:engine` | 38/38 passed locally, including concurrent and cross-instance StateStore saves, failed-write recovery, Range integrity, pause/resume, non-resumable fallback, custom-header persistence and cross-origin header stripping, global queue limits, deterministic schedule race handling, manager history hooks, filename sanitization, malformed Range rejection, categories, throttling, URL redaction, bounded API schedule sources, and Home Assistant boolean sources. |
-| `npm run test:electron` | 54/54 passed for export, local history, concurrent and append-only history foundations, hook/index isolation, argument and snapshot bounds, renderer-boundary history filter normalization, renderer settings validation, regex, tabs, documentation-link resolution/search bounds, command-palette foundations, compiled renderer-path resolution, secure updater IPC, version monotonicity, timeout/stale-event recovery, native Squirrel download-overlap protection, queue payload validation, Settings Escape handling, completion-notification preference handling, loopback handoff success/failure responses, slow-pending handoff acknowledgement, export metadata/loss contracts, and changelog validation/filtering/store/IPC paths. |
+| `npm run test:electron` | 54/54 passed for export, local history, concurrent and append-only history foundations, hook/index isolation, argument and snapshot bounds, renderer-boundary history filter normalization, renderer settings validation, regex, tabs, documentation-link resolution/search bounds, command-palette foundations, compiled renderer-path resolution, secure updater IPC, version monotonicity, timeout/stale-event recovery, native Squirrel download-overlap protection, queue payload validation, Settings Escape handling, completion-notification preference handling, loopback handoff success/failure responses, the historical provisional acknowledgement behavior now superseded by protocol 2 final-only acceptance, export metadata/loss contracts, and changelog validation/filtering/store/IPC paths. |
 | `npm run test:ui` | 24/24 required checks passed through the built Electron/CDP smoke harness: renderer freshness, real preload bridge, tab shell including Documentation, offline article index and Markdown rendering, plain-text and regex article search, relative article navigation, honest empty state, command-palette destination, History tab controls and honest empty state, a seeded separate progress window with a named progressbar, four Settings tabs, independent search, anchored regex builder, Escape focus restoration, interactive-label structure, narrow layout at 520 CSS pixels and 2× scale, and cleanup. |
 | Chromium extension `npm test` | 12/12 passed for MV3 permissions and entrypoints, page/link/selected-text context-menu handoff, bounded link-target precedence, loopback protocol, bounded validation, settings import/export, regex safety, localization, and no remote assets/tracking. |
 | `npm run test:docs` and bundle guard | 2/2 bundle tests passed; all 30 categorized Markdown files are present in the generated renderer catalog. |
@@ -507,16 +580,14 @@ full or delta `.nupkg`, and `NotSigned` verification. The legacy unsigned
 verified through `v0.1.19` at the evidence-capture point; later successful
 releases advance the same dynamic feed.
 
-The repository has a Windows push/dispatch workflow at
-[`.github/workflows/ci.yml`](.github/workflows/ci.yml) for validation and a
-separate [stable Windows release workflow](.github/workflows/release.yml). Both
-use the explicit self-hosted label contract and the committed dependency
-inventory. The release workflow validates tests and Squirrel assets, publishes
-one stable non-draft, non-prerelease release, records unsigned status, and
-verifies release timing and asset identity after publication. A self-hosted
-Pages workflow is now present at
-[`.github/workflows/pages.yml`](.github/workflows/pages.yml). It validates and
-stages the local site before deployment, asks `actions/configure-pages@v5` to
+The repository has a [stable Windows release workflow](.github/workflows/release.yml)
+on every push and manual dispatch. It uses the pinned GitHub-hosted Windows
+image and committed dependency inventory, builds the app, validates Squirrel
+and extension ZIP assets, publishes one stable non-draft/non-prerelease
+release, records unsigned status, and verifies release timing and asset identity
+after publication. GitHub Actions runs no tests or lint. The
+[Pages workflow](.github/workflows/pages.yml) uses the same pinned hosted image
+to stage the local site for deployment, asks `actions/configure-pages@v5` to
 enable Pages when needed, and now has live verification at
 https://ding-ding-projects.github.io/material-download-manager/. The site
 injects the latest verified stable manifest only after the release asset
@@ -524,13 +595,12 @@ inventory is checked. The `v0.1.19` deployment additionally refreshed the
 manifest after the stable release was published and verified the rendered
 publication state through the live site.
 
-The release branch also passed local static checks for the workflow and helper
+The historical release branch also passed local static checks for the workflow and helper
 contracts: `actionlint -shellcheck=` passed, all 8 PowerShell run blocks parsed,
 the line-count table validated, the dim-sum metadata resolved to
 `Classic Har Gow · 蝦餃`, and `electron-builder --version` resolved to
-`24.13.3`. The current workflow contract also passes local static inspection;
-the matching repository runner is registered and the current self-hosted
-release and Pages runs are verified above.
+`24.13.3`. Those recorded self-hosted release and Pages runs remain historical
+evidence only; the current task requires its own pinned-hosted run verdicts.
 
 ## Distributed SSH worker handoff
 
@@ -553,7 +623,7 @@ an idempotent removal entry point outside the versioned worker root.
 The implementation is verified locally by the focused manager/task/protocol,
 vault, probe, planner, manifest, and worker tests plus TypeScript/build gates:
 the compiled download-engine suite is 90/90, the Electron suite is 67/67, the
-worker suite is 48/48, and the built-artifact Herng Ha smoke is 39/39.
+worker suite is 48/48, and the built-artifact Electron smoke is 39/39.
 The Docker daemon was unavailable on the development machine, so a live image
 launch is not claimed; the static Compose/resource contract and worker hostile
 tests remain separate evidence. Before any real host is provisioned, recheck

@@ -26,11 +26,22 @@ available without a fetch. The source Markdown remains authoritative in
 
 ## Release and publication honesty
 
-`data/release-manifest.json` and its browser-loaded JavaScript form both state
-that no stable production installer has been proven. The UI creates a stable
+`data/release-manifest.json` and its browser-loaded JavaScript form fail closed
+when no stable production release has been proven. The UI creates a stable
 installer link only when a manifest record is marked verified, carries a stable
 version, uses an HTTPS asset URL, and lists the required Squirrel assets. The
-current test prerelease is intentionally not eligible.
+injected manifest also carries the version-stamped Chromium extension ZIP's
+name, size, SHA-256, Manifest V3 version, unsigned state, and load-unpacked
+installation method only after the latest release exposes matching verified
+metadata. A prerelease is never eligible.
+
+The extension release asset is a generic source/reference ZIP. Its pairing
+module is intentionally empty, so a fresh copy cannot authenticate protocol-2
+handoff until the desktop app prepares a private paired folder. The site directs
+users to **Install browser extension** in the app, then **Developer mode → Load
+unpacked** with the automatically revealed folder. The repository does not
+create or advertise a CRX because a genuine CRX3 requires signing and the
+project permanently prohibits signing keys and signing operations.
 
 GitHub Pages publication is not claimed by this source. A real deployment URL
 and built-output verification must be added before the repository advertises a

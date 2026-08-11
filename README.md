@@ -9,14 +9,14 @@ AB Download Manager codebase.
 - Preserved visual prototype: [`prototype/`](prototype/)
 - Handoff: [`HANDOFF.md`](HANDOFF.md)
 - Roadmap: [`ROADMAP.md`](ROADMAP.md)
+- Changelog: [`CHANGELOG.md`](CHANGELOG.md)
 - CI and release contract: [`CI.md`](CI.md)
 - Shared project guidance mirror: [`AGENTS.md`](AGENTS.md)
-- CI workflow: [Windows verification](.github/workflows/ci.yml)
 - Release workflow: [stable Windows release](.github/workflows/release.yml)
 - GitHub Pages source: [`site/`](site/)
 - Live site: [Material Download Manager on GitHub Pages](https://ding-ding-projects.github.io/material-download-manager/)
 - Latest stable release: [view the latest stable GitHub Release](https://github.com/Ding-Ding-Projects/material-download-manager/releases/latest)
-- Chromium extension: [`extension/`](extension/) — packaged with every stable release as `material-download-manager-extension-<version>.zip` on the [latest release](https://github.com/Ding-Ding-Projects/material-download-manager/releases/latest); extract it and use **Load unpacked** at `chrome://extensions`
+- Chromium extension: [`extension/`](extension/) — catches eligible browser downloads automatically by default through an app-prepared authenticated pairing and is packaged with every stable release as the versioned source/reference ZIP `material-download-manager-extension-<version>.zip`; use **Install browser extension** in the app, then choose its automatically opened paired folder with **Load unpacked** at `chrome://extensions`
 - Search feature docs: [`docs/features/search/`](docs/features/search/)
 - Navigation feature docs: [`docs/features/navigation/`](docs/features/navigation/)
 - Website: [ding-ding-projects.github.io/material-download-manager](https://ding-ding-projects.github.io/material-download-manager/)
@@ -79,6 +79,55 @@ the exact disposable process tree, profile, and headless desktop were removed.
 </details>
 
 <details>
+<summary>Browser extension automatic capture and installation</summary>
+
+The Manifest V3 extension requests Chrome's `downloads` permission and enables
+automatic capture by default. When Chrome creates an eligible HTTP(S)
+download, the service worker pauses that browser download and records that it
+owns the pause. It first sends only a nonce to `GET /v2/challenge`; the app must
+prove the app-prepared pairing with HMAC-SHA-256 before the extension sends any
+download URL. The authenticated one-use POST is successful only after the app
+proves the source with a credential-free ranged GET, durably persists and
+starts the manager record, and returns an authenticated final `202`. Only then
+does the extension cancel the original browser download and erase its cancelled
+history row. An unpaired copy, rejection, overload, invalid proof, source-read
+failure, client-disconnect rollback, timeout, offline app, or local processing
+failure resumes and retains the exact download the extension paused. Manual
+popup and context-menu handoffs remain available.
+
+Automatic handoff sends the credential-free URL and, when one can be derived
+safely, a basename from the URL path. It never forwards cookies,
+authorization headers, referrers, browser request headers, or the absolute
+browser download path. Query-bearing URLs that the app accepts persist only in
+the operating-system credential vault, are redacted from ordinary state and
+history, and are removed on terminal cleanup. The persisted **Automatically
+send browser downloads to the local manager** option can turn this behavior off
+without removing manual handoff actions.
+
+The desktop app's **Install browser extension** action creates the paired
+private copy in its stable application-data folder: the app-side capability is
+kept in the operating-system credential vault and its match is written only to
+that staged extension. The app automatically opens the exact folder. The
+existing **Open extension folder** action remains available if the file manager
+could not be opened or the folder needs to be shown again. Chrome still
+requires **Developer mode → Load unpacked** for this off-store installation.
+
+Each stable extension ZIP receives the reserved release version in its staged
+`manifest.json`. Packaging validates that the archive has its manifest and
+manifest-referenced entry points at the archive root, requires the pairing
+module to be empty, rejects embedded capabilities and signing material, and
+records the ZIP's size and SHA-256 for publication verification. The generic
+ZIP is versioned source/reference material until the app prepares a private
+paired copy; loading it directly into a fresh profile reports an unpaired
+state. The project does not publish a `.crx`: a genuine CRX3 is a signed
+container, while this repository permanently prohibits signing keys and
+signing operations. Renaming a ZIP would not make a valid CRX, and ordinary
+off-store Chrome installations still require an unpacked extension unless an
+administrator has configured an enterprise installation policy.
+
+</details>
+
+<details>
 <summary>Build and test</summary>
 
 From `design/`:
@@ -102,11 +151,19 @@ prohibited. The helper restores the source manifest byte-for-byte, and the
 artifact validator requires an intentionally unsigned `Setup.exe`,
 `RELEASES`, every full and delta `.nupkg`, and matching package references.
 
-The `stable Windows release` workflow runs tests first, reserves a monotonic
-unique version and public dim-sum code name, then creates one stable,
+Local checks run before a change is pushed. GitHub Actions deliberately runs no
+tests, lint, type checking, static analysis, coverage, accessibility checks, or
+screenshots. The accepted tradeoff is that automated publication does not
+protect users from a commit whose local checks were skipped or failed; the
+repository therefore records the real local result in the task handoff and
+release notes.
+
+The `stable Windows release` workflow builds the application, reserves a
+monotonic unique version and public dim-sum code name, then creates one stable,
 non-draft release with `isPrerelease=false`, release timing, the line-count table,
-and the validated Squirrel assets. It has no signing credentials or alternate
-distribution path. The historical unsigned test release
+the validated Squirrel assets, and a version-stamped validated Chromium
+extension ZIP. It has no signing credentials or alternate distribution path.
+The historical unsigned test release
 [`v0.1.0`](https://github.com/Ding-Ding-Projects/material-download-manager/releases/tag/v0.1.0)
 is retained as prior evidence only. The latest implementation verification
 release is [`v0.1.33`](https://github.com/Ding-Ding-Projects/material-download-manager/releases/tag/v0.1.33),
@@ -116,20 +173,25 @@ non-draft, non-prerelease, and unsigned. The latest-release link above is
 deliberately dynamic because every successful push creates a new monotonic
 stable record.
 
-Both workflows require the explicit self-hosted Windows label contract
-documented in [`CI.md`](CI.md), and both validate the committed dependency
-inventory through the pre-install and post-install bootstrap checks. No remote
-run is claimed until a matching self-hosted runner is registered.
+The active workflows use the pinned GitHub-hosted Windows image documented in
+[`CI.md`](CI.md). The release job bootstraps its declared application and
+packaging dependencies; the Pages job builds the dependency-free site and
+publishes only verified release metadata. Safe evidence collection runs even
+after an earlier build or publication failure without changing that failure's
+result.
 
 The updater has a stable default feed at
 `https://github.com/Ding-Ding-Projects/material-download-manager/releases/latest/download/`;
 `MDM_UPDATE_FEED_URL` remains an optional main-process override. The historical
 unsigned `v0.1.0` test release is excluded from the stable feed. A new stable
-feed result is verified by the self-hosted release run that published
-`v0.1.18`; later successful runs advance the same feed without recycling a tag.
+feed result was verified by the historical self-hosted release run that
+published `v0.1.18`; later successful runs advance the same feed without
+recycling a tag.
 
-The Windows verification workflow runs the typecheck, build, downloader tests,
-and compiled Electron path tests on every push and on manual dispatch.
+The release workflow runs on every push and on manual dispatch. It builds,
+packages, publishes, and verifies a unique release; it does not run tests or
+lint. The Pages workflow builds and deploys the documentation site from `main`
+and on manual dispatch.
 
 </details>
 
@@ -164,10 +226,22 @@ expression—including Add download category preview and final routing—runs
 through bounded IPC in a terminable main-process worker; timeouts fail safely
 instead of blocking the renderer or Electron event loop. Settings schema v3
 validates exact bounded rule records and preserves truthful per-key provenance.
-The Chromium extension sends validated page or link URLs
-through the loopback protocol; a live accepted handoff joins the same queue the
-progress window displays. The prototype is never presented as the download
-path. The app also ships an offline Documentation tab that bundles every
+The Chromium extension sends validated page or link URLs through a protocol-2
+loopback pairing and automatically catches eligible browser downloads by
+default. It pauses before handoff, requires the app to prove its capability
+before any download URL is sent, and cancels/erases the browser copy only after
+an authenticated final durable acceptance. Every unpaired, rejected, offline,
+overloaded, invalid, source-unreadable, disconnected, or timed-out route resumes
+and retains its own paused browser item. The automatic payload is limited to a
+credential-free URL plus an optional URL-derived safe basename. Protected
+query URLs persist only in the operating-system credential vault and are
+removed on terminal cleanup. The desktop app prepares a paired extension,
+automatically opens the exact staged folder, and retains a manual reveal
+action. The generic release ZIP contains no pairing capability and remains a
+validated versioned source/reference artifact. A live accepted handoff joins
+the same queue the progress window displays. The prototype is never presented
+as the download path. The app also
+ships an offline Documentation tab that bundles every
 categorized feature article, renders Markdown safely, keeps relative article
 links inside the app, and provides its own anchored regex search. Remaining
 release and product gaps are explicit in [`HANDOFF.md`](HANDOFF.md). The

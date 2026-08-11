@@ -15,10 +15,14 @@ function Stop-WithMessage([string]$Message) {
 $repositoryRoot = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 $designRoot = Join-Path $repositoryRoot 'design'
 $packagePath = Join-Path $designRoot 'package.json'
+$extensionManifestPath = Join-Path $repositoryRoot 'extension/manifest.json'
 $releaseRoot = Join-Path $designRoot 'release'
 
 if (-not (Test-Path -LiteralPath $packagePath -PathType Leaf)) {
   Stop-WithMessage "Missing package manifest: $packagePath"
+}
+if (-not (Test-Path -LiteralPath $extensionManifestPath -PathType Leaf)) {
+  Stop-WithMessage "Missing bundled extension manifest: $extensionManifestPath"
 }
 
 $workspacePrefix = ([System.IO.Path]::GetFullPath($repositoryRoot)).TrimEnd('\') + '\'
@@ -29,10 +33,20 @@ if (-not $releaseRootFull.StartsWith($workspacePrefix, [System.StringComparison]
 
 $originalBytes = [System.IO.File]::ReadAllBytes($packagePath)
 $originalHash = (Get-FileHash -LiteralPath $packagePath -Algorithm SHA256).Hash
+$originalExtensionManifestBytes = [System.IO.File]::ReadAllBytes($extensionManifestPath)
+$originalExtensionManifestHash = (Get-FileHash -LiteralPath $extensionManifestPath -Algorithm SHA256).Hash
 try {
   $package = [System.Text.Encoding]::UTF8.GetString($originalBytes) | ConvertFrom-Json -Depth 40
 } catch {
   Stop-WithMessage 'design/package.json is malformed JSON.'
+}
+try {
+  $extensionManifest = [System.Text.Encoding]::UTF8.GetString($originalExtensionManifestBytes) | ConvertFrom-Json -Depth 20
+} catch {
+  Stop-WithMessage 'extension/manifest.json is malformed JSON.'
+}
+if ([int]$extensionManifest.manifest_version -ne 3 -or $extensionManifest.PSObject.Properties.Name -contains 'key') {
+  Stop-WithMessage 'The bundled extension must be unsigned Manifest V3 without a manifest key.'
 }
 
 if ($null -eq $package.build -or $null -eq $package.build.forceCodeSigning -or $null -eq $package.build.win) {
@@ -82,6 +96,12 @@ try {
     $temporaryJson,
     [System.Text.UTF8Encoding]::new($false)
   )
+  $extensionManifest.version = $Version
+  [System.IO.File]::WriteAllText(
+    $extensionManifestPath,
+    ($extensionManifest | ConvertTo-Json -Depth 20),
+    [System.Text.UTF8Encoding]::new($false)
+  )
 
   foreach ($name in $signingEnvironmentNames) {
     Remove-Item -Path "Env:$name" -ErrorAction SilentlyContinue
@@ -106,11 +126,16 @@ try {
   }
 
   [System.IO.File]::WriteAllBytes($packagePath, $originalBytes)
+  [System.IO.File]::WriteAllBytes($extensionManifestPath, $originalExtensionManifestBytes)
 }
 
 $restoredHash = (Get-FileHash -LiteralPath $packagePath -Algorithm SHA256).Hash
 if ($restoredHash -ne $originalHash) {
   Stop-WithMessage 'The original design/package.json bytes were not restored after packaging.'
+}
+$restoredExtensionManifestHash = (Get-FileHash -LiteralPath $extensionManifestPath -Algorithm SHA256).Hash
+if ($restoredExtensionManifestHash -ne $originalExtensionManifestHash) {
+  Stop-WithMessage 'The original extension/manifest.json bytes were not restored after packaging.'
 }
 if ($exitCode -ne 0) {
   Stop-WithMessage "electron-builder exited with code $exitCode."
@@ -119,4 +144,4 @@ if (-not (Test-Path -LiteralPath $releaseRoot -PathType Container)) {
   Stop-WithMessage 'electron-builder did not produce design/release.'
 }
 
-Write-Output "Built unsigned Squirrel.Windows artifacts for version $Version; the source manifest was restored byte-for-byte."
+Write-Output "Built unsigned Squirrel.Windows artifacts for version $Version; the application and bundled-extension source manifests were restored byte-for-byte."

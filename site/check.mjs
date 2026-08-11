@@ -70,12 +70,19 @@ for (const relativePath of expectedFiles) {
 const html = await read("index.html");
 const css = await read("styles.css");
 const app = await read("app.js");
+const buildSource = await read("build.mjs");
 const contentSource = await read("content.js");
 const manifestJsonSource = await read("data/release-manifest.json");
 const manifestJsSource = await read("data/release-manifest.js");
 const content = loadScript(contentSource, "content.js", "MDM_SITE_CONTENT");
 const manifestFromJs = loadScript(manifestJsSource, "release-manifest.js", "MDM_RELEASE_MANIFEST");
 const manifestFromJson = JSON.parse(manifestJsonSource);
+
+run("site builder never recursively removes a caller-selected output path", () => {
+  assert.doesNotMatch(buildSource, /\brm\s*\(/);
+  assert.match(buildSource, /output already exists/);
+  assert.match(buildSource, /outside the repository and its ancestors/);
+});
 
 run("HTML has language, viewport, skip link, main landmark, and tab semantics", () => {
   assert.match(html, /<html lang="en"/);

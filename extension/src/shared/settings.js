@@ -1,8 +1,9 @@
 export const SETTINGS_KEY = "settings";
 export const LAST_RESULT_KEY = "lastResult";
+export const DOWNLOAD_CLAIMS_KEY = "automaticDownloadClaims";
 export const SETTINGS_EXPORT_SCHEMA = "material-download-manager-extension-settings";
 export const SETTINGS_EXPORT_VERSION = 1;
-export const HANDOFF_PROTOCOL_VERSION = 1;
+export const HANDOFF_PROTOCOL_VERSION = 2;
 export const HANDOFF_PATH = "/v1/downloads";
 export const STATUS_PATH = "/v1/status";
 export const ALLOWED_LOOPBACK_HOSTS = new Set(["127.0.0.1", "localhost"]);
@@ -14,6 +15,7 @@ export const DEFAULT_SETTINGS = Object.freeze({
   languageMode: "en",
   funnyLevelEn: 2,
   funnyLevelYue: 2,
+  autoCaptureDownloads: true,
   handoffEndpoint: DEFAULT_HANDOFF_ENDPOINT,
 });
 
@@ -93,6 +95,9 @@ export function sanitizeSettings(value) {
     languageMode: LANGUAGE_MODES.has(source.languageMode) ? source.languageMode : DEFAULT_SETTINGS.languageMode,
     funnyLevelEn: clampLevel(source.funnyLevelEn, DEFAULT_SETTINGS.funnyLevelEn),
     funnyLevelYue: clampLevel(source.funnyLevelYue, DEFAULT_SETTINGS.funnyLevelYue),
+    autoCaptureDownloads: typeof source.autoCaptureDownloads === "boolean"
+      ? source.autoCaptureDownloads
+      : DEFAULT_SETTINGS.autoCaptureDownloads,
     handoffEndpoint: endpoint.valid ? endpoint.value : "",
   };
 }

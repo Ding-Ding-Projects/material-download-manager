@@ -10,6 +10,14 @@ import { localize } from "./shared/localization.js";
 
 let settings = sanitizeSettings(DEFAULT_SETTINGS);
 let activeTab = "connection";
+const REQUIRED_SEARCHABLE_SETTING_IDS = Object.freeze([
+  "handoff-endpoint",
+  "auto-capture-downloads",
+  "manager-display-name",
+  "language-mode",
+  "funny-level-en",
+  "funny-level-yue",
+]);
 
 const elements = {
   managerName: document.querySelector("#manager-name"),
@@ -33,6 +41,7 @@ const elements = {
   useDefaultEndpoint: document.querySelector("#use-default-endpoint"),
   testConnection: document.querySelector("#test-connection"),
   connectionStatus: document.querySelector("#connection-status"),
+  autoCaptureDownloads: document.querySelector("#auto-capture-downloads"),
   managerDisplayName: document.querySelector("#manager-display-name"),
   languageMode: document.querySelector("#language-mode"),
   funnyEn: document.querySelector("#funny-level-en"),
@@ -48,6 +57,12 @@ const elements = {
   resetSettings: document.querySelector("#reset-settings"),
   toast: document.querySelector("#toast"),
 };
+
+for (const id of REQUIRED_SEARCHABLE_SETTING_IDS) {
+  const control = document.getElementById(id);
+  const card = control?.closest(".setting-card[data-search]");
+  if (!control || !card) throw new Error(`Searchable extension setting is missing from the settings inventory: ${id}`);
+}
 
 function localizePage() {
   document.documentElement.lang = settings.languageMode === "yue" ? "zh-Hant" : "en";
@@ -67,6 +82,7 @@ function localizePage() {
 
 function fillForm() {
   elements.endpoint.value = settings.handoffEndpoint;
+  elements.autoCaptureDownloads.checked = settings.autoCaptureDownloads;
   elements.managerDisplayName.value = settings.managerName;
   elements.languageMode.value = settings.languageMode;
   elements.funnyEn.value = String(settings.funnyLevelEn);
@@ -79,6 +95,7 @@ function collectFormSettings() {
   return sanitizeSettings({
     ...settings,
     handoffEndpoint: elements.endpoint.value,
+    autoCaptureDownloads: elements.autoCaptureDownloads.checked,
     managerName: elements.managerDisplayName.value,
     languageMode: elements.languageMode.value,
     funnyLevelEn: Number(elements.funnyEn.value),
@@ -97,11 +114,25 @@ function showToast(text) {
 function resultMessage(value) {
   const key = {
     "handoff-success": "handoffSuccess",
-    "handoff-pending": "handoffPending",
+    "handoff-cleanup-warning": "handoffCleanupWarning",
+    "automatic-pause-failed": "automaticPauseFailed",
+    "automatic-capacity-full": "automaticCapacityFull",
+    "automatic-resumed-failed": "automaticResumedFailed",
+    "automatic-resume-failed": "automaticResumeFailed",
+    "automatic-cancel-failed-resumed": "automaticCancelFailedResumed",
+    "automatic-cancel-failed-original-gone": "automaticCancelFailedOriginalGone",
+    "automatic-cancel-failed-already-running": "automaticCancelFailedAlreadyRunning",
+    "automatic-cancel-recovery-failed": "automaticCancelRecoveryFailed",
+    "automatic-original-gone": "automaticOriginalGone",
+    "automatic-original-already-running": "automaticOriginalAlreadyRunning",
+    "automatic-ownership-mismatch": "automaticOwnershipMismatch",
+    "automatic-restart-resume-failed": "automaticRestartResumeFailed",
     "handoff-disabled": "handoffDisabled",
+    "handoff-unpaired": "handoffUnpaired",
     "handoff-failed": "handoffFailed",
     "connection-success": "connectionSuccess",
     "connection-disabled": "connectionDisabled",
+    "connection-unpaired": "connectionUnpaired",
     "connection-failed": "connectionFailed",
     "settings-saved": "settingsSaved",
     "settings-imported": "settingsImported",
@@ -313,7 +344,7 @@ elements.useDefaultEndpoint.addEventListener("click", () => {
   updateConnectionState();
   markDirty();
 });
-[elements.managerDisplayName, elements.languageMode, elements.funnyEn, elements.funnyYue].forEach((input) => {
+[elements.autoCaptureDownloads, elements.managerDisplayName, elements.languageMode, elements.funnyEn, elements.funnyYue].forEach((input) => {
   input.addEventListener("input", () => {
     settings = collectFormSettings();
     localizePage();

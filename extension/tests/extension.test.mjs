@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { createHash, createHmac } from "node:crypto";
 import { createServer } from "node:http";
 import { readFile } from "node:fs/promises";
 import { test } from "node:test";
@@ -9,18 +10,143 @@ import {
   DEFAULT_SETTINGS,
   DEFAULT_HANDOFF_ENDPOINT,
   HANDOFF_PATH,
+  HANDOFF_PROTOCOL_VERSION,
   makeSettingsExport,
   parseSettingsExport,
   sanitizeSettings,
   statusEndpoint,
   validateEndpoint,
 } from "../src/shared/settings.js";
-import { createHandoffEnvelope, normalizeDownloadUrl, validateIncomingMessage } from "../src/shared/handoff.js";
+import {
+  createHandoffEnvelope,
+  challengeProofInput,
+  deriveDownloadFileName,
+  handoffRequestProofInput,
+  handoffResponseProofInput,
+  normalizeDownloadUrl,
+  normalizeFileName,
+  validateIncomingMessage,
+} from "../src/shared/handoff.js";
 import { appendRegexFragment, evaluateRegex, validateRegex } from "../src/shared/regex.js";
 import { hasLocalizationKey, localize } from "../src/shared/localization.js";
 
 const extensionRoot = dirname(dirname(fileURLToPath(import.meta.url)));
 const read = (relativePath) => readFile(join(extensionRoot, relativePath), "utf8");
+let nextHarnessId = 0;
+const TEST_CAPABILITY = "a".repeat(43);
+
+function handoffProof(input) {
+  return createHmac("sha256", TEST_CAPABILITY).update(input, "utf8").digest("hex");
+}
+
+function challengeBody(url) {
+  const nonce = new URL(String(url)).searchParams.get("nonce");
+  assert.match(nonce ?? "", /^[a-f0-9]{64}$/u);
+  return {
+    protocol: HANDOFF_PROTOCOL_VERSION,
+    nonce,
+    proof: handoffProof(challengeProofInput(nonce)),
+  };
+}
+
+class FakeEvent {
+  listeners = [];
+  addListener(listener) { this.listeners.push(listener); }
+  dispatch(...args) { this.listeners.forEach((listener) => listener(...args)); }
+}
+
+async function waitFor(predicate, message, attempts = 100) {
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    if (predicate()) return;
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  }
+  assert.fail(message);
+}
+
+function createChromeHarness({ initialStorage = {}, initialDownloads = [] } = {}) {
+  nextHarnessId += 1;
+  const storage = new Map(Object.entries(initialStorage));
+  const items = new Map(initialDownloads.map((item) => [item.id, { ...item }]));
+  const operations = [];
+  const failures = {
+    pause: new Set(),
+    resume: new Set(),
+    cancel: new Set(),
+    erase: new Set(),
+  };
+  const runtime = {
+    id: `extension-test-${nextHarnessId}`,
+    onInstalled: new FakeEvent(),
+    onStartup: new FakeEvent(),
+    onMessage: new FakeEvent(),
+  };
+  const contextMenus = {
+    onClicked: new FakeEvent(),
+    created: [],
+    async removeAll() { contextMenus.created.length = 0; },
+    async create(menu) { contextMenus.created.push(menu); return menu.id; },
+  };
+  const downloads = {
+    onCreated: new FakeEvent(),
+    async search(query) {
+      operations.push(["search", query.id]);
+      const item = items.get(query.id);
+      return item ? [{ ...item }] : [];
+    },
+    async pause(id) {
+      operations.push(["pause", id]);
+      if (failures.pause.has(id)) throw new Error("pause failed");
+      const item = items.get(id);
+      if (item) item.paused = true;
+    },
+    async resume(id) {
+      operations.push(["resume", id]);
+      if (failures.resume.has(id)) throw new Error("resume failed");
+      const item = items.get(id);
+      if (item) item.paused = false;
+    },
+    async cancel(id) {
+      operations.push(["cancel", id]);
+      if (failures.cancel.has(id)) throw new Error("cancel failed");
+      const item = items.get(id);
+      if (item) {
+        item.paused = false;
+        item.state = "interrupted";
+      }
+    },
+    async erase(query) {
+      operations.push(["erase", query.id]);
+      if (failures.erase.has(query.id)) throw new Error("erase failed");
+      items.delete(query.id);
+      return [query.id];
+    },
+  };
+  const chromeMock = {
+    runtime,
+    contextMenus,
+    downloads,
+    storage: {
+      local: {
+        async get(key) {
+          if (typeof key === "string") return { [key]: storage.get(key) };
+          if (Array.isArray(key)) return Object.fromEntries(key.map((name) => [name, storage.get(name)]));
+          return Object.fromEntries(storage);
+        },
+        async set(values) { Object.entries(values).forEach(([key, value]) => storage.set(key, value)); },
+      },
+      onChanged: new FakeEvent(),
+    },
+    action: {
+      async setBadgeText() {},
+      async setBadgeBackgroundColor() {},
+    },
+  };
+  return { chromeMock, contextMenus, downloads, failures, items, operations, runtime, storage };
+}
+
+function downloadFingerprint(url, startTime) {
+  return createHash("sha256").update(`${url}\n${startTime}`, "utf8").digest("hex");
+}
 
 test("MV3 manifest declares the intended entrypoints and minimized permissions", async () => {
   const manifest = JSON.parse(await read("manifest.json"));
@@ -29,11 +155,11 @@ test("MV3 manifest declares the intended entrypoints and minimized permissions",
   assert.equal(manifest.background.type, "module");
   assert.equal(manifest.action.default_popup, "src/popup.html");
   assert.equal(manifest.options_page, "src/options.html");
-  assert.deepEqual(manifest.permissions, ["activeTab", "contextMenus", "storage"]);
+  assert.deepEqual(manifest.permissions, ["activeTab", "contextMenus", "downloads", "storage"]);
   assert.deepEqual(manifest.host_permissions, ["http://127.0.0.1/*", "http://localhost/*"]);
   assert.equal(manifest.permissions.includes("tabs"), false);
   assert.equal(manifest.permissions.includes("scripting"), false);
-  assert.equal(manifest.permissions.includes("downloads"), false);
+  assert.equal(manifest.permissions.includes("downloads"), true);
   assert.equal(manifest.host_permissions.includes("<all_urls>"), false);
   await import("node:fs/promises").then(({ access }) => Promise.all([
     access(join(extensionRoot, manifest.background.service_worker)),
@@ -50,6 +176,11 @@ test("service worker, popup, options, and runtime message boundary are wired", a
   assert.match(worker, /chrome\.contextMenus\.create/);
   assert.match(worker, /chrome\.contextMenus\.onClicked\.addListener/);
   assert.match(worker, /chrome\.runtime\.onMessage\.addListener/);
+  assert.match(worker, /chrome\.downloads\.onCreated\.addListener/);
+  assert.match(worker, /chrome\.downloads\.pause/);
+  assert.match(worker, /chrome\.downloads\.resume/);
+  assert.match(worker, /chrome\.downloads\.cancel/);
+  assert.match(worker, /chrome\.downloads\.erase/);
   assert.match(worker, /validateIncomingMessage/);
   assert.match(worker, /HANDOFF_URL/);
   assert.match(worker, /sendResponse/);
@@ -64,23 +195,31 @@ test("service worker, popup, options, and runtime message boundary are wired", a
   assert.match(options, /id="settings-search"/);
   assert.match(options, /id="regex-toggle"/);
   assert.match(options, /id="use-default-endpoint"/);
+  assert.match(options, /id="auto-capture-downloads"/);
+  assert.match(options, /id="auto-capture-downloads"[^>]+aria-describedby="auto-capture-downloads-help"/);
+  assert.match(options, /id="auto-capture-downloads-help"/);
+  assert.match(await read("src/options.js"), /REQUIRED_SEARCHABLE_SETTING_IDS[\s\S]*"auto-capture-downloads"/);
   assert.match(options, /role="tab"/);
   assert.match(options, /id="import-file" type="file"/);
   assert.doesNotMatch(worker, /console\.(log|info|debug|error)\(/);
 });
 
 test("service worker runtime boundary stores settings and reports disabled handoff", async () => {
-  class FakeEvent {
-    listeners = [];
-    addListener(listener) { this.listeners.push(listener); }
-  }
-
   const storage = new Map();
   const runtime = { id: "extension-test", onInstalled: new FakeEvent(), onStartup: new FakeEvent(), onMessage: new FakeEvent() };
   const contextMenus = { onClicked: new FakeEvent(), created: [], removeAll: async () => { contextMenus.created.length = 0; }, create: async (menu) => { contextMenus.created.push(menu); return menu.id; } };
+  const downloads = {
+    onCreated: new FakeEvent(),
+    async search() { return []; },
+    async pause() {},
+    async resume() {},
+    async cancel() {},
+    async erase() {},
+  };
   const chromeMock = {
     runtime,
     contextMenus,
+    downloads,
     storage: {
       local: {
         async get(key) { return { [key]: storage.get(key) }; },
@@ -95,9 +234,10 @@ test("service worker runtime boundary stores settings and reports disabled hando
   };
   const previousChrome = globalThis.chrome;
   globalThis.chrome = chromeMock;
+  storage.set("handoffCapability", TEST_CAPABILITY);
   let receivedBody = null;
   let managerAccepted = true;
-  let managerPending = false;
+  let responseProofValid = true;
   const server = createServer((request, response) => {
     if (request.method === "OPTIONS") {
       response.writeHead(204, {
@@ -110,7 +250,12 @@ test("service worker runtime boundary stores settings and reports disabled hando
     }
     if (request.method === "GET" && request.url === "/v1/status") {
       response.writeHead(200, { "Content-Type": "application/json" });
-      response.end(JSON.stringify({ protocol: 1, acceptingUrls: true }));
+      response.end(JSON.stringify({ protocol: HANDOFF_PROTOCOL_VERSION, acceptingUrls: true }));
+      return;
+    }
+    if (request.method === "GET" && request.url?.startsWith("/v2/challenge?")) {
+      response.writeHead(200, { "Content-Type": "application/json" });
+      response.end(JSON.stringify(challengeBody(`http://127.0.0.1${request.url}`)));
       return;
     }
     if (request.method === "POST" && request.url === "/v1/downloads") {
@@ -118,8 +263,23 @@ test("service worker runtime boundary stores settings and reports disabled hando
       request.on("data", (chunk) => chunks.push(chunk));
       request.on("end", () => {
         receivedBody = JSON.parse(Buffer.concat(chunks).toString("utf8"));
+        const expectedRequestProof = handoffProof(handoffRequestProofInput(receivedBody, receivedBody.authNonce));
+        if (receivedBody.authProof !== expectedRequestProof) {
+          response.writeHead(403, { "Content-Type": "application/json" });
+          response.end(JSON.stringify({ protocol: HANDOFF_PROTOCOL_VERSION, accepted: false }));
+          return;
+        }
         response.writeHead(202, { "Content-Type": "application/json" });
-        response.end(JSON.stringify({ protocol: 1, accepted: managerAccepted, pending: managerPending, downloadId: "extension-test-id" }));
+        response.end(JSON.stringify({
+          protocol: HANDOFF_PROTOCOL_VERSION,
+          accepted: managerAccepted,
+          downloadId: "extension-test-id",
+          ...(managerAccepted ? {
+            proof: responseProofValid
+              ? handoffProof(handoffResponseProofInput(receivedBody.authNonce, "extension-test-id"))
+              : "0".repeat(64),
+          } : {}),
+        }));
       });
       return;
     }
@@ -141,6 +301,11 @@ test("service worker runtime boundary stores settings and reports disabled hando
     const initial = await send({ type: "GET_STATE" });
     assert.equal(initial.ok, true);
     assert.equal(initial.settings.handoffEndpoint, DEFAULT_HANDOFF_ENDPOINT);
+    assert.equal(initial.settings.autoCaptureDownloads, true);
+    const optedOut = await send({ type: "SAVE_SETTINGS", settings: { autoCaptureDownloads: false } });
+    assert.equal(optedOut.settings.autoCaptureDownloads, false);
+    const persistedOptOut = await send({ type: "GET_STATE" });
+    assert.equal(persistedOptOut.settings.autoCaptureDownloads, false);
     const cleared = await send({ type: "SAVE_SETTINGS", settings: { handoffEndpoint: "" } });
     assert.equal(cleared.settings.handoffEndpoint, "");
     const disabled = await send({ type: "HANDOFF_URL", url: "https://example.test/file.zip" });
@@ -161,7 +326,7 @@ test("service worker runtime boundary stores settings and reports disabled hando
     assert.equal(connection.result.code, "connection-success");
     const handedOff = await send({ type: "HANDOFF_URL", url: "https://example.test/file.zip", title: "Example" });
     assert.equal(handedOff.result.code, "handoff-success");
-    assert.equal(receivedBody.protocol, 1);
+    assert.equal(receivedBody.protocol, HANDOFF_PROTOCOL_VERSION);
     assert.equal(receivedBody.source, "material-download-manager-extension");
     assert.equal(receivedBody.url, "https://example.test/file.zip");
     assert.equal(receivedBody.title, "Example");
@@ -189,11 +354,10 @@ test("service worker runtime boundary stores settings and reports disabled hando
     }
     assert.ok(receivedBody, "link context-menu handoff did not reach the manager");
     assert.equal(receivedBody.url, "https://example.test/linked-file.zip");
-    managerPending = true;
-    const pending = await send({ type: "HANDOFF_URL", url: "https://example.test/slow-file.zip" });
-    assert.equal(pending.result.code, "handoff-pending");
-    assert.equal(pending.result.ok, true);
-    managerPending = false;
+    responseProofValid = false;
+    const impersonated = await send({ type: "HANDOFF_URL", url: "https://example.test/forged-response.zip" });
+    assert.equal(impersonated.result.code, "handoff-failed");
+    responseProofValid = true;
     managerAccepted = false;
     const unconfirmed = await send({ type: "HANDOFF_URL", url: "https://example.test/file.zip" });
     assert.equal(unconfirmed.result.code, "handoff-failed");
@@ -201,6 +365,249 @@ test("service worker runtime boundary stores settings and reports disabled hando
     await new Promise((resolve) => server.close(resolve));
     if (previousChrome === undefined) delete globalThis.chrome;
     else globalThis.chrome = previousChrome;
+  }
+});
+
+test("automatic download capture is fail-safe, privacy-minimal, and coalesces duplicate events", async () => {
+  const settings = sanitizeSettings({
+    autoCaptureDownloads: true,
+    handoffEndpoint: "http://127.0.0.1:47821/v1/downloads",
+  });
+  const harness = createChromeHarness({ initialStorage: { settings, handoffCapability: TEST_CAPABILITY } });
+  const previousChrome = globalThis.chrome;
+  const previousFetch = globalThis.fetch;
+  const posts = [];
+  let managerMode = "accepted";
+  globalThis.chrome = harness.chromeMock;
+  globalThis.fetch = async (url, options = {}) => {
+    if (managerMode === "offline") throw new TypeError("loopback endpoint offline");
+    if (options.method === "GET" && new URL(String(url)).pathname === "/v2/challenge") {
+      return new Response(JSON.stringify(challengeBody(url)), { status: 200, headers: { "Content-Type": "application/json" } });
+    }
+    if (options.method !== "POST") throw new Error(`Unexpected request: ${options.method ?? "GET"} ${url}`);
+    const body = JSON.parse(options.body);
+    posts.push({ url: String(url), options, body });
+    assert.equal(body.authProof, handoffProof(handoffRequestProofInput(body, body.authNonce)));
+    const downloadId = "automatic-capture-test";
+    return new Response(JSON.stringify({
+      protocol: HANDOFF_PROTOCOL_VERSION,
+      accepted: managerMode === "accepted",
+      downloadId,
+      ...(managerMode === "accepted" ? { proof: handoffProof(handoffResponseProofInput(body.authNonce, downloadId)) } : {}),
+    }), { status: 202, headers: { "Content-Type": "application/json" } });
+  };
+
+  const claimsDoNotContain = (id) => !Object.prototype.hasOwnProperty.call(
+    harness.storage.get("automaticDownloadClaims") ?? {},
+    String(id),
+  );
+  const dispatchDownload = (item) => {
+    harness.items.set(item.id, { ...item });
+    harness.downloads.onCreated.dispatch({ ...item });
+  };
+  const baseDownload = (id, overrides = {}) => ({
+    id,
+    url: `https://example.test/download-${id}.zip`,
+    finalUrl: `https://example.test/download-${id}.zip`,
+    state: "in_progress",
+    paused: false,
+    exists: true,
+    incognito: false,
+    startTime: `2026-08-11T04:00:${String(id % 60).padStart(2, "0")}.000Z`,
+    ...overrides,
+  });
+
+  try {
+    await import(`../src/service-worker.js?automatic-capture-test=${nextHarnessId}`);
+    await waitFor(
+      () => harness.downloads.onCreated.listeners.length === 1 && harness.contextMenus.created.length === 1,
+      "service worker initialization did not register automatic download capture",
+    );
+
+    dispatchDownload(baseDownload(101, {
+      url: "https://example.test/releases/report%20final.zip",
+      finalUrl: "https://example.test/releases/report%20final.zip",
+      filename: "C:\\Users\\Example\\Downloads\\private-local-name.zip",
+      referrer: "https://private.example.test/account",
+      cookies: [{ name: "session", value: "must-not-leak" }],
+      requestHeaders: [{ name: "Authorization", value: "must-not-leak" }],
+    }));
+    await waitFor(
+      () => harness.storage.get("lastResult")?.code === "handoff-success" && claimsDoNotContain(101),
+      "accepted automatic download did not finish",
+    );
+    assert.deepEqual(
+      harness.operations.filter(([, id]) => id === 101),
+      [["pause", 101], ["search", 101], ["cancel", 101], ["erase", 101]],
+    );
+    assert.equal(posts.length, 1);
+    assert.equal(posts[0].url, settings.handoffEndpoint);
+    assert.deepEqual(Object.keys(posts[0].body).sort(), ["authNonce", "authProof", "fileName", "protocol", "requestedAt", "source", "url"]);
+    assert.equal(posts[0].body.url, "https://example.test/releases/report%20final.zip");
+    assert.equal(posts[0].body.fileName, "report final.zip");
+    assert.equal(posts[0].body.protocol, HANDOFF_PROTOCOL_VERSION);
+    assert.equal(posts[0].body.source, "material-download-manager-extension");
+    assert.doesNotMatch(JSON.stringify(posts[0].body), new RegExp(TEST_CAPABILITY));
+    assert.match(posts[0].body.requestedAt, /^\d{4}-\d{2}-\d{2}T/);
+    assert.doesNotMatch(JSON.stringify(posts[0].body), /private-local-name|private\.example|session|Authorization|must-not-leak/);
+    assert.equal(harness.operations.some(([operation, id]) => operation === "resume" && id === 101), false);
+
+    harness.operations.length = 0;
+    posts.length = 0;
+    managerMode = "rejected";
+    dispatchDownload(baseDownload(102));
+    await waitFor(
+      () => harness.operations.some(([operation, id]) => operation === "resume" && id === 102)
+        && harness.storage.get("lastResult")?.code === "automatic-resumed-failed"
+        && claimsDoNotContain(102),
+      "manager rejection did not resume the original browser download",
+    );
+    assert.deepEqual(
+      harness.operations.filter(([, id]) => id === 102),
+      [["pause", 102], ["search", 102], ["resume", 102]],
+    );
+    assert.equal(posts.length, 1);
+    assert.equal(harness.operations.some(([operation]) => operation === "cancel" || operation === "erase"), false);
+
+    harness.operations.length = 0;
+    posts.length = 0;
+    managerMode = "offline";
+    dispatchDownload(baseDownload(103));
+    await waitFor(
+      () => harness.operations.some(([operation, id]) => operation === "resume" && id === 103)
+        && claimsDoNotContain(103),
+      "offline endpoint did not resume the original browser download",
+    );
+    assert.deepEqual(
+      harness.operations.filter(([, id]) => id === 103),
+      [["pause", 103], ["search", 103], ["resume", 103]],
+    );
+    assert.equal(posts.length, 0);
+    assert.equal(harness.operations.some(([operation]) => operation === "cancel" || operation === "erase"), false);
+
+    harness.operations.length = 0;
+    posts.length = 0;
+    managerMode = "accepted";
+    harness.failures.pause.add(104);
+    dispatchDownload(baseDownload(104));
+    await waitFor(
+      () => harness.storage.get("lastResult")?.code === "automatic-pause-failed",
+      "pause failure did not report that the browser download was left untouched",
+    );
+    assert.deepEqual(harness.operations.filter(([, id]) => id === 104), [["pause", 104], ["search", 104]]);
+    assert.equal(posts.length, 0);
+    assert.equal(claimsDoNotContain(104), true);
+
+    harness.operations.length = 0;
+    posts.length = 0;
+    for (const item of [
+      baseDownload(105, { incognito: true }),
+      baseDownload(106, { paused: true }),
+      baseDownload(107, { state: "complete" }),
+      baseDownload(108, { byExtensionId: harness.runtime.id }),
+      baseDownload(109, { url: "file:///C:/private.zip", finalUrl: "file:///C:/private.zip" }),
+    ]) dispatchDownload(item);
+    for (let tick = 0; tick < 5; tick += 1) await new Promise((resolve) => setTimeout(resolve, 0));
+    assert.deepEqual(harness.operations, []);
+    assert.deepEqual(posts, []);
+
+    harness.storage.set("settings", { ...settings, autoCaptureDownloads: false });
+    dispatchDownload(baseDownload(110));
+    for (let tick = 0; tick < 5; tick += 1) await new Promise((resolve) => setTimeout(resolve, 0));
+    assert.deepEqual(harness.operations, []);
+    assert.deepEqual(posts, []);
+
+    harness.storage.set("settings", settings);
+    dispatchDownload(baseDownload(111));
+    harness.downloads.onCreated.dispatch(baseDownload(111));
+    await waitFor(
+      () => harness.storage.get("lastResult")?.code === "handoff-success" && claimsDoNotContain(111),
+      "coalesced automatic download did not finish",
+    );
+    assert.deepEqual(
+      harness.operations.filter(([, id]) => id === 111),
+      [["pause", 111], ["search", 111], ["cancel", 111], ["erase", 111]],
+    );
+    assert.equal(posts.length, 1);
+
+    harness.operations.length = 0;
+    posts.length = 0;
+    harness.storage.set("automaticDownloadClaims", Object.fromEntries(
+      Array.from({ length: 64 }, (_, index) => [String(10_000 + index), { phase: "intent", fingerprint: "a".repeat(64) }]),
+    ));
+    dispatchDownload(baseDownload(113));
+    await waitFor(
+      () => harness.storage.get("lastResult")?.code === "automatic-capacity-full",
+      "full ownership table did not leave the next browser download untouched",
+    );
+    assert.deepEqual(harness.operations, []);
+    assert.deepEqual(posts, []);
+    assert.equal(Object.keys(harness.storage.get("automaticDownloadClaims")).length, 64);
+  } finally {
+    if (previousChrome === undefined) delete globalThis.chrome;
+    else globalThis.chrome = previousChrome;
+    if (previousFetch === undefined) delete globalThis.fetch;
+    else globalThis.fetch = previousFetch;
+  }
+});
+
+test("automatic download claims recover only their exact persisted IDs after worker restart", async () => {
+  const settings = sanitizeSettings({
+    autoCaptureDownloads: true,
+    handoffEndpoint: "http://127.0.0.1:47821/v1/downloads",
+  });
+  const startTimes = Object.fromEntries([501, 502, 504, 505, 999].map((id) => [id, `2026-08-11T04:10:${id % 60}.000Z`]));
+  const urls = Object.fromEntries([501, 502, 504, 505, 999].map((id) => [id, `https://example.test/${id}.zip`]));
+  const harness = createChromeHarness({
+    initialStorage: {
+      settings,
+      automaticDownloadClaims: {
+        "501": { phase: "paused", fingerprint: downloadFingerprint(urls[501], startTimes[501]) },
+        "502": { phase: "accepted", fingerprint: downloadFingerprint(urls[502], startTimes[502]) },
+        "503": { phase: "unknown" },
+        "504": { phase: "intent", fingerprint: downloadFingerprint(urls[504], startTimes[504]) },
+        "505": { phase: "accepted", fingerprint: "b".repeat(64) },
+      },
+    },
+    initialDownloads: [
+      { id: 501, url: urls[501], startTime: startTimes[501], state: "in_progress", paused: true, exists: true },
+      { id: 502, url: urls[502], startTime: startTimes[502], state: "in_progress", paused: true, exists: true },
+      { id: 504, url: urls[504], startTime: startTimes[504], state: "complete", paused: false, exists: true },
+      { id: 505, url: urls[505], startTime: startTimes[505], state: "in_progress", paused: true, exists: true },
+      { id: 999, url: urls[999], startTime: startTimes[999], state: "in_progress", paused: true, exists: true },
+    ],
+  });
+  const previousChrome = globalThis.chrome;
+  const previousFetch = globalThis.fetch;
+  let postCount = 0;
+  globalThis.chrome = harness.chromeMock;
+  globalThis.fetch = async () => {
+    postCount += 1;
+    throw new Error("restart recovery must not repost accepted claims");
+  };
+  try {
+    await import(`../src/service-worker.js?restart-recovery-test=${nextHarnessId}`);
+    await waitFor(
+      () => Object.keys(harness.storage.get("automaticDownloadClaims") ?? {}).length === 0,
+      "persisted automatic download claims were not cleared after recovery",
+    );
+    assert.deepEqual(
+      harness.operations.filter(([operation]) => operation === "search"),
+      [["search", 501], ["search", 502], ["search", 504], ["search", 505]],
+    );
+    assert.deepEqual(harness.operations.filter(([operation]) => operation === "resume"), [["resume", 501]]);
+    assert.deepEqual(harness.operations.filter(([operation]) => operation === "cancel"), [["cancel", 502]]);
+    assert.deepEqual(harness.operations.filter(([operation]) => operation === "erase"), [["erase", 502]]);
+    assert.equal(harness.operations.some(([, id]) => id === 503 || id === 999), false);
+    assert.equal(harness.operations.some(([operation, id]) => id === 505 && (operation === "cancel" || operation === "resume")), false);
+    assert.equal(harness.items.get(505)?.paused, true);
+    assert.equal(harness.items.get(999)?.paused, true);
+    assert.equal(postCount, 0);
+  } finally {
+    if (previousChrome === undefined) delete globalThis.chrome;
+    else globalThis.chrome = previousChrome;
+    if (previousFetch === undefined) delete globalThis.fetch;
+    else globalThis.fetch = previousFetch;
   }
 });
 
@@ -245,12 +652,24 @@ test("handoff message boundary accepts only bounded download messages", () => {
 test("handoff envelope normalizes safe URLs and records the protocol source", () => {
   assert.equal(normalizeDownloadUrl("file:///C:/secret.txt"), null);
   assert.equal(normalizeDownloadUrl("https://user:pass@example.test/file"), null);
-  const envelope = createHandoffEnvelope("https://example.test/file.zip", { title: "File", selectionText: "Selected text" });
+  assert.equal(deriveDownloadFileName("https://example.test/releases/My%20File.zip?token=not-a-file-name"), "My File.zip");
+  assert.equal(deriveDownloadFileName("https://example.test/releases/folder%2Fescape.zip"), undefined);
+  assert.equal(deriveDownloadFileName("https://example.test/releases/%E0%A4%A"), undefined);
+  assert.equal(normalizeFileName("archive.zip"), "archive.zip");
+  for (const fileName of ["../archive.zip", "folder/archive.zip", "folder\\archive.zip", "C:archive.zip", "..", "x\u0000.zip", "x".repeat(513)]) {
+    assert.equal(normalizeFileName(fileName), null, fileName);
+  }
+  const envelope = createHandoffEnvelope("https://example.test/file.zip", {
+    title: "File",
+    selectionText: "Selected text",
+    fileName: "File.zip",
+  });
   assert.deepEqual(
-    { protocol: envelope.protocol, source: envelope.source, url: envelope.url, title: envelope.title, selectionText: envelope.selectionText },
-    { protocol: 1, source: "material-download-manager-extension", url: "https://example.test/file.zip", title: "File", selectionText: "Selected text" },
+    { protocol: envelope.protocol, source: envelope.source, url: envelope.url, title: envelope.title, selectionText: envelope.selectionText, fileName: envelope.fileName },
+    { protocol: HANDOFF_PROTOCOL_VERSION, source: "material-download-manager-extension", url: "https://example.test/file.zip", title: "File", selectionText: "Selected text", fileName: "File.zip" },
   );
   assert.throws(() => createHandoffEnvelope("https://example.test/file.zip", { selectionText: "x".repeat(2049) }), /metadata is too large/);
+  assert.throws(() => createHandoffEnvelope("https://example.test/file.zip", { fileName: "folder/file.zip" }), /metadata is too large/);
   assert.match(envelope.requestedAt, /^\d{4}-\d{2}-\d{2}T/);
 });
 
@@ -278,20 +697,27 @@ test("settings are bounded, persistable, and exportable without arbitrary endpoi
     languageMode: "bilingual",
     funnyLevelEn: 5,
     funnyLevelYue: 0,
+    autoCaptureDownloads: false,
     handoffEndpoint: "http://127.0.0.1:47821/v1/downloads",
   });
   assert.equal(safe.managerName, "Local <manager>");
   assert.equal(safe.languageMode, "bilingual");
   assert.equal(safe.funnyLevelEn, 5);
   assert.equal(safe.funnyLevelYue, 2);
+  assert.equal(safe.autoCaptureDownloads, false);
   assert.equal(safe.handoffEndpoint, "http://127.0.0.1:47821/v1/downloads");
   assert.equal(sanitizeSettings({ handoffEndpoint: "http://example.com:47821/v1/downloads" }).handoffEndpoint, "");
   const exported = makeSettingsExport(safe);
   assert.equal(exported.schema, "material-download-manager-extension-settings");
+  assert.doesNotMatch(JSON.stringify(exported), /capability|handoffCapability/u);
+  assert.equal(exported.settings.autoCaptureDownloads, false);
   assert.deepEqual(parseSettingsExport(exported), safe);
   assert.throws(() => parseSettingsExport({ schema: "other", version: 1, settings: {} }));
   assert.throws(() => parseSettingsExport({ schema: "material-download-manager-extension-settings", version: 1, settings: { handoffEndpoint: "http://example.com:47821/v1/downloads" } }), /endpoint is invalid/);
   assert.equal(sanitizeSettings(DEFAULT_SETTINGS).managerName, DEFAULT_SETTINGS.managerName);
+  assert.equal(DEFAULT_SETTINGS.autoCaptureDownloads, true);
+  assert.equal(sanitizeSettings({}).autoCaptureDownloads, true);
+  assert.equal(parseSettingsExport(makeSettingsExport({ ...DEFAULT_SETTINGS, autoCaptureDownloads: false })).autoCaptureDownloads, false);
   assert.equal(sanitizeSettings({}).handoffEndpoint, DEFAULT_HANDOFF_ENDPOINT);
 });
 
@@ -325,6 +751,34 @@ test("popup and options localization markers all resolve to known copy", async (
   const markers = [...html.matchAll(/data-l10n(?:-aria)?="([^"]+)"/g)].map((match) => match[1]);
   assert.ok(markers.length > 30);
   markers.forEach((key) => assert.equal(hasLocalizationKey(key), true, key));
+
+  const typedOutcomeKeys = [
+    "handoffUnpaired",
+    "automaticPauseFailed",
+    "automaticCapacityFull",
+    "automaticResumedFailed",
+    "automaticResumeFailed",
+    "automaticCancelFailedResumed",
+    "automaticCancelFailedOriginalGone",
+    "automaticCancelFailedAlreadyRunning",
+    "automaticCancelRecoveryFailed",
+    "automaticOriginalGone",
+    "automaticOriginalAlreadyRunning",
+    "automaticOwnershipMismatch",
+    "automaticRestartResumeFailed",
+    "connectionUnpaired",
+  ];
+  for (const key of typedOutcomeKeys) {
+    assert.equal(hasLocalizationKey(key), true, key);
+    for (let level = 1; level <= 5; level += 1) {
+      assert.ok(localize(key, { ...DEFAULT_SETTINGS, languageMode: "en", funnyLevelEn: level }).length > 20, `${key} en ${level}`);
+      assert.ok(localize(key, { ...DEFAULT_SETTINGS, languageMode: "yue", funnyLevelYue: level }).length > 10, `${key} yue ${level}`);
+    }
+    assert.match(localize(key, { ...DEFAULT_SETTINGS, languageMode: "bilingual" }), / · /u, `${key} bilingual`);
+  }
+  assert.match(localize("automaticCancelFailedResumed", DEFAULT_SETTINGS), /duplicate|two files/u);
+  assert.doesNotMatch(localize("automaticOwnershipMismatch", DEFAULT_SETTINGS), /accepted the URL/u);
+  assert.match(localize("handoffUnpaired", DEFAULT_SETTINGS), /Prepare .*extension/u);
 });
 
 test("user-facing source contains no remote asset or tracking dependency", async () => {
@@ -336,6 +790,7 @@ test("user-facing source contains no remote asset or tracking dependency", async
     "src/options.css",
     "src/options.js",
     "src/service-worker.js",
+    "src/shared/pairing.js",
   ]) {
     const source = await read(path);
     assert.doesNotMatch(source, /<script[^>]+src=["']https?:/i, path);

@@ -1,9 +1,11 @@
 name: GitHub Pages
 
 on:
-  push:
-    branches:
-      - main
+  workflow_run:
+    workflows:
+      - Stable Windows release
+    types:
+      - completed
   workflow_dispatch:
 
 permissions:
@@ -17,8 +19,9 @@ concurrency:
 
 jobs:
   deploy:
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
     name: Build and deploy the local documentation site
-    runs-on: windows-latest
+    runs-on: windows-2025
     timeout-minutes: 20
     environment:
       name: github-pages
@@ -26,15 +29,21 @@ jobs:
     steps:
       - name: Check out source
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
 
       - name: Set up Node.js 22
         uses: actions/setup-node@v4
         with:
           node-version: 22.x
 
-      - name: Validate site source
+      - name: Bootstrap missing deployment tools from canonical releases
         shell: pwsh
-        run: node site/check.mjs
+        run: pwsh -NoProfile -File scripts/bootstrap-actions-tools.ps1
+
+      - name: Verify deployment dependency bootstrap
+        shell: pwsh
+        run: pwsh -NoProfile -File scripts/verify-self-hosted-bootstrap.ps1 -Phase preinstall
 
       - name: Prepare Windows-safe Pages staging path
         shell: pwsh
@@ -44,7 +53,7 @@ jobs:
 
       - name: Build site to an isolated staging directory
         shell: pwsh
-        run: node site/build.mjs "$env:PAGES_STAGING_PATH"
+        run: node site/build.mjs "$env:PAGES_STAGING_PATH" --package-only
 
       - name: Inject verified stable release metadata into the staging site
         shell: pwsh
@@ -55,7 +64,8 @@ jobs:
           $pagesUrl = "https://$($parts[0].ToLowerInvariant()).github.io/$($parts[1].ToLowerInvariant())/"
           pwsh -NoProfile -File scripts/prepare-pages-release-manifest.ps1 `
             -OutputDirectory "$env:PAGES_STAGING_PATH" `
-            -PagesUrl $pagesUrl
+            -PagesUrl $pagesUrl `
+            -ExpectedSourceCommit '${{ github.event.workflow_run.head_sha }}'
 
       - name: Configure GitHub Pages
         uses: actions/configure-pages@v5
@@ -112,3 +122,36 @@ jobs:
             throw "Published Pages response was not the expected site: $uri"
           }
           Write-Output "Verified published Pages response: $uri"
+
+      - name: Collect safe Pages evidence
+        if: ${{ always() }}
+        continue-on-error: true
+        shell: pwsh
+        env:
+          PAGES_JOB_STATUS: ${{ job.status }}
+        run: |
+          $evidenceDirectory = Join-Path $env:RUNNER_TEMP 'material-download-manager-pages-evidence'
+          New-Item -ItemType Directory -Path $evidenceDirectory -Force | Out-Null
+          [ordered]@{
+            runId = $env:GITHUB_RUN_ID
+            sourceCommit = $env:GITHUB_SHA
+            jobStatus = $env:PAGES_JOB_STATUS
+            runnerOs = $env:RUNNER_OS
+            runnerArch = $env:RUNNER_ARCH
+            deployedPageUrl = '${{ steps.deployment.outputs.page_url }}'
+            collectedAt = [DateTimeOffset]::UtcNow.ToString('o')
+          } | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $evidenceDirectory 'run-context.json') -Encoding utf8NoBOM
+          $pagesArchive = Join-Path $env:RUNNER_TEMP 'artifact.tar'
+          if (Test-Path -LiteralPath $pagesArchive -PathType Leaf) {
+            Copy-Item -LiteralPath $pagesArchive -Destination $evidenceDirectory
+          }
+
+      - name: Upload safe Pages evidence
+        if: ${{ always() }}
+        continue-on-error: true
+        uses: actions/upload-artifact@v4
+        with:
+          name: pages-evidence-${{ github.run_id }}
+          path: ${{ runner.temp }}/material-download-manager-pages-evidence
+          if-no-files-found: warn
+          retention-days: 7

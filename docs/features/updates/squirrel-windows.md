@@ -11,8 +11,10 @@ disable anything. Code signing is permanently prohibited for this project. A val
 build produces `Setup.exe`, `RELEASES`, the full `.nupkg`, and any generated
 delta packages under the Squirrel output directory. The release workflow
 collects those real files, verifies that `Setup.exe` reports `NotSigned`, and
-publishes one immutable stable GitHub Release only after tests and artifact
-checks pass. It never publishes a draft or prerelease as the production path.
+publishes one immutable stable GitHub Release after build, package, and artifact
+checks. GitHub Actions runs no tests or lint; those checks remain local task
+evidence and never control publication. The workflow never publishes a draft or
+prerelease as the production path.
 
 `design/electron/updater/UpdateService.ts` is a main-process-only coordinator.
 It performs one bounded startup check and bounded background checks. It
@@ -73,13 +75,19 @@ repository root:
 
 ```powershell
 pwsh -NoProfile -File scripts/build-unsigned-squirrel.ps1 -Version 0.1.1
-pwsh -NoProfile -File scripts/validate-squirrel-artifacts.ps1 -OutputDirectory "$env:TEMP\mdm-release-assets" -ManifestPath "$env:TEMP\mdm-release-assets.json"
+pwsh -NoProfile -File scripts/validate-squirrel-artifacts.ps1 -OutputDirectory "$env:TEMP\mdm-release-assets" -ManifestPath "$env:TEMP\mdm-release-assets.json" -OwnedOutputRoot "$env:TEMP"
 ```
 
-The release workflow additionally verifies the exact commit, stable
+The commands above are local checks; GitHub Actions does not run them. The
+release workflow verifies the exact commit, stable
 `draft=false` and `isPrerelease=false` state, workflow timing, line-count
-table, release assets, and the update-ready/restart flow. A real release is
-not claimed from compilation or from the historical test prerelease.
+table, Squirrel release assets, version-stamped Chromium extension ZIP, and the
+published asset inventory. The extension ZIP must keep its public pairing
+module empty; it is versioned source/reference until the desktop app prepares a
+private paired folder for authenticated handoff. A real release is not claimed
+from compilation or from the historical test prerelease. The workflow does not
+create a CRX because a genuine CRX3 requires signing and signing keys are
+permanently prohibited.
 
 ## Suggested articles
 

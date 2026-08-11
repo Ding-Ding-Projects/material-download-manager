@@ -12,8 +12,8 @@ permissions:
 
 jobs:
   release:
-    name: Test, package, and publish the stable unsigned release
-    runs-on: windows-latest
+    name: Build, package, and publish the stable unsigned release
+    runs-on: windows-2025
     timeout-minutes: 45
     steps:
       - name: Check out exact source commit
@@ -31,6 +31,14 @@ jobs:
           cache: npm
           cache-dependency-path: design/package-lock.json
 
+      - name: Bootstrap missing build tools from canonical releases
+        shell: pwsh
+        run: pwsh -NoProfile -File scripts/bootstrap-actions-tools.ps1
+
+      - name: Verify build dependency bootstrap before install
+        shell: pwsh
+        run: pwsh -NoProfile -File scripts/verify-self-hosted-bootstrap.ps1 -Phase preinstall
+
       - name: Install locked dependencies
         working-directory: design
         run: npm ci --no-audit --no-fund
@@ -39,45 +47,15 @@ jobs:
         shell: pwsh
         run: pwsh -NoProfile -File scripts/complete-node-binary-bootstrap.ps1
 
-      - name: Validate bundled documentation catalog
-        working-directory: design
-        run: npm run docs:bundle:check
-
-      - name: Test bundled documentation catalog
-        working-directory: design
-        run: npm run test:docs
-
-      - name: Typecheck
-        working-directory: design
-        run: npm run typecheck
+      - name: Verify build dependency bootstrap after install
+        shell: pwsh
+        run: pwsh -NoProfile -File scripts/verify-self-hosted-bootstrap.ps1 -Phase postinstall
 
       - name: Build application
         working-directory: design
-        run: npm run build
-
-      - name: Test download engine
-        working-directory: design
-        run: npm run test:engine
-
-      - name: Test Electron integration
-        working-directory: design
-        run: npm run test:electron
-
-      - name: Test real renderer and separate-window smoke
-        working-directory: design
-        run: npm run test:ui
-
-      - name: Test Chromium extension contract
-        working-directory: extension
-        run: npm test
-
-      - name: Validate Pages source
-        working-directory: site
-        run: npm run check
-
-      - name: Build Pages source
-        working-directory: site
-        run: npm run build
+        run: |
+          npm run build:renderer
+          npm run build:electron
 
       - name: Count source, tests, styles, markup, and surviving blame attribution
         id: line_count
@@ -140,10 +118,11 @@ jobs:
         run: |
           $manifestPath = Join-Path $env:RUNNER_TEMP 'release-assets.json'
           $assetDirectory = Join-Path $env:RUNNER_TEMP 'release-assets'
-          pwsh -NoProfile -File scripts/validate-squirrel-artifacts.ps1 -OutputDirectory $assetDirectory -ManifestPath $manifestPath
+          pwsh -NoProfile -File scripts/validate-squirrel-artifacts.ps1 -OutputDirectory $assetDirectory -ManifestPath $manifestPath -OwnedOutputRoot $env:RUNNER_TEMP
           "path=$manifestPath" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
 
       - name: Package the Chromium extension release asset
+        id: extension
         shell: pwsh
         run: |
           $manifestPath = Join-Path $env:RUNNER_TEMP 'release-assets.json'
@@ -161,3 +140,83 @@ jobs:
             -VersionPath '${{ steps.version.outputs.path }}' `
             -LineCountPath '${{ steps.line_count.outputs.path }}' `
             -ArtifactManifestPath '${{ steps.artifacts.outputs.path }}'
+
+      - name: Collect safe release evidence
+        if: ${{ always() }}
+        continue-on-error: true
+        shell: pwsh
+        env:
+          RELEASE_JOB_STATUS: ${{ job.status }}
+          SQUIRREL_ARTIFACTS_OUTCOME: ${{ steps.artifacts.outcome }}
+          EXTENSION_ARTIFACT_OUTCOME: ${{ steps.extension.outcome }}
+        run: |
+          $evidenceDirectory = Join-Path $env:RUNNER_TEMP 'material-download-manager-release-evidence'
+          New-Item -ItemType Directory -Path $evidenceDirectory -Force | Out-Null
+          [ordered]@{
+            runId = $env:GITHUB_RUN_ID
+            sourceCommit = $env:GITHUB_SHA
+            jobStatus = $env:RELEASE_JOB_STATUS
+            runnerOs = $env:RUNNER_OS
+            runnerArch = $env:RUNNER_ARCH
+            collectedAt = [DateTimeOffset]::UtcNow.ToString('o')
+          } | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $evidenceDirectory 'run-context.json') -Encoding utf8NoBOM
+
+          foreach ($candidate in @(
+              (Join-Path $env:RUNNER_TEMP 'release-assets.json'),
+              (Join-Path $env:RUNNER_TEMP 'release-version.json'),
+              (Join-Path $env:RUNNER_TEMP 'release-metadata.json'),
+              (Join-Path $env:RUNNER_TEMP 'line-count.tsv')
+            )) {
+            if (Test-Path -LiteralPath $candidate -PathType Leaf) {
+              Copy-Item -LiteralPath $candidate -Destination $evidenceDirectory
+            }
+          }
+          $releaseAssets = Join-Path $env:RUNNER_TEMP 'release-assets'
+          $releaseManifestPath = Join-Path $env:RUNNER_TEMP 'release-assets.json'
+          if ($env:SQUIRREL_ARTIFACTS_OUTCOME -eq 'success' -and
+              $env:EXTENSION_ARTIFACT_OUTCOME -eq 'success' -and
+              (Test-Path -LiteralPath $releaseAssets -PathType Container) -and
+              (Test-Path -LiteralPath $releaseManifestPath -PathType Leaf)) {
+            try {
+              $releaseManifest = Get-Content -LiteralPath $releaseManifestPath -Raw | ConvertFrom-Json -Depth 50
+              if ([System.IO.Path]::GetFullPath([string]$releaseManifest.directory) -ne [System.IO.Path]::GetFullPath($releaseAssets)) {
+                throw 'The validated manifest points outside the expected release-assets directory.'
+              }
+              $declaredNames = @($releaseManifest.names | ForEach-Object { [string]$_ })
+              $declaredSet = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+              foreach ($name in $declaredNames) {
+                if ([string]::IsNullOrWhiteSpace($name) -or [System.IO.Path]::GetFileName($name) -ne $name -or -not $declaredSet.Add($name)) {
+                  throw "The validated manifest contains an invalid or duplicate evidence filename: $name"
+                }
+              }
+              $actualItems = @(Get-ChildItem -LiteralPath $releaseAssets -Force)
+              if (@($actualItems | Where-Object { $_.PSIsContainer -or ($_.Attributes -band [System.IO.FileAttributes]::ReparsePoint) }).Count -ne 0) {
+                throw 'The validated release-assets directory contains a directory or reparse point.'
+              }
+              $actualSet = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+              foreach ($item in $actualItems) { [void]$actualSet.Add($item.Name) }
+              if ($actualSet.Count -ne $declaredSet.Count) {
+                throw 'The validated evidence file count differs from the manifest.'
+              }
+              foreach ($name in $declaredSet) {
+                if (-not $actualSet.Contains($name)) { throw "Validated evidence file is missing: $name" }
+              }
+              $evidenceAssets = Join-Path $evidenceDirectory 'release-assets'
+              New-Item -ItemType Directory -Path $evidenceAssets -Force | Out-Null
+              foreach ($name in $declaredSet) {
+                Copy-Item -LiteralPath (Join-Path $releaseAssets $name) -Destination $evidenceAssets
+              }
+            } catch {
+              Write-Warning "Validated release payload evidence was not copied: $($_.Exception.Message)"
+            }
+          }
+
+      - name: Upload safe release evidence
+        if: ${{ always() }}
+        continue-on-error: true
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-evidence-${{ github.run_id }}
+          path: ${{ runner.temp }}/material-download-manager-release-evidence
+          if-no-files-found: warn
+          retention-days: 7

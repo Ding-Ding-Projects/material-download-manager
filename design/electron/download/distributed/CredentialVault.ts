@@ -5,8 +5,8 @@ import { utils as sshUtils } from "ssh2";
 import { isStableSshIdentifier, normalizeSshPrivateKeyCredential } from "../../../shared/ssh";
 import type { SshPrivateKeyCredentialInput } from "../../../shared/ssh";
 import {
+  DISTRIBUTED_MAX_URL_LENGTH,
   isDistributedRequestHeaders,
-  isDistributedSourceUrl,
 } from "../../../shared/distributedProtocol";
 
 const SERVICE_NAME = "MaterialDownloadManager.Ssh.v1";
@@ -41,6 +41,18 @@ interface StoredSourceRecord {
   version: typeof VAULT_SCHEMA_VERSION;
   url: string;
   headers: Record<string, string>;
+}
+
+function isVaultSourceUrl(value: unknown): value is string {
+  if (typeof value !== "string" || value.length === 0 || value.length > DISTRIBUTED_MAX_URL_LENGTH) {
+    return false;
+  }
+  try {
+    const parsed = new URL(value);
+    return (parsed.protocol === "http:" || parsed.protocol === "https:") && Boolean(parsed.hostname);
+  } catch {
+    return false;
+  }
 }
 
 class OperatingSystemCredentialVaultAdapter implements CredentialVaultAdapter {
@@ -200,7 +212,7 @@ export class CredentialVault {
       Reflect.ownKeys(record).length !== 2 ||
       !Object.prototype.hasOwnProperty.call(record, "url") ||
       !Object.prototype.hasOwnProperty.call(record, "headers") ||
-      !isDistributedSourceUrl(record.url) ||
+      !isVaultSourceUrl(record.url) ||
       !isDistributedRequestHeaders(record.headers)
     ) {
       throw new Error("Invalid distributed download source");
@@ -240,7 +252,7 @@ export class CredentialVault {
         Reflect.ownKeys(record).length !== expected.size ||
         Reflect.ownKeys(record).some((key) => typeof key !== "string" || !expected.has(key)) ||
         record.version !== VAULT_SCHEMA_VERSION ||
-        !isDistributedSourceUrl(record.url) ||
+        !isVaultSourceUrl(record.url) ||
         !isDistributedRequestHeaders(record.headers)
       ) {
         throw new Error("Stored distributed download source is corrupt");

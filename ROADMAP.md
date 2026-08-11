@@ -10,19 +10,62 @@ unverified surface has shipped.
 - Separate frameless download-progress window with typed IPC, live state,
   pause/resume/cancel/close controls, and hidden-desktop capture evidence.
 - Manifest V3 Chromium extension with page/link/selected-text capture through
-  the loopback protocol; accepted captures enter the desktop queue and bounded
-  link-target precedence is covered by the extension contract test.
+  the loopback protocol; accepted manual captures enter the desktop queue and
+  bounded link-target precedence is covered by the extension contract test.
 - Persisted language, independent funny levels, appearance provenance, and a
   four-tab Settings dialog with one search and regex-builder state per tab.
 - Local Git-backed history plus a History app tab with date/action/text filters
   and filtered coding-format export; local commits disable hooks and isolate
   the snapshot from unrelated staged files.
 - Material-style landing and documentation site, stable unsigned Squirrel
-  packaging, self-hosted CI, GitHub Pages publication, and monotonic real
-  releases.
+  packaging, pinned GitHub-hosted build/package/publication automation, GitHub
+  Pages publication, and monotonic real releases. GitHub Actions runs no tests
+  or lint; local task evidence carries those results.
 - Built-artifact UI smoke that fail-closes on the real separate progress
   window, rejects nested interactive labels, and checks narrow Settings layout
   at 2× scale.
+
+## Authenticated automatic browser capture implemented
+
+- Automatic extension capture defaults on for eligible HTTP(S) browser
+  downloads. The extension pauses first, records bounded ownership, cancels and
+  erases the browser copy only after final authenticated durable acceptance,
+  and resumes/retains the exact extension-owned item after every failed
+  takeover route.
+- **Install browser extension** creates a private paired copy: the app-side
+  capability stays in the operating-system credential vault, the matching
+  value is written only into the staged extension, and the exact staged folder
+  opens automatically. **Open extension folder** remains the manual fallback.
+- Protocol 2 sends only a nonce to `GET /v2/challenge` before the app proves the
+  pairing with HMAC-SHA-256. The query-bearing download URL is sent only in the
+  authenticated one-use POST, and the final `202` carries an authenticated
+  accepted response.
+- The app accepts only after a credential-free ranged GET succeeds and the real
+  queue record is durably persisted and started. Protocol 2 has no provisional
+  response; a client disconnect before response delivery rolls the new record
+  and protected source back.
+- Automatic handoff sends only a credential-free URL and optional URL-derived
+  safe basename—never cookies, authorization headers, referrers, browser
+  request headers, or an absolute browser destination path. The desktop server
+  also rejects website origins before routing. Accepted query-bearing URLs
+  persist only in the operating-system credential vault, stay redacted
+  elsewhere, and are removed on terminal cleanup.
+- Admission is bounded to 8 in-flight handoffs and 60 challenge/POST requests
+  per rolling minute. One-use challenges expire after 30 seconds and occupy a
+  table capped at 64 entries.
+- The Options page persists a default-on automatic-capture switch while keeping
+  manual popup and context-menu handoffs. The existing Settings search retains
+  its adjacent full regex builder.
+- Release automation produces a version-stamped, archive-validated extension
+  ZIP with structured size and SHA-256 evidence. The public pairing module is
+  empty, so the generic ZIP is source/reference until the app prepares a
+  private paired copy. It does not produce a CRX because a genuine CRX3
+  requires signing and the repository permanently prohibits signing keys and
+  signing operations.
+- This implementation is not described as a published release here. Its exact
+  completion commit, local verification counts, release asset, Pages result,
+  and public-safe real-artifact capture belong to the records that produce
+  those facts.
 
 ## Auto-organize foundation integrated
 

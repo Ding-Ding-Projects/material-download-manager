@@ -27,7 +27,7 @@ import { DEFAULT_QUEUE_ID, SETTING_KEYS } from "../../shared/types";
 import { cloneSshHostConfigs, isSshHostConfigs } from "../../shared/ssh";
 import { StateStore } from "./persistence";
 import { resolveCategoryIsolated, resolveDownloadFolder } from "./categories";
-import { probeUrl as httpProbeUrl, redactErrorMessage, redactUrl, sanitizeFileName } from "./HttpProbe";
+import { probeUrl as httpProbeUrl, proveDownloadReadable, redactErrorMessage, redactUrl, sanitizeFileName } from "./HttpProbe";
 import { DownloadTask } from "./DownloadTask";
 import { CredentialVault, type DistributedSourceSecret } from "./distributed/CredentialVault";
 import {
@@ -112,7 +112,7 @@ function sourceRequiresTrustedSshHost(url: string, headers: Record<string, strin
   } catch {
     return true;
   }
-  if (parsed.username || parsed.password || parsed.search.length > 0) return true;
+  if (parsed.username || parsed.password || parsed.search.length > 0 || parsed.hash.length > 0) return true;
   return Object.keys(headers).some((name) =>
     /authorization|cookie|token|secret|api[-_]?key|signature|referer/u.test(name)
   );
@@ -153,7 +153,7 @@ export class DownloadManager extends EventEmitter {
   private compiledSettings!: AppSettings;
   private tasks: Map<string, ManagedDownloadTask> = new Map();
   private itemHeaders: Map<string, Record<string, string>> = new Map();
-  /** Raw source URLs stay in memory only so active credentialed transfers work. */
+  /** Raw source URLs materialize only in memory; protected values persist only in the operating-system vault. */
   private itemSourceUrls: Map<string, string> = new Map();
   private distributedSources: Map<string, DistributedSourceSecret> = new Map();
   private readonly credentialVault: CredentialVault;
@@ -463,7 +463,7 @@ export class DownloadManager extends EventEmitter {
         }
         item.transferNotice =
           "SSH distribution was unavailable for this source, so the download was kept local.";
-        if (sourceRequiresTrustedSshHost(req.url, headers)) {
+        if (item.error === null && sourceRequiresTrustedSshHost(req.url, headers)) {
           await this.credentialVault.storeDownloadSource(id, { url: req.url, headers });
           item.sourceSecretStoredInVault = true;
         }
@@ -487,7 +487,7 @@ export class DownloadManager extends EventEmitter {
           : !req.ssh.expectedSha256
           ? "SSH distribution was kept local because this source has no trusted whole-file SHA-256 digest."
           : "SSH distribution was kept local because the selected hosts are not trusted for source credentials.";
-        if (hasSecretBearingRequest) {
+        if (item.error === null && hasSecretBearingRequest) {
           await this.credentialVault.storeDownloadSource(id, { url: req.url, headers });
           item.sourceSecretStoredInVault = true;
         }
@@ -528,6 +528,10 @@ export class DownloadManager extends EventEmitter {
       } catch (e) {
         item.error = redactErrorMessage(e, req.url);
       }
+      if (item.error === null && sourceRequiresTrustedSshHost(req.url, headers ?? {})) {
+        await this.credentialVault.storeDownloadSource(id, { url: req.url, headers: headers ?? {} });
+        item.sourceSecretStoredInVault = true;
+      }
     }
 
     this.itemSourceUrls.set(id, req.url);
@@ -556,6 +560,36 @@ export class DownloadManager extends EventEmitter {
     if (req.startImmediately) this.processQueue(queue.id);
     this.scheduleNotify();
     return id;
+  }
+
+  /**
+   * Queue a browser takeover only after the credential-free source probe and
+   * the durable local snapshot both succeed. The browser keeps its own copy
+   * whenever this stricter path cannot prove that the app can retrieve it.
+   */
+  async addBrowserHandoff(req: AddDownloadRequest): Promise<string> {
+    try {
+      await proveDownloadReadable(req.url, {});
+    } catch {
+      throw new Error("The browser download source was not usable without browser credentials.");
+    }
+    const id = await this.addDownload({ ...req, startImmediately: false });
+    const item = this.items.get(id);
+    if (!item || item.error) {
+      await this.remove(id, false).catch(() => {});
+      throw new Error("The browser download source was not usable without browser credentials.");
+    }
+    try {
+      await this.resume(id, `Queued browser handoff ${item.fileName}`);
+      return id;
+    } catch (error) {
+      await this.remove(id, false).catch(() => {});
+      throw error;
+    }
+  }
+
+  async rollbackBrowserHandoff(id: string): Promise<void> {
+    await this.remove(id, false);
   }
 
   private async resolveNameCollision(folder: string, fileName: string): Promise<string> {

@@ -34,6 +34,112 @@ async function removeTestRoot(root: string): Promise<void> {
   await fsp.rm(root, { recursive: true, force: true, maxRetries: 20, retryDelay: 100 });
 }
 
+test("browser handoff starts only after a credential-free source probe succeeds", async () => {
+  const root = await fsp.mkdtemp(path.join(os.tmpdir(), "mdm-browser-handoff-test-"));
+  const publicServer = await startTestServer(1024);
+  const protectedServer = await startTestServer(1024, {
+    requiredHeader: { name: "authorization", value: "Bearer browser-only" },
+  });
+  const deceptiveHeadServer = await startTestServer(1024, {
+    requiredHeader: { name: "authorization", value: "Bearer get-only" },
+    headBypassesRequiredHeader: true,
+  });
+  const previousUserProfile = process.env.USERPROFILE;
+  process.env.USERPROFILE = root;
+  const manager = new DownloadManager(root);
+  try {
+    await manager.init();
+    const folder = path.join(root, "Downloads");
+    const acceptedId = await manager.addBrowserHandoff({
+      url: publicServer.url,
+      folder,
+      fileName: "public.bin",
+      startImmediately: true,
+    });
+    assert.ok(manager.getState().items.some((item) => item.id === acceptedId));
+
+    await assert.rejects(
+      manager.addBrowserHandoff({
+        url: protectedServer.url,
+        folder,
+        fileName: "browser-credentials-required.bin",
+        startImmediately: true,
+      }),
+      /not usable without browser credentials/,
+    );
+    assert.equal(
+      manager.getState().items.some((item) => item.fileName === "browser-credentials-required.bin"),
+      false,
+      "a rejected takeover must not leave an unusable queued item",
+    );
+    await assert.rejects(
+      manager.addBrowserHandoff({
+        url: deceptiveHeadServer.url,
+        folder,
+        fileName: "head-public-get-protected.bin",
+        startImmediately: true,
+      }),
+      /not usable without browser credentials/,
+      "a public HEAD response must not substitute for a credential-free download GET",
+    );
+    assert.equal(
+      manager.getState().items.some((item) => item.fileName === "head-public-get-protected.bin"),
+      false,
+    );
+  } finally {
+    await manager.shutdown();
+    await publicServer.close();
+    await protectedServer.close();
+    await deceptiveHeadServer.close();
+    await removeTestRoot(root);
+    if (previousUserProfile === undefined) delete process.env.USERPROFILE;
+    else process.env.USERPROFILE = previousUserProfile;
+  }
+});
+
+test("browser handoff query URLs survive restart only through the credential vault", async () => {
+  const root = await fsp.mkdtemp(path.join(os.tmpdir(), "mdm-browser-handoff-vault-test-"));
+  let releaseBody!: () => void;
+  const bodyRelease = new Promise<void>((resolve) => { releaseBody = resolve; });
+  const server = await startTestServer(32 * 1024, { bodyRelease });
+  const previousUserProfile = process.env.USERPROFILE;
+  process.env.USERPROFILE = root;
+  const vault = new CredentialVault(new MemoryVaultAdapter());
+  let first: DownloadManager | null = new DownloadManager(root, undefined, { credentialVault: vault });
+  let second: DownloadManager | null = null;
+  const secret = "signed-query-value-that-must-not-enter-state";
+  const sourceUrl = `${server.url}?signature=${secret}`;
+  try {
+    await first.init();
+    const id = await first.addBrowserHandoff({
+      url: sourceUrl,
+      folder: path.join(root, "Downloads"),
+      fileName: "signed.bin",
+      startImmediately: true,
+    });
+    await first.shutdown();
+    first = null;
+
+    const stateText = await fsp.readFile(path.join(root, "state.json"), "utf8");
+    assert.equal(stateText.includes(secret), false);
+    assert.match(stateText, /signature=\[REDACTED\]/u);
+
+    second = new DownloadManager(root, undefined, { credentialVault: vault });
+    await second.init();
+    const internals = second as unknown as { itemSourceUrls: Map<string, string> };
+    assert.equal(internals.itemSourceUrls.get(id), sourceUrl);
+    assert.equal(second.getState().items.find((item) => item.id === id)?.url.includes(secret), false);
+  } finally {
+    if (first) await first.shutdown();
+    if (second) await second.shutdown();
+    releaseBody();
+    await server.close();
+    await removeTestRoot(root);
+    if (previousUserProfile === undefined) delete process.env.USERPROFILE;
+    else process.env.USERPROFILE = previousUserProfile;
+  }
+});
+
 test("manager applies ordered auto-organize rules without rewriting explicit target folders", async () => {
   const root = await fsp.mkdtemp(path.join(os.tmpdir(), "mdm-auto-organize-manager-test-"));
   const server = await startTestServer(1024);

@@ -109,6 +109,31 @@ test("distributed source URLs and allowed headers round-trip only through the va
   assert.equal(await vault.loadDownloadSource(HOST_ID), null);
 });
 
+test("protected local source credentials and fragments round-trip only through the vault account", async () => {
+  const adapter = new MemoryCredentialAdapter();
+  const vault = new CredentialVault(adapter);
+  const source = {
+    url: "https://download-user:download-password@downloads.example.test/archive.zip?short-lived=secret#private-fragment",
+    headers: {},
+  };
+
+  await vault.storeDownloadSource(HOST_ID, source);
+
+  assert.deepEqual(await vault.loadDownloadSource(HOST_ID), source);
+  assert.deepEqual(Array.from(adapter.values.keys()), [`download-source:${HOST_ID}`]);
+});
+
+test("protected source vault rejects malformed URLs", async () => {
+  const vault = new CredentialVault(new MemoryCredentialAdapter());
+  await assert.rejects(
+    vault.storeDownloadSource(HOST_ID, {
+      url: "https://download-user:download-password@example.test:not-a-port/archive.zip",
+      headers: {},
+    }),
+    /Invalid distributed download source/u,
+  );
+});
+
 test("distributed source vault rejects transport-controlled and unknown headers", async () => {
   const vault = new CredentialVault(new MemoryCredentialAdapter());
   await assert.rejects(

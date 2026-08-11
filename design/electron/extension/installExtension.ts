@@ -11,6 +11,8 @@ export const BROWSER_EXTENSION_DIRECTORY_NAME = "browser-extension";
 
 const REQUIRED_PAYLOAD = ["manifest.json", path.join("src", "service-worker.js")];
 const PAYLOAD_ENTRIES = ["manifest.json", "src", "README.md", "docs"];
+const CAPABILITY_MODULE = path.join("src", "shared", "pairing.js");
+const CAPABILITY_PATTERN = /^[A-Za-z0-9_-]{43}$/u;
 
 async function isPresent(candidate: string): Promise<boolean> {
   try {
@@ -66,8 +68,11 @@ export async function installedExtensionPath(userDataPath: string): Promise<stri
  * install so stale files never linger, and verify the result actually loads
  * before reporting success.
  */
-export async function installBrowserExtension(sourceRoot: string, userDataPath: string): Promise<string> {
+export async function installBrowserExtension(sourceRoot: string, userDataPath: string, capability: string): Promise<string> {
   await assertLoadablePayload(sourceRoot, "bundled extension source");
+  if (!CAPABILITY_PATTERN.test(capability)) {
+    throw new Error("A valid per-install handoff capability is required");
+  }
 
   const target = browserExtensionTarget(userDataPath);
   await fsp.rm(target, { recursive: true, force: true });
@@ -77,6 +82,13 @@ export async function installBrowserExtension(sourceRoot: string, userDataPath: 
     if (!(await isPresent(sourceEntry))) continue;
     await fsp.cp(sourceEntry, path.join(target, entry), { recursive: true });
   }
+  const capabilityModulePath = path.join(target, CAPABILITY_MODULE);
+  await fsp.mkdir(path.dirname(capabilityModulePath), { recursive: true });
+  await fsp.writeFile(
+    capabilityModulePath,
+    `// Generated only in the app's private staged extension folder.\nexport const HANDOFF_CAPABILITY = ${JSON.stringify(capability)};\n`,
+    { encoding: "utf8", mode: 0o600 },
+  );
 
   await assertLoadablePayload(target, "installed extension");
   return target;

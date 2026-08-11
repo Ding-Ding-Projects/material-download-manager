@@ -22,6 +22,7 @@ export function startTestServer(
     supportRanges?: boolean;
     ignoreRange?: boolean;
     requiredHeader?: { name: string; value: string };
+    headBypassesRequiredHeader?: boolean;
     redirectHops?: number;
     redirectLocation?: string;
     responseDelayMs?: number;
@@ -56,6 +57,7 @@ export function startTestServer(
       }
       if (
         opts.requiredHeader &&
+        !(opts.headBypassesRequiredHeader && req.method === "HEAD") &&
         req.headers[opts.requiredHeader.name.toLowerCase()] !== opts.requiredHeader.value
       ) {
         res.writeHead(401);

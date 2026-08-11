@@ -1800,6 +1800,15 @@ textarea {
   color: var(--danger);
   font-size: 11px;
 }
+#settings-browser-extension .field-row {
+  flex-wrap: wrap;
+}
+#settings-browser-extension .setting-helper,
+#settings-browser-extension .field-error {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
 .search-builder-error {
   margin: 4px 0 0;
   max-width: 100%;

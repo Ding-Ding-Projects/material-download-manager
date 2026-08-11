@@ -199,3 +199,76 @@ export function probeUrl(
     req.end();
   });
 }
+
+/**
+ * Prove that a credential-free GET can read the source before a browser
+ * takeover is accepted. A server that exposes HEAD but rejects GET is not a
+ * usable download source. The response is bounded to the first body chunk.
+ */
+export function proveDownloadReadable(
+  url: string,
+  headers: Record<string, string> = {},
+  redirectsLeft = MAX_REDIRECTS,
+  initialUrl = url
+): Promise<void> {
+  return new Promise((resolve, reject) => {
+    let target: URL;
+    try {
+      target = new URL(url);
+    } catch {
+      reject(new Error(`Invalid URL: ${redactUrl(url)}`));
+      return;
+    }
+
+    let settled = false;
+    const finish = (error?: Error) => {
+      if (settled) return;
+      settled = true;
+      if (error) reject(error);
+      else resolve();
+    };
+    const client = pickClient(target);
+    const req = client.request(
+      target,
+      {
+        method: "GET",
+        headers: {
+          "User-Agent": "Mozilla/5.0 (compatible; MaterialDownloadManager/0.1)",
+          ...headersForTarget(headers, initialUrl, target.toString()),
+          Range: "bytes=0-0",
+          "Accept-Encoding": "identity",
+        },
+      },
+      (res) => {
+        const status = res.statusCode ?? 0;
+        if ([301, 302, 303, 307, 308].includes(status) && res.headers.location) {
+          res.resume();
+          if (redirectsLeft <= 0) {
+            finish(new Error("Too many redirects"));
+            return;
+          }
+          const nextUrl = new URL(res.headers.location, target).toString();
+          settled = true;
+          resolve(proveDownloadReadable(nextUrl, headers, redirectsLeft - 1, initialUrl));
+          return;
+        }
+        if (status !== 200 && status !== 206) {
+          res.resume();
+          finish(new Error(`Server responded with ${status} to the download GET`));
+          return;
+        }
+        res.once("data", (chunk: Buffer) => {
+          if (chunk.length > 0) {
+            finish();
+            res.destroy();
+          }
+        });
+        res.once("end", () => finish());
+        res.once("error", (error) => finish(new Error(redactErrorMessage(error, url))));
+      }
+    );
+    req.on("error", (error) => finish(new Error(redactErrorMessage(error, url))));
+    req.setTimeout(15000, () => req.destroy(new Error("Download-readiness request timed out")));
+    req.end();
+  });
+}
