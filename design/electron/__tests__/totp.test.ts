@@ -9,6 +9,7 @@ import {
   parseTotpUri,
   type TotpRegistrationMetadata,
 } from "../../shared/authenticator";
+import { nextTotpTimestampMs, remainingTotpSeconds } from "../../shared/authenticatorDisplay";
 import { generateTotpCode, verifyTotpCode } from "../authenticator/TotpEngine";
 import { TotpRegistrationService } from "../authenticator/TotpRegistrationService";
 import { TotpSecretVault, type TotpSecretVaultAdapter } from "../authenticator/TotpSecretVault";
@@ -174,4 +175,14 @@ test("secret and URI validation fails closed at the model boundary", () => {
   assert.throws(() => normalizeTotpRegistration({ issuer: "x", account: "y", secret: "not-base32-0" }), /secret/iu);
   assert.throws(() => normalizeTotpRegistration({ issuer: "x", account: "y", secret: "JBSWY3DPEHPK3PXP", digits: 7 }), /digits/iu);
   assert.throws(() => normalizeTotpRegistration({ issuer: "x", account: "y", secret: "JBSWY3DPEHPK3PXP", period: 0 }), /period/iu);
+});
+
+test("renderer-safe countdown helpers stay aligned to period boundaries", () => {
+  assert.equal(remainingTotpSeconds(60_001, 30), 30);
+  assert.equal(nextTotpTimestampMs(60_001, 30), 90_000);
+  assert.equal(remainingTotpSeconds(89_999, 30), 1);
+  assert.equal(nextTotpTimestampMs(89_999, 30), 90_000);
+  assert.equal(remainingTotpSeconds(90_000, 30), 30);
+  assert.throws(() => remainingTotpSeconds(1_000, 0), /period/iu);
+  assert.throws(() => nextTotpTimestampMs(Number.NaN, 30), /timestamp/iu);
 });

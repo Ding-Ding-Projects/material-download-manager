@@ -1,5 +1,62 @@
 # Handoff: Material Download Manager
 
+## Authenticator management list and live codes (2026-08-11)
+
+Issue [#18](https://github.com/Ding-Ding-Projects/material-download-manager/issues/18)
+tracks this bounded desktop management slice. Source commit
+[`9c32741`](https://github.com/Ding-Ding-Projects/material-download-manager/commit/9c3274134e6aa4b2d1de6b9f234fdf680b72f16f)
+extends the existing authenticator Settings tab with a real persisted metadata
+list that reloads after restart, vault-backed current and next TOTP code
+display, a numeric seconds-remaining countdown, and an explicit clipboard copy
+action. The renderer calls only the existing typed
+`generateAuthenticatorCode` IPC seam; secrets remain in the operating-system
+credential vault and never enter local metadata storage, ordinary exports,
+history, logs, or the smoke result.
+
+The row refreshes on initial load and at each period rollover. A per-entry
+request generation prevents a delayed vault response from replacing a newer
+period. When a vault entry is missing or corrupt, both code fields are cleared
+and the row reports that the entry is unavailable rather than offering stale
+digits. The list's existing plain-text-first search and anchored regex builder
+remain active. Reorder/group/bulk workflows, per-tab locks, and schedules are
+not part of this slice. No signing or CRX artifact was added.
+
+### Changed files and verification
+
+- `design/src/components/AuthenticatorPanel.tsx`: live current/next code rows,
+  countdown tick, vault-backed refresh, and user-triggered copy.
+- `design/src/styles/authenticator.css`: responsive live-code row layout and
+  numeric-code typography.
+- `design/shared/authenticatorDisplay.ts`: secret-free period-boundary helpers.
+- `design/electron/__tests__/totp.test.ts` and
+  `design/electron/__tests__/authenticatorSurface.test.ts`: countdown boundary,
+  no-network, IPC, copy, and secret-free renderer assertions.
+- `design/ui-tests/smoke.mjs`: disposable built-artifact registration, reload,
+  live current/next code/countdown/copy checks, and vault cleanup. It returns
+  code widths and metadata IDs only, never the generated digits or fixture
+  secret.
+- `docs/features/security/totp-authenticator-core.md`, `site/content.js`, and
+  `design/src/generated/documentationArticles.ts`: categorized behavior,
+  security, failure-mode, and verification documentation.
+
+Local evidence for this handoff:
+
+- `npm run typecheck` — passed.
+- `npm run build` — passed (renderer and Electron output).
+- Focused TOTP/UI tests — **14/14 passed**.
+- Full compiled Electron tests — **110/110 passed**.
+- Real built-artifact smoke — **43/43 required checks passed**. The new
+  `settings-authenticator-live-management` check registered a disposable
+  vault entry, reloaded the app, verified six-digit current/next values, a
+  numeric countdown, and an enabled copy action, then removed the vault entry
+  and metadata. No live-code screenshot is claimed because the displayed
+  digits are credential-bearing.
+- The secret-free registration capture remains
+  [`docs/screenshots/authenticator/authenticator-settings-empty.png`](docs/screenshots/authenticator/authenticator-settings-empty.png)
+  (524×462 PNG, SHA-256
+  `92DCE765FF7B8D07854C15D34FAED2708EB5C29C827DA26879E02DEACFD4DDC`),
+  recaptured from the built renderer during the 43/43 smoke run.
+
 ## Authenticator Settings registration surface (2026-08-11)
 
 Issue [#18](https://github.com/Ding-Ding-Projects/material-download-manager/issues/18)
