@@ -9,7 +9,7 @@ import { migrateSettings, StateStore } from "../persistence";
 test("default settings are versioned and mark every value as compiled-in", () => {
   const settings = createDefaultSettings("C:/Downloads/MaterialDownloadManager");
 
-  assert.equal(SETTINGS_SCHEMA_VERSION, 6);
+  assert.equal(SETTINGS_SCHEMA_VERSION, 8);
   assert.equal(settings.settingsVersion, SETTINGS_SCHEMA_VERSION);
   assert.equal(settings.languageMode, "english");
   assert.equal(settings.displayName, "Material Download Manager");
@@ -18,6 +18,10 @@ test("default settings are versioned and mark every value as compiled-in", () =>
   assert.equal(settings.schoolModeEnabled, false);
   assert.equal(settings.schoolModeName, "School mode");
   assert.equal(settings.showEmojis, false);
+  assert.equal(settings.narratorEnabled, false);
+  assert.equal(settings.narratorLanguage, "english");
+  assert.equal(settings.narratorQuietMode, false);
+  assert.equal(settings.narratorAssistiveTechnologyActive, false);
   assert.deepEqual(settings.schoolModeCredential, {
     schemaVersion: 1,
     provider: "os-credential-vault",

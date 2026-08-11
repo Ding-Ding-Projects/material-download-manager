@@ -34,7 +34,7 @@ launchers are accepted only when their adjacent native `Code.exe` or
 `Code - Insiders.exe` can be found; the child process is then launched directly
 without shell interpretation.
 
-The setting is schema version 6 and migrates older profiles to a null editor
+The setting is schema version 8 and migrates older profiles to a null editor
 selection. The chosen path is a convenience setting only: app identity,
 installer identity, update feeds, and application-data locations do not depend
 on it.
@@ -68,7 +68,7 @@ instead of presenting a button that cannot work.
 validation, PATH/configured discovery and deduplication, missing-editor
 recovery, bounded export writes, workspace-root arguments, native `.cmd`
 resolution, and the no-shell launch boundary. `persistence.test.ts` covers
-schema-v6 default, migration, provenance, and rejected selection values.
+schema-v8 default, migration, provenance, and rejected selection values.
 
 The History, Changelog, NotificationCenter, RegexBuilder, and AuthenticatorPanel
 surfaces retain their normal download action and expose **Open last export in

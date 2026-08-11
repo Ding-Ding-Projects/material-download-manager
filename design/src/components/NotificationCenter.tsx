@@ -4,6 +4,7 @@ import { useAppStore } from "../store/useAppStore";
 import { CloseIcon, InfoIcon, RefreshIcon } from "./icons";
 import DestructiveActionGate from "./DestructiveActionGate";
 import { useExternalEditorExport } from "../hooks/useExternalEditorExport";
+import type { NarrationRequest } from "@shared/narration";
 
 export type NotificationTone = "info" | "success" | "warning" | "error";
 
@@ -14,9 +15,11 @@ export interface NotificationInput {
   timeoutMs?: number;
   /** Decorative only; never part of the accessible name or action label. */
   emoji?: string;
+  /** Optional raw bilingual facts for the opt-in spoken narrator. */
+  narration?: NarrationRequest;
 }
 
-interface NotificationRecord extends Omit<NotificationInput, "tone"> {
+interface NotificationRecord extends Omit<NotificationInput, "tone" | "narration"> {
   id: string;
   createdAt: number;
   tone: NotificationTone;
@@ -101,8 +104,9 @@ export default function NotificationCenter() {
     function addRecord(event: Event) {
       const detail = (event as CustomEvent<NotificationRecord>).detail;
       if (!detail?.title || !detail.message) return;
+      const { narration: _narration, ...visibleDetail } = detail as NotificationRecord & { narration?: NarrationRequest };
       const record: NotificationRecord = {
-        ...detail,
+        ...visibleDetail,
         id: detail.id ?? `notification-${Date.now()}-${++nextNotificationId}`,
         tone: detail.tone ?? "info",
         createdAt: detail.createdAt ?? Date.now(),

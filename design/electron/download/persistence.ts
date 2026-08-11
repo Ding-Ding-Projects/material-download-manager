@@ -14,6 +14,7 @@ import {
   isHexColor,
   isValidAppDisplayName,
   isLanguageMode,
+  isNarratorLanguage,
   isValidDefaultSaveFolder,
   isSchoolModeCredentialMetadata,
   isValidSchoolModeName,
@@ -150,6 +151,10 @@ export function migrateSettings(input: unknown, defaultSaveFolder: string): AppS
   adopt("schoolModeEnabled", (value): value is boolean => typeof value === "boolean");
   adopt("schoolModeName", isValidSchoolModeName);
   adopt("showEmojis", (value): value is boolean => typeof value === "boolean");
+  adopt("narratorEnabled", (value): value is boolean => typeof value === "boolean");
+  adopt("narratorLanguage", isNarratorLanguage);
+  adopt("narratorQuietMode", (value): value is boolean => typeof value === "boolean");
+  adopt("narratorAssistiveTechnologyActive", (value): value is boolean => typeof value === "boolean");
   adopt("density", isDensityMode);
   adopt("accentSeedColor", isHexColor);
   adopt("uiFontFamily", isUIFontFamily);

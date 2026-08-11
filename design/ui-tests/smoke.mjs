@@ -27,6 +27,7 @@ const RUNTIME_CHECK_IDS = [
   "changelog-action-error-separation",
   "progress-window",
   "settings-open",
+  "settings-narrator-controls",
   "settings-external-editor",
   "settings-scheduled-settings",
   "settings-authenticator-surface",
@@ -79,6 +80,7 @@ function usage() {
     "  --scheduled-screenshot <path>  Capture the built Settings scheduled-settings surface",
     "  --authenticator-screenshot <path>  Capture the secret-free Authenticator Settings registration surface",
     "  --external-editor-screenshot <path>  Capture the Settings external-editor selector",
+    "  --narrator-screenshot <path>  Capture the Settings spoken-narrator controls",
     "  --progress-screenshot <path>  Capture a separate progress page when one exists",
     "  --gallery-dir <path>    Capture the seven auto-organize documentation states into this directory",
     "  --json <path>          Write the same stable JSON summary to a file",
@@ -102,6 +104,7 @@ function parseArgs(argv) {
     scheduledScreenshotPath: null,
     authenticatorScreenshotPath: null,
     externalEditorScreenshotPath: null,
+    narratorScreenshotPath: null,
     progressScreenshotPath: null,
     galleryDirectory: null,
     jsonPath: null,
@@ -129,6 +132,7 @@ function parseArgs(argv) {
     else if (argument === "--scheduled-screenshot") options.scheduledScreenshotPath = path.resolve(value);
     else if (argument === "--authenticator-screenshot") options.authenticatorScreenshotPath = path.resolve(value);
     else if (argument === "--external-editor-screenshot") options.externalEditorScreenshotPath = path.resolve(value);
+    else if (argument === "--narrator-screenshot") options.narratorScreenshotPath = path.resolve(value);
     else if (argument === "--progress-screenshot") options.progressScreenshotPath = path.resolve(value);
     else if (argument === "--gallery-dir") options.galleryDirectory = path.resolve(value);
     else if (argument === "--json") options.jsonPath = path.resolve(value);
@@ -924,6 +928,9 @@ function createResult(options) {
     externalEditor: options.externalEditorScreenshotPath
       ? { requested: true, status: "not-run", path: options.externalEditorScreenshotPath }
       : { requested: false, status: "not-requested", path: null },
+    narrator: options.narratorScreenshotPath
+      ? { requested: true, status: "not-run", path: options.narratorScreenshotPath }
+      : { requested: false, status: "not-requested", path: null },
     gallery: options.galleryDirectory
       ? { requested: true, status: "not-run", directory: options.galleryDirectory, expected: GALLERY_ITEMS.map((item) => item.name), items: [] }
       : { requested: false, status: "not-requested", directory: null, expected: [], items: [] },
@@ -1543,12 +1550,60 @@ async function main(argv) {
     await runCheck(result, "settings-open", async () => {
       await clickByRole(cdp, "button", "Settings");
       await waitForPage(cdp, `Boolean(document.querySelector(".dialog"))`, "Settings dialog surface", options.timeoutMs);
-      if (options.galleryDirectory) await cdp.send("Emulation.setDeviceMetricsOverride", { width: 1100, height: 900, deviceScaleFactor: 1, mobile: false });
+      if (options.galleryDirectory || options.narratorScreenshotPath) {
+        // The narrator panel is intentionally complete in the evidence frame;
+        // give the hidden desktop enough vertical room for all four persisted
+        // controls and the user test action instead of clipping the lower rows.
+        await cdp.send("Emulation.setDeviceMetricsOverride", {
+          width: 1100,
+          height: options.narratorScreenshotPath ? 1200 : 900,
+          deviceScaleFactor: 1,
+          mobile: false,
+        });
+      }
       return cdp.evaluate(pageExpression(`
         const dialog = document.querySelector(".dialog");
         if (!dialog || !isVisible(dialog)) throw new Error("Settings dialog is not visible after activating Settings");
         return { className: dialog.className, visible: true };
       `));
+    });
+
+    await runCheck(result, "settings-narrator-controls", async () => {
+      await clickByRole(cdp, "tab", "Language", '[role="dialog"]');
+      await waitForPage(cdp, `Boolean(document.querySelector("#settings-narrator-panel"))`, "spoken narrator Settings panel", options.timeoutMs);
+      const evidence = await cdp.evaluate(pageExpression(`
+        const panel = document.getElementById("settings-narrator-panel");
+        const enabled = document.getElementById("settings-narrator-enabled");
+        const language = document.getElementById("settings-narrator-language");
+        const quiet = document.getElementById("settings-narrator-quiet");
+        const assistive = document.getElementById("settings-narrator-assistive");
+        const test = panel ? [...panel.querySelectorAll("button")].find((button) => /Test narration|測試朗讀/.test(accessibleName(button))) : null;
+        if (!(panel instanceof HTMLElement) || !isVisible(panel)) throw new Error("spoken narrator panel is missing or hidden");
+        if (!(enabled instanceof HTMLInputElement) || enabled.type !== "checkbox") throw new Error("narrator enabled switch is missing");
+        if (!(language instanceof HTMLSelectElement) || language.options.length !== 3) throw new Error("narrator language select is incomplete");
+        if (!(quiet instanceof HTMLInputElement) || quiet.type !== "checkbox") throw new Error("narrator quiet switch is missing");
+        if (!(assistive instanceof HTMLInputElement) || assistive.type !== "checkbox") throw new Error("narrator assistive-technology switch is missing");
+        if (!(test instanceof HTMLButtonElement) || !isVisible(test)) throw new Error("narrator test action is missing");
+        const provenance = panel.querySelectorAll(".setting-source");
+        const resetActions = panel.querySelectorAll(".setting-reset");
+        if (provenance.length < 4) throw new Error("narrator controls are missing persisted provenance lines");
+        if (resetActions.length < 4) throw new Error("narrator controls are missing reset actions");
+        enabled.click();
+        language.value = "both";
+        language.dispatchEvent(new Event("change", { bubbles: true }));
+        test.click();
+        return { enabled: true, languageOptions: [...language.options].map((option) => option.value), quiet: true, assistiveTechnology: true, provenanceLines: provenance.length, resetActions: resetActions.length, test: accessibleName(test) };
+      `));
+      await waitForPage(cdp, `Boolean([...document.querySelectorAll(".notification-toast")].find((node) => /Test narration requested locally|測試朗讀已要求本機執行|Test narration queued|測試朗讀已加入|speech synthesis is unavailable|speech synthesis 未有提供|Cantonese speech voice is unavailable|香港廣東話語音/.test(node.textContent ?? "")))`, "narrator test notification", options.timeoutMs);
+      if (options.narratorScreenshotPath) {
+        await cdp.evaluate(`document.querySelector(".notification-toast .notification-dismiss")?.click()`);
+        await cdp.evaluate(`document.getElementById("settings-narrator-panel")?.scrollIntoView({ block: "center", inline: "nearest" })`);
+        await sleep(60);
+        const capturedPath = await captureScreenshot(cdp, options.narratorScreenshotPath, "#settings-narrator-panel");
+        result.narrator = { requested: true, status: "captured", path: capturedPath };
+        return { ...evidence, screenshotPath: capturedPath };
+      }
+      return evidence;
     });
 
     await runCheck(result, "settings-external-editor", async () => {

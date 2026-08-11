@@ -27,6 +27,7 @@ import DimSumSurprise from "./components/DimSumSurprise";
 import HistoryPanel from "./components/HistoryPanel";
 import ChangelogPanel from "./components/ChangelogPanel";
 import DocumentationPanel from "./components/DocumentationPanel";
+import NarratorController, { requestNarration } from "./narration/NarratorController";
 import { setActiveTab } from "@shared/tabModel";
 import { useFilteredItems } from "./hooks/useFilteredItems";
 import { clearLegacyDisplayName, readLegacyDisplayName } from "./store/displayPreferences";
@@ -195,6 +196,14 @@ export default function App() {
         onSelect: () => openSettings("show-emojis"),
       }] : []),
       ...(!settings?.schoolModeEnabled ? [{
+        id: "settings.narrator",
+        label: copy.text("Settings · Spoken narrator", "設定 · 語音朗讀器"),
+        description: copy.text("Enable English, Cantonese, or serialized bilingual event narration with quiet, screen-reader, and reduced-motion safety", "開啟英文、廣東話或者英粵順序嘅事件朗讀，設有靜音、讀屏同減少動態安全設定"),
+        keywords: ["narrator", "speech", "voice", "tts", "cantonese", "bilingual", "quiet", "screen reader", "assistive technology", "reduced motion"],
+        section: "Settings",
+        onSelect: () => openSettings("narrator"),
+      }] : []),
+      ...(!settings?.schoolModeEnabled ? [{
         id: "settings.appearance",
         label: copy.text("Settings · Appearance", "設定 · 外觀"),
         description: copy.text("Open Settings to adjust theme, density, accent, and fonts", "開啟設定調整主題、密度、主色同字型"),
@@ -360,7 +369,16 @@ export default function App() {
       const previous = previousItems.current.get(item.id);
       if (!previous || previous.status === item.status) {
         if (item.error && item.error !== previous?.error) {
-          notify({ title: copy.text("Download error", "下載錯誤"), message: copy.downloadError(itemName(item), item.error), tone: "error" });
+          notify({
+            title: copy.text("Download error", "下載錯誤"),
+            message: copy.downloadError(itemName(item), item.error),
+            tone: "error",
+            narration: {
+              english: `${itemName(item)}: ${item.error}`,
+              cantonese: `${itemName(item)}：${item.error}`,
+              category: "download-error",
+            },
+          });
         }
         return;
       }
@@ -369,9 +387,24 @@ export default function App() {
       // Completion is owned by the main-process native notification path. Do
       // not emit a second renderer toast for the same completed item.
       if (item.status === "completed") {
+        requestNarration({
+          english: `${name} completed.`,
+          cantonese: `${name}：完成。`,
+          category: "download-completion",
+        });
         return;
       } else if (item.status === "error") {
-        notify({ title: copy.text("Download error", "下載錯誤"), message: copy.downloadError(name, item.error || copy.text("The manager reported an error.", "管理器回報咗一個錯誤。")), tone: "error" });
+        const error = item.error || copy.text("The manager reported an error.", "管理器回報咗一個錯誤。");
+        notify({
+          title: copy.text("Download error", "下載錯誤"),
+          message: copy.downloadError(name, error),
+          tone: "error",
+          narration: {
+            english: `${name}: ${error}`,
+            cantonese: `${name}：${error}`,
+            category: "download-error",
+          },
+        });
       } else {
         const status = item.status.charAt(0).toUpperCase() + item.status.slice(1);
         notify({ title: copy.text("Download status", "下載狀態"), message: copy.downloadStatus(name, status), tone: "info" });
@@ -430,6 +463,7 @@ export default function App() {
   return (
     <div className="app">
       <RendererAccessibilityBridge />
+      <NarratorController />
       <CommandPalette commands={paletteCommands} />
       <TitleBar />
       <TabStrip state={tabState} onChange={setTabState} onActivate={activateTab} />

@@ -34,6 +34,7 @@ import RegexBuilder from "./RegexBuilder";
 import { notify } from "./NotificationCenter";
 import AuthenticatorPanel from "./AuthenticatorPanel";
 import ScheduledSettingsPanel from "./ScheduledSettingsPanel";
+import { requestNarration, speechSynthesisReadiness } from "../narration/NarratorController";
 
 type SettingsTab = "language" | "appearance" | "downloads" | "authenticator" | "advanced";
 
@@ -124,6 +125,12 @@ const SETTINGS_SEARCH_INDEX = [
     targetId: "settings-show-emojis-toggle",
     tab: "language" as const,
     labels: ["Show emojis dialogs message boxes decorative accessibility", "顯示 emoji 對話框 訊息框 裝飾 讀屏"],
+  },
+  {
+    id: "settings-narrator",
+    targetId: "settings-narrator-panel",
+    tab: "language" as const,
+    labels: ["Spoken narrator speech TTS English Cantonese bilingual completion error queue debounce cooldown quiet screen reader assistive technology", "語音朗讀器 speech TTS 英文 廣東話 雙語 完成 錯誤 隊列 去抖 冷卻 靜音 讀屏 輔助工具"],
   },
   {
     id: "settings-language-heading",
@@ -269,7 +276,7 @@ export default function SettingsDialog() {
   const [saving, setSaving] = useState(false);
   const [accentError, setAccentError] = useState<string | null>(null);
   const [activeSettingsTab, setActiveSettingsTab] = useState<SettingsTab>(() => {
-    if (settingsFocus === "language" || settingsFocus === "school-mode" || settingsFocus === "show-emojis") return "language";
+    if (settingsFocus === "language" || settingsFocus === "school-mode" || settingsFocus === "show-emojis" || settingsFocus === "narrator") return "language";
     if (settingsFocus === "appearance" || settingsFocus === "downloads" || settingsFocus === "authenticator" || settingsFocus === "advanced") return settingsFocus;
     if (settingsFocus === "auto-organize" || settingsFocus === "auto-organize-rules") return "downloads";
     return readSettingsTab();
@@ -468,7 +475,7 @@ export default function SettingsDialog() {
       searchable: `${AUTO_ORGANIZE_TARGET_LABELS[category].join(" ")} destination path 目的路徑 ${displayAutoOrganizePath(form.defaultSaveFolder, AUTO_ORGANIZE_FOLDERS[category])}`,
     }));
     const visibleBaseEntries = form.schoolModeEnabled
-      ? baseEntries.filter((entry) => entry.id !== "settings-language-heading" && entry.id !== "settings-show-emojis")
+      ? baseEntries.filter((entry) => entry.id !== "settings-language-heading" && entry.id !== "settings-show-emojis" && entry.id !== "settings-narrator")
       : baseEntries;
     return [...visibleBaseEntries, ...pathEntries, ...ruleEntries];
   }, [form.autoOrganizeEnabled, form.autoOrganizeRules, form.defaultSaveFolder, form.displayName, form.schoolModeEnabled]);
@@ -570,7 +577,7 @@ export default function SettingsDialog() {
     appliedSettingsFocus.current = settingsFocus;
     const targetTab: SettingsTab = settingsFocus === "auto-organize" || settingsFocus === "auto-organize-rules"
       ? "downloads"
-      : settingsFocus === "school-mode" || settingsFocus === "show-emojis"
+      : settingsFocus === "school-mode" || settingsFocus === "show-emojis" || settingsFocus === "narrator"
         ? "language"
         : settingsFocus;
     setActiveSettingsTab(targetTab);
@@ -578,6 +585,8 @@ export default function SettingsDialog() {
       ? "settings-school-mode-toggle"
       : settingsFocus === "show-emojis"
         ? "settings-show-emojis-toggle"
+        : settingsFocus === "narrator"
+          ? "settings-narrator-panel"
         : settingsFocus === "language"
       ? "settings-language-mode"
       : settingsFocus === "appearance"
@@ -989,6 +998,48 @@ export default function SettingsDialog() {
     return true;
   }
 
+  function handleNarratorTest() {
+    if (!form.narratorEnabled) {
+      notify({
+        title: ui.text("Narrator is off", "朗讀器未開啟"),
+        message: ui.text("Enable the narrator before running a test.", "請先開啟朗讀器先至可以測試。"),
+        tone: "warning",
+      });
+      return;
+    }
+    const readiness = speechSynthesisReadiness(form.narratorLanguage);
+    if (readiness !== "ready") {
+      notify({
+        title: copy.narratorTitle,
+        message: readiness === "cantonese-voice-unavailable"
+          ? ui.text("A Hong Kong Cantonese speech voice is unavailable; choose English or install a local voice.", "未有香港廣東話語音；請揀英文或者安裝本機語音。")
+          : copy.narratorUnavailable,
+        tone: "warning",
+      });
+      return;
+    }
+    requestNarration({
+      english: "Narrator test: the local speech queue is ready.",
+      cantonese: "朗讀測試：本機語音隊列準備好喇。",
+      category: "manual",
+      priority: "user",
+      settings: {
+        enabled: form.narratorEnabled,
+        language: form.narratorLanguage,
+        quietMode: form.narratorQuietMode,
+        funnyLevelEnglish: form.funnyLevelEnglish,
+        funnyLevelCantonese: form.funnyLevelCantonese,
+        assistiveTechnologyActive: form.narratorAssistiveTechnologyActive,
+      },
+      onError: () => notify({ title: copy.narratorTitle, message: copy.narratorUnavailable, tone: "warning" }),
+    });
+    notify({
+      title: copy.narratorTitle,
+      message: copy.narratorTestSent,
+      tone: "info",
+    });
+  }
+
   async function handleSave() {
     if (!isHexColor(form.accentSeedColor)) {
       setAccentError(copy.accentInvalid);
@@ -1394,6 +1445,78 @@ export default function SettingsDialog() {
         </div>
         <p className="setting-disclosure" role="note">{copy.funnyDisclosure}</p>
         <p className="setting-preview" role="status">{ui.funnyPreview}</p>
+        <section className="settings-section" id="settings-narrator-panel" aria-labelledby="settings-narrator-heading" tabIndex={-1}>
+          <div className="settings-section-heading" id="settings-narrator-heading">{copy.narratorTitle}</div>
+          <p className="setting-helper">{copy.narratorDisclosure}</p>
+          <label className="checkbox-row" htmlFor="settings-narrator-enabled">
+            <input
+              id="settings-narrator-enabled"
+              type="checkbox"
+              checked={form.narratorEnabled}
+              onChange={(event) => update("narratorEnabled", event.target.checked)}
+            />
+            <span>{copy.narratorEnabled}</span>
+          </label>
+          <p className="setting-helper">{copy.narratorEnabledHelp}</p>
+          <span className="setting-source">{source("narratorEnabled", "false")}</span>
+          <button type="button" className="btn btn-ghost btn-sm setting-reset" onClick={() => resetSetting("narratorEnabled")}>
+            {copy.reset}
+          </button>
+          <div className="field">
+            <span className="field-label" id="settings-narrator-language-label">{copy.narratorLanguage}</span>
+            <select
+              id="settings-narrator-language"
+              className="input select"
+              aria-labelledby="settings-narrator-language-label"
+              value={form.narratorLanguage}
+              onChange={(event) => update("narratorLanguage", event.target.value as AppSettings["narratorLanguage"])}
+              disabled={!form.narratorEnabled}
+            >
+              <option value="english">{copy.narratorEnglish}</option>
+              <option value="cantonese">{copy.narratorCantonese}</option>
+              <option value="both">{copy.narratorBoth}</option>
+            </select>
+            <span className="setting-source">{source("narratorLanguage", "english")}</span>
+            <button type="button" className="btn btn-ghost btn-sm setting-reset" onClick={() => resetSetting("narratorLanguage")}>
+              {copy.reset}
+            </button>
+          </div>
+          <label className="checkbox-row" htmlFor="settings-narrator-quiet">
+            <input
+              id="settings-narrator-quiet"
+              type="checkbox"
+              checked={form.narratorQuietMode}
+              onChange={(event) => update("narratorQuietMode", event.target.checked)}
+              disabled={!form.narratorEnabled}
+            />
+            <span>{copy.narratorQuiet}</span>
+          </label>
+          <p className="setting-helper">{copy.narratorQuietHelp}</p>
+          <span className="setting-source">{source("narratorQuietMode", "false")}</span>
+          <button type="button" className="btn btn-ghost btn-sm setting-reset" onClick={() => resetSetting("narratorQuietMode")}>
+            {copy.reset}
+          </button>
+          <label className="checkbox-row" htmlFor="settings-narrator-assistive">
+            <input
+              id="settings-narrator-assistive"
+              type="checkbox"
+              checked={form.narratorAssistiveTechnologyActive}
+              onChange={(event) => update("narratorAssistiveTechnologyActive", event.target.checked)}
+              disabled={!form.narratorEnabled}
+            />
+            <span>{copy.narratorAssistive}</span>
+          </label>
+          <p className="setting-helper">{copy.narratorAssistiveHelp}</p>
+          <span className="setting-source">{source("narratorAssistiveTechnologyActive", "false")}</span>
+          <button type="button" className="btn btn-ghost btn-sm setting-reset" onClick={() => resetSetting("narratorAssistiveTechnologyActive")}>
+            {copy.reset}
+          </button>
+          <div className="button-row">
+            <button type="button" className="btn btn-secondary" onClick={handleNarratorTest} disabled={!form.narratorEnabled}>
+              {copy.narratorTest}
+            </button>
+          </div>
+        </section>
         </section>
         }
       </div>}

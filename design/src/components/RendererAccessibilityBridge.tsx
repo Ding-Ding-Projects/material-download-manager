@@ -3,6 +3,7 @@ import { useAppStore } from "../store/useAppStore";
 
 const DESTRUCTIVE_REQUEST_EVENT = "mdm:request-destructive-action";
 const CLOSE_CONTEXT_MENU_EVENT = "mdm:close-context-menus";
+const SCREEN_READER_SIGNAL_EVENT = "mdm:screen-reader-active";
 
 let generatedId = 0;
 
@@ -203,6 +204,12 @@ export default function RendererAccessibilityBridge() {
         trackedMenus.delete(menu);
         if (restore?.isConnected && restore !== document.body) restore.focus();
       }
+      window.dispatchEvent(new CustomEvent(SCREEN_READER_SIGNAL_EVENT, {
+        detail: {
+          active: document.documentElement.dataset.screenReaderActive === "true"
+            || document.body?.dataset.screenReaderActive === "true",
+        },
+      }));
     }
 
     function closeContextMenus() {

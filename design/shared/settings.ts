@@ -6,6 +6,7 @@ import type {
   DownloadCategory,
   FunnyLevel,
   LanguageMode,
+  NarratorLanguage,
   PresentationPatch,
   PresentationSettings,
   ResetCredentialState,
@@ -28,7 +29,7 @@ import { normalizeRegexFlags, validateRegexPattern } from "./regex";
 import { cloneSshHostConfigs, isSshHostConfigs } from "./ssh";
 import { isSafeEditorExecutable } from "./externalEditor";
 
-export const SETTINGS_SCHEMA_VERSION = 6;
+export const SETTINGS_SCHEMA_VERSION = 8;
 export const APP_DISPLAY_NAME_MAX_LENGTH = 64;
 export const DEFAULT_APP_DISPLAY_NAME = "Material Download Manager";
 export const SCHOOL_MODE_NAME_MAX_LENGTH = 80;
@@ -59,6 +60,10 @@ export const COMPILED_IN_DEFAULTS = {
   schoolModeEnabled: false,
   schoolModeName: DEFAULT_SCHOOL_MODE_NAME,
   showEmojis: false,
+  narratorEnabled: false,
+  narratorLanguage: "english" as NarratorLanguage,
+  narratorQuietMode: false,
+  narratorAssistiveTechnologyActive: false,
   density: "comfortable" as DensityMode,
   accentSeedColor: "#7c5cff",
   uiFontFamily: "segoe-ui" as UIFontFamily,
@@ -91,6 +96,10 @@ export function createDefaultSettings(defaultSaveFolder: string): AppSettings {
 
 export function isLanguageMode(value: unknown): value is LanguageMode {
   return value === "english" || value === "cantonese" || value === "bilingual";
+}
+
+export function isNarratorLanguage(value: unknown): value is NarratorLanguage {
+  return value === "english" || value === "cantonese" || value === "both";
 }
 
 export function isResetCredentialState(value: unknown): value is ResetCredentialState {
@@ -282,7 +291,12 @@ export function validateSettingsPatch(
           return isFunnyLevel(settingValue);
         case "schoolModeEnabled":
         case "showEmojis":
+        case "narratorEnabled":
+        case "narratorQuietMode":
+        case "narratorAssistiveTechnologyActive":
           return typeof settingValue === "boolean";
+        case "narratorLanguage":
+          return isNarratorLanguage(settingValue);
         case "schoolModeName":
           return isValidSchoolModeName(settingValue);
         case "density":

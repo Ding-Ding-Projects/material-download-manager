@@ -21,6 +21,13 @@ const validRule = {
 test("settings IPC validation rejects unknown and non-finite values", () => {
   assert.deepEqual(validateSettingsPatch({ maxActiveDownloads: 4, theme: "light" }), { maxActiveDownloads: 4, theme: "light" });
   assert.deepEqual(validateSettingsPatch({ displayName: "My Downloads" }), { displayName: "My Downloads" });
+  assert.deepEqual(validateSettingsPatch({ narratorEnabled: true, narratorLanguage: "both", narratorQuietMode: true, narratorAssistiveTechnologyActive: true }), {
+    narratorEnabled: true,
+    narratorLanguage: "both",
+    narratorQuietMode: true,
+    narratorAssistiveTechnologyActive: true,
+  });
+  assert.throws(() => validateSettingsPatch({ narratorLanguage: "bilingual" }), /Invalid value for setting/);
   assert.throws(() => validateSettingsPatch({ unknownSetting: true }), /Invalid setting key/);
   assert.throws(() => validateSettingsPatch({ maxActiveDownloads: Number.NaN }), /Invalid value for setting/);
   assert.throws(() => validateSettingsPatch({ uiFontSize: 200 }), /Invalid value for setting/);

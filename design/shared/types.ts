@@ -116,6 +116,8 @@ export interface DownloadQueue {
 
 export type LanguageMode = "english" | "cantonese" | "bilingual";
 export type FunnyLevel = 1 | 2 | 3 | 4 | 5;
+/** Spoken narrator output language; Both is serialized English then Cantonese. */
+export type NarratorLanguage = "english" | "cantonese" | "both";
 export type DensityMode = "compact" | "comfortable" | "spacious";
 export type UIFontFamily = "segoe-ui" | "inter" | "cascadia-code" | "system";
 export type UIFontWeight = 400 | 500 | 600 | 700;
@@ -174,6 +176,10 @@ export const SETTING_KEYS = [
   "schoolModeEnabled",
   "schoolModeName",
   "showEmojis",
+  "narratorEnabled",
+  "narratorLanguage",
+  "narratorQuietMode",
+  "narratorAssistiveTechnologyActive",
   "density",
   "accentSeedColor",
   "uiFontFamily",
@@ -219,6 +225,14 @@ export interface AppSettings {
   schoolModeEnabled: boolean;
   schoolModeName: string;
   showEmojis: boolean;
+  /** Spoken narration is opt-in and off by default. */
+  narratorEnabled: boolean;
+  /** Spoken output language; Both always speaks English before Cantonese. */
+  narratorLanguage: NarratorLanguage;
+  /** User-selected quiet switch; it suppresses event narration without changing the saved language. */
+  narratorQuietMode: boolean;
+  /** Explicit fail-closed handoff switch for screen-reader or other assistive-technology sessions. */
+  narratorAssistiveTechnologyActive: boolean;
   /** Metadata only; credential material never enters settings state. */
   schoolModeCredential: SchoolModeCredentialMetadata;
   density: DensityMode;
