@@ -164,10 +164,10 @@
         title: "Built-in TOTP authenticator with QR pairing",
         category: "security",
         requiredSurfaces: ["authenticator tab", "lock setup", "settings"],
-        docsPath: "../docs/features/site/universal-feature-coverage.md",
-        status: "planned",
+        docsPath: "../docs/features/security/totp-authenticator-core.md",
+        status: "partial",
         probes: ["otpauth-qr", "manual-secret", "rfc-6238-vectors", "secret-free-export"],
-        runtimeAnchors: []
+        runtimeAnchors: ["otpauth-qr", "secret-free-export"]
       },
       {
         id: "mutation-history",

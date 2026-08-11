@@ -410,6 +410,38 @@ window.MDM_SITE_CONTENT = {
       suggested: ["reliable-transfers", "squirrel-updates", "site-foundation"],
     },
     {
+      id: "local-totp-core",
+      category: "Security",
+      title: "Local TOTP and QR registration core",
+      summary: "A bounded RFC 6238 main-process foundation with otpauth://totp/ parsing, one-time QR registration material, credential-vault storage, and secret-free metadata export.",
+      docsPath: "../docs/features/security/totp-authenticator-core.md",
+      tags: ["authenticator", "TOTP", "QR", "security", "export"],
+      sections: {
+        behavior: [
+          "The core generates and verifies RFC 6238 codes with SHA-1, SHA-256, or SHA-512, six or eight digits, a bounded period, and a bounded adjacent-period clock-skew window.",
+          "The model builds and parses otpauth://totp/ URIs, checks issuer consistency, rejects duplicate or unknown parameters, and creates one-time QR/manual-secret registration material in memory.",
+          "The main-process registration service returns stable metadata through typed IPC. The full authenticator tab and QR image renderer are separate follow-up work."
+        ],
+        configuration: [
+          "Registration metadata includes issuer, account, algorithm, digit width, period, schema version, and a stable ID.",
+          "TotpSecretVault stores the normalized secret only in the operating-system credential vault under a stable service/account boundary.",
+          "Ordinary export is metadata-only and marks secret-free export explicitly with secretOmitted: true."
+        ],
+        failureModes: [
+          "Invalid schemes, hotp URIs, issuer mismatches, malformed base32, unsupported algorithms, invalid digit widths or periods, bad timestamps, and oversized skew windows fail closed.",
+          "Missing or corrupt vault records never become usable codes. Malformed candidates return false without revealing credential bytes."
+        ],
+        security: [
+          "Secrets never enter settings, history snapshots, logs, ordinary exports, or renderer metadata. The otpauth URI and manual secret are one-time in-memory registration values, not ordinary state.",
+          "The local core performs no network requests and has no cloud account or telemetry path."
+        ],
+        verification: [
+          "The focused suite covers all published RFC 6238 SHA-1/SHA-256/SHA-512 vectors, six/eight-digit output, periods/skew, URI validation, QR-model boundaries, vault behavior, and secret-free export."
+        ]
+      },
+      suggested: ["local-history", "destructive-action-gate", "site-foundation"]
+    },
+    {
       id: "progress-window",
       category: "Download engine",
       title: "Separate download progress window",

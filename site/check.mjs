@@ -263,7 +263,7 @@ run("local image asset has meaningful alternative text", () => {
 });
 
 run("feature article inventory covers every embedded feature", () => {
-  assert.equal(content.features.length, 16);
+  assert.equal(content.features.length, 17);
   const ids = new Set(content.features.map((feature) => feature.id));
   assert.ok(ids.has("auto-organize-downloads"), "auto-organize article is in the explicit feature inventory");
   for (const feature of content.features) {
