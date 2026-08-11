@@ -5,6 +5,38 @@ or have reached a stable release. Published entries must link the exact commit
 that completed the change. An Unreleased entry names missing evidence instead
 of guessing a commit, release, or date.
 
+## Unreleased — browser extension authenticator destination
+
+- **Source issue:** [#18 — Implement the universal feature contract](https://github.com/Ding-Ding-Projects/material-download-manager/issues/18)
+- **Source commits:** [`572d37e`](https://github.com/Ding-Ding-Projects/material-download-manager/commit/572d37e0ddc3abd0eca495c1d97af4e7dde0fef2), [`1c5273d`](https://github.com/Ding-Ding-Projects/material-download-manager/commit/1c5273dfc77f23659d8aa2d0ed168c54bd22a04d)
+- **Scope:** Chromium extension options destination with local registration and
+  browser-local storage; no network, CRX, or signing path was added.
+
+### Added
+
+- RFC 6238 SHA-1/SHA-256/SHA-512 registration with six/eight-digit codes,
+  configurable period, current/next code display, countdown, and one-step
+  pairing confirmation.
+- Local QR matrix rendering with a bounded compact URI and one-time manual
+  secret reveal; oversized payloads keep a manual fallback.
+- Searchable metadata list with an adjacent full regex builder, metadata-only
+  export (`secretOmitted: true`), redacted authenticator mutation history, and
+  a two-key/full-slider removal confirmation.
+- Separate versioned browser-local metadata and secret records, bounded
+  corruption handling, orphan-secret reconciliation, and rollback on storage
+  or journal failure.
+
+### Verification boundary
+
+- `npm test` from `extension/` — **33/33 passed**.
+- `node --check` for the new TOTP, QR, and browser-local store modules — passed.
+- `git diff --check` — passed (with expected LF-to-CRLF normalization notices
+  from the Windows checkout).
+- The local test suite uses RFC vectors and QR matrix invariants; this checkout has
+  no scanner decoder dependency, so no scanner-backed capture is claimed.
+- GitHub Actions remains build/package/publication-only and does not run tests
+  or lint. No CRX artifact, signing key, or signing operation was added.
+
 ## Unreleased — authenticator Settings registration surface
 
 - **Source issue:** [#18 — Implement the universal feature contract](https://github.com/Ding-Ding-Projects/material-download-manager/issues/18)

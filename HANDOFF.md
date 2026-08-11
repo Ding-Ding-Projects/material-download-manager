@@ -1,5 +1,37 @@
 # Handoff: Material Download Manager
 
+## Browser extension authenticator destination (2026-08-11)
+
+Issue [#18](https://github.com/Ding-Ding-Projects/material-download-manager/issues/18)
+tracks this extension slice. Commits
+[`572d37e`](https://github.com/Ding-Ding-Projects/material-download-manager/commit/572d37e0ddc3abd0eca495c1d97af4e7dde0fef2)
+and
+[`1c5273d`](https://github.com/Ding-Ding-Projects/material-download-manager/commit/1c5273dfc77f23659d8aa2d0ed168c54bd22a04d)
+add the real Chromium extension Authenticator options destination. It accepts
+manual or `otpauth://totp/` registration values, draws the QR locally, reveals
+the manual secret only on explicit request, verifies a current code before
+storage, and displays current/next codes with a readable countdown.
+
+The extension has no operating-system credential-vault API. Metadata and the
+validated secret fallback therefore live in separate versioned browser-local
+records, plainly documented as not a security boundary, not synced, and not
+exported. Clearing this extension's local storage is the reset route. Reads
+fail closed on malformed or oversized records and prune orphan secret ids;
+storage or redacted-history failure rolls back the mutation where possible.
+The metadata list has its own search and full regex builder, metadata-only
+export, redacted authenticator mutation entries, and a two-key/full-slider
+removal confirmation. URI confirmation reuses the same normalized path as
+manual confirmation, including the regression coverage.
+
+Local verification on this jer: `npm test` from `extension/` **33/33 passed**;
+new TOTP, QR, and browser-local store modules pass `node --check`; `git diff
+--check` passed with expected line-ending normalization notices. The local QR
+check is a payload-bound matrix invariant because this checkout has no scanner
+decoder dependency; no scanner-backed capture is claimed. The extension keeps
+the unsigned ZIP/Load-unpacked path and adds no CRX, signing key, or signing
+operation. Image/camera/clipboard QR import, deliberate secret export, reorder,
+groups, and bulk management remain explicit follow-up work.
+
 ## Authenticator Settings registration surface (2026-08-11)
 
 Issue [#18](https://github.com/Ding-Ding-Projects/material-download-manager/issues/18)
