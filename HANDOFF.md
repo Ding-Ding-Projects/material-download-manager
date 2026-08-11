@@ -160,6 +160,21 @@ The intentionally unimplemented follow-ons are TOTP locks, schedules,
 narration, appearance editors, and expansion of the history manager. The
 shared browser-extension capture and release no-signing paths were not changed.
 
+### Boundary hardening follow-up
+
+Commit [`40fc29123da0c8b83c13176ab4ba526a4d5dcbd8`](https://github.com/Ding-Ding-Projects/material-download-manager/commit/40fc29123da0c8b83c13176ab4ba526a4d5dcbd8)
+is the security follow-up on the same branch. `presentation:set` now rejects a
+direct renderer attempt to disable School mode even when metadata is
+`configured`; only the credential service's verified main-process method can
+perform that transition. `DownloadManager` rolls metadata and settings back
+when persistence fails, and verifier validation buffers are scrubbed after
+schema checks. The real Settings pixels are unchanged, so the existing
+1150×720 capture and hash remain the evidence for the visible surface.
+
+The follow-up Chuts are `npm run typecheck`, `npm run build:electron`,
+`npm run test:electron` (**104/104**), and `npm run test:engine`
+(**100/100**).
+
 ## Fresh-machine build contract (2026-08-11)
 
 The repository now has root [`build.bat`](build.bat) and

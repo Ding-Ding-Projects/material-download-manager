@@ -73,6 +73,12 @@ unverified surface has shipped.
   `docs/screenshots/settings/school-mode-credential-turnoff.png`. TOTP locks,
   schedules, narration, appearance editors, signing, and CRX artifacts remain
   separate work.
+- Boundary hardening follow-up at commit
+  [`40fc29123da0c8b83c13176ab4ba526a4d5dcbd8`](https://github.com/Ding-Ding-Projects/material-download-manager/commit/40fc29123da0c8b83c13176ab4ba526a4d5dcbd8): direct renderer School-mode
+  exits are rejected even with configured metadata, persistence failures roll
+  metadata back, and verifier validation buffers are scrubbed. Follow-up local
+  evidence is Electron **104/104** and engine **100/100**; the visible capture
+  is unchanged.
 
 ## Authenticated automatic browser capture implemented
 
