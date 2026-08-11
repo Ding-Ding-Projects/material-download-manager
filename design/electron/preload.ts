@@ -203,6 +203,22 @@ const api = {
     if (!isTotpRegistrationMetadata(result)) throw new Error("Invalid authenticator registration from main process");
     return result;
   },
+  confirmAuthenticatorRegistration: async (
+    input: TotpRegistrationInput,
+    candidate: string,
+    timestampMs?: number,
+    skewSteps?: number,
+  ): Promise<boolean> => {
+    const result: unknown = await ipcRenderer.invoke(
+      IPC.AUTHENTICATOR_CONFIRM_REGISTRATION,
+      input,
+      candidate,
+      timestampMs,
+      skewSteps,
+    );
+    if (typeof result !== "boolean") throw new Error("Invalid authenticator pairing result from main process");
+    return result;
+  },
   generateAuthenticatorCode: async (metadata: TotpRegistrationMetadata, timestampMs?: number): Promise<string> => {
     const result: unknown = await ipcRenderer.invoke(IPC.AUTHENTICATOR_GENERATE_CODE, metadata, timestampMs);
     if (typeof result !== "string" || !/^(?:\d{6}|\d{8})$/u.test(result)) throw new Error("Invalid authenticator code from main process");

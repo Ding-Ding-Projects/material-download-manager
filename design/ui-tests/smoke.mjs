@@ -27,6 +27,7 @@ const RUNTIME_CHECK_IDS = [
   "changelog-action-error-separation",
   "progress-window",
   "settings-open",
+  "settings-authenticator-surface",
   "settings-dialog-a11y",
   "settings-auto-organize-ui",
   "settings-auto-organize-regex-focus",
@@ -72,6 +73,7 @@ function usage() {
     "  --timeout <ms>         Per-run timeout (default: 30000)",
     "  --temp-root <path>     Parent for the disposable app profile (default: OS temp directory)",
     "  --screenshot <path>    Capture a PNG of the installed browser-extension card after automatic folder reveal",
+    "  --authenticator-screenshot <path>  Capture the secret-free Authenticator Settings registration surface",
     "  --progress-screenshot <path>  Capture a separate progress page when one exists",
     "  --gallery-dir <path>    Capture the seven auto-organize documentation states into this directory",
     "  --json <path>          Write the same stable JSON summary to a file",
@@ -92,6 +94,7 @@ function parseArgs(argv) {
     timeoutMs: DEFAULT_TIMEOUT_MS,
     tempRoot: null,
     screenshotPath: null,
+    authenticatorScreenshotPath: null,
     progressScreenshotPath: null,
     galleryDirectory: null,
     jsonPath: null,
@@ -116,6 +119,7 @@ function parseArgs(argv) {
     else if (argument === "--timeout") options.timeoutMs = parseBoundedInteger(value, "timeout", 1_000, 300_000);
     else if (argument === "--temp-root") options.tempRoot = path.resolve(value);
     else if (argument === "--screenshot") options.screenshotPath = path.resolve(value);
+    else if (argument === "--authenticator-screenshot") options.authenticatorScreenshotPath = path.resolve(value);
     else if (argument === "--progress-screenshot") options.progressScreenshotPath = path.resolve(value);
     else if (argument === "--gallery-dir") options.galleryDirectory = path.resolve(value);
     else if (argument === "--json") options.jsonPath = path.resolve(value);
@@ -902,6 +906,9 @@ function createResult(options) {
     timeoutMs: options.timeoutMs,
     checks: [],
     screenshot: options.screenshotPath ? { requested: true, status: "not-run", path: options.screenshotPath } : { requested: false, status: "not-requested", path: null },
+    authenticator: options.authenticatorScreenshotPath
+      ? { requested: true, status: "not-run", path: options.authenticatorScreenshotPath }
+      : { requested: false, status: "not-requested", path: null },
     gallery: options.galleryDirectory
       ? { requested: true, status: "not-run", directory: options.galleryDirectory, expected: GALLERY_ITEMS.map((item) => item.name), items: [] }
       : { requested: false, status: "not-requested", directory: null, expected: [], items: [] },
@@ -1525,6 +1532,41 @@ async function main(argv) {
       `));
     });
 
+    await runCheck(result, "settings-authenticator-surface", async () => {
+      await clickByRole(cdp, "tab", "Authenticator", '[role="dialog"]');
+      await waitForPage(cdp, `Boolean(document.querySelector("#settings-authenticator-panel"))`, "Authenticator Settings panel", options.timeoutMs);
+      const evidence = await cdp.evaluate(pageExpression(`
+        const panel = document.getElementById("settings-authenticator-panel");
+        const controls = [
+          "authenticator-issuer",
+          "authenticator-account",
+          "authenticator-secret",
+          "authenticator-algorithm",
+          "authenticator-digits",
+          "authenticator-period",
+          "authenticator-prepare-qr",
+          "authenticator-list-search",
+          "authenticator-export",
+        ].map((id) => document.getElementById(id));
+        if (!(panel instanceof HTMLElement) || !isVisible(panel)) throw new Error("Authenticator Settings panel is missing or hidden");
+        if (controls.some((control) => !(control instanceof HTMLElement) || !isVisible(control))) throw new Error("Authenticator registration/list control is missing or hidden");
+        if (document.querySelector("#authenticator-pairing-code")) throw new Error("secret-bearing pairing confirmation is visible before an explicit QR preparation action");
+        if ((panel.textContent ?? "").includes("otpauth://")) throw new Error("ordinary Authenticator surface exposed an otpauth URI");
+        if ((document.getElementById("authenticator-secret") instanceof HTMLInputElement) && document.getElementById("authenticator-secret").value) throw new Error("fresh Authenticator surface unexpectedly contains a secret");
+        const activeTab = document.querySelector('[role="tablist"][aria-label="Settings sections"] [role="tab"][aria-selected="true"]');
+        if (!activeTab || accessibleName(activeTab) !== "Authenticator") throw new Error("Authenticator tab is not active");
+        return { activeTab: accessibleName(activeTab), registrationControls: controls.length, pairingHidden: true, uriExposed: false, secretPresent: false };
+      `));
+      if (options.authenticatorScreenshotPath) {
+        await cdp.send("Emulation.setDeviceMetricsOverride", { width: 1100, height: 900, deviceScaleFactor: 1, mobile: false });
+        const capturedPath = await captureScreenshot(cdp, options.authenticatorScreenshotPath, "#settings-authenticator-panel .authenticator-card");
+        result.authenticator = { requested: true, status: "captured", path: capturedPath };
+        return { ...evidence, screenshotPath: capturedPath };
+      }
+      return evidence;
+    });
+    await clickByRole(cdp, "tab", "Downloads", '[role="dialog"]');
+
     await runCheck(result, "settings-dialog-a11y", async () => cdp.evaluate(pageExpression(`
       const dialog = document.querySelector('[role="dialog"]');
       if (!dialog) throw new Error('Settings surface is mounted but missing required role="dialog"');
@@ -1886,7 +1928,7 @@ async function main(argv) {
     await runCheck(result, "settings-narrow-layout", async () => {
       await cdp.send("Emulation.setDeviceMetricsOverride", { width: 520, height: 720, deviceScaleFactor: 2, mobile: false });
       try {
-        const tabNames = ["Language", "Appearance", "Downloads", "Advanced"];
+        const tabNames = ["Language", "Appearance", "Downloads", "Authenticator", "Advanced"];
         const panels = [];
         for (const tabName of tabNames) {
           await clickByRole(cdp, "tab", tabName, '[role="dialog"]');
@@ -2038,7 +2080,7 @@ async function main(argv) {
         const selected = tabs.filter((tab) => tab.getAttribute("aria-selected") === "true");
         const panelId = selected[0]?.getAttribute("aria-controls");
         const panel = panelId ? document.getElementById(panelId) : null;
-        if (!tabList || tabs.length !== 4) throw new Error("Settings surface must expose four browser-style tabs");
+        if (!tabList || tabs.length !== 5) throw new Error("Settings surface must expose five browser-style tabs");
         if (selected.length !== 1 || !panel || !isVisible(panel)) throw new Error("Settings tab selection does not expose one visible panel");
         return { tabCount: tabs.length, selected: accessibleName(selected[0]), panel: panel.id };
       `));

@@ -60,6 +60,17 @@ export class TotpRegistrationService {
     return metadata;
   }
 
+  /** Verify a pairing code before the credential is written to the vault. */
+  verifyPendingRegistration(
+    input: TotpRegistrationInput,
+    candidate: unknown,
+    timestampMs = Date.now(),
+    skewSteps = 1,
+  ): boolean {
+    const registration = normalizeTotpRegistration(input);
+    return verifyTotpCode(registration, candidate, timestampMs, skewSteps);
+  }
+
   async generateCode(metadata: TotpRegistrationMetadata, timestampMs = Date.now()): Promise<string> {
     assertMetadata(metadata);
     const secret = await this.vault.load(metadata.id);

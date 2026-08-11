@@ -31,10 +31,11 @@ import DestructiveActionGate from "./DestructiveActionGate";
 import { FolderIcon, SettingsIcon } from "./icons";
 import RegexBuilder from "./RegexBuilder";
 import { notify } from "./NotificationCenter";
+import AuthenticatorPanel from "./AuthenticatorPanel";
 
-type SettingsTab = "language" | "appearance" | "downloads" | "advanced";
+type SettingsTab = "language" | "appearance" | "downloads" | "authenticator" | "advanced";
 
-const SETTINGS_TABS: readonly SettingsTab[] = ["language", "appearance", "downloads", "advanced"];
+const SETTINGS_TABS: readonly SettingsTab[] = ["language", "appearance", "downloads", "authenticator", "advanced"];
 const SETTINGS_TAB_STORAGE_KEY = "material-download-manager.settings.active-tab";
 
 const AUTO_ORGANIZE_TARGETS: readonly AutoOrganizeTargetCategory[] = [
@@ -198,6 +199,12 @@ const SETTINGS_SEARCH_INDEX = [
     tab: "advanced" as const,
     labels: ["Advanced minimum splittable part size", "進階 最小可分割區塊大小"],
   },
+  {
+    id: "settings-authenticator",
+    targetId: "settings-authenticator-panel",
+    tab: "authenticator" as const,
+    labels: ["Authenticator TOTP QR pairing secret-free metadata export", "Authenticator TOTP QR 配對 secret-free 資料標籤匯出"],
+  },
 ] as const;
 
 function readSettingsTab(): SettingsTab {
@@ -222,6 +229,7 @@ function createSettingsSearchStates(): Record<SettingsTab, RegexBuilderState> {
     language: createSettingsSearchState("language"),
     appearance: createSettingsSearchState("appearance"),
     downloads: createSettingsSearchState("downloads"),
+    authenticator: createSettingsSearchState("authenticator"),
     advanced: createSettingsSearchState("advanced"),
   };
 }
@@ -246,7 +254,7 @@ export default function SettingsDialog() {
   const [accentError, setAccentError] = useState<string | null>(null);
   const [activeSettingsTab, setActiveSettingsTab] = useState<SettingsTab>(() => {
     if (settingsFocus === "language" || settingsFocus === "school-mode" || settingsFocus === "show-emojis") return "language";
-    if (settingsFocus === "appearance" || settingsFocus === "downloads" || settingsFocus === "advanced") return settingsFocus;
+    if (settingsFocus === "appearance" || settingsFocus === "downloads" || settingsFocus === "authenticator" || settingsFocus === "advanced") return settingsFocus;
     if (settingsFocus === "auto-organize" || settingsFocus === "auto-organize-rules") return "downloads";
     return readSettingsTab();
   });
@@ -499,6 +507,8 @@ export default function SettingsDialog() {
           ? "settings-auto-organize-toggle"
           : settingsFocus === "auto-organize-rules"
             ? "settings-auto-organize-rules"
+          : settingsFocus === "authenticator"
+            ? "settings-authenticator-panel"
             : settingsFocus === "advanced"
               ? "settings-min-splittable-part-size"
               : "settings-default-save-folder-input";
@@ -914,6 +924,7 @@ export default function SettingsDialog() {
     language: ui.text("Language", "語言"),
     appearance: ui.text("Appearance", "外觀"),
     downloads: ui.text("Downloads", "下載"),
+    authenticator: ui.text("Authenticator", "Authenticator"),
     advanced: ui.text("Advanced", "進階"),
   };
 
@@ -1921,6 +1932,11 @@ export default function SettingsDialog() {
         )}
       </div>
         </section>
+      </div>}
+
+      {activeSettingsTab === "authenticator" && <div className="settings-tab-panel" id="settings-panel-authenticator" role="tabpanel" aria-labelledby="settings-tab-authenticator">
+        {renderSettingsSearch()}
+        <AuthenticatorPanel />
       </div>}
 
       {activeSettingsTab === "advanced" && <div className="settings-tab-panel" id="settings-panel-advanced" role="tabpanel" aria-labelledby="settings-tab-advanced">
