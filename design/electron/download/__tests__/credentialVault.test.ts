@@ -72,13 +72,16 @@ test("credential vault rejects non-Ed25519 and corrupt or mismatched records", a
   await assert.rejects(vault.load(HOST_ID, "bootstrap"), /corrupt/u);
 
   const pair = sshUtils.generateKeyPairSync("ed25519");
+  const otherPair = sshUtils.generateKeyPairSync("ed25519");
+  const otherParsed = sshUtils.parseKey(otherPair.private);
+  assert.ok(!(otherParsed instanceof Error));
   adapter.values.set(
     `bootstrap:${HOST_ID}`,
     new TextEncoder().encode(JSON.stringify({
       version: 1,
       privateKey: pair.private,
       passphrase: null,
-      publicKey: "ssh-ed25519 AAAA",
+      publicKey: `ssh-ed25519 ${otherParsed.getPublicSSH().toString("base64")}`,
     })),
   );
   await assert.rejects(vault.load(HOST_ID, "bootstrap"), /does not match/u);

@@ -110,6 +110,56 @@ negative export probes intentionally emit invalid-format diagnostics while the
 overall smoke result remains passed. No signing material or CRX artifact was
 introduced.
 
+## Shared School-mode reset credential (2026-08-11)
+
+Issue [#18](https://github.com/Ding-Ding-Projects/material-download-manager/issues/18)
+tracks this desktop slice. Commit
+[`3b76509c684a2fc5c795d92400e10cd803c511e3`](https://github.com/Ding-Ding-Projects/material-download-manager/commit/3b76509c684a2fc5c795d92400e10cd803c511e3)
+is published on `codex/uh-school-credential`.
+
+The main process now owns a serialized School-mode credential service with
+setup, change, reset, and turn-off verification handlers. A stable
+`MaterialDownloadManager.SchoolMode.v1` operating-system vault record contains
+only a versioned random salt and scrypt verifier. Renderer IPC returns
+metadata-only `PresentationSettings`; the credential value never enters
+`state.json`, local history snapshots, exports, logs, notifications, or the
+renderer bundle. Metadata state (`unavailable`, `unconfigured`, `configured`)
+propagates through `presentation:changed` to both the main window and the
+separate progress window.
+
+If the app-data `state.json` is absent at startup, the service treats that as
+the deliberate deletion recovery route and removes an orphaned vault record.
+A previously configured profile whose vault record is missing becomes
+`unavailable` and cannot disable School mode. Reset rolls the verifier back if
+the metadata write fails, keeping the vault and metadata aligned where the
+platform allows it; an unrecoverable vault write remains fail-closed.
+
+### Verification and built-artifact evidence
+
+- `npm run docs:bundle:check` — passed.
+- `npm run typecheck` — passed.
+- `npm run build` — passed; the renderer emitted `index-kWX_jsfD.js` (SHA-256
+  `5844713025366765B73B14AACEBE156668ED49BCCD48FF39FB0803AF2B957EA3`) and
+  `index-C-AqvXg_.css` (SHA-256
+  `21D729A0A9EC8499337DD4DD6EDCB9FD44CDE434A6D877F544A84766CA2A7F26`).
+- `npm run test:docs` — **2/2 passed**.
+- `npm run test:electron` — **104/104 passed**.
+- `npm run test:engine` — **99/99 passed**.
+- Hidden-desktop capture from the real built application at 1150×720:
+  [`school-mode-credential-turnoff.png`](docs/screenshots/settings/school-mode-credential-turnoff.png)
+  shows checked School mode, configured-vault status, recovery guidance, and
+  the current-credential turn-off prompt without a credential value. PNG
+  SHA-256:
+  `1BA68A701556A1957756722A022B6708B32F8D0CAB1C2E71065B5C1DB96F24C1`.
+- The smoke used a named cheap hidden desktop, direct Electron executable,
+  background capture, and a disposable profile; all app processes and the
+  profile were removed afterward. No signing material or CRX artifact was
+  introduced.
+
+The intentionally unimplemented follow-ons are TOTP locks, schedules,
+narration, appearance editors, and expansion of the history manager. The
+shared browser-extension capture and release no-signing paths were not changed.
+
 ## Fresh-machine build contract (2026-08-11)
 
 The repository now has root [`build.bat`](build.bat) and

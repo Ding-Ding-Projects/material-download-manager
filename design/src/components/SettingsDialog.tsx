@@ -76,6 +76,8 @@ type ExtensionError =
   | { kind: "reveal"; detail: string }
   | null;
 
+type SchoolModeCredentialAction = "setup" | "change" | "reset" | "disable" | null;
+
 function displayAutoOrganizePath(base: string, leaf: string): string {
   if (!isValidDefaultSaveFolder(base)) return "";
   const trimmed = base.trim().replace(/[\\/]+$/u, "");
@@ -266,6 +268,12 @@ export default function SettingsDialog() {
   const [extensionStatus, setExtensionStatus] = useState<ExtensionStatus>(null);
   const [extensionError, setExtensionError] = useState<ExtensionError>(null);
   const [extensionPath, setExtensionPath] = useState<string | null>(null);
+  const [schoolModeCredentialAction, setSchoolModeCredentialAction] = useState<SchoolModeCredentialAction>(null);
+  const [schoolModeCurrentCredential, setSchoolModeCurrentCredential] = useState("");
+  const [schoolModeNextCredential, setSchoolModeNextCredential] = useState("");
+  const [schoolModeCredentialConfirmation, setSchoolModeCredentialConfirmation] = useState("");
+  const [schoolModeCredentialBusy, setSchoolModeCredentialBusy] = useState(false);
+  const [schoolModeCredentialError, setSchoolModeCredentialError] = useState<string | null>(null);
   const autoOrganizeRuleButtonRefs = useRef(new Map<string, HTMLButtonElement>());
   const autoOrganizeRuleMoveButtonRefs = useRef(new Map<string, HTMLButtonElement>());
   const autoOrganizeRuleNameRefs = useRef(new Map<string, HTMLInputElement>());
@@ -452,6 +460,15 @@ export default function SettingsDialog() {
       // A locked-down profile can still use the tabbed surface for this session.
     }
   }, [activeSettingsTab]);
+
+  useEffect(() => {
+    if (!currentSettings) return;
+    setForm((current) => ({
+      ...current,
+      schoolModeEnabled: currentSettings.schoolModeEnabled,
+      schoolModeCredential: currentSettings.schoolModeCredential,
+    }));
+  }, [currentSettings?.schoolModeCredential.state, currentSettings?.schoolModeEnabled]);
 
   function updateSettingsSearch(value: RegexBuilderState) {
     setSettingsSearches((current) => ({ ...current, [activeSettingsTab]: value }));
@@ -644,6 +661,63 @@ export default function SettingsDialog() {
   async function handlePickFolder() {
     const picked = await pickFolder();
     if (picked) update("defaultSaveFolder", picked);
+  }
+
+  function clearSchoolModeCredentialForm() {
+    setSchoolModeCurrentCredential("");
+    setSchoolModeNextCredential("");
+    setSchoolModeCredentialConfirmation("");
+    setSchoolModeCredentialError(null);
+    setSchoolModeCredentialAction(null);
+  }
+
+  function openSchoolModeCredentialAction(action: Exclude<SchoolModeCredentialAction, null>) {
+    setSchoolModeCredentialAction(action);
+    setSchoolModeCurrentCredential("");
+    setSchoolModeNextCredential("");
+    setSchoolModeCredentialConfirmation("");
+    setSchoolModeCredentialError(null);
+  }
+
+  function handleSchoolModeToggle(enabled: boolean) {
+    if (enabled) {
+      update("schoolModeEnabled", true);
+      return;
+    }
+    openSchoolModeCredentialAction("disable");
+  }
+
+  async function handleSchoolModeCredentialAction() {
+    const action = schoolModeCredentialAction;
+    if (!action || schoolModeCredentialBusy) return;
+    setSchoolModeCredentialBusy(true);
+    setSchoolModeCredentialError(null);
+    try {
+      const presentation = action === "setup"
+        ? await window.api.setupSchoolModeCredential(schoolModeNextCredential, schoolModeCredentialConfirmation)
+        : action === "change"
+          ? await window.api.changeSchoolModeCredential(
+              schoolModeCurrentCredential,
+              schoolModeNextCredential,
+              schoolModeCredentialConfirmation,
+            )
+          : action === "reset"
+            ? await window.api.resetSchoolModeCredential(schoolModeCurrentCredential)
+            : await window.api.disableSchoolMode(schoolModeCurrentCredential);
+      setForm((current) => ({ ...current, ...presentation }));
+      clearSchoolModeCredentialForm();
+      notify({
+        title: ui.text("School mode credential updated", "School mode credential 已更新"),
+        message: action === "disable"
+          ? ui.text("School mode is now off; your previous language and emoji choices are restored.", "School mode 已關閉，之前嘅語言同 emoji 選擇已恢復。")
+          : ui.text("The credential metadata changed; the secret stayed in the operating-system vault.", "credential metadata 已更新，秘密仍然留喺作業系統憑證庫。"),
+        tone: "success",
+      });
+    } catch (error) {
+      setSchoolModeCredentialError(error instanceof Error ? error.message : ui.schoolModeUnavailable);
+    } finally {
+      setSchoolModeCredentialBusy(false);
+    }
   }
 
   async function handleInstallExtension() {
@@ -1078,16 +1152,95 @@ export default function SettingsDialog() {
               id="settings-school-mode-toggle"
               type="checkbox"
               checked={form.schoolModeEnabled}
-              onChange={(event) => update("schoolModeEnabled", event.target.checked)}
+              onChange={(event) => handleSchoolModeToggle(event.target.checked)}
             />
             <span>{ui.schoolModeLabel}</span>
           </label>
           <p className="setting-helper">{ui.schoolModeHelp}</p>
           <p className="setting-helper" role="status">
             {form.schoolModeCredential.state === "configured"
-              ? ui.text("Reset credential metadata is configured.", "重設 credential metadata 已設定。")
-              : `${ui.schoolModeCredentialStatus}: ${ui.schoolModeUnavailable}`}
+              ? ui.schoolModeCredentialConfigured
+              : form.schoolModeCredential.state === "unconfigured"
+                ? ui.schoolModeCredentialUnconfigured
+                : `${ui.schoolModeCredentialStatus}: ${ui.schoolModeUnavailable}`}
           </p>
+          <p className="setting-helper">{ui.schoolModeCredentialRecovery}</p>
+          {form.schoolModeCredential.state === "configured" && schoolModeCredentialAction === null && (
+            <div className="button-row">
+              <button type="button" className="btn btn-ghost btn-sm" onClick={() => openSchoolModeCredentialAction("change")}>
+                {ui.schoolModeCredentialChange}
+              </button>
+              <button type="button" className="btn btn-ghost btn-sm" onClick={() => openSchoolModeCredentialAction("reset")}>
+                {ui.schoolModeCredentialReset}
+              </button>
+            </div>
+          )}
+          {form.schoolModeCredential.state !== "configured" && schoolModeCredentialAction === null && (
+            <button type="button" className="btn btn-ghost btn-sm" onClick={() => openSchoolModeCredentialAction("setup")}>
+              {ui.schoolModeCredentialSetup}
+            </button>
+          )}
+          {schoolModeCredentialAction !== null && (
+            <div className="settings-section credential-action" role="group" aria-labelledby="school-mode-credential-action-title">
+              <div className="settings-section-heading" id="school-mode-credential-action-title">
+                {schoolModeCredentialAction === "setup"
+                  ? ui.schoolModeCredentialSetup
+                  : schoolModeCredentialAction === "change"
+                    ? ui.schoolModeCredentialChange
+                    : schoolModeCredentialAction === "reset"
+                      ? ui.schoolModeCredentialReset
+                      : ui.text(`Turn off ${form.schoolModeName}`, `關閉${form.schoolModeName}`)}
+              </div>
+              {(schoolModeCredentialAction === "change" || schoolModeCredentialAction === "reset" || schoolModeCredentialAction === "disable") && (
+                <div className="field">
+                  <label className="field-label" htmlFor="school-mode-current-credential">{ui.schoolModeCredentialCurrentLabel}</label>
+                  <input
+                    id="school-mode-current-credential"
+                    className="input"
+                    type="password"
+                    autoComplete="current-password"
+                    value={schoolModeCurrentCredential}
+                    onChange={(event) => setSchoolModeCurrentCredential(event.target.value)}
+                  />
+                </div>
+              )}
+              {(schoolModeCredentialAction === "setup" || schoolModeCredentialAction === "change") && (
+                <>
+                  <div className="field">
+                    <label className="field-label" htmlFor="school-mode-new-credential">{ui.schoolModeCredentialNewLabel}</label>
+                    <input
+                      id="school-mode-new-credential"
+                      className="input"
+                      type="password"
+                      autoComplete="new-password"
+                      value={schoolModeNextCredential}
+                      onChange={(event) => setSchoolModeNextCredential(event.target.value)}
+                    />
+                  </div>
+                  <div className="field">
+                    <label className="field-label" htmlFor="school-mode-confirm-credential">{ui.schoolModeCredentialConfirmLabel}</label>
+                    <input
+                      id="school-mode-confirm-credential"
+                      className="input"
+                      type="password"
+                      autoComplete="new-password"
+                      value={schoolModeCredentialConfirmation}
+                      onChange={(event) => setSchoolModeCredentialConfirmation(event.target.value)}
+                    />
+                  </div>
+                </>
+              )}
+              {schoolModeCredentialError && <p className="field-error" role="alert">{schoolModeCredentialError}</p>}
+              <div className="button-row">
+                <button type="button" className="btn btn-primary" onClick={() => void handleSchoolModeCredentialAction()} disabled={schoolModeCredentialBusy}>
+                  {schoolModeCredentialBusy ? ui.text("Working…", "處理緊…") : schoolModeCredentialAction === "disable" ? ui.text("Verify and turn off", "驗證並關閉") : ui.schoolModeCredentialSave}
+                </button>
+                <button type="button" className="btn btn-ghost" onClick={clearSchoolModeCredentialForm} disabled={schoolModeCredentialBusy}>
+                  {ui.schoolModeCredentialCancel}
+                </button>
+              </div>
+            </div>
+          )}
         </section>
 
         {!form.schoolModeEnabled && <section className="settings-section" aria-labelledby="settings-show-emojis-heading">

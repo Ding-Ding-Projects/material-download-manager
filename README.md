@@ -127,6 +127,31 @@ names or exports.
 </details>
 
 <details>
+<summary>School-mode reset credential</summary>
+
+Commit [`3b76509c684a2fc5c795d92400e10cd803c511e3`](https://github.com/Ding-Ding-Projects/material-download-manager/commit/3b76509c684a2fc5c795d92400e10cd803c511e3)
+adds the real shared School-mode reset credential path. Enrollment, change,
+reset, and turn-off verification run through trusted main-process IPC. The
+operating-system credential vault stores only a salted scrypt verifier; the
+password never enters settings state, local history, exports, logs, renderer
+state, or screenshots. Metadata propagates live to both application windows,
+and a deleted app-data profile removes an orphaned verifier before a new setup.
+
+![Settings showing the configured School-mode credential and current-value turn-off prompt](docs/screenshots/settings/school-mode-credential-turnoff.png)
+
+This 1150×720 capture came from the real built desktop surface through the
+cheap hidden-desktop route. SHA-256:
+`1BA68A701556A1957756722A022B6708B32F8D0CAB1C2E71065B5C1DB96F24C1`.
+
+The local Chuts for this slice are `npm run docs:bundle:check`,
+`npm run typecheck`, `npm run build`, `npm run test:docs` (**2/2**),
+`npm run test:electron` (**104/104**), and `npm run test:engine`
+(**99/99**). TOTP locks, schedules, narration, appearance editors, signing,
+and CRX artifacts remain outside this slice.
+
+</details>
+
+<details>
 <summary>Browser extension automatic capture and installation</summary>
 
 The Manifest V3 extension requests Chrome's `downloads` permission and enables

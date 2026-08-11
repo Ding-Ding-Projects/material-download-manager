@@ -7,3 +7,6 @@
   application-data presentation state, user-renamable English-only mode,
   live two-window propagation, decorative message emojis, and fail-closed
   reset metadata.
+- [School-mode reset credential](school-mode-reset-credential.md) — local
+  enrollment, change, reset, turn-off verification, OS-vault verifier storage,
+  deleted-profile recovery, and live metadata propagation.

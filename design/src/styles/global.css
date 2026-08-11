@@ -974,6 +974,19 @@ textarea {
   font-size: 13px;
   font-weight: 600;
 }
+.button-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+.credential-action {
+  margin-top: 4px;
+  padding: 12px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  background: var(--bg-row-hover);
+}
 .settings-tabs {
   display: flex;
   gap: 4px;

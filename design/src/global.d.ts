@@ -51,6 +51,10 @@ export interface MaterialDownloadManagerAPI {
   setSettings(settings: SettingsPatch, resetKeys?: SettingKey[]): Promise<AppSettings>;
   getPresentationSettings(): Promise<PresentationSettings>;
   setPresentationSettings(settings: PresentationPatch, resetKeys?: PresentationSettingKey[]): Promise<PresentationSettings>;
+  setupSchoolModeCredential(next: string, confirmation: string): Promise<PresentationSettings>;
+  changeSchoolModeCredential(current: string, next: string, confirmation: string): Promise<PresentationSettings>;
+  resetSchoolModeCredential(current: string): Promise<PresentationSettings>;
+  disableSchoolMode(current: string): Promise<PresentationSettings>;
   onPresentationChanged(cb: (settings: PresentationSettings) => void): () => void;
   saveSshHost(draft: SshHostDraft): Promise<AppSettings>;
   importSshBootstrapKey(hostId: string): Promise<AppSettings>;
