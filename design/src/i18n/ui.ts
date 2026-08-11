@@ -55,6 +55,19 @@ export interface UiCopy {
   schoolModeHelp: string;
   schoolModeCredentialStatus: string;
   schoolModeUnavailable: string;
+  schoolModeCredentialConfigured: string;
+  schoolModeCredentialUnconfigured: string;
+  schoolModeCredentialSetup: string;
+  schoolModeCredentialChange: string;
+  schoolModeCredentialReset: string;
+  schoolModeCredentialCurrentLabel: string;
+  schoolModeCredentialNewLabel: string;
+  schoolModeCredentialConfirmLabel: string;
+  schoolModeCredentialSave: string;
+  schoolModeCredentialCancel: string;
+  schoolModeCredentialRecovery: string;
+  schoolModeCredentialMismatch: string;
+  schoolModeCredentialWrong: string;
   showEmojisLabel: string;
   showEmojisHelp: string;
   funnyPreview: string;
@@ -126,6 +139,28 @@ export function getUiCopy(settings: SettingsLike): UiCopy {
       `${schoolModeName} cannot be turned off because its locally verified reset credential is unavailable. Delete the shared application-data folder only as the deliberate recovery route.`,
       `未能關閉${schoolModeName}，因為本機驗證嘅重設 credential 未有提供。只有刻意恢復先刪除共用應用程式資料夾。`
     ),
+    schoolModeCredentialConfigured: text(
+      "A reset credential is configured in the operating-system credential vault.",
+      "重設 credential 已經存入作業系統憑證庫。"
+    ),
+    schoolModeCredentialUnconfigured: text(
+      "No reset credential is configured yet. Set one before enabling this mode.",
+      "仲未設定重設 credential，開啟呢個模式之前請先設定。"
+    ),
+    schoolModeCredentialSetup: text("Set reset credential", "設定重設 credential"),
+    schoolModeCredentialChange: text("Change reset credential", "更改重設 credential"),
+    schoolModeCredentialReset: text("Reset credential", "重設 credential"),
+    schoolModeCredentialCurrentLabel: text("Current reset credential", "目前重設 credential"),
+    schoolModeCredentialNewLabel: text("New reset credential", "新重設 credential"),
+    schoolModeCredentialConfirmLabel: text("Confirm reset credential", "確認重設 credential"),
+    schoolModeCredentialSave: text("Save credential", "儲存 credential"),
+    schoolModeCredentialCancel: text("Cancel credential action", "取消 credential 操作"),
+    schoolModeCredentialRecovery: text(
+      "This is a user-experience lock, not security. Delete the app's local application-data folder to recover if the credential is forgotten.",
+      "呢個係使用體驗鎖，唔係安全措施。如果唔記得 credential，刪除程式本機應用程式資料夾就可以恢復。"
+    ),
+    schoolModeCredentialMismatch: text("The two new credentials did not match.", "兩次新 credential 唔一致。"),
+    schoolModeCredentialWrong: text("The reset credential did not match.", "重設 credential 唔正確。"),
     showEmojisLabel: text("Show emojis in dialogs and message boxes", "喺對話框同訊息框顯示 emoji"),
     showEmojisHelp: text(
       "When enabled, dialogs and message boxes may include a relevant decorative emoji. Buttons, field labels, accessible names, and exports stay factual.",

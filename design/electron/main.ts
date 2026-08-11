@@ -57,6 +57,8 @@ import {
 } from "./history/ChangelogStore";
 import { HistoryAccessVault } from "./history/HistoryAccessVault";
 import { HistoryAccessSession } from "./history/HistoryAccessSession";
+import { SchoolModeResetVault } from "./schoolMode/SchoolModeResetVault";
+import { SchoolModeCredentialService } from "./schoolMode/SchoolModeCredentialService";
 import { TotpRegistrationService } from "./authenticator/TotpRegistrationService";
 import { isDevelopmentLaunch, resolveRendererPath } from "./runtimePaths";
 import { CredentialVault } from "./download/distributed/CredentialVault";
@@ -88,6 +90,7 @@ let sshWorkerClient: SshWorkerClient;
 let sshProvisioning: SshProvisioningService;
 let extensionCapabilityVault: ExtensionCapabilityVault;
 let historyAccessVault: HistoryAccessVault;
+let schoolModeCredentialService: SchoolModeCredentialService;
 let authenticatorService: TotpRegistrationService;
 const historyAccessSession = new HistoryAccessSession();
 let updater: UpdateService | null = null;
@@ -474,6 +477,22 @@ function registerIpcHandlers() {
       throw new Error("A presentation setting cannot be changed and reset in the same mutation");
     }
     return manager.setPresentationSettings(validated as PresentationPatch, validatedResetKeys);
+  });
+  ipcMain.handle(IPC.SCHOOL_MODE_CREDENTIAL_SETUP, async (event, next: unknown, confirmation: unknown) => {
+    assertTrustedSender(event);
+    return schoolModeCredentialService.setup(next, confirmation);
+  });
+  ipcMain.handle(IPC.SCHOOL_MODE_CREDENTIAL_CHANGE, async (event, current: unknown, next: unknown, confirmation: unknown) => {
+    assertTrustedSender(event);
+    return schoolModeCredentialService.change(current, next, confirmation);
+  });
+  ipcMain.handle(IPC.SCHOOL_MODE_CREDENTIAL_RESET, async (event, current: unknown) => {
+    assertTrustedSender(event);
+    return schoolModeCredentialService.reset(current);
+  });
+  ipcMain.handle(IPC.SCHOOL_MODE_DISABLE, async (event, current: unknown) => {
+    assertTrustedSender(event);
+    return schoolModeCredentialService.disable(current);
   });
 
   ipcMain.handle(IPC.SSH_HOST_SAVE, async (event, draft: unknown) => {
@@ -870,6 +889,7 @@ app.on("second-instance", (_event, commandLine) => {
 app.whenReady().then(async () => {
   extensionCapabilityVault = new ExtensionCapabilityVault();
   historyAccessVault = new HistoryAccessVault();
+  const schoolModeResetVault = new SchoolModeResetVault();
   authenticatorService = new TotpRegistrationService();
   sshVault = new CredentialVault();
   sshWorkerClient = new SshWorkerClient({ vault: sshVault });
@@ -878,7 +898,12 @@ app.whenReady().then(async () => {
     : path.resolve(__dirname, "../../../worker");
   sshProvisioning = new SshProvisioningService({ bundlePath: workerBundlePath, vault: sshVault, client: sshWorkerClient });
   manager = new DownloadManager(app.getPath("userData"), undefined, { credentialVault: sshVault });
+  const hadStateFile = await fsp.stat(path.join(app.getPath("userData"), "state.json")).then(() => true, () => false);
   await manager.init();
+  schoolModeCredentialService = new SchoolModeCredentialService(schoolModeResetVault, manager);
+  await schoolModeCredentialService.synchronize(hadStateFile).catch((error: unknown) => {
+    console.warn(`School mode reset credential metadata could not be reconciled: ${error instanceof Error ? error.message : "unknown failure"}`);
+  });
   manager.on("stateChanged", broadcastState);
   manager.on("presentationChanged", broadcastPresentation);
   manager.on("itemCompleted", notifyDownloadComplete);

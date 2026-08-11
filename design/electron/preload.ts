@@ -64,6 +64,30 @@ const api = {
     return value;
   },
 
+  setupSchoolModeCredential: async (next: string, confirmation: string): Promise<PresentationSettings> => {
+    const value: unknown = await ipcRenderer.invoke(IPC.SCHOOL_MODE_CREDENTIAL_SETUP, next, confirmation);
+    if (!isPresentationSettings(value)) throw new Error("Invalid School mode credential setup result from main process");
+    return value;
+  },
+
+  changeSchoolModeCredential: async (current: string, next: string, confirmation: string): Promise<PresentationSettings> => {
+    const value: unknown = await ipcRenderer.invoke(IPC.SCHOOL_MODE_CREDENTIAL_CHANGE, current, next, confirmation);
+    if (!isPresentationSettings(value)) throw new Error("Invalid School mode credential change result from main process");
+    return value;
+  },
+
+  resetSchoolModeCredential: async (current: string): Promise<PresentationSettings> => {
+    const value: unknown = await ipcRenderer.invoke(IPC.SCHOOL_MODE_CREDENTIAL_RESET, current);
+    if (!isPresentationSettings(value)) throw new Error("Invalid School mode credential reset result from main process");
+    return value;
+  },
+
+  disableSchoolMode: async (current: string): Promise<PresentationSettings> => {
+    const value: unknown = await ipcRenderer.invoke(IPC.SCHOOL_MODE_DISABLE, current);
+    if (!isPresentationSettings(value)) throw new Error("Invalid School mode disable result from main process");
+    return value;
+  },
+
   onPresentationChanged: (cb: (settings: PresentationSettings) => void) => {
     const listener = (_: unknown, settings: unknown) => {
       if (isPresentationSettings(settings)) cb(settings);

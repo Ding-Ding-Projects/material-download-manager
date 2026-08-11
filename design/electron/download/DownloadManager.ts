@@ -12,6 +12,7 @@ import type {
   NewDownloadInfo,
   PresentationPatch,
   PresentationSettings,
+  ResetCredentialState,
   SettingKey,
   SettingsPatch,
   StateSnapshot,
@@ -960,7 +961,40 @@ export class DownloadManager extends EventEmitter {
     return this.getPresentationSettings();
   }
 
+  getSchoolModeCredentialMetadata() {
+    return { ...this.settings.schoolModeCredential };
+  }
+
+  async setSchoolModeCredentialState(state: ResetCredentialState): Promise<PresentationSettings> {
+    if (state !== "unavailable" && state !== "unconfigured" && state !== "configured") {
+      throw new Error("Invalid School mode reset credential state");
+    }
+    if (this.settings.schoolModeCredential.state === state) return this.getPresentationSettings();
+    this.settings = {
+      ...this.settings,
+      schoolModeCredential: { ...this.settings.schoolModeCredential, state },
+    };
+    await this.persist("settings-changed", "Updated School mode reset credential metadata");
+    this.emit("presentationChanged", this.getPresentationSettings());
+    this.scheduleNotify();
+    return this.getPresentationSettings();
+  }
+
+  async disableSchoolModeAfterCredentialVerification(): Promise<PresentationSettings> {
+    if (!this.settings.schoolModeEnabled) return this.getPresentationSettings();
+    await this.setSettingsInternal({ schoolModeEnabled: false }, [], true);
+    return this.getPresentationSettings();
+  }
+
   async setSettings(partial: SettingsPatch, resetKeysInput: readonly SettingKey[] = []): Promise<AppSettings> {
+    return this.setSettingsInternal(partial, resetKeysInput, false);
+  }
+
+  private async setSettingsInternal(
+    partial: SettingsPatch,
+    resetKeysInput: readonly SettingKey[] = [],
+    allowVerifiedSchoolModeDisable = false,
+  ): Promise<AppSettings> {
     const validated = validateSettingsPatch(partial, { allowManagedSshHosts: true });
     const resetKeys = validateSettingResetKeys(resetKeysInput);
     if (resetKeys.some((key) => Object.prototype.hasOwnProperty.call(validated, key))) {
@@ -986,7 +1020,7 @@ export class DownloadManager extends EventEmitter {
       (nextSettings as unknown as Record<SettingKey, AppSettings[SettingKey]>)[key] = this.compiledSettings[key];
       provenance[key] = "compiled-in";
     }
-    if (previousSettings.schoolModeEnabled && !nextSettings.schoolModeEnabled) {
+    if (previousSettings.schoolModeEnabled && !nextSettings.schoolModeEnabled && !allowVerifiedSchoolModeDisable) {
       if (previousSettings.schoolModeCredential.state !== "configured") {
         throw new Error("School mode cannot be turned off because its locally verified reset credential is unavailable.");
       }
