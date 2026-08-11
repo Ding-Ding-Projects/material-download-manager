@@ -16,6 +16,13 @@ labels that generic ZIP as versioned source/reference with an empty pairing
 module and directs users to the desktop app for the private paired folder that
 can authenticate protocol-2 handoff.
 
+The Pages source also carries a hand-written universal feature inventory in
+`site/data/universal-feature-manifest.js`. Its required surfaces, article
+paths, status, and exact verification probes are checked independently from
+the sixteen-item article catalogue. The current source reports partial and
+planned entries honestly while each missing implementation is delivered in a
+later verified slice.
+
 ## Configuration
 
 Run `npm run check` and `npm run build` from `site/`. The builder accepts an
@@ -47,6 +54,12 @@ empty public module. The build removes
 only its explicitly requested staging directory before copying the checked
 local files. An unavailable stable release leaves the installer button absent;
 it never points at a guessed or prerelease asset.
+
+The browser settings schema now includes a persisted emoji-decoration switch
+and a user-renamable School mode. School mode forces English presentation,
+removes the playful controls and dim sum surprise, and restores the prior
+language and funny-level values when switched off. Clearing this site's browser
+storage is the reset route; no credential or secret is stored by this slice.
 
 ## Security considerations
 

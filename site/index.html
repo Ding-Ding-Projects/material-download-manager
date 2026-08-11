@@ -203,26 +203,42 @@
             <span class="search-state" id="settings-search-state">Plain text</span>
             <div class="builder-popover" id="builder-settings" role="dialog" aria-label="Settings regex builder" hidden></div>
           </div>
-          <p class="disclosure-note" data-copy="funnyDisclosure">Funny levels style all site messages, including warnings and errors. They change voice, never facts, and can be reset at any time.</p>
+          <p class="disclosure-note" data-copy="funnyDisclosure" data-school-optional>Funny levels style all site messages, including warnings and errors. They change voice, never facts, and can be reset at any time.</p>
           <div class="settings-grid" id="settings-list">
             <article class="settings-card" data-setting-search="language language mode english cantonese bilingual 語言">
               <div class="card-heading-row"><div><p class="eyebrow" data-copy="languageModeEyebrow">LANGUAGE MODE</p><h2 data-copy="languageModeTitle">Choose the reading voice.</h2></div><span class="state-icon state-icon-accent" aria-hidden="true">文</span></div>
               <p class="field-explanation" data-copy="languageExplanation">Controls the primary language of every label on this site. Bilingual mode keeps English prominent and adds a compact Cantonese counterpart.</p>
               <div class="segmented-control" id="language-mode-buttons" role="group" aria-label="Language mode">
                 <button type="button" data-setting="language" data-value="en">English</button>
-                <button type="button" data-setting="language" data-value="yue">香港粵語</button>
-                <button type="button" data-setting="language" data-value="bilingual">Bilingual</button>
+                <button type="button" data-setting="language" data-value="yue" data-school-language-option="true">香港粵語</button>
+                <button type="button" data-setting="language" data-value="bilingual" data-school-language-option="true">Bilingual</button>
               </div>
               <p class="provenance" data-provenance="language">Persisted in this browser</p>
             </article>
-            <article class="settings-card" data-setting-search="english funny level humor tone copy">
+            <article class="settings-card" data-setting-search="message decorations emojis emoji switch" data-school-optional>
+              <div class="card-heading-row"><div><p class="eyebrow" data-copy="emojiToggleTitle">MESSAGE DECORATIONS</p><h2 data-copy="emojiToggleTitle">Message decorations</h2></div><span class="state-icon state-icon-accent" aria-hidden="true">✦</span></div>
+              <p class="field-explanation" data-copy="emojiToggleExplanation">Show a small decorative emoji in notifications and decision messages. It never changes facts, control labels, or accessible names.</p>
+              <label class="switch-row"><input id="show-emojis" type="checkbox"><span class="switch-visual" aria-hidden="true"></span><span data-copy="emojiToggleLabel">Show emojis in messages</span></label>
+              <p class="provenance" data-provenance="showEmojis">Compiled-in value: on</p>
+            </article>
+            <article class="settings-card" data-setting-search="school mode focus english reset name">
+              <div class="card-heading-row"><div><p class="eyebrow" id="school-mode-eyebrow">School mode</p><h2 id="school-mode-title">School mode</h2></div><span class="state-icon state-icon-accent" aria-hidden="true">▣</span></div>
+              <p class="field-explanation" id="school-mode-explanation">School mode: This user-named mode keeps the site in English and removes playful language, Cantonese options, funny-level controls, and the dim sum surprise while it is on.</p>
+              <label class="field-control"><span data-copy="schoolModeNameLabel">Mode name</span><input id="school-mode-name" type="text" maxlength="48" autocomplete="off" aria-describedby="school-mode-recovery school-mode-status"><output id="school-mode-name-output" class="sr-only">School mode</output></label>
+              <label class="switch-row"><input id="school-mode-enabled" type="checkbox"><span class="switch-visual" aria-hidden="true"></span><span data-copy="schoolModeToggleLabel">Use this mode</span></label>
+              <p class="field-help" id="school-mode-status" role="status" aria-live="polite">School mode is off</p>
+              <p class="field-help" id="school-mode-recovery" data-copy="schoolModeRecovery">To clear a forgotten mode name or reset state, clear this site's browser storage. Nothing is sent anywhere.</p>
+              <button class="text-button" id="reset-school-mode" type="button" data-copy="schoolModeReset">Reset mode name and state</button>
+              <p class="provenance" data-provenance="schoolMode">Compiled-in value: School mode (off)</p>
+            </article>
+            <article class="settings-card" data-setting-search="english funny level humor tone copy" data-school-optional>
               <div class="card-heading-row"><div><p class="eyebrow">ENGLISH TONE</p><h2>English funny level</h2></div><output id="funny-en-output" class="value-output">3 / 5</output></div>
               <p class="field-explanation">Styles English copy from professional to maximum playful voice. Facts and actions remain unchanged.</p>
               <label class="range-control" for="funny-en"><span class="sr-only">English funny level from 1 to 5</span><input id="funny-en" type="range" min="1" max="5" step="1" value="3"><span class="range-endpoints"><span>Serious</span><span>Playful</span></span></label>
               <p class="tone-preview" id="tone-preview-en"></p>
               <p class="provenance">Persisted in this browser</p>
             </article>
-            <article class="settings-card" data-setting-search="cantonese funny level humor tone copy">
+            <article class="settings-card" data-setting-search="cantonese funny level humor tone copy" data-school-optional>
               <div class="card-heading-row"><div><p class="eyebrow">粵語語氣</p><h2>粵語 funny level</h2></div><output id="funny-yue-output" class="value-output">3 / 5</output></div>
               <p class="field-explanation">調校粵語字句嘅幽默程度，由認真到最玩味；資料同埋下一步永遠保持清楚。</p>
               <label class="range-control" for="funny-yue"><span class="sr-only">Cantonese funny level from 1 to 5</span><input id="funny-yue" type="range" min="1" max="5" step="1" value="3"><span class="range-endpoints"><span>認真</span><span>玩味</span></span></label>
@@ -363,6 +379,8 @@
   <div class="notification-region" id="notification-region" aria-live="polite" aria-atomic="false"></div>
 
   <script src="./content.js"></script>
+  <script src="./data/universal-feature-manifest.js"></script>
+  <script src="./data/settings-contract.js"></script>
   <script src="./data/release-manifest.js"></script>
   <script src="./app.js"></script>
 </body>
