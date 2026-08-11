@@ -12,8 +12,36 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
+# Keep Windows PowerShell 5.1 on its inbox security module.  A PowerShell 7
+# module path inherited from a developer shell has incompatible type data and
+# prevents Get-AuthenticodeSignature from loading.
+if ($PSVersionTable.PSEdition -eq 'Desktop') {
+  $desktopModules = Join-Path $PSHOME 'Modules'
+  $env:PSModulePath = $desktopModules
+  Import-Module (Join-Path $desktopModules 'Microsoft.PowerShell.Security') -Force -ErrorAction Stop
+}
+
 function Stop-WithMessage([string]$Message) {
   throw "Squirrel.Windows artifact validation failed: $Message"
+}
+
+function Write-Utf8NoBom([string]$Path, [string]$Text) {
+  [System.IO.File]::WriteAllText($Path, $Text, [System.Text.UTF8Encoding]::new($false))
+}
+
+function Get-Sha256([string]$Path) {
+  $hashCommand = Get-Command Get-FileHash -ErrorAction SilentlyContinue
+  if ($null -ne $hashCommand) {
+    return (Get-FileHash -LiteralPath $Path -Algorithm SHA256).Hash.ToLowerInvariant()
+  }
+  $stream = [System.IO.File]::OpenRead($Path)
+  $algorithm = [System.Security.Cryptography.SHA256]::Create()
+  try {
+    return ([BitConverter]::ToString($algorithm.ComputeHash($stream)).Replace('-', '')).ToLowerInvariant()
+  } finally {
+    $algorithm.Dispose()
+    $stream.Dispose()
+  }
 }
 
 function Test-StrictDescendant([string]$Child, [string]$Parent) {
@@ -154,7 +182,7 @@ if (-not (Test-Path -LiteralPath $manifestDirectory -PathType Container)) {
   [pscustomobject]@{
     name = $_.Name
     sizeBytes = [int64]$_.Length
-    sha256 = (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+    sha256 = Get-Sha256 $_.FullName
   }
 })
 [pscustomobject]@{
@@ -165,6 +193,6 @@ if (-not (Test-Path -LiteralPath $manifestDirectory -PathType Container)) {
   setupSignatureStatus = [string]$setupSignature.Status
   fullPackages = @($fullPackages.Name)
   releaseIndex = 'RELEASES'
-} | ConvertTo-Json -Depth 10 | Set-Content -LiteralPath $manifestPathFull -Encoding utf8NoBOM
+} | ConvertTo-Json -Depth 10 | ForEach-Object { Write-Utf8NoBom $manifestPathFull $_ }
 
 Write-Output "Validated unsigned Squirrel.Windows assets: $($assetFiles.Name -join ', ')"

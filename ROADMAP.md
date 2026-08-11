@@ -30,6 +30,12 @@ unverified surface has shipped.
   packaging, pinned GitHub-hosted build/package/publication automation, GitHub
   Pages publication, and monotonic real releases. GitHub Actions runs no tests
   or lint; local task evidence carries those results.
+- Root `build.bat` and `build-installer.bat` now provide a touchless,
+  user-scoped fresh-machine path with silent mode, official Node.js checksum
+  fallback, locked npm installation, current-commit output checks, and
+  unsigned Squirrel artifact validation. The scripts never sign, publish,
+  tag, upload, or create a CRX; the focused fixture guard proves both wrappers
+  work from paths containing spaces and rejects deliberately broken contracts.
 - Built-artifact UI smoke that fail-closes on the real separate progress
   window, rejects nested interactive labels, and checks narrow Settings layout
   at 2× scale.
