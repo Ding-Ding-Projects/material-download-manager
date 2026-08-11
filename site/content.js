@@ -413,14 +413,14 @@ window.MDM_SITE_CONTENT = {
       id: "local-totp-core",
       category: "Security",
       title: "Local TOTP and QR registration core",
-      summary: "A bounded RFC 6238 main-process foundation with otpauth://totp/ parsing, one-time QR registration material, credential-vault storage, and secret-free metadata export.",
+      summary: "A bounded RFC 6238 authenticator Settings tab with local otpauth://totp/ QR pairing, one-time manual reveal, credential-vault storage, and secret-free metadata export.",
       docsPath: "../docs/features/security/totp-authenticator-core.md",
       tags: ["authenticator", "TOTP", "QR", "security", "export"],
       sections: {
         behavior: [
           "The core generates and verifies RFC 6238 codes with SHA-1, SHA-256, or SHA-512, six or eight digits, a bounded period, and a bounded adjacent-period clock-skew window.",
           "The model builds and parses otpauth://totp/ URIs, checks issuer consistency, rejects duplicate or unknown parameters, and creates one-time QR/manual-secret registration material in memory.",
-          "The main-process registration service returns stable metadata through typed IPC. The full authenticator tab and QR image renderer are separate follow-up work."
+          "The Settings authenticator tab renders the QR matrix locally, confirms the current code before vault mutation, and clears the secret-bearing view after pairing."
         ],
         configuration: [
           "Registration metadata includes issuer, account, algorithm, digit width, period, schema version, and a stable ID.",
@@ -433,10 +433,10 @@ window.MDM_SITE_CONTENT = {
         ],
         security: [
           "Secrets never enter settings, history snapshots, logs, ordinary exports, or renderer metadata. The otpauth URI and manual secret are one-time in-memory registration values, not ordinary state.",
-          "The local core performs no network requests and has no cloud account or telemetry path."
+          "The local core and registration tab perform no network requests and have no cloud account or telemetry path."
         ],
         verification: [
-          "The focused suite covers all published RFC 6238 SHA-1/SHA-256/SHA-512 vectors, six/eight-digit output, periods/skew, URI validation, QR-model boundaries, vault behavior, and secret-free export."
+          "The focused suite covers all published RFC 6238 SHA-1/SHA-256/SHA-512 vectors, six/eight-digit output, periods/skew, URI validation, QR-model boundaries, pending pairing before vault mutation, local/no-network UI wiring, vault behavior, and secret-free export."
         ]
       },
       suggested: ["local-history", "destructive-action-gate", "site-foundation"]

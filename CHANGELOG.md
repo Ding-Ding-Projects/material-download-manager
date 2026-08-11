@@ -5,6 +5,41 @@ or have reached a stable release. Published entries must link the exact commit
 that completed the change. An Unreleased entry names missing evidence instead
 of guessing a commit, release, or date.
 
+## Unreleased — authenticator Settings registration surface
+
+- **Source issue:** [#18 — Implement the universal feature contract](https://github.com/Ding-Ding-Projects/material-download-manager/issues/18)
+- **Source commit:** [`385e040`](https://github.com/Ding-Ding-Projects/material-download-manager/commit/385e04030b0eebc6df5afa1370571226b9dd9d56)
+- **Scope:** bounded registration UI only. Live code/countdown, reorder/group/bulk
+  workflows, per-tab locks, and schedules remain follow-up work.
+
+### Added
+
+- Settings authenticator tab with its own settings search and regex builder,
+  issuer/account/secret/algorithm/digits/period form, and local QR matrix
+  rendering from `otpauth://totp/` data.
+- Explicit one-time manual-secret reveal that clears on cancel or successful
+  pairing; pairing confirmation verifies the current code before any vault
+  write.
+- Validated metadata-only list and ordinary JSON export with
+  `secretOmitted: true`; no network request or secret-bearing URI enters
+  renderer storage, history, logs, or export.
+- Command-palette destination, responsive styling, and built-artifact smoke
+  coverage for the real Settings surface.
+
+### Verification boundary
+
+- `npm run typecheck` — passed.
+- `npm run build` — passed.
+- Focused TOTP/UI tests — **12/12 passed**.
+- Full compiled Electron tests — **100/100 passed**.
+- Real built-artifact smoke — **42/42 required checks passed**; the
+  secret-free capture is
+  [`authenticator-settings-empty.png`](docs/screenshots/authenticator/authenticator-settings-empty.png)
+  (524×462 PNG, SHA-256
+  `92DCE765FF7B8D07854C15D34FAED2708EB5C29C827DA26879E02DEACFD4DDC`).
+- GitHub Actions does not run tests or lint; these local results are the test
+  evidence. No signing operation or CRX artifact was added.
+
 ## Unreleased — local TOTP and QR registration core
 
 - **Source issue:** [#18 — Implement the universal feature contract](https://github.com/Ding-Ding-Projects/material-download-manager/issues/18)

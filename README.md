@@ -35,6 +35,7 @@ AB Download Manager codebase.
 - Distributed SSH worker docs: [`docs/features/download-engine/distributed-ssh-workers.md`](docs/features/download-engine/distributed-ssh-workers.md)
 - In-app documentation docs: [`docs/features/documentation/in-app-documentation-browser.md`](docs/features/documentation/in-app-documentation-browser.md)
 - Protected display-name history: [`docs/features/history/display-name-mutation-history.md`](docs/features/history/display-name-mutation-history.md)
+- Local TOTP/authenticator registration: [`docs/features/security/totp-authenticator-core.md`](docs/features/security/totp-authenticator-core.md)
 
 <details>
 <summary>Auto-organize screenshot gallery</summary>
@@ -95,6 +96,26 @@ folder reset route, and the disabled export action while the tab is locked.
 This 1150×720 PNG came from the hidden-desktop/CDP capture route at the source
 commit documented in [`HANDOFF.md`](HANDOFF.md). SHA-256:
 `53DBA85C6FED4704995D5D6D7893F3A51590A6A942E870FE6B074E6F9A5C2361`.
+
+</details>
+
+<details>
+<summary>Authenticator Settings registration surface</summary>
+
+The current bounded authenticator slice adds a real Settings registration tab
+with local QR rendering, an explicit one-time manual-secret reveal, pairing
+confirmation before credential-vault storage, and a metadata-only list/export.
+This capture comes from the built Electron renderer at source commit
+`385e04030b0eebc6df5afa1370571226b9dd9d56` through the CDP smoke harness. It
+shows the complete registration card with an empty secret field; no QR, manual
+secret, URI, or metadata record was photographed.
+
+![Authenticator Settings registration card with local QR pairing controls and an empty secret field](docs/screenshots/authenticator/authenticator-settings-empty.png)
+
+The 524×462 PNG has SHA-256
+`92DCE765FF7B8D07854C15D34FAED2708EB5C29C827DA26879E02DEACFD4DDC`. Live
+code/countdown, reorder/group/bulk management, per-tab locks, and schedules are
+not part of this bounded slice.
 
 </details>
 
