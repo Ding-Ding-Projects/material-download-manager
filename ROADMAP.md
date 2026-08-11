@@ -62,10 +62,11 @@ unverified surface has shipped.
   private paired copy. It does not produce a CRX because a genuine CRX3
   requires signing and the repository permanently prohibits signing keys and
   signing operations.
-- This implementation is not described as a published release here. Its exact
-  completion commit, local verification counts, release asset, Pages result,
-  and public-safe real-artifact capture belong to the records that produce
-  those facts.
+- The final built-artifact evidence is now captured locally: the real-app smoke
+  passed 43/43 checks, all seven auto-organize gallery frames were replaced,
+  and a public-safe browser-extension install/reveal capture was added. The
+  completion commit, release asset, Pages result, and remote verification still
+  belong to the records that produce those facts.
 
 ## Auto-organize foundation integrated
 

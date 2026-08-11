@@ -144,11 +144,11 @@ GET proof, durable acceptance, client-disconnect rollback, protected-query URL
 storage and cleanup, optional safe basename validation, website-origin
 rejection, bounded bodies, extension preparation, automatic folder opening,
 and the separate folder-open failure result. The built-app smoke exercises the
-real IPC boundary and the Settings surface on a hidden desktop.
+real IPC boundary and the Settings surface on a hidden desktop. The fresh
+built-artifact capture below frames the automatic folder-open status and its
+manual fallback without exposing a user-specific application-data path:
 
-No Settings capture is embedded here because the repository does not yet carry
-a tightly framed public-safe built-artifact image for this card. The existing
-machine-specific application-data-path capture is intentionally excluded.
+![Downloads Settings browser-extension installation and automatic folder-open status](../../screenshots/browser-extension/settings-install-and-reveal.png)
 
 ## Suggested articles
 

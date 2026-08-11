@@ -48,6 +48,15 @@ const RUNTIME_CHECK_IDS = [
   "settings-auto-organize-preview-ipc",
   "settings-reset-provenance",
 ];
+const GALLERY_ITEMS = [
+  { name: "01-six-category-paths", selector: "#settings-panel-downloads" },
+  { name: "02-ordered-rule-editor", selector: "#settings-auto-organize-rules" },
+  { name: "03-anchored-regex-builder", selector: ".auto-organize-rule-builder" },
+  { name: "04-inline-invalid-rule", selector: "#settings-auto-organize-rules" },
+  { name: "05-narrow-rule-layout", selector: ".auto-organize-rule-builder" },
+  { name: "06-bilingual-category-settings", selector: "#settings-panel-downloads" },
+  { name: "07-command-palette-destination", selector: ".command-palette" },
+];
 
 function usage() {
   return [
@@ -64,6 +73,7 @@ function usage() {
     "  --temp-root <path>     Parent for the disposable app profile (default: OS temp directory)",
     "  --screenshot <path>    Capture a PNG of the installed browser-extension card after automatic folder reveal",
     "  --progress-screenshot <path>  Capture a separate progress page when one exists",
+    "  --gallery-dir <path>    Capture the seven auto-organize documentation states into this directory",
     "  --json <path>          Write the same stable JSON summary to a file",
     "  --keep-user-data-dir   Preserve the temporary Electron profile for debugging",
     "  --help                 Show this help",
@@ -83,6 +93,7 @@ function parseArgs(argv) {
     tempRoot: null,
     screenshotPath: null,
     progressScreenshotPath: null,
+    galleryDirectory: null,
     jsonPath: null,
     keepUserDataDirectory: false,
   };
@@ -106,6 +117,7 @@ function parseArgs(argv) {
     else if (argument === "--temp-root") options.tempRoot = path.resolve(value);
     else if (argument === "--screenshot") options.screenshotPath = path.resolve(value);
     else if (argument === "--progress-screenshot") options.progressScreenshotPath = path.resolve(value);
+    else if (argument === "--gallery-dir") options.galleryDirectory = path.resolve(value);
     else if (argument === "--json") options.jsonPath = path.resolve(value);
     else throw new Error(`Unknown option: ${argument}`);
   }
@@ -858,6 +870,20 @@ async function captureScreenshot(client, screenshotPath, selector = null) {
   return screenshotPath;
 }
 
+async function captureGalleryFrame(client, options, result, name, selector) {
+  if (!options.galleryDirectory) return null;
+  const target = path.join(options.galleryDirectory, `${name}.png`);
+  await client.evaluate(`(() => {
+    const element = document.querySelector(${JSON.stringify(selector)});
+    if (!(element instanceof HTMLElement)) throw new Error("Gallery target is missing: " + ${JSON.stringify(selector)});
+    element.scrollIntoView({ block: "center", inline: "nearest" });
+  })()`);
+  await sleep(60);
+  const capturedPath = await captureScreenshot(client, target);
+  result.gallery.items.push({ name, selector, path: capturedPath, status: "captured" });
+  return capturedPath;
+}
+
 function createResult(options) {
   return {
     schemaVersion: 1,
@@ -870,6 +896,9 @@ function createResult(options) {
     timeoutMs: options.timeoutMs,
     checks: [],
     screenshot: options.screenshotPath ? { requested: true, status: "not-run", path: options.screenshotPath } : { requested: false, status: "not-requested", path: null },
+    gallery: options.galleryDirectory
+      ? { requested: true, status: "not-run", directory: options.galleryDirectory, expected: GALLERY_ITEMS.map((item) => item.name), items: [] }
+      : { requested: false, status: "not-requested", directory: null, expected: [], items: [] },
     progressWindow: { status: "not-run", target: null, surface: null, screenshotPath: null },
     launch: null,
     cdp: null,
@@ -1046,6 +1075,7 @@ async function main(argv) {
 
   const { options } = parsed;
   const result = createResult(options);
+  const captureGallery = async (name, selector) => captureGalleryFrame(cdp, options, result, name, selector);
   let build = null;
   let launch = null;
   let cdp = null;
@@ -1462,6 +1492,7 @@ async function main(argv) {
     await runCheck(result, "settings-open", async () => {
       await clickByRole(cdp, "button", "Settings");
       await waitForPage(cdp, `Boolean(document.querySelector(".dialog"))`, "Settings dialog surface", options.timeoutMs);
+      if (options.galleryDirectory) await cdp.send("Emulation.setDeviceMetricsOverride", { width: 1100, height: 900, deviceScaleFactor: 1, mobile: false });
       return cdp.evaluate(pageExpression(`
         const dialog = document.querySelector(".dialog");
         if (!dialog || !isVisible(dialog)) throw new Error("Settings dialog is not visible after activating Settings");
@@ -1490,6 +1521,7 @@ async function main(argv) {
     await runCheck(result, "settings-auto-organize-ui", async () => {
       await clickByRole(cdp, "tab", "Downloads", '[role="dialog"]');
       await waitForPage(cdp, `Boolean(document.querySelector("#settings-auto-organize-toggle"))`, "auto-organize settings surface", options.timeoutMs);
+      if (options.galleryDirectory) await setInputValue(cdp, "#settings-default-save-folder-input", "C:\\Downloads");
       const initial = await cdp.evaluate(pageExpression(`
         const panel = document.getElementById("settings-panel-downloads");
         const toggle = document.getElementById("settings-auto-organize-toggle");
@@ -1501,6 +1533,7 @@ async function main(argv) {
         if (list) throw new Error("fresh profile unexpectedly contains custom rules");
         return { pathRows: paths.length, toggle: accessibleName(toggle), checked: true };
       `));
+      await captureGallery("01-six-category-paths", "#settings-panel-downloads");
       await clickByRole(cdp, "button", "Add document preset", ".auto-organize-rule-presets");
       await waitForPage(cdp, `document.querySelectorAll(".auto-organize-rule-card").length === 1`, "first auto-organize rule", options.timeoutMs);
       await clickByRole(cdp, "button", "Add archive preset", ".auto-organize-rule-presets");
@@ -1564,12 +1597,14 @@ async function main(argv) {
         if (focusedCard?.querySelector("input")?.value !== "Archive URLs") throw new Error("keyboard reorder did not retain focus in the moved rule");
         return { names, destinations: selects, keyboardReorder: ["Enter", "Space", "Enter"], focusedRule: "Archive URLs" };
       `));
+      await captureGallery("02-ordered-rule-editor", "#settings-auto-organize-rules");
       return { ...initial, ...semantics, ...ordered };
     });
 
     await runCheck(result, "settings-auto-organize-regex-focus", async () => {
       await clickByRole(cdp, "button", "Open regex builder for Rule 1", ".auto-organize-rule-card");
       await waitForPage(cdp, `Boolean(document.querySelector(".auto-organize-rule-builder .regex-builder"))`, "rule regex builder", options.timeoutMs);
+      await captureGallery("03-anchored-regex-builder", ".auto-organize-rule-builder");
       const fixedMode = await cdp.evaluate(pageExpression(`
         const builder = document.querySelector(".auto-organize-rule-builder .regex-builder");
         const toggle = document.getElementById("settings-auto-rule-1-builder-toggle");
@@ -1702,6 +1737,7 @@ async function main(argv) {
         }
         return { patternInvalid: true, alert: alert.textContent?.trim() ?? "", disabledActionsExplained: 2 };
       `));
+      await captureGallery("04-inline-invalid-rule", "#settings-auto-organize-rules");
       await setInputValue(cdp, "#settings-auto-rule-3-pattern", "temporary");
       await setInputValue(cdp, "#settings-auto-rule-3-name", "");
       await waitForPage(cdp, `document.querySelector("#settings-auto-rule-3-name")?.getAttribute("aria-invalid") === "true"`, "blank rule-name validation", options.timeoutMs);
@@ -1878,6 +1914,15 @@ async function main(argv) {
             if (unnamedControls.length > 0) throw new Error("narrow Settings tab contains unnamed controls: " + JSON.stringify(unnamedControls));
             return { panel: panel.id, horizontalOverflow, singleColumnGrids: visibleGrids.length, unnamedControls: 0 };
           `)));
+          if (tabName === "Downloads" && options.galleryDirectory) {
+            await cdp.send("Emulation.setDeviceMetricsOverride", { width: 520, height: 760, deviceScaleFactor: 1, mobile: false });
+            await clickByRole(cdp, "button", "Open regex builder for Rule 1", ".auto-organize-rule-card");
+            await waitForPage(cdp, `Boolean(document.querySelector(".auto-organize-rule-builder .regex-builder"))`, "gallery narrow rule builder", options.timeoutMs);
+            await captureGallery("05-narrow-rule-layout", ".auto-organize-rule-builder");
+            await dispatchEscape(cdp);
+            await waitForPage(cdp, `!document.querySelector(".auto-organize-rule-builder")`, "close gallery narrow rule builder", options.timeoutMs);
+            await cdp.send("Emulation.setDeviceMetricsOverride", { width: 520, height: 720, deviceScaleFactor: 2, mobile: false });
+          }
         }
         await clickByRole(cdp, "tab", "Language", '[role="dialog"]');
         await waitForPage(cdp, 'document.querySelector(\'[role="tablist"][aria-label="Settings sections"] [role="tab"][aria-selected="true"]\')?.textContent?.trim() === "Language"', "restore Language settings tab", options.timeoutMs);
@@ -1943,6 +1988,14 @@ async function main(argv) {
         await dispatchEscape(cdp);
         await waitForPage(cdp, `!document.querySelector(".auto-organize-rule-builder") && document.activeElement?.id === "settings-auto-rule-1-builder-toggle"`, "bilingual narrow builder Escape focus", options.timeoutMs);
         evidence.builderEscapeFocus = true;
+        if (options.galleryDirectory) {
+          await cdp.send("Emulation.clearDeviceMetricsOverride");
+          await cdp.send("Emulation.setDeviceMetricsOverride", { width: 1100, height: 900, deviceScaleFactor: 1, mobile: false });
+          await setInputValue(cdp, '.settings-search input[type="search"]', "");
+          await cdp.evaluate(`document.getElementById("settings-tab-downloads")?.click()`);
+          await waitForPage(cdp, `document.getElementById("settings-tab-downloads")?.getAttribute("aria-selected") === "true" && !document.querySelector(".auto-organize-rule-builder")`, "normal-width bilingual Downloads gallery state", options.timeoutMs);
+          await captureGallery("06-bilingual-category-settings", "#settings-panel-downloads");
+        }
       } finally {
         await cdp.evaluate(`document.getElementById("settings-tab-language")?.click()`).catch(() => undefined);
         await waitForPage(cdp, `document.getElementById("settings-tab-language")?.getAttribute("aria-selected") === "true"`, "restore Language tab after bilingual narrow check", options.timeoutMs).catch(() => undefined);
@@ -2155,6 +2208,8 @@ async function main(argv) {
     if (options.screenshotPath) {
       const screenshot = await runCheck(result, "screenshot-captured", async () => {
         if (!cdp) throw new Error("CDP is not connected");
+        await cdp.evaluate(`document.getElementById("settings-browser-extension")?.scrollIntoView({ block: "center", inline: "nearest" })`);
+        await sleep(60);
         const capturedPath = await captureScreenshot(cdp, options.screenshotPath, "#settings-browser-extension");
         result.screenshot = { requested: true, status: "captured", path: capturedPath };
         return { path: capturedPath, format: "png", surface: "Downloads settings browser-extension install and automatic-reveal status" };
@@ -2194,6 +2249,7 @@ async function main(argv) {
     await runCheck(result, "settings-auto-organize-command-palette", async () => {
       await clickByRole(cdp, "button", "Settings");
       await waitForPage(cdp, `Boolean(document.querySelector(".dialog"))`, "Settings for Cantonese command section", options.timeoutMs);
+      if (options.galleryDirectory) await cdp.send("Emulation.setDeviceMetricsOverride", { width: 1100, height: 900, deviceScaleFactor: 1, mobile: false });
       await cdp.evaluate(`document.getElementById("settings-tab-language")?.click()`);
       await setSelectValue(cdp, "#settings-language-mode", "cantonese");
       await waitForPage(cdp, `/設定/.test(document.querySelector(".dialog-header-title")?.textContent ?? "")`, "Cantonese Settings copy", options.timeoutMs);
@@ -2232,6 +2288,7 @@ async function main(argv) {
       await waitForPage(cdp, `Boolean(document.querySelector('[role="dialog"].command-palette'))`, "command palette for auto-organize destination", options.timeoutMs);
       await setInputValue(cdp, 'input[aria-label="Command palette search"]', "Auto-organize folders");
       await waitForPage(cdp, `Boolean([...document.querySelectorAll(".command-palette-row")].find((row) => /Settings · Auto-organize folders/.test(row.textContent ?? "")))`, "auto-organize command-palette result", options.timeoutMs);
+      await captureGallery("07-command-palette-destination", ".command-palette");
       await cdp.evaluate(pageExpression(`
         const row = [...document.querySelectorAll(".command-palette-row")]
           .find((candidate) => /Settings · Auto-organize folders/.test(candidate.textContent ?? ""));
@@ -2411,6 +2468,19 @@ async function main(argv) {
     } else {
       recordCheck(result, "temp-profile-cleaned", "passed", "temporary profile was not created");
     }
+  }
+
+  if (options.galleryDirectory) {
+    const captured = new Set(result.gallery.items.map((item) => item.name));
+    const missing = GALLERY_ITEMS.map((item) => item.name).filter((name) => !captured.has(name));
+    result.gallery.status = missing.length === 0 ? "captured" : "failed";
+    recordCheck(
+      result,
+      "screenshot-gallery-complete",
+      missing.length === 0 ? "passed" : "failed",
+      missing.length === 0 ? "all seven auto-organize gallery states captured" : `gallery states missing: ${missing.join(", ")}`,
+      { expected: GALLERY_ITEMS.map((item) => item.name), captured: [...captured], missing },
+    );
   }
 
   result.durationMs = Date.now() - startedAt;

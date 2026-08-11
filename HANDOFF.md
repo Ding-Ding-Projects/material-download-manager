@@ -67,10 +67,24 @@ Chrome's **Developer mode → Load unpacked** flow.
 GitHub Actions no longer runs tests, lint, type checking, static analysis,
 coverage, accessibility checks, or screenshots. Local checks remain required
 task evidence, while the workflows build, package, publish, deploy, verify
-external assets, and retain safe failure evidence. At this documentation
-checkpoint the implementation is not yet merged or remotely verified. Its
-integrating commit, exact local check counts, release run, Pages run, and
-public-safe Settings capture must be added here before issue #14 is closed.
+external assets, and retain safe failure evidence. The implementation is ready
+for integration; the integrating commit and remote release/Pages verdicts are
+still pending until the final dew.
+
+The final built-artifact capture run passed 43/43 checks on 2026-08-11. The
+same local verification pass also recorded 14/14 extension tests, 95/95 engine
+tests, 81/81 compiled Electron app tests, 44/44 site checks, and 47/47 release
+package assertions. It
+replaced all seven auto-organize gallery images with fresh 1100×900 frames (plus
+the 520×760 narrow frame) and added a public-safe browser-extension install
+and automatic-folder-open capture. The renderer assets were
+`index-Chmat1Oe.js` (SHA-256
+`E7B0448F42DBA46B86F28428FF15D22CB68437E837F914DC51F985CCD11A6297`) and
+`index-BIukjjFo.css` (SHA-256
+`5ED0A26C08B504D0D9FBF2EDCFD9ACC5D38012CD4A81F3537F9C63EAAD1C5420`). The
+cheap hidden-desktop process tree, temporary profile, and named desktop were
+cleaned up; the image status path used a generic system temporary folder so no
+user name appears in the published capture.
 
 ## CI moved to GitHub-hosted runners (2026-08-08)
 

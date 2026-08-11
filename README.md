@@ -37,16 +37,16 @@ AB Download Manager codebase.
 <summary>Auto-organize screenshot gallery</summary>
 
 These captures come from the real built Electron renderer on a disposable
-off-screen desktop. The displayed base path was deliberately set to the generic
-`C:\Downloads` before capture. They were recorded from the 2026-08-07 21:36 EDT
-renderer build between 21:39:33 and 21:39:36 EDT. That build emitted
-`index-DYxCKsvA.js` (SHA-256
-`101F7631C949CE6999E89C241559ED5BE42F3FBD9CF7A7A933495672644C39F0`)
-and `index-DLDpdm-j.css` (SHA-256
-`F5A85852CA48644BAE56C3B25926D11A1B231E803DD8FBD61773E61BA5FD7E04`).
-The final built-application smoke passed all 38 required checks against those
-artifacts. Every image decodes as a 24-bit PNG with a unique SHA-256 hash, and
-the exact disposable process tree, profile, and headless desktop were removed.
+cheap hidden desktop. The displayed base path was deliberately set to the
+generic `C:\Downloads` before capture. The verified 2026-08-11 capture run
+passed all 43 required built-application checks. Its renderer emitted
+`index-ZfTIAB4c.js` (SHA-256
+`E7B0448F42DBA46B86F28428FF15D22CB68437E837F914DC51F985CCD11A6297`)
+and `index-BIukjjFo.css` (SHA-256
+`5ED0A26C08B504D0D9FBF2EDCFD9ACC5D38012CD4A81F3537F9C63EAAD1C5420`).
+Six gallery frames are 1100 × 900 and the narrow frame is 520 × 760; every
+image decodes as a 24-bit PNG with a unique SHA-256 hash. The exact disposable
+process tree, profile, and hidden desktop were removed after the run.
 
 ### Six future category paths
 
@@ -111,6 +111,12 @@ that staged extension. The app automatically opens the exact folder. The
 existing **Open extension folder** action remains available if the file manager
 could not be opened or the folder needs to be shown again. Chrome still
 requires **Developer mode → Load unpacked** for this off-store installation.
+
+![Downloads Settings showing automatic browser-extension installation, the automatic folder-open status, and the manual fallback](docs/screenshots/browser-extension/settings-install-and-reveal.png)
+
+This is a fresh built-artifact crop of the install-and-reveal card. The
+temporary staging path uses a generic system temporary folder so no user name
+is present in the published image.
 
 Each stable extension ZIP receives the reserved release version in its staged
 `manifest.json`. Packaging validates that the archive has its manifest and

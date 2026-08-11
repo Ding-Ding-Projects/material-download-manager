@@ -8,9 +8,9 @@ of guessing a commit, release, or date.
 ## Unreleased — authenticated automatic browser download capture
 
 - **Source issue:** [#14 — Automatically hand browser downloads to the app and reveal the extension folder](https://github.com/Ding-Ding-Projects/material-download-manager/issues/14)
-- **Publication state:** implemented in the current task checkout; this entry
-  does not assign a completion commit, release tag, or GitHub Actions result
-  before those records exist.
+- **Publication state:** implemented and locally verified in the current task
+  checkout; the completion commit, release tag, and GitHub Actions result are
+  intentionally left for the final integration and publication records.
 
 ### Added
 
@@ -43,6 +43,11 @@ of guessing a commit, release, or date.
 - Accepted query-bearing URLs persist only in the operating-system credential
   vault, remain redacted in state/history/renderer data, and are removed on
   terminal cleanup.
+- Fresh built-artifact evidence: the Electron Settings install/reveal card and
+  all seven auto-organize gallery states were captured through the hidden-desktop
+  smoke harness; the run passed 43/43 checks. The gallery includes 1100×900
+  normal frames and a 520×760 narrow frame, with no user name in the published
+  browser-extension image.
 - Chromium-extension origin validation on the desktop loopback adapter;
   website origins are rejected before queueing.
 - Bounded admission: at most 8 simultaneous handoffs and 60 challenge/POST
