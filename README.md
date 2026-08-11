@@ -16,6 +16,8 @@ AB Download Manager codebase.
 - GitHub Pages source: [`site/`](site/)
 - Live site: [Material Download Manager on GitHub Pages](https://ding-ding-projects.github.io/material-download-manager/)
 - Latest stable release: [view the latest stable GitHub Release](https://github.com/Ding-Ding-Projects/material-download-manager/releases/latest)
+- Fresh-machine build: [`build.bat`](build.bat) and [`build-installer.bat`](build-installer.bat)
+- Fresh-machine build docs: [`docs/features/build/`](docs/features/build/)
 - Chromium extension: [`extension/`](extension/) — catches eligible browser downloads automatically by default through an app-prepared authenticated pairing and is packaged with every stable release as the versioned source/reference ZIP `material-download-manager-extension-<version>.zip`; use **Install browser extension** in the app, then choose its automatically opened paired folder with **Load unpacked** at `chrome://extensions`
 - Search feature docs: [`docs/features/search/`](docs/features/search/)
 - Navigation feature docs: [`docs/features/navigation/`](docs/features/navigation/)
@@ -135,6 +137,24 @@ administrator has configured an enterprise installation policy.
 
 <details>
 <summary>Build and test</summary>
+
+The root entry points are the supported fresh-machine path. They install the
+declared user-scoped toolchain and project packages, refresh the current
+process `PATH`, build the real renderer and main process, and report exact
+failures. Use `/s` (or `--silent`, `SILENT=1`, or `MDM_BUILD_SILENT=1`) for a
+touchless run from any working directory:
+
+```powershell
+build.bat /s
+build-installer.bat /s
+```
+
+`build-installer.bat` reuses the application build, invokes the supported
+unsigned Squirrel.Windows helper and validator, and reports the source commit,
+artifact paths, sizes, SHA-256 digests, and `NotSigned` status. It never tags,
+publishes, uploads, signs, generates a CRX, or opens an installer. The complete
+contract, bootstrap routes, failure behavior, and focused fixture check are in
+[`docs/features/build/fresh-machine-build.md`](docs/features/build/fresh-machine-build.md).
 
 From `design/`:
 

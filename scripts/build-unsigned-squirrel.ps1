@@ -12,6 +12,21 @@ function Stop-WithMessage([string]$Message) {
   throw "Unsigned Squirrel.Windows build failed: $Message"
 }
 
+function Get-Sha256([string]$Path) {
+  $hashCommand = Get-Command Get-FileHash -ErrorAction SilentlyContinue
+  if ($null -ne $hashCommand) {
+    return (Get-FileHash -LiteralPath $Path -Algorithm SHA256).Hash
+  }
+  $stream = [System.IO.File]::OpenRead($Path)
+  $algorithm = [System.Security.Cryptography.SHA256]::Create()
+  try {
+    return [BitConverter]::ToString($algorithm.ComputeHash($stream)).Replace('-', '')
+  } finally {
+    $algorithm.Dispose()
+    $stream.Dispose()
+  }
+}
+
 $repositoryRoot = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 $designRoot = Join-Path $repositoryRoot 'design'
 $packagePath = Join-Path $designRoot 'package.json'
@@ -32,16 +47,16 @@ if (-not $releaseRootFull.StartsWith($workspacePrefix, [System.StringComparison]
 }
 
 $originalBytes = [System.IO.File]::ReadAllBytes($packagePath)
-$originalHash = (Get-FileHash -LiteralPath $packagePath -Algorithm SHA256).Hash
+$originalHash = Get-Sha256 $packagePath
 $originalExtensionManifestBytes = [System.IO.File]::ReadAllBytes($extensionManifestPath)
-$originalExtensionManifestHash = (Get-FileHash -LiteralPath $extensionManifestPath -Algorithm SHA256).Hash
+$originalExtensionManifestHash = Get-Sha256 $extensionManifestPath
 try {
-  $package = [System.Text.Encoding]::UTF8.GetString($originalBytes) | ConvertFrom-Json -Depth 40
+  $package = [System.Text.Encoding]::UTF8.GetString($originalBytes) | ConvertFrom-Json
 } catch {
   Stop-WithMessage 'design/package.json is malformed JSON.'
 }
 try {
-  $extensionManifest = [System.Text.Encoding]::UTF8.GetString($originalExtensionManifestBytes) | ConvertFrom-Json -Depth 20
+  $extensionManifest = [System.Text.Encoding]::UTF8.GetString($originalExtensionManifestBytes) | ConvertFrom-Json
 } catch {
   Stop-WithMessage 'extension/manifest.json is malformed JSON.'
 }
@@ -110,7 +125,7 @@ try {
 
   Push-Location $designRoot
   try {
-    & npm exec -- electron-builder --win squirrel --x64 --publish never "-c.extraMetadata.version=$Version"
+    & npm exec -- electron-builder --win=squirrel --x64 --publish=never "-c.extraMetadata.version=$Version"
     $exitCode = $LASTEXITCODE
   } finally {
     Pop-Location
@@ -129,11 +144,11 @@ try {
   [System.IO.File]::WriteAllBytes($extensionManifestPath, $originalExtensionManifestBytes)
 }
 
-$restoredHash = (Get-FileHash -LiteralPath $packagePath -Algorithm SHA256).Hash
+$restoredHash = Get-Sha256 $packagePath
 if ($restoredHash -ne $originalHash) {
   Stop-WithMessage 'The original design/package.json bytes were not restored after packaging.'
 }
-$restoredExtensionManifestHash = (Get-FileHash -LiteralPath $extensionManifestPath -Algorithm SHA256).Hash
+$restoredExtensionManifestHash = Get-Sha256 $extensionManifestPath
 if ($restoredExtensionManifestHash -ne $originalExtensionManifestHash) {
   Stop-WithMessage 'The original extension/manifest.json bytes were not restored after packaging.'
 }

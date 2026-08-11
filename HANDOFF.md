@@ -1,5 +1,32 @@
 # Handoff: Material Download Manager
 
+## Fresh-machine build contract (2026-08-11)
+
+The repository now has root [`build.bat`](build.bat) and
+[`build-installer.bat`](build-installer.bat) entry points for a clean Windows
+machine. They resolve helper paths from the checkout, accept `/s`,
+`--silent`, `SILENT=1`, and `MDM_BUILD_SILENT=1`, return child exit codes, and
+never prompt or launch anything in silent mode. The bootstrap checks for the
+declared Node.js 22.16.0 runtime, tries a user-scoped `winget` route, verifies
+the official Node.js archive checksum when that route is unavailable, refreshes
+the current process `PATH`, and installs the locked project packages without
+global npm changes.
+
+`build.bat` verifies the renderer, main-process output, native Electron and
+esbuild binaries, package-lock bytes, tracked-source status, and current Git
+commit. `build-installer.bat` derives a strict semver from `design/package.json`,
+invokes the committed unsigned Squirrel helper and validator, stages from
+`design/release/squirrel-windows`, and reports the setup executable,
+`RELEASES`, full packages, sizes, SHA-256 digests, source commit, and
+`NotSigned` status. The local path never creates a release, tag, upload, or
+CRX, and never handles signing material. The output states the intentional
+unsigned/SmartScreen warning.
+
+The focused contract fixture covers arbitrary working directories and spaces,
+help/unknown-argument handling, silent markers, lockfile validation, and the
+no-publication guard. The complete behavior and recovery matrix is documented
+in [`docs/features/build/fresh-machine-build.md`](docs/features/build/fresh-machine-build.md).
+
 ## Authenticated automatic browser capture and app-prepared extension (2026-08-11)
 
 Issue [#14](https://github.com/Ding-Ding-Projects/material-download-manager/issues/14)
