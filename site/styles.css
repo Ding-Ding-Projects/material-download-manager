@@ -244,6 +244,9 @@ kbd { display: inline-flex; align-items: center; min-height: 1.4rem; padding: .0
 .hero-caption { position: absolute; z-index: 4; top: 1.2rem; right: 1.2rem; display: flex; align-items: center; gap: .45rem; padding: .4rem .65rem; border-radius: 999px; background: color-mix(in srgb, var(--surface) 80%, transparent); color: var(--on-surface-variant); font-size: .72rem; }
 .signal-dot, .status-dot { display: inline-block; width: .55rem; height: .55rem; border-radius: 50%; background: var(--success); }
 .status-dot.warning, .signal-dot.warning { background: var(--warning); }
+.signal-dot.info { background: var(--accent); }
+.signal-dot.progress { background: var(--accent-strong); }
+.signal-dot.error { background: var(--danger); }
 
 .metric-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: .75rem; margin: 0 0 1.5rem; }
 .metric-card { display: grid; gap: .15rem; padding: 1rem; border: 1px solid var(--outline-variant); border-radius: var(--radius-md); background: var(--surface-container-low); }
@@ -452,6 +455,7 @@ kbd { display: inline-flex; align-items: center; min-height: 1.4rem; padding: .0
 .notification-record-actions .text-button { min-height: 2.75rem; padding: .5rem; }
 .notification-centre-empty { margin: 0; padding: 1rem; border: 1px dashed var(--outline); border-radius: var(--radius-md); color: var(--on-surface-variant); }
 .notification-delete-confirm { display: grid; gap: .65rem; padding: .9rem; border: 2px solid var(--danger); border-radius: var(--radius-md); background: color-mix(in srgb, var(--danger) 8%, var(--surface-container-high)); }
+.notification-centre[data-delete-open="true"] > :not(.notification-delete-confirm) { pointer-events: none; user-select: none; }
 .notification-delete-confirm h3 { margin: 0; font-size: 1rem; }
 .notification-delete-confirm p { margin: 0; color: var(--on-surface-variant); font-size: .78rem; }
 .notification-delete-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: .5rem; }
