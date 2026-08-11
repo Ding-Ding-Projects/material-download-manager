@@ -502,6 +502,8 @@ html[data-reduced-motion="true"] *, html[data-reduced-motion="true"] *::before, 
   .notification-centre { top: 8rem; right: .75rem; width: calc(100vw - 1.5rem); max-height: calc(100vh - 8.8rem); }
 }
 
+[hidden] { display: none !important; }
+
 @media (max-width: 460px) {
   .brand-name { max-width: 100%; }
   .topbar-actions { align-items: stretch; flex-direction: column; }
