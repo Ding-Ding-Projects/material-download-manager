@@ -98,6 +98,29 @@ function isWithin(parent: string, child: string): boolean {
   return relative === "" || (relative !== ".." && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative));
 }
 
+async function ensureOwnedDirectory(directoryPath: string): Promise<void> {
+  const resolved = path.resolve(directoryPath);
+  const parsed = path.parse(resolved);
+  let current = parsed.root;
+  const segments = resolved.slice(parsed.root.length).split(/[\\/]+/u).filter(Boolean);
+  for (const segment of segments) {
+    current = path.join(current, segment);
+    try {
+      const existing = await fsp.lstat(current);
+      if (!existing.isDirectory() || existing.isSymbolicLink()) {
+        throw new Error("The export workspace contains an unsafe directory link.");
+      }
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+      await fsp.mkdir(current);
+      const created = await fsp.lstat(current);
+      if (!created.isDirectory() || created.isSymbolicLink()) {
+        throw new Error("The export workspace contains an unsafe directory link.");
+      }
+    }
+  }
+}
+
 function failure(
   editor: ExternalEditorDescriptor | null,
   filePath: string | null,
@@ -182,7 +205,7 @@ export class ExternalEditorService {
       return failure(editor, null, workspacePath, "The export path escaped the app export folder.");
     }
     try {
-      await fsp.mkdir(exportDirectory, { recursive: true });
+      await ensureOwnedDirectory(exportDirectory);
       const editorExecutable = await this.resolveLaunchExecutable(editor.executable);
       if (!editorExecutable) return failure(editor, null, workspacePath, "The selected editor launcher has no safe native executable.");
       await fsp.writeFile(filePath, content, { encoding: "utf8", flag: "wx", mode: 0o600 });
@@ -195,8 +218,8 @@ export class ExternalEditorService {
         workspacePath,
         error: null,
       };
-    } catch (error) {
-      return failure(editor, filePath, workspacePath, error instanceof Error ? error.message : "The external editor could not be opened.");
+    } catch {
+      return failure(editor, filePath, workspacePath, "The export could not be staged or opened in the selected editor.");
     }
   }
 
@@ -224,8 +247,8 @@ export class ExternalEditorService {
         workspacePath,
         error: null,
       };
-    } catch (error) {
-      return failure(editor, null, workspacePath, error instanceof Error ? error.message : "The external editor could not be opened.");
+    } catch {
+      return failure(editor, null, workspacePath, "The selected workspace could not be opened in the selected editor.");
     }
   }
 
