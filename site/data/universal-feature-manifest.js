@@ -116,8 +116,8 @@
         requiredSurfaces: ["landing", "articles", "settings", "dialogs"],
         docsPath: "../docs/features/notifications/notification-center.md",
         status: "partial",
-        probes: ["toast-lifecycle", "notification-centre", "notification-bulk-actions"],
-        runtimeAnchors: ["function notify", "notification-region"]
+        probes: ["toast-lifecycle", "notification-centre-history", "notification-search-filter", "notification-selection", "notification-bulk-dismiss", "notification-bulk-delete-confirm", "notification-export", "notification-live-sync"],
+        runtimeAnchors: ["function notify", "notification-region", "NOTIFICATION_HISTORY_KEY", "function renderNotificationCentre", "notification-bulk-delete", "function exportVisibleNotifications"]
       },
       {
         id: "appearance-editor",

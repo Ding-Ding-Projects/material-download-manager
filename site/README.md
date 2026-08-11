@@ -29,6 +29,25 @@ user-renamable School mode name/state. School mode is an English-only
 user-experience setting: it removes the playful controls and local surprise,
 and clearing this site's browser storage is the documented reset route.
 
+The top-bar Notification centre now keeps up to 100 text-only toast records in
+browser storage. Dismissed messages remain reviewable, with an independent
+search/regex builder, status filter, visible-scope selection and inverse
+selection, bulk dismiss, typed delete confirmation, and JSON export. The
+manifest continues to mark this universal feature partial while the complete
+two-key destructive confirmation and full capture matrix remain outstanding.
+
+### Notification centre capture evidence
+
+![Notification centre showing a persisted dismissed record](../docs/screenshots/site/notification-centre-history.png)
+
+This capture was taken from source commit
+`a790fe937092c75c0d766365223cc6ed2ea9e95d` at a 1384 by 892 pixel viewport
+using the local Pages files on an isolated hidden desktop. The PNG is
+`docs/screenshots/site/notification-centre-history.png` and its SHA-256 is
+`0fcbb0d1e65eb667bc4b83e3bba20535c518b40196abc16967b054a19872ebce`.
+It shows the Settings-triggered toast retained as a dismissed history row,
+the local search and regex builder, the status filter, and the bulk controls.
+
 The site embeds the categorized feature articles so the documentation remains
 available without a fetch. The source Markdown remains authoritative in
 `docs/features/`; every site article links back to its category article.

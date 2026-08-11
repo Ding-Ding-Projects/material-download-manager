@@ -3,6 +3,7 @@
 
   const content = window.MDM_SITE_CONTENT;
   const settingsContract = window.MDM_SITE_SETTINGS_CONTRACT;
+  const notificationContract = window.MDM_SITE_NOTIFICATION_CONTRACT;
   const manifest = window.MDM_RELEASE_MANIFEST || { stable: null, publication: { pages: "unverified" } };
   const root = document.documentElement;
   const SETTINGS_SCHEMA_VERSION = 2;
@@ -27,7 +28,12 @@
     appearanceOverrides: {},
     tabOverrides: {}
   };
-  const SEARCH_IDS = ["features", "changelog", "settings", "palette", "tab-strip", "tab-group", "tab-groups", "tab-master"];
+  const NOTIFICATION_HISTORY_KEY = "mdm-site-notification-history-v1";
+  const NOTIFICATION_LIMIT = 100;
+  const NOTIFICATION_TONES = notificationContract.tones;
+  const NOTIFICATION_FILTERS = notificationContract.filters;
+  const NOTIFICATION_DELETE_PHRASE = "DELETE";
+  const SEARCH_IDS = ["features", "changelog", "settings", "palette", "notifications", "tab-strip", "tab-group", "tab-groups", "tab-master"];
   const searchStates = Object.fromEntries(SEARCH_IDS.map((id) => [id, {
     mode: "text",
     pattern: "",
@@ -94,6 +100,42 @@
     emojiToggleTitle: ["Message decorations", "訊息裝飾"],
     emojiToggleExplanation: ["Show a small decorative emoji in notifications and decision messages. It never changes facts, control labels, or accessible names.", "喺通知同決定訊息加細細個裝飾 emoji；唔會改事實、控制標籤或者無障礙名稱。"],
     emojiToggleLabel: ["Show emojis in messages", "喺訊息顯示 emoji"],
+    notificationCentre: ["NOTIFICATION CENTRE", "通知中心"],
+    notificationCentreOpen: ["Notification centre", "通知中心"],
+    notificationCentreTitle: ["Review notifications", "檢視通知"],
+    notificationCentreDescription: ["Dismissed messages stay here until you delete them. Search and filter the local history without sending it anywhere.", "已收起嘅訊息會留喺度，直到你刪除佢哋；搜尋同篩選只喺本機進行，唔會送去任何地方。"],
+    notificationCentreClose: ["Close notification centre", "關閉通知中心"],
+    notificationHistoryLabel: ["Notification history", "通知紀錄"],
+    notificationSelect: ["Select notification", "選取通知"],
+    notificationSearchLabel: ["Search notification history", "搜尋通知紀錄"],
+    notificationSearchPlaceholder: ["Search notification history", "搜尋通知紀錄"],
+    notificationFilter: ["View", "檢視"],
+    notificationFilterAll: ["All messages", "全部訊息"],
+    notificationFilterActive: ["Active only", "只顯示未收起"],
+    notificationFilterDismissed: ["Dismissed only", "只顯示已收起"],
+    notificationFilterErrors: ["Warnings and errors", "警告同錯誤"],
+    notificationSelectAll: ["Select visible", "選取目前顯示"],
+    notificationSelectInverse: ["Invert selection", "反轉選取"],
+    notificationBulkDismiss: ["Dismiss selected", "收起選取項目"],
+    notificationBulkDelete: ["Delete selected", "刪除選取項目"],
+    notificationExport: ["Export visible", "匯出目前顯示"],
+    notificationHistoryEmpty: ["No notifications match this view.", "呢個檢視冇符合嘅通知。"],
+    notificationActive: ["Active", "未收起"],
+    notificationDismissed: ["Dismissed", "已收起"],
+    notificationDismiss: ["Dismiss", "收起"],
+    notificationSelectedStatus: ["{selected} selected · {visible} visible", "已選 {selected} 項 · 顯示緊 {visible} 項"],
+    notificationHistoryCount: ["{count} notifications", "{count} 個通知"],
+    notificationNoSelection: ["Select one or more visible notifications first.", "請先選取一個或者多個目前顯示嘅通知。"],
+    notificationDismissedResult: ["{count} notifications dismissed", "已收起 {count} 個通知"],
+    notificationDeletedResult: ["{count} notifications deleted", "已刪除 {count} 個通知"],
+    notificationExportedResult: ["The visible notification history was exported locally.", "目前顯示嘅通知紀錄已經喺本機匯出。"],
+    notificationDeleteTitle: ["Delete selected notifications?", "刪除選取嘅通知？"],
+    notificationDeleteDescription: ["This permanently removes the selected local history records. Review the count before continuing.", "呢個動作會永久刪除選取嘅本機紀錄；繼續之前請核對數量。"],
+    notificationDeleteAck: ["I understand these records will be deleted.", "我明白呢啲紀錄會被刪除。"],
+    notificationDeletePhrase: ["Type DELETE to continue", "輸入 DELETE 先可以繼續"],
+    notificationDeleteRequired: ["Both the acknowledgement and the exact word DELETE are required.", "要同時確認同輸入正確嘅 DELETE。"],
+    notificationDeleteCancel: ["Cancel", "取消"],
+    notificationDeleteConfirm: ["Delete permanently", "永久刪除"],
     schoolModeTitle: ["School mode", "學校模式"],
     schoolModeNameLabel: ["Mode name", "模式名稱"],
     schoolModeToggleLabel: ["Use this mode", "使用呢個模式"],
@@ -193,6 +235,61 @@
     return settingsContract.normalizeSettingsRecord(parsed, DEFAULTS, DEFAULT_SCHOOL_MODE_NAME, content.product.name);
   }
 
+  function normalizeNotificationText(value, fallback, maxLength) {
+    return notificationContract.normalizeText(value, fallback, maxLength);
+  }
+
+  function makeNotificationId() {
+    try { if (crypto && typeof crypto.randomUUID === "function") return crypto.randomUUID(); } catch (_error) { /* fall through to a bounded local id */ }
+    notificationCounter += 1;
+    return `notification-${Date.now().toString(36)}-${notificationCounter.toString(36)}`;
+  }
+
+  function normalizeNotificationRecord(record, index) {
+    return notificationContract.normalizeRecord(record, index);
+  }
+
+  function readNotificationState() {
+    let parsed = null;
+    try {
+      const raw = localStorage.getItem(NOTIFICATION_HISTORY_KEY);
+      parsed = raw ? JSON.parse(raw) : null;
+    } catch (_error) {
+      parsed = null;
+    }
+    const sourceRecords = Array.isArray(parsed?.records) ? parsed.records : [];
+    const records = notificationContract.normalizeRecords(sourceRecords, NOTIFICATION_LIMIT);
+    const view = parsed?.view && typeof parsed.view === "object" ? parsed.view : {};
+    const mode = view.mode === "regex" ? "regex" : "text";
+    const flags = String(view.flags || "g").replace(/[^gimsuy]/g, "").split("").filter((value, index, values) => values.indexOf(value) === index).join("") || "g";
+    return {
+      schemaVersion: 1,
+      revision: Number.isSafeInteger(parsed?.revision) && parsed.revision >= 0 ? parsed.revision : 0,
+      records,
+      view: {
+        filter: NOTIFICATION_FILTERS.includes(view.filter) ? view.filter : "all",
+        mode,
+        query: String(view.query || "").slice(0, 256),
+        pattern: String(view.pattern || "").slice(0, 2048),
+        flags
+      }
+    };
+  }
+
+  function saveNotificationState() {
+    if (!notificationState) return;
+    notificationState.records = notificationState.records.slice(-NOTIFICATION_LIMIT);
+    notificationState.revision = Number(notificationState.revision || 0) + 1;
+    try {
+      localStorage.setItem(NOTIFICATION_HISTORY_KEY, JSON.stringify({
+        schemaVersion: 1,
+        revision: notificationState.revision,
+        records: notificationState.records,
+        view: notificationState.view
+      }));
+    } catch (_error) { /* Private browsing can refuse persistence; the centre remains live. */ }
+  }
+
   function readSettings() {
     for (const key of [STORAGE_KEY, ...LEGACY_STORAGE_KEYS]) {
       try {
@@ -236,6 +333,7 @@
   function applyTranslations() {
     $$('[data-copy]').forEach((element) => { element.textContent = localized(element.dataset.copy); });
     $$('[data-copy-placeholder]').forEach((element) => { element.placeholder = localized(element.dataset.copyPlaceholder); });
+    $$('[data-copy-aria]').forEach((element) => { element.setAttribute("aria-label", localized(element.dataset.copyAria)); });
     root.lang = effectiveLanguage() === "yue" ? "zh-Hant" : "en";
     const section = effectiveLanguage() === "yue" ? "文件" : "Documentation";
     document.title = isSchoolMode() ? `${settings.displayName || DEFAULTS.displayName} · ${schoolModeLabel()}` : `${settings.displayName || DEFAULTS.displayName} · ${section}`;
@@ -304,7 +402,238 @@
 
   function clearNotifications() {
     const region = $("#notification-region");
-    if (region) region.replaceChildren();
+    if (!region) return;
+    const ids = $$(".notification", region).map((item) => item.dataset.notificationId).filter(Boolean);
+    ids.forEach((id) => {
+      const record = notificationState.records.find((item) => item.id === id);
+      if (record) record.dismissed = true;
+    });
+    if (ids.length) saveNotificationState();
+    region.replaceChildren();
+    updateNotificationCount();
+  }
+
+  function formatNotificationTime(value) {
+    try { return new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" }).format(new Date(value)); } catch (_error) { return "Time unavailable"; }
+  }
+
+  function notificationSearchValue(record) {
+    return `${record.title} ${record.message} ${record.tone} ${record.dismissed ? "dismissed" : "active"} ${record.createdAt}`;
+  }
+
+  function visibleNotificationRecords() {
+    const filter = notificationState.view.filter;
+    return notificationState.records.filter((record) => {
+      if (filter === "active" && record.dismissed) return false;
+      if (filter === "dismissed" && !record.dismissed) return false;
+      if (filter === "errors" && !["warning", "error"].includes(record.tone)) return false;
+      return searchMatches("notifications", notificationSearchValue(record));
+    });
+  }
+
+  function setNotificationStatus(message) {
+    const status = $("#notification-centre-status");
+    if (status) status.textContent = message;
+  }
+
+  function notificationStatusCopy(selected, visible) {
+    return localized("notificationSelectedStatus").replace("{selected}", String(selected)).replace("{visible}", String(visible));
+  }
+
+  function updateNotificationCount() {
+    const count = notificationState.records.filter((record) => !record.dismissed).length;
+    const badge = $("#notification-centre-count");
+    if (badge) {
+      badge.textContent = String(count);
+      badge.setAttribute("aria-label", `${count} active notifications`);
+    }
+  }
+
+  function selectedVisibleNotificationRecords(records = visibleNotificationRecords()) {
+    const visibleIds = new Set(records.map((record) => record.id));
+    return notificationState.records.filter((record) => visibleIds.has(record.id) && notificationState.selected.has(record.id));
+  }
+
+  function setNotificationSelection(id, selected) {
+    if (selected) notificationState.selected.add(id);
+    else notificationState.selected.delete(id);
+    renderNotificationCentre();
+  }
+
+  function selectAllVisibleNotifications() {
+    visibleNotificationRecords().forEach((record) => notificationState.selected.add(record.id));
+    renderNotificationCentre();
+  }
+
+  function invertVisibleNotificationSelection() {
+    visibleNotificationRecords().forEach((record) => {
+      if (notificationState.selected.has(record.id)) notificationState.selected.delete(record.id);
+      else notificationState.selected.add(record.id);
+    });
+    renderNotificationCentre();
+  }
+
+  function dismissNotification(id, announce = false) {
+    const record = notificationState.records.find((item) => item.id === id);
+    const timer = notificationTimers.get(id);
+    if (timer) { clearTimeout(timer); notificationTimers.delete(id); }
+    if (!record || record.dismissed) return false;
+    record.dismissed = true;
+    saveNotificationState();
+    const toast = $$(".notification").find((item) => item.dataset.notificationId === id);
+    if (toast) toast.remove();
+    updateNotificationCount();
+    renderNotificationCentre();
+    if (announce) setNotificationStatus(localized("notificationDismissedResult").replace("{count}", "1"));
+    return true;
+  }
+
+  function bulkDismissNotifications() {
+    const visible = visibleNotificationRecords();
+    const selected = selectedVisibleNotificationRecords(visible);
+    if (!selected.length) { setNotificationStatus(localized("notificationNoSelection")); return; }
+    selected.forEach((record) => { record.dismissed = true; });
+    notificationState.selected.clear();
+    saveNotificationState();
+    selected.forEach((record) => {
+      const toast = $$(".notification").find((item) => item.dataset.notificationId === record.id);
+      if (toast) toast.remove();
+    });
+    updateNotificationCount();
+    renderNotificationCentre();
+    setNotificationStatus(localized("notificationDismissedResult").replace("{count}", String(selected.length)));
+  }
+
+  function updateNotificationDeleteControls() {
+    const acknowledge = $("#notification-delete-ack")?.checked === true;
+    const phrase = $("#notification-delete-phrase")?.value === NOTIFICATION_DELETE_PHRASE;
+    const confirm = $("#notification-delete-confirm-button");
+    if (confirm) confirm.disabled = !(acknowledge && phrase);
+  }
+
+  function closeNotificationDeleteConfirm(restoreFocus = true) {
+    const dialog = $("#notification-delete-confirm");
+    if (dialog) dialog.hidden = true;
+    notificationDeleteIds = [];
+    if (restoreFocus && notificationDeleteOrigin?.isConnected) notificationDeleteOrigin.focus();
+    notificationDeleteOrigin = null;
+  }
+
+  function openNotificationDeleteConfirm() {
+    const selected = selectedVisibleNotificationRecords();
+    if (!selected.length) { setNotificationStatus(localized("notificationNoSelection")); return; }
+    notificationDeleteIds = selected.map((record) => record.id);
+    notificationDeleteOrigin = document.activeElement;
+    const dialog = $("#notification-delete-confirm");
+    if (!dialog) return;
+    dialog.hidden = false;
+    $("#notification-delete-ack").checked = false;
+    $("#notification-delete-phrase").value = "";
+    updateNotificationDeleteControls();
+    $("#notification-delete-ack").focus();
+  }
+
+  function confirmNotificationDelete() {
+    updateNotificationDeleteControls();
+    if ($("#notification-delete-confirm-button")?.disabled) return;
+    const ids = new Set(notificationDeleteIds);
+    const deleted = notificationState.records.filter((record) => ids.has(record.id)).length;
+    notificationState.records = notificationState.records.filter((record) => !ids.has(record.id));
+    notificationState.selected.clear();
+    saveNotificationState();
+    closeNotificationDeleteConfirm(false);
+    updateNotificationCount();
+    renderNotificationCentre();
+    setNotificationStatus(localized("notificationDeletedResult").replace("{count}", String(deleted)));
+    $("#notification-bulk-delete")?.focus();
+  }
+
+  function exportVisibleNotifications() {
+    const visible = visibleNotificationRecords();
+    const payload = notificationContract.buildExport(visible, notificationState.view);
+    downloadFile("notification-history.json", `${JSON.stringify(payload, null, 2)}\n`, "application/json");
+    setNotificationStatus(localized("notificationExportedResult"));
+  }
+
+  function renderNotificationCentre() {
+    const centre = $("#notification-centre");
+    const list = $("#notification-list");
+    const empty = $("#notification-empty");
+    if (!centre || !list || !empty) return;
+    updateNotificationCount();
+    if (isSchoolMode()) {
+      centre.hidden = true;
+      notificationCentreOpen = false;
+      list.replaceChildren();
+      empty.hidden = true;
+      return;
+    }
+    centre.hidden = !notificationCentreOpen;
+    const visible = visibleNotificationRecords();
+    const selected = selectedVisibleNotificationRecords(visible).length;
+    list.replaceChildren();
+    empty.hidden = visible.length > 0;
+    visible.forEach((record) => {
+      const item = create("li", `notification-record${record.dismissed ? " is-dismissed" : ""}`);
+      item.dataset.notificationId = record.id;
+      const selectLabel = create("label", "notification-select-row");
+      const checkbox = create("input");
+      checkbox.type = "checkbox";
+      checkbox.className = "notification-select";
+      checkbox.checked = notificationState.selected.has(record.id);
+      checkbox.setAttribute("aria-label", `${localized("notificationSelect")}: ${record.title}`);
+      checkbox.addEventListener("change", () => setNotificationSelection(record.id, checkbox.checked));
+      selectLabel.append(checkbox);
+      item.append(selectLabel);
+      const marker = create("span", `signal-dot ${record.tone}`, effectiveShowEmojis() ? (record.tone === "success" ? "✅" : record.tone === "error" || record.tone === "warning" ? "⚠️" : "💬") : "");
+      marker.setAttribute("aria-hidden", "true");
+      marker.dataset.decorative = "true";
+      item.append(marker);
+      const body = create("div", "notification-record-copy");
+      const titleId = `notification-title-${record.id}`;
+      const messageId = `notification-message-${record.id}`;
+      const title = create("strong", "notification-title", schoolSafeText(record.title));
+      title.id = titleId;
+      const message = create("span", "notification-message", schoolSafeText(record.message));
+      message.id = messageId;
+      body.append(title, message);
+      const meta = create("span", "notification-record-meta", `${formatNotificationTime(record.createdAt)} · ${record.dismissed ? localized("notificationDismissed") : localized("notificationActive")}`);
+      body.append(meta);
+      item.append(body);
+      const actions = create("div", "notification-record-actions");
+      if (!record.dismissed) {
+        const dismiss = create("button", "text-button", localized("notificationDismiss"));
+        dismiss.type = "button";
+        dismiss.setAttribute("aria-label", `${localized("notificationDismiss")}: ${record.title}`);
+        dismiss.addEventListener("click", () => dismissNotification(record.id, true));
+        actions.append(dismiss);
+      }
+      item.append(actions);
+      item.setAttribute("aria-describedby", `${titleId} ${messageId}`);
+      list.append(item);
+    });
+    const status = notificationStatusCopy(selected, visible.length);
+    setNotificationStatus(status);
+  }
+
+  function openNotificationCentre() {
+    if (isSchoolMode()) return;
+    notificationCentreOrigin = document.activeElement;
+    notificationCentreOpen = true;
+    const centre = $("#notification-centre");
+    if (!centre) return;
+    centre.hidden = false;
+    renderNotificationCentre();
+    $("#notifications-search")?.focus();
+  }
+
+  function closeNotificationCentre(restoreFocus = true) {
+    const centre = $("#notification-centre");
+    if (centre) centre.hidden = true;
+    notificationCentreOpen = false;
+    closeNotificationDeleteConfirm(false);
+    if (restoreFocus && notificationCentreOrigin?.isConnected) notificationCentreOrigin.focus();
+    notificationCentreOrigin = null;
   }
 
   function applyIncomingSettings(raw) {
@@ -320,9 +649,44 @@
     }
   }
 
+  function applyIncomingNotificationState(raw) {
+    try {
+      const incoming = JSON.parse(raw);
+      const revision = Number(incoming?.revision);
+      if (!Number.isSafeInteger(revision) || revision <= Number(notificationState.revision || 0)) return false;
+      const records = notificationContract.normalizeRecords(incoming.records, NOTIFICATION_LIMIT);
+      const view = incoming.view && typeof incoming.view === "object" ? incoming.view : {};
+      notificationState = {
+        schemaVersion: 1,
+        revision,
+        records,
+        selected: new Set(),
+        view: {
+          filter: NOTIFICATION_FILTERS.includes(view.filter) ? view.filter : "all",
+          mode: view.mode === "regex" ? "regex" : "text",
+          query: String(view.query || "").slice(0, 256),
+          pattern: String(view.pattern || "").slice(0, 2048),
+          flags: String(view.flags || "g").replace(/[^gimsuy]/g, "").split("").filter((value, index, values) => values.indexOf(value) === index).join("") || "g"
+        }
+      };
+      searchStates.notifications.mode = notificationState.view.mode;
+      searchStates.notifications.query = notificationState.view.query;
+      searchStates.notifications.pattern = notificationState.view.pattern || notificationState.view.query;
+      searchStates.notifications.flags = notificationState.view.flags;
+      $("#notification-filter").value = notificationState.view.filter;
+      $("#notifications-search").value = notificationState.view.query;
+      updateNotificationCount();
+      renderNotificationCentre();
+      return true;
+    } catch (_error) {
+      return false;
+    }
+  }
+
   function bindSettingsSync() {
     window.addEventListener("storage", (event) => {
       if (event.key === STORAGE_KEY && event.newValue) applyIncomingSettings(event.newValue);
+      if (event.key === NOTIFICATION_HISTORY_KEY && event.newValue) applyIncomingNotificationState(event.newValue);
     });
   }
 
@@ -410,6 +774,7 @@
     if (typeof renderReleaseList === "function" && $("#release-list")) renderReleaseList();
     if (typeof renderTabDiscovery === "function" && $("#tab-results")) renderTabDiscovery();
     if (typeof renderPalette === "function" && $("#palette-results")) renderPalette();
+    if (typeof renderNotificationCentre === "function" && $("#notification-centre")) renderNotificationCentre();
   }
 
   function renderProvenance() {
@@ -1087,6 +1452,7 @@
       { id: "search.features", label: "Features · search", description: "Focus the feature search field", action: () => focusElement("feature-search", "features") },
       { id: "search.settings", label: "Settings · search", description: "Focus the settings search field", action: () => focusElement("settings-search", "settings") },
       { id: "search.tabs", label: "Tabs · four searches", description: "Open the tab discovery lab", action: () => focusElement("tab-strip-search", "settings") },
+      { id: "destination.notifications", label: "Notification centre", description: "Review, filter, export, dismiss, or delete local notification history", action: () => openNotificationCentre(), schoolOptional: true },
       { id: "setting.language", label: "Settings · language mode", description: "Choose English, Cantonese, or bilingual copy", action: () => focusElement("language-mode-buttons", "settings") },
       { id: "setting.funny-en", label: "Settings · English funny level", description: "Adjust English voice from 1 to 5", schoolOptional: true, action: () => focusElement("funny-en", "settings") },
       { id: "setting.funny-yue", label: "Settings · Cantonese funny level", description: "Adjust Cantonese voice from 1 to 5", schoolOptional: true, action: () => focusElement("funny-yue", "settings") },
@@ -1174,6 +1540,14 @@
     }
     if (id === "changelog") renderReleaseList();
     if (id === "palette" && !$("#command-palette-layer").hidden) renderPalette();
+    if (id === "notifications") {
+      notificationState.view.query = searchStates.notifications.query;
+      notificationState.view.pattern = searchStates.notifications.pattern;
+      notificationState.view.flags = searchStates.notifications.flags;
+      notificationState.view.mode = searchStates.notifications.mode;
+      saveNotificationState();
+      renderNotificationCentre();
+    }
     if (id.startsWith("tab-")) renderTabDiscovery();
   }
 
@@ -1212,26 +1586,74 @@
     $("#tab-radius-setting").addEventListener("input", (event) => updateTabAppearance("radius", Number(event.target.value)));
   }
 
+  function bindNotificationCentre() {
+    $("#notification-centre-open").addEventListener("click", openNotificationCentre);
+    $("#notification-centre-close").addEventListener("click", () => closeNotificationCentre());
+    $("#notification-filter").addEventListener("change", (event) => {
+      notificationState.view.filter = NOTIFICATION_FILTERS.includes(event.target.value) ? event.target.value : "all";
+      saveNotificationState();
+      renderNotificationCentre();
+    });
+    $("#notification-select-all").addEventListener("click", selectAllVisibleNotifications);
+    $("#notification-select-inverse").addEventListener("click", invertVisibleNotificationSelection);
+    $("#notification-bulk-dismiss").addEventListener("click", bulkDismissNotifications);
+    $("#notification-bulk-delete").addEventListener("click", openNotificationDeleteConfirm);
+    $("#notification-export").addEventListener("click", exportVisibleNotifications);
+    $("#notification-delete-ack").addEventListener("change", updateNotificationDeleteControls);
+    $("#notification-delete-phrase").addEventListener("input", updateNotificationDeleteControls);
+    $("#notification-delete-cancel").addEventListener("click", () => closeNotificationDeleteConfirm());
+    $("#notification-delete-confirm-button").addEventListener("click", confirmNotificationDelete);
+    $("#notification-filter").value = notificationState.view.filter;
+    searchStates.notifications.mode = notificationState.view.mode;
+    searchStates.notifications.query = notificationState.view.query;
+    searchStates.notifications.pattern = notificationState.view.pattern || notificationState.view.query;
+    searchStates.notifications.flags = notificationState.view.flags;
+    $("#notifications-search").value = notificationState.view.query;
+    renderNotificationCentre();
+  }
+
   function notify(tone, title, message) {
     const region = $("#notification-region");
-    if (!region) return;
-    const item = create("article", `notification ${tone}`);
-    item.setAttribute("role", tone === "error" || tone === "warning" ? "alert" : "status");
-    const marker = create("span", "signal-dot", effectiveShowEmojis() ? (tone === "success" ? "✅" : tone === "error" ? "⚠️" : "💬") : "");
+    if (!region || isSchoolMode()) return;
+    const safeTone = NOTIFICATION_TONES.includes(tone) ? tone : "info";
+    const record = {
+      id: makeNotificationId(),
+      tone: safeTone,
+      title: normalizeNotificationText(title, "Notification", 160),
+      message: normalizeNotificationText(message, "", 600),
+      createdAt: new Date().toISOString(),
+      dismissed: false
+    };
+    notificationState.records.push(record);
+    saveNotificationState();
+    updateNotificationCount();
+    const item = create("article", `notification ${safeTone}`);
+    item.dataset.notificationId = record.id;
+    item.setAttribute("role", safeTone === "error" || safeTone === "warning" ? "alert" : "status");
+    const marker = create("span", `signal-dot ${safeTone}`, effectiveShowEmojis() ? (safeTone === "success" ? "✅" : safeTone === "error" || safeTone === "warning" ? "⚠️" : "💬") : "");
     marker.setAttribute("aria-hidden", "true");
     marker.dataset.decorative = "true";
     item.append(marker);
     const copy = create("div");
-    copy.append(create("div", "notification-title", isSchoolMode() ? String(title).replace(/Cantonese|bilingual|funny|emoji/gi, "setting") : title));
-    copy.append(create("div", "notification-message", isSchoolMode() ? String(message).replace(/Cantonese|bilingual|funny|emoji/gi, "setting") : message));
+    const titleId = `toast-title-${record.id}`;
+    const messageId = `toast-message-${record.id}`;
+    const titleElement = create("div", "notification-title", record.title);
+    titleElement.id = titleId;
+    const messageElement = create("div", "notification-message", record.message);
+    messageElement.id = messageId;
+    copy.append(titleElement, messageElement);
     item.append(copy);
     const close = create("button", "notification-close", "×");
     close.type = "button";
-    close.setAttribute("aria-label", "Dismiss notification");
-    close.addEventListener("click", () => item.remove());
+    close.setAttribute("aria-label", `${localized("notificationDismiss")}: ${record.title}`);
+    close.addEventListener("click", () => dismissNotification(record.id, true));
     item.append(close);
+    item.setAttribute("aria-describedby", `${titleId} ${messageId}`);
     region.append(item);
-    if (tone !== "error" && tone !== "warning") setTimeout(() => item.remove(), 5200);
+    if (!["error", "warning"].includes(safeTone)) {
+      const timer = setTimeout(() => { notificationTimers.delete(record.id); dismissNotification(record.id); }, 5200);
+      notificationTimers.set(record.id, timer);
+    }
   }
 
   function maybeShowSurprise() {
@@ -1251,7 +1673,9 @@
       if (event.key === "Escape") {
         const openBuilder = $(".builder-popover:not([hidden])");
         if (openBuilder) { openBuilder.hidden = true; const toggle = openBuilder.parentElement.querySelector(".builder-toggle"); if (toggle) toggle.setAttribute("aria-expanded", "false"); return; }
+        if (!( $("#notification-delete-confirm")?.hidden ?? true)) { closeNotificationDeleteConfirm(); return; }
         if (!$("#command-palette-layer").hidden) { closePalette(); return; }
+        if (notificationCentreOpen) { closeNotificationCentre(); return; }
         closeContextMenu();
         $("#tab-appearance-editor").hidden = true;
       }
@@ -1281,12 +1705,21 @@
     bindSearches();
     bindPalette();
     bindSettings();
+    bindNotificationCentre();
     bindSettingsSync();
     bindChangelogActions();
     bindGlobalKeys();
     setTimeout(maybeShowSurprise, 40);
   }
 
+  let notificationCounter = 0;
+  let notificationState = readNotificationState();
+  notificationState.selected = new Set();
+  let notificationCentreOpen = false;
+  let notificationCentreOrigin = null;
+  let notificationDeleteOrigin = null;
+  let notificationDeleteIds = [];
+  let notificationTimers = new Map();
   let settings = readSettings();
   initialize();
 })();

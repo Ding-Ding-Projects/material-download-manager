@@ -101,6 +101,7 @@ const expectedFiles = [
   "data/release-manifest.js",
   "data/universal-feature-manifest.js",
   "data/settings-contract.js",
+  "data/notification-contract.js",
   "assets/dim-sum.svg"
 ];
 for (const relativePath of expectedFiles) {
@@ -117,10 +118,12 @@ const manifestJsonSource = await read("data/release-manifest.json");
 const manifestJsSource = await read("data/release-manifest.js");
 const universalFeatureManifestSource = await read("data/universal-feature-manifest.js");
 const settingsContractSource = await read("data/settings-contract.js");
+const notificationContractSource = await read("data/notification-contract.js");
 const content = loadScript(contentSource, "content.js", "MDM_SITE_CONTENT");
 const manifestFromJs = loadScript(manifestJsSource, "release-manifest.js", "MDM_RELEASE_MANIFEST");
 const universalFeatureManifest = loadScript(universalFeatureManifestSource, "universal-feature-manifest.js", "MDM_UNIVERSAL_FEATURE_MANIFEST");
 const settingsContract = loadScript(settingsContractSource, "settings-contract.js", "MDM_SITE_SETTINGS_CONTRACT");
+const notificationContract = loadScript(notificationContractSource, "notification-contract.js", "MDM_SITE_NOTIFICATION_CONTRACT");
 const manifestFromJson = JSON.parse(manifestJsonSource);
 
 run("site builder never recursively removes a caller-selected output path", () => {
@@ -145,7 +148,7 @@ run("site exposes the required keyboard command palette shortcut", () => {
 });
 
 run("site has local search fields with individual regex-builder anchors", () => {
-  for (const id of ["features", "changelog", "settings", "palette", "tab-strip", "tab-group", "tab-groups", "tab-master"]) {
+  for (const id of ["features", "changelog", "settings", "palette", "notifications", "tab-strip", "tab-group", "tab-groups", "tab-master"]) {
     assert.match(html, new RegExp(`data-search-id="${id}"`));
     assert.match(html, new RegExp(`builder-${id}`));
   }
@@ -159,7 +162,7 @@ run("release manifest JSON and browser form agree", () => {
   assert.equal(manifestFromJson.stable, null);
 });
 
-const universalSourceCorpus = `${html}\n${css}\n${app}\n${contentSource}\n${universalFeatureManifestSource}`;
+const universalSourceCorpus = `${html}\n${css}\n${app}\n${contentSource}\n${universalFeatureManifestSource}\n${notificationContractSource}`;
 const universalFeatureEntries = validateUniversalFeatureManifest(universalFeatureManifest, universalSourceCorpus);
 run("universal feature manifest is explicit and independently validated", () => {
   assert.equal(universalFeatureEntries.length, universalFeatureManifest.requiredIds.length);
@@ -236,6 +239,44 @@ run("emoji and School controls are wired to persistence, reset, and live suppres
   assert.match(html, /data\/universal-feature-manifest\.js/);
   assert.match(app, /window\.addEventListener\("storage"/);
   assert.match(app, /marker\.setAttribute\("aria-hidden", "true"\)/);
+});
+
+run("notification history contract bounds text, tones, filters, and exports", () => {
+  assert.deepEqual(JSON.parse(JSON.stringify(notificationContract.tones)), ["info", "success", "progress", "warning", "error"]);
+  assert.equal(notificationContract.normalizeTone("unknown-tone"), "info", "unknown tones normalize to info");
+  const record = notificationContract.normalizeRecord({
+    id: "notice-1",
+    tone: "warning",
+    title: `${"T".repeat(300)}\u202E`,
+    message: `${"M".repeat(800)}\u0000`,
+    createdAt: "2026-08-11T00:00:00Z",
+    dismissed: true,
+    secret: "must be dropped"
+  }, 0);
+  assert.equal(record.title.length, 160);
+  assert.equal(record.message.length, 600);
+  assert.equal(record.dismissed, true);
+  assert.equal(record.secret, undefined);
+  assert.equal(notificationContract.normalizeRecords([record, record]).length, 1, "duplicate IDs are collapsed before persistence");
+  const records = [record, { id: "active-1", tone: "success", title: "Active", message: "Ready", createdAt: "2026-08-11T00:01:00Z", dismissed: false }, { id: "error-1", tone: "error", title: "Error", message: "Failed", createdAt: "2026-08-11T00:02:00Z", dismissed: false }];
+  assert.equal(notificationContract.filterRecords(records, { filter: "active" }).length, 2);
+  assert.equal(notificationContract.filterRecords(records, { filter: "dismissed" }).length, 1);
+  assert.equal(notificationContract.filterRecords(records, { filter: "errors" }).length, 2);
+  const exported = notificationContract.buildExport(records, { filter: "active", query: "ready", mode: "text" }, "2026-08-11T00:03:00Z");
+  assert.equal(exported.schemaVersion, 1);
+  assert.equal(exported.filter, "active");
+  assert.equal(exported.records.length, 3, "export preserves the explicitly supplied visible scope");
+  assert.equal(exported.records[0].secret, undefined);
+});
+
+run("notification centre is wired to persistence, search, bulk actions, School suppression, and focus", () => {
+  for (const marker of ["NOTIFICATION_HISTORY_KEY", "function renderNotificationCentre", "function bulkDismissNotifications", "function openNotificationDeleteConfirm", "function exportVisibleNotifications", "notificationState.selected", "if (!region || isSchoolMode()) return", "window.addEventListener(\"storage\""]) assert.match(app, new RegExp(marker.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+  for (const marker of ["id=\"notification-centre-open\"", "id=\"notification-centre\"", "id=\"notifications-search\"", "data-search-id=\"notifications\"", "id=\"notification-select-all\"", "id=\"notification-select-inverse\"", "id=\"notification-bulk-dismiss\"", "id=\"notification-bulk-delete\"", "id=\"notification-export\"", "id=\"notification-delete-confirm\"", "id=\"notification-delete-ack\"", "id=\"notification-delete-phrase\""]) assert.ok(html.includes(marker), `${marker} is present`);
+  assert.match(html, /data\/notification-contract\.js/);
+  assert.match(css, /\.notification-centre\s*\{/);
+  assert.match(css, /\.notification-record\s*\{/);
+  assert.match(app, /notificationContract\.buildExport/);
+  assert.match(app, /notificationState\.view\.filter/);
 });
 
 run("stable installer is absent until verified metadata exists", () => {

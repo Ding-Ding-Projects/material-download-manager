@@ -20,6 +20,11 @@
       </div>
       <div class="topbar-actions">
         <span class="status-chip" id="publication-status">Local source · Pages publication unverified</span>
+        <button class="button button-tonal" id="notification-centre-open" type="button" aria-haspopup="dialog" aria-controls="notification-centre" data-school-optional>
+          <span aria-hidden="true">◌</span>
+          <span data-copy="notificationCentreOpen">Notification centre</span>
+          <span class="count-badge" id="notification-centre-count" aria-label="0 active notifications">0</span>
+        </button>
         <button class="button button-tonal" id="command-palette-open" type="button" aria-haspopup="dialog" aria-controls="command-palette-dialog">
           <span aria-hidden="true">⌕</span>
           <span data-copy="openPalette">Command palette</span>
@@ -378,9 +383,51 @@
 
   <div class="notification-region" id="notification-region" aria-live="polite" aria-atomic="false"></div>
 
+  <aside class="notification-centre" id="notification-centre" role="dialog" aria-labelledby="notification-centre-title" aria-describedby="notification-centre-description" hidden data-school-optional>
+    <div class="dialog-heading">
+      <div>
+        <p class="eyebrow" data-copy="notificationCentre">NOTIFICATION CENTRE</p>
+        <h2 id="notification-centre-title" data-copy="notificationCentreTitle">Review notifications</h2>
+      </div>
+      <button class="icon-button" id="notification-centre-close" type="button" aria-label="Close notification centre" data-copy-aria="notificationCentreClose">×</button>
+    </div>
+    <p class="dialog-help" id="notification-centre-description" data-copy="notificationCentreDescription">Dismissed messages stay here until you delete them. Search and filter the local history without sending it anywhere.</p>
+    <div class="search-row" data-search-id="notifications">
+      <label class="search-field" for="notifications-search"><span class="search-icon" aria-hidden="true">⌕</span><span class="sr-only" data-copy="notificationSearchLabel">Search notification history</span><input id="notifications-search" type="search" autocomplete="off" placeholder="Search notification history" data-copy-placeholder="notificationSearchPlaceholder"></label>
+      <button class="button button-outlined builder-toggle" type="button" aria-expanded="false" aria-controls="builder-notifications"><span aria-hidden="true">.*</span><span data-copy="regexBuilder">Regex builder</span></button>
+      <span class="search-state" id="notifications-search-state">Plain text</span>
+      <div class="builder-popover" id="builder-notifications" role="dialog" aria-label="Notification history regex builder" hidden></div>
+    </div>
+    <div class="filter-row notification-filter-row">
+      <label class="field-control compact-control"><span data-copy="notificationFilter">View</span><select id="notification-filter"><option value="all" data-copy="notificationFilterAll">All messages</option><option value="active" data-copy="notificationFilterActive">Active only</option><option value="dismissed" data-copy="notificationFilterDismissed">Dismissed only</option><option value="errors" data-copy="notificationFilterErrors">Warnings and errors</option></select></label>
+      <span class="field-help" id="notification-centre-status" role="status" aria-live="polite">0 notifications</span>
+    </div>
+    <div class="notification-bulk-actions" role="group" aria-label="Notification history bulk actions">
+      <button class="button button-outlined" id="notification-select-all" type="button" data-copy="notificationSelectAll">Select visible</button>
+      <button class="button button-outlined" id="notification-select-inverse" type="button" data-copy="notificationSelectInverse">Invert selection</button>
+      <button class="button button-tonal" id="notification-bulk-dismiss" type="button" data-copy="notificationBulkDismiss">Dismiss selected</button>
+      <button class="button button-outlined" id="notification-bulk-delete" type="button" data-copy="notificationBulkDelete">Delete selected</button>
+      <button class="button button-outlined" id="notification-export" type="button" data-copy="notificationExport">Export visible</button>
+    </div>
+    <ul class="notification-centre-list" id="notification-list" aria-live="polite" aria-label="Notification history" data-copy-aria="notificationHistoryLabel"></ul>
+    <p class="notification-centre-empty" id="notification-empty" data-copy="notificationHistoryEmpty" hidden>No notifications match this view.</p>
+    <section class="notification-delete-confirm" id="notification-delete-confirm" role="alertdialog" aria-labelledby="notification-delete-title" aria-describedby="notification-delete-description" aria-modal="true" hidden>
+      <h3 id="notification-delete-title" data-copy="notificationDeleteTitle">Delete selected notifications?</h3>
+      <p id="notification-delete-description" data-copy="notificationDeleteDescription">This permanently removes the selected local history records. Review the count before continuing.</p>
+      <label class="switch-row"><input id="notification-delete-ack" type="checkbox"><span class="switch-visual" aria-hidden="true"></span><span data-copy="notificationDeleteAck">I understand these records will be deleted.</span></label>
+      <label class="field-control"><span data-copy="notificationDeletePhrase">Type DELETE to continue</span><input id="notification-delete-phrase" type="text" autocomplete="off" spellcheck="false" aria-describedby="notification-delete-required"></label>
+      <p class="field-help" id="notification-delete-required" data-copy="notificationDeleteRequired">Both the acknowledgement and the exact word DELETE are required.</p>
+      <div class="notification-delete-actions">
+        <button class="button button-outlined" id="notification-delete-cancel" type="button" data-copy="notificationDeleteCancel">Cancel</button>
+        <button class="button button-filled" id="notification-delete-confirm-button" type="button" disabled data-copy="notificationDeleteConfirm">Delete permanently</button>
+      </div>
+    </section>
+  </aside>
+
   <script src="./content.js"></script>
   <script src="./data/universal-feature-manifest.js"></script>
   <script src="./data/settings-contract.js"></script>
+  <script src="./data/notification-contract.js"></script>
   <script src="./data/release-manifest.js"></script>
   <script src="./app.js"></script>
 </body>
