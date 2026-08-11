@@ -5,11 +5,11 @@ or have reached a stable release. Published entries must link the exact commit
 that completed the change. An Unreleased entry names missing evidence instead
 of guessing a commit, release, or date.
 
-## Unreleased — external editor export handoff
+## v0.1.119 — external editor export handoff
 
 - **Source issue:** [#18 — Implement the universal feature contract](https://github.com/Ding-Ding-Projects/material-download-manager/issues/18)
-- **Source commit:** [`37237cd`](https://github.com/Ding-Ding-Projects/material-download-manager/commit/37237cd82ec8b7c259b57a12ba248599ee218f70)
-- **Source branch:** `codex/uh-external-editor`
+- **Source commits:** [`37237cd`](https://github.com/Ding-Ding-Projects/material-download-manager/commit/37237cd82ec8b7c259b57a12ba248599ee218f70), [`36fbfb3`](https://github.com/Ding-Ding-Projects/material-download-manager/commit/36fbfb3f0b278bb4d3031912488cc8d8ac15bbaf), [`c463160`](https://github.com/Ding-Ding-Projects/material-download-manager/commit/c46316011a6dc7d244569f99ce7bb3248767a228), and [`209e144`](https://github.com/Ding-Ding-Projects/material-download-manager/commit/209e144478ed4938b4758277201b5e9f23288ae0)
+- **Publication:** [v0.1.119 — Orange Chocolate Bao · 香橙朱古力包](https://github.com/Ding-Ding-Projects/material-download-manager/releases/tag/v0.1.119), non-draft and non-prerelease, exact final source `209e144`
 - **Scope:** Windows desktop discovery and native Browse selection for Visual
   Studio Code, safe app-owned export staging, workspace-root opening, Settings
   persistence/provenance, and History/Changelog export actions.
@@ -23,6 +23,7 @@ of guessing a commit, release, or date.
 - The real built Electron app smoke passes **44/44**. The Settings → Advanced
   capture is 534×232 pixels, 21,975 bytes, SHA-256
   `92dd6a25df6e810583878a61c5cec6c98e0acebdc6a7ceb267b898cce8843057`.
+- GitHub Actions run [31499381710](https://github.com/Ding-Ding-Projects/material-download-manager/actions/runs/31499381710) published the unsigned release in `00:04:43`; Pages run [31499908812](https://github.com/Ding-Ding-Projects/material-download-manager/actions/runs/31499908812) verified the live manifest at source `209e144`.
 - The extension and Pages site keep their honest local-download fallback; no
   native-messaging or browser-to-filesystem bridge was added.
 

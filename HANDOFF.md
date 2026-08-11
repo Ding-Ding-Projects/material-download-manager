@@ -1,10 +1,10 @@
 # Handoff: Material Download Manager
 
-## External editor export handoff (verified locally, 2026-08-11)
+## External editor export handoff (published and verified, 2026-08-11)
 
 Issue [#18](https://github.com/Ding-Ding-Projects/material-download-manager/issues/18)
-tracks this bounded desktop slice on `codex/uh-external-editor`, source commit
-[`37237cd`](https://github.com/Ding-Ding-Projects/material-download-manager/commit/37237cd82ec8b7c259b57a12ba248599ee218f70). The current
+tracks this bounded desktop slice on `codex/uh-external-editor`, with final
+hardening integrated into `main` at [`209e144`](https://github.com/Ding-Ding-Projects/material-download-manager/commit/209e144478ed4938b4758277201b5e9f23288ae0). The current
 implementation adds a typed external-editor contract, schema-v6 Settings
 selection/provenance, main-process discovery and native Browse selection, and
 History/Changelog actions that open the last exported file in Visual Studio
@@ -28,6 +28,7 @@ Local evidence:
 - Settings → Advanced capture: 534×232 pixels, 21,975 bytes, SHA-256
   `92dd6a25df6e810583878a61c5cec6c98e0acebdc6a7ceb267b898cce8843057`,
   stored at `docs/screenshots/integrations/external-editor-settings.png`.
+- GitHub Actions run [`31499381710`](https://github.com/Ding-Ding-Projects/material-download-manager/actions/runs/31499381710) published [v0.1.119](https://github.com/Ding-Ding-Projects/material-download-manager/releases/tag/v0.1.119) in `00:04:43`; Pages run [`31499908812`](https://github.com/Ding-Ding-Projects/material-download-manager/actions/runs/31499908812) verified the live manifest from the same source.
 
 The extension and Pages site do not claim a privileged editor bridge because
 neither has a native-messaging or operating-system filesystem capability.
