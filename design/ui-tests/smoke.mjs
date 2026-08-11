@@ -6,7 +6,7 @@ import { createServer } from "node:http";
 import net from "node:net";
 import os from "node:os";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { promisify } from "node:util";
 
 const execFileAsync = promisify(execFile);
@@ -421,7 +421,7 @@ function spawnBuiltApp(build, userDataDirectory, port) {
   ];
   if (process.platform !== "win32") argumentsForElectron.push("--no-sandbox");
 
-  const environment = { ...process.env, NODE_ENV: "production" };
+  const environment = { ...process.env, NODE_ENV: "production", MDM_HISTORY_ACCESS_SCOPE: "ui-smoke" };
   delete environment.ELECTRON_RUN_AS_NODE;
 
   const child = spawn(build.electronPath, argumentsForElectron, {
@@ -455,6 +455,12 @@ function spawnBuiltApp(build, userDataDirectory, port) {
     getOutput: () => ({ stdout, stderr, error: spawnError }),
     exit,
   };
+}
+
+async function clearSmokeHistoryAccess(appDirectory) {
+  const modulePath = path.join(appDirectory, "dist-electron", "electron", "history", "HistoryAccessVault.js");
+  const module = await import(pathToFileURL(modulePath).href);
+  await new module.HistoryAccessVault().remove();
 }
 
 async function fetchJson(url, timeoutMs) {
@@ -1074,6 +1080,7 @@ async function main(argv) {
   }
 
   const { options } = parsed;
+  process.env.MDM_HISTORY_ACCESS_SCOPE = "ui-smoke";
   const result = createResult(options);
   const captureGallery = async (name, selector) => captureGalleryFrame(cdp, options, result, name, selector);
   let build = null;
@@ -1098,6 +1105,7 @@ async function main(argv) {
 
     build = await runCheck(result, "build-output", () => inspectBuildOutput(options.appDirectory, options.electronPath));
     if (!build) throw new Error("build-output check failed; refusing to launch an unverified, missing, or stale build");
+    await clearSmokeHistoryAccess(options.appDirectory);
 
     port = await allocateLoopbackPort(options.port);
     const tempRoot = options.tempRoot ?? os.tmpdir();
@@ -1411,13 +1419,30 @@ async function main(argv) {
     await runCheck(result, "history-panel", async () => {
       await clickByRole(cdp, "tab", "History");
       await waitForPage(cdp, `Boolean(document.querySelector("#history-panel-heading"))`, "History tab surface", options.timeoutMs);
+      await waitForPage(cdp, `Boolean(document.querySelector(".history-access, .history-filters"))`, "History protection state", options.timeoutMs);
+      if (await cdp.evaluate(`Boolean(document.querySelector("form.history-access"))`)) {
+        const smokeHistoryPassword = "smoke-history-password-2026";
+        const setupState = await cdp.evaluate(`window.api.setupHistoryAccess(${JSON.stringify(smokeHistoryPassword)})`);
+        if (!setupState?.configured || !setupState?.unlocked) throw new Error(`History setup returned an unexpected state: ${JSON.stringify(setupState)}`);
+        await cdp.evaluate("location.reload()");
+        await waitForPage(cdp, `Boolean(document.querySelector("#history-panel-heading"))`, "reloaded History tab", options.timeoutMs);
+        await clickByRole(cdp, "tab", "History");
+        await waitForPage(cdp, `Boolean(document.querySelector("form.history-access, .history-filters"))`, "configured History state", options.timeoutMs);
+        if (await cdp.evaluate(`Boolean(document.querySelector("form.history-access"))`)) {
+          await setInputValue(cdp, 'form.history-access input[type="password"]', smokeHistoryPassword);
+          await clickByRole(cdp, "button", "Unlock history", "form.history-access");
+          await waitForPage(cdp, `Boolean(document.querySelector('input[aria-label="Search history"]'))`, "unlocked History search", options.timeoutMs);
+        }
+      }
       const evidence = await cdp.evaluate(pageExpression(`
         const panel = document.querySelector(".history-panel");
         const search = document.querySelector('input[aria-label="Search history"]');
         const dates = document.querySelectorAll('.history-panel input[type="date"]');
         const exportButton = findByRole("button", "Export filtered history");
         const tab = document.querySelector('[role="tablist"][aria-label="Open tabs"] [role="tab"][aria-selected="true"]');
-        if (!panel || !isVisible(panel) || !search || !isVisible(search)) throw new Error("History panel or search is missing or hidden");
+        if (!panel || !isVisible(panel) || !search || !isVisible(search)) {
+          throw new Error("History panel or search is missing or hidden");
+        }
         if (dates.length !== 2) throw new Error("History panel is missing its two native date filters");
         if (!exportButton) throw new Error("History panel is missing its export action");
         if (!tab || accessibleName(tab) !== "History") throw new Error("History tab is not the active application tab");
@@ -2467,6 +2492,14 @@ async function main(argv) {
       }
     } else {
       recordCheck(result, "temp-profile-cleaned", "passed", "temporary profile was not created");
+    }
+
+    if (build) {
+      try {
+        await clearSmokeHistoryAccess(options.appDirectory);
+      } catch {
+        // Credential cleanup is best effort after the app and profile are gone.
+      }
     }
   }
 

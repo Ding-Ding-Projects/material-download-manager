@@ -9,6 +9,13 @@ const MIN_PASSWORD_LENGTH = 8;
 const MAX_PASSWORD_LENGTH = 256;
 const MAX_RECORD_BYTES = 4 * 1024;
 
+function scopedAccountName(scope: string | undefined): string {
+  const normalized = typeof scope === "string"
+    ? scope.trim().replace(/[^A-Za-z0-9._-]/g, "-").slice(0, 48)
+    : "";
+  return normalized ? `${ACCOUNT_NAME}-${normalized}` : ACCOUNT_NAME;
+}
+
 interface HistoryAccessRecord {
   version: typeof RECORD_VERSION;
   salt: string;
@@ -22,7 +29,11 @@ export interface HistoryAccessVaultAdapter {
 }
 
 class OperatingSystemHistoryAccessAdapter implements HistoryAccessVaultAdapter {
-  private readonly entry = new AsyncEntry(SERVICE_NAME, ACCOUNT_NAME);
+  private readonly entry: AsyncEntry;
+
+  constructor(scope = process.env.MDM_HISTORY_ACCESS_SCOPE) {
+    this.entry = new AsyncEntry(SERVICE_NAME, scopedAccountName(scope));
+  }
 
   async read(): Promise<Uint8Array | null> {
     const value = await this.entry.getSecret();
@@ -93,6 +104,10 @@ async function deriveVerifier(password: string, salt: Buffer): Promise<Buffer> {
 /** OS-vault-backed password verifier for the local History surface. */
 export class HistoryAccessVault {
   constructor(private readonly adapter: HistoryAccessVaultAdapter = new OperatingSystemHistoryAccessAdapter()) {}
+
+  async remove(): Promise<void> {
+    await this.adapter.remove();
+  }
 
   async isConfigured(): Promise<boolean> {
     const bytes = await this.adapter.read();
