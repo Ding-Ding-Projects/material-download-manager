@@ -17,6 +17,15 @@ unverified surface has shipped.
 - Local Git-backed history plus a History app tab with date/action/text filters
   and filtered coding-format export; local commits disable hooks and isolate
   the snapshot from unrelated staged files.
+- Protected display-name mutation history on branch
+  `codex/uh-display-history` at source commit
+  [`afb71fd`](https://github.com/Ding-Ding-Projects/material-download-manager/commit/afb71fd):
+  main-process canonical writes, required hash-only `display-name.json`
+  revisions, OS-vault verifier, visible History lock, and fail-closed rollback
+  when the required audit write fails. Broader `snapshot.json` revisions remain
+  plaintext local metadata by design; the UI credential is not claimed as
+  encryption or filesystem access control. Local focused evidence is 46/46
+  tests, with remote build/release and real-artifact capture still pending.
 - Material-style landing and documentation site, stable unsigned Squirrel
   packaging, pinned GitHub-hosted build/package/publication automation, GitHub
   Pages publication, and monotonic real releases. GitHub Actions runs no tests

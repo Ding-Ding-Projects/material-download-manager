@@ -5,6 +5,38 @@ or have reached a stable release. Published entries must link the exact commit
 that completed the change. An Unreleased entry names missing evidence instead
 of guessing a commit, release, or date.
 
+## Unreleased — protected display-name mutation history
+
+- **Source issue:** [#16 — Protected display-name history](https://github.com/Ding-Ding-Projects/material-download-manager/issues/16)
+- **Source commit:** [`afb71fd`](https://github.com/Ding-Ding-Projects/material-download-manager/commit/afb71fd)
+- **Publication state:** source and focused local verification are complete on
+  `codex/uh-display-history`; the documentation follow-up and remote workflow
+  evidence are still pending, so this is not a released feature record.
+
+### Added
+
+- Main-process-owned, bounded display-name setting with legacy renderer-storage
+  migration and a reset to the shipped name that never changes app identity.
+- Required append-only `display-name.json` history records containing only the
+  schema version, previous SHA-256, and next SHA-256. The chosen display name
+  is absent from the dedicated audit record.
+- Operating-system-vault-backed history password verifier with no plaintext
+  password in settings, history, exports, renderer state, logs, or Git.
+- Visible History setup/unlock/lock states and locked IPC/view/export behavior.
+- Fail-closed settings rollback when the required redacted history commit fails.
+
+### Verification boundary
+
+- `npm run typecheck` — passed.
+- `npm run build:electron` — passed.
+- Focused Node tests — **46/46 passed**, including vault corruption, wrong
+  password, locked session, redacted record, migration, validation, and
+  required-history rollback cases.
+- Broader `snapshot.json` history revisions remain plaintext local metadata;
+  the new UI password is an access lock, not encryption or filesystem access
+  control. Remote build/release evidence and a real locked-surface capture are
+  not claimed until their exact records exist.
+
 ## Unreleased — authenticated automatic browser download capture
 
 - **Source issue:** [#14 — Automatically hand browser downloads to the app and reveal the extension folder](https://github.com/Ding-Ding-Projects/material-download-manager/issues/14)

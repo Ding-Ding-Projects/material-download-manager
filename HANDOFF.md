@@ -1,5 +1,62 @@
 # Handoff: Material Download Manager
 
+## Protected display-name history (2026-08-11)
+
+Issue [#16](https://github.com/Ding-Ding-Projects/material-download-manager/issues/16)
+tracks the first desktop slice of protected local mutation history. Source
+commit [`afb71fd`](https://github.com/Ding-Ding-Projects/material-download-manager/commit/afb71fd)
+is on branch `codex/uh-display-history`; this handoff documentation is the
+follow-up record for that exact source commit.
+
+The application display name is now a versioned setting owned by the main
+process. Renderer local storage is used only as a bounded legacy migration
+source, and the key is cleared only after the main-process settings write
+succeeds. The main process canonicalizes and validates the label, saves it,
+then appends `display-name.json` before the settings IPC call reports success.
+That dedicated revision stores a schema version, previous SHA-256 (or `null`),
+and next SHA-256; it never stores the chosen name. Reset and change actions are
+separate searchable history actions.
+
+The History tab is visibly locked until the user creates or enters a password.
+The operating-system credential vault stores only a versioned salt and scrypt
+verifier. A per-window unlock session is cleared on lock or window close, and
+history view/export IPC rejects a locked renderer. Wrong passwords, malformed
+vault records, missing credentials, and required history-write failures fail
+closed. The setting rolls back when the required redacted history commit fails.
+
+The boundary is intentionally narrow and documented: broader `snapshot.json`
+history revisions remain plaintext local metadata, so the UI password is not
+claimed as encryption or filesystem access control. The dedicated display-name
+record is hash-only; ordinary operating-system account and disk protection
+remain required.
+
+### Changed files and verification
+
+- `design/electron/history/HistoryAccessVault.ts` and
+  `HistoryAccessSession.ts`: vault verifier and per-window locked/unlocked
+  session state.
+- `design/electron/history/HistoryStore.ts`: append-only hash-only display-name
+  records and `display-name-changed`/`display-name-reset` actions.
+- `design/electron/download/DownloadManager.ts`, settings migration, shared
+  types, preload, main IPC, display-name consumers, and the History panel:
+  canonical mutation, rollback, visible lock state, and stable identity.
+- Focused tests cover verifier setup/wrong password/corrupt vault, locked
+  session state, redacted record contents, settings migration/validation, and
+  required-history rollback.
+
+Local evidence on the branch:
+
+- `npm run typecheck` — passed.
+- `npm run build:electron` — passed.
+- Focused Node list — **46/46 passed**.
+- `git diff --check` — passed before the source commit.
+
+The repository's GitHub Actions workflow is not a test gate; any remote build,
+release, and Pages results for the pushed documentation follow-up must be read
+from their exact run records. No signing operation or CRX artifact was added.
+No built-artifact screenshot is claimed in this handoff until the real locked
+History surface is captured through the approved hidden-desktop route.
+
 ## Authenticated automatic browser capture and app-prepared extension (2026-08-11)
 
 Issue [#14](https://github.com/Ding-Ding-Projects/material-download-manager/issues/14)

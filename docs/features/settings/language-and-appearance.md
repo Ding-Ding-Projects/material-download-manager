@@ -40,6 +40,13 @@ derived-path, and rule values rather than only static labels. Invalid rules
 disable Save; each error describes only the name, pattern, destination, or
 whole rule that owns it.
 
+The Appearance tab also owns the renameable application display name. The
+chosen label is shown in the title bar, About copy, and other app-introduction
+surfaces after the main process accepts it. Reset returns to the shipped name;
+the package identifier, data directory, installer identity, update feed, and
+repository markers do not change. The display-name mutation is recorded by the
+protected local-history path before the Settings action reports success.
+
 Rule cards form a named ordered list. Inputs, destination selectors, builder
 buttons, move controls, and remove controls include their rule number in the
 accessible name. Reordering keeps focus on a valid move control for the moved
@@ -65,6 +72,12 @@ legacy auto-organize rules are canonicalized one by one, including deterministic
 name/identifier repair and `image` to General mapping, so one old rule cannot
 erase unrelated valid rules.
 
+`displayName` is a versioned setting key with a bounded canonical validator.
+Legacy renderer local-storage values are accepted only when the main process
+still has the compiled shipped name; the migration clears the legacy key only
+after the IPC write succeeds. This keeps renderer storage from becoming a
+second authority.
+
 ## Failure modes and security
 
 Invalid enum, number, color, folder, or exact-shape rule values fail validation
@@ -72,6 +85,10 @@ or fall back safely during migration. Unknown persisted keys are ignored.
 Migration never executes persisted text as code and does not send settings over
 the network. User-authored settings-search and rule-builder expressions run in
 terminable main-process workers rather than on the renderer event loop.
+Display-name writes reject control characters, non-canonical spacing, and
+oversized values. A failed required history append rolls the display-name
+setting back; the broader local history snapshots remain plaintext metadata,
+while the dedicated display-name record stores hashes only.
 
 ## Verification
 
@@ -81,6 +98,8 @@ and regex search, the anchored worker-backed builder, native keyboard reorder,
 move/remove focus, field-specific error association, interactive-label
 structure, contrast, and narrow bilingual layout. Run `npm run test:engine`,
 `npm run build`, `npm run test:electron`, and `npm run test:ui` from `design/`.
+The display-name path additionally has persistence/migration, validation,
+redacted-history, and required-history-rollback tests in the engine suite.
 Final command results and remote evidence belong in the project handoff.
 
 The remaining product-level work is explicit: apply localized/funny copy to
