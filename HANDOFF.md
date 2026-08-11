@@ -1,5 +1,61 @@
 # Handoff: Material Download Manager
 
+## Protected local history actions (verified on `codex/uh-history-manager`, 2026-08-11)
+
+Issue [#16](https://github.com/Ding-Ding-Projects/material-download-manager/issues/16)
+tracks this bounded Windows desktop history slice. Commit
+[`512aa2c`](https://github.com/Ding-Ding-Projects/material-download-manager/commit/512aa2cfa50ecf06ebe3e47985b0b3c8da31fa73)
+adds first-class redacted revision diffs, bounded user labels, validated
+append-only restore, and retention pruning with tombstones. Labels and prune
+metadata are bounded, schema-checked sidecars. Restore validates the complete
+state envelope, pauses active statuses, and restores the previous live state if
+either persistence or the required audit commit fails. Retention prunes only
+state revisions; label, prune, and display-name audit revisions remain visible
+so the retention decision cannot erase its own audit trail.
+
+### Changed paths
+
+- `design/shared/history.ts`, `design/shared/types.ts`: bounded diff, label,
+  restore, prune contracts and IPC constants/validators.
+- `design/electron/history/HistoryStore.ts`: redacted diff generation,
+  sidecar labels/tombstones, append-only audit commits, and protected audit
+  retention semantics. Absolute Windows/UNC/POSIX paths and identity/display
+  metadata are redacted before a diff crosses IPC.
+- `design/electron/download/DownloadManager.ts`, `main.ts`, `preload.ts`, and
+  `design/src/global.d.ts`: trusted restore/diff/label/prune wiring with
+  request and result validation and fail-safe rollback.
+- `design/src/components/HistoryPanel.tsx` and `design/src/styles/global.css`:
+  accessible row actions, inline diff, label editor, retention controls, and
+  non-blocking notifications; only destructive prune uses the blocking
+  confirmation gate.
+- `design/electron/__tests__/history.test.ts`: validator, redaction,
+  sidecar-label, append-only restore, tombstone-retention, and audit-presence
+  coverage.
+- `docs/features/history/`, `design/src/generated/documentationArticles.ts`,
+  and the two real built captures below: behavior/security docs and the
+  bundled offline article.
+
+### Verification
+
+- `npm run typecheck` and `npm run build` from `design/` — passed.
+- Full compiled Electron tests — **132/132 passed**.
+- Download-engine tests — **101/101 passed**.
+- Documentation tests — **2/2 passed**.
+- Built UI smoke — **45/45 passed**.
+- `git diff --check` and the public-record vocabulary scan — passed.
+- Real built History capture through the Cheap hidden-desktop/CDP route:
+  [`history-manager-actions.png`](docs/screenshots/history/history-manager-actions.png),
+  1150×720, 78,947 bytes, SHA-256
+  `845E8EA17410AF2C4CE95CF3531C03CCB100664C768297746F460CE02BC75115`;
+  [`history-manager-actions-diff.png`](docs/screenshots/history/history-manager-actions-diff.png),
+  1150×720, 84,295 bytes, SHA-256
+  `2F7C4290D2809095AC5D463F9DDF4D63C71FF3C3CCAD3A2F7C4CD5D1E6F28930`.
+  The diff visibly shows `[LOCAL_PATH_REDACTED]`; a post-capture text probe
+  found no absolute path, username, or user-authored display name.
+- The history app process launched for capture was stopped and the hidden
+  desktop was closed. No remote CI result is claimed by this handoff; the
+  branch tip is dewed and ready for integration into `main`.
+
 ## External editor export handoff (published and verified, 2026-08-11)
 
 Issue [#18](https://github.com/Ding-Ding-Projects/material-download-manager/issues/18)

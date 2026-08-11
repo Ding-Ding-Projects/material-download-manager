@@ -108,6 +108,35 @@ commit documented in [`HANDOFF.md`](HANDOFF.md). SHA-256:
 </details>
 
 <details>
+<summary>Protected History actions and retention</summary>
+
+Commit [`512aa2c`](https://github.com/Ding-Ding-Projects/material-download-manager/commit/512aa2cfa50ecf06ebe3e47985b0b3c8da31fa73)
+extends the unlocked History surface with redacted revision diffs, bounded
+user labels, append-only restore, and retention pruning. Labels live in a
+validated sidecar record; restore validates every item and rolls back the live
+state if persistence or the audit commit fails; pruning records tombstones and
+keeps label, prune, and display-name audit revisions visible instead of
+rewriting Git history. The main/preload boundary validates every request and
+result, while the panel uses non-blocking action notifications and reserves
+the two-key blocking confirmation for destructive pruning.
+
+![Built History surface with revision actions and retention control](docs/screenshots/history/history-manager-actions.png)
+
+![Built History surface with a redacted revision diff open](docs/screenshots/history/history-manager-actions-diff.png)
+
+These 1150×720 PNGs came from the real built desktop through the Cheap
+hidden-desktop route. The actions capture is 78,947 bytes, SHA-256
+`845E8EA17410AF2C4CE95CF3531C03CCB100664C768297746F460CE02BC75115`; the diff
+capture is 84,295 bytes, SHA-256
+`2F7C4290D2809095AC5D463F9DDF4D63C71FF3C3CCAD3A2F7C4CD5D1E6F28930`.
+The diff view visibly replaces local paths with `[LOCAL_PATH_REDACTED]`; the
+capture probe found no absolute path, username, or user-authored display name.
+Local evidence is full Electron **132/132**, engine **101/101**, docs **2/2**,
+typecheck/build green, and built UI smoke **45/45**.
+
+</details>
+
+<details>
 <summary>Authenticator Settings registration surface</summary>
 
 The bounded authenticator surface now includes a real Settings registration tab

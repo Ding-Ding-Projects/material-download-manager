@@ -5,6 +5,21 @@ unverified surface has shipped.
 
 ## In progress
 
+- Protected local history actions are implemented on
+  `codex/uh-history-manager` at source commit
+  [`512aa2c`](https://github.com/Ding-Ding-Projects/material-download-manager/commit/512aa2cfa50ecf06ebe3e47985b0b3c8da31fa73)
+  for issue [#16](https://github.com/Ding-Ding-Projects/material-download-manager/issues/16).
+  The History surface now offers main-process redacted revision diffs,
+  bounded sidecar labels, validated append-only restore with rollback, and
+  retention tombstones that preserve label/prune/display-name audit revisions.
+  Local verification is full Electron **132/132**, engine **101/101**, docs
+  **2/2**, typecheck/build, and built UI smoke **45/45**. Fresh built captures
+  are `docs/screenshots/history/history-manager-actions.png` (SHA-256
+  `845E8EA17410AF2C4CE95CF3531C03CCB100664C768297746F460CE02BC75115`) and
+  `docs/screenshots/history/history-manager-actions-diff.png` (SHA-256
+  `2F7C4290D2809095AC5D463F9DDF4D63C71FF3C3CCAD3A2F7C4CD5D1E6F28930`).
+  Integration into `main` and remote CI/release evidence remain pending.
+
 - External editor export handoff is complete on `main` at source commit
   [`0d16520`](https://github.com/Ding-Ding-Projects/material-download-manager/commit/0d16520860d67903a007fc53dc9e1f9ff132009a): discovery and native Browse
   selection for Visual Studio Code, schema-v6 persisted choice, safe app-owned

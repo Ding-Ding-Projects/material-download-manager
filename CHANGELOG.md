@@ -5,6 +5,31 @@ or have reached a stable release. Published entries must link the exact commit
 that completed the change. An Unreleased entry names missing evidence instead
 of guessing a commit, release, or date.
 
+## Unreleased — protected local history actions
+
+- **Source issue:** [#16 — Protected display-name history and local history manager](https://github.com/Ding-Ding-Projects/material-download-manager/issues/16)
+- **Source commit:** [`512aa2c`](https://github.com/Ding-Ding-Projects/material-download-manager/commit/512aa2cfa50ecf06ebe3e47985b0b3c8da31fa73)
+- **Scope:** redacted revision diff, bounded user labels, append-only restore
+  with validated rollback, and bounded retention pruning through audit
+  tombstones. Label, prune, and display-name audit revisions remain visible;
+  no existing Git commit is rewritten or deleted.
+
+### Verification boundary
+
+- Full compiled Electron suite — **132/132 passed**.
+- Download-engine suite — **101/101 passed**; documentation tests — **2/2**.
+- Typecheck, renderer/main build, documentation bundle, and `git diff --check`
+  passed; built UI smoke — **45/45 passed**.
+- Real built History captures: `history-manager-actions.png` (1150×720,
+  78,947 bytes, SHA-256
+  `845E8EA17410AF2C4CE95CF3531C03CCB100664C768297746F460CE02BC75115`) and
+  `history-manager-actions-diff.png` (1150×720, 84,295 bytes, SHA-256
+  `2F7C4290D2809095AC5D463F9DDF4D63C71FF3C3CCAD3A2F7C4CD5D1E6F28930`).
+  The diff capture visibly redacts local paths, and a post-capture probe found
+  no absolute path, username, or user-authored display name.
+- No remote CI or release result is claimed for this task branch; integration
+  into `main` is the next handoff action.
+
 ## v0.1.125 — Pan-Fried Radish Cake · 香煎蘿蔔糕
 
 - **Source issue:** [#18 — Implement the universal feature contract](https://github.com/Ding-Ding-Projects/material-download-manager/issues/18)
