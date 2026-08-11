@@ -5,6 +5,26 @@ or have reached a stable release. Published entries must link the exact commit
 that completed the change. An Unreleased entry names missing evidence instead
 of guessing a commit, release, or date.
 
+## v0.1.125 — Pan-Fried Radish Cake · 香煎蘿蔔糕
+
+- **Source issue:** [#18 — Implement the universal feature contract](https://github.com/Ding-Ding-Projects/material-download-manager/issues/18)
+- **Source commits:** [`be14edb`](https://github.com/Ding-Ding-Projects/material-download-manager/commit/be14edbd17b3ba19c4cdc8aa43f567d4bb5d8798), [`78b5184`](https://github.com/Ding-Ding-Projects/material-download-manager/commit/78b5184bf7388f5ed665bc79a76fdde791f597a4), and [`0d16520`](https://github.com/Ding-Ding-Projects/material-download-manager/commit/0d16520860d67903a007fc53dc9e1f9ff132009a)
+- **Publication:** [v0.1.125 — Pan-Fried Radish Cake · 香煎蘿蔔糕](https://github.com/Ding-Ding-Projects/material-download-manager/releases/tag/v0.1.125), non-draft and non-prerelease, exact final source `0d16520`
+- **Scope:** NotificationCenter, RegexBuilder, and AuthenticatorPanel retain their ordinary local downloads and add a safe Visual Studio Code handoff for the last export. Authenticator exports remain metadata-only; secrets and `otpauth://` URIs are omitted. Browser extension and GitHub Pages exports remain local-download-only because they have no privileged operating-system editor bridge.
+
+### Verification boundary
+
+- Full compiled Electron suite — **129/129 passed**.
+- Built UI smoke — **45/45 passed**; download engine — **101/101 passed**.
+- Documentation tests — **2/2 passed**; site check/build — **94/94**; release package contract — **63 assertions**.
+- Typecheck, production build, and diff check passed.
+- Fresh built RegexBuilder capture:
+  `docs/screenshots/integrations/external-editor-desktop-exports-regex-post-integration.png`
+  (1150×720, 98,762 bytes, SHA-256
+  `6969fc98bd72787d8213bed44404b557e9ad2f49fd216ff711531ff29dafcf16`).
+- GitHub Actions runs [31504097235](https://github.com/Ding-Ding-Projects/material-download-manager/actions/runs/31504097235) and [31504141685](https://github.com/Ding-Ding-Projects/material-download-manager/actions/runs/31504141685) published exact-source v0.1.124 and v0.1.125. The v0.1.125 workflow duration is **00:04:56**; its release contains Setup.exe, RELEASES, the full `.nupkg`, and the extension ZIP, with no CRX or signing material.
+- GitHub Pages run [31504646111](https://github.com/Ding-Ding-Projects/material-download-manager/actions/runs/31504646111) verified the live manifest at source `0d16520`, including the unsigned installer and versioned extension ZIP.
+
 ## v0.1.119 — external editor export handoff
 
 - **Source issue:** [#18 — Implement the universal feature contract](https://github.com/Ding-Ding-Projects/material-download-manager/issues/18)

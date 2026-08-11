@@ -5,17 +5,17 @@ unverified surface has shipped.
 
 ## In progress
 
-- External editor export handoff is integrated on `main` at source commit
-  [`209e144`](https://github.com/Ding-Ding-Projects/material-download-manager/commit/209e144478ed4938b4758277201b5e9f23288ae0): discovery and native Browse
+- External editor export handoff is complete on `main` at source commit
+  [`0d16520`](https://github.com/Ding-Ding-Projects/material-download-manager/commit/0d16520860d67903a007fc53dc9e1f9ff132009a): discovery and native Browse
   selection for Visual Studio Code, schema-v6 persisted choice, safe app-owned
-  export staging, workspace-root opening, and History/Changelog buttons are
-  shipped. Focused external-editor **7/7**,
-  persistence **13/13** (combined subset **20/20**), compiled Electron
-  **126/126**, and the real built Electron app smoke **44/44** are green. The
-  Settings → Advanced capture is stored at
-  `docs/screenshots/integrations/external-editor-settings.png` with SHA-256
-  `92dd6a25df6e810583878a61c5cec6c98e0acebdc6a7ceb267b898cce8843057`.
-  Release `v0.1.119` and Pages run `31499908812` verify the exact source.
+  export staging, workspace-root opening, and export actions for
+  NotificationCenter, RegexBuilder, AuthenticatorPanel, History, and Changelog
+  are shipped. Full Electron **129/129**, built UI smoke **45/45**, engine
+  **101/101**, docs **2/2**, site **94/94**, and release contract **63
+  assertions** are green. Fresh post-integration capture:
+  `docs/screenshots/integrations/external-editor-desktop-exports-regex-post-integration.png`,
+  SHA-256 `6969fc98bd72787d8213bed44404b557e9ad2f49fd216ff711531ff29dafcf16`.
+  Release `v0.1.125` and Pages run `31504646111` verify the exact source.
 
 - Scheduled settings foundation is integrated and verified at
   `8b6e5f9c71e72cc5f86d8f85460ea6970b1c20fc`: versioned local records, native

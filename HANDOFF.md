@@ -3,13 +3,15 @@
 ## External editor export handoff (published and verified, 2026-08-11)
 
 Issue [#18](https://github.com/Ding-Ding-Projects/material-download-manager/issues/18)
-tracks this bounded desktop slice on `codex/uh-external-editor`, with final
-hardening integrated into `main` at [`209e144`](https://github.com/Ding-Ding-Projects/material-download-manager/commit/209e144478ed4938b4758277201b5e9f23288ae0). The current
-implementation adds a typed external-editor contract, schema-v6 Settings
-selection/provenance, main-process discovery and native Browse selection, and
-History/Changelog actions that open the last exported file in Visual Studio
-Code. Export content is staged into a fresh application-owned directory and
-the directory is passed as the workspace root.
+tracks this bounded desktop slice, integrated into `main` at
+[`0d16520`](https://github.com/Ding-Ding-Projects/material-download-manager/commit/0d16520860d67903a007fc53dc9e1f9ff132009a). Commits
+[`be14edb`](https://github.com/Ding-Ding-Projects/material-download-manager/commit/be14edbd17b3ba19c4cdc8aa43f567d4bb5d8798) and
+[`78b5184`](https://github.com/Ding-Ding-Projects/material-download-manager/commit/78b5184bf7388f5ed665bc79a76fdde791f597a4) add the typed external-editor
+contract, schema-v6 Settings selection/provenance, main-process discovery and
+native Browse selection, and the export actions. NotificationCenter,
+RegexBuilder, AuthenticatorPanel, History, and Changelog now open their last
+successful export in Visual Studio Code. Export content is staged into a fresh
+application-owned directory and the directory is passed as the workspace root.
 
 The main/preload boundary validates paths, names, content size, result shapes,
 and launcher resolution. `.cmd` launchers are converted to adjacent native
@@ -19,18 +21,21 @@ available and tells the user how to choose automatic discovery or Browse.
 
 Local evidence:
 
-- external-editor tests **7/7**;
-- persistence tests **13/13** and combined subset **20/20**;
-- full compiled Electron suite **126/126**;
+- full compiled Electron suite **129/129**;
+- built UI smoke **45/45**;
+- download engine suite **101/101**;
+- documentation tests **2/2** and site check/build **94/94**;
+- release package contract **63 assertions**;
 - typecheck, renderer build, Electron compilation, and documentation bundle
   checks passed;
-- real built Electron app smoke **44/44**;
+- real built Electron app smoke **45/45**;
 - Settings → Advanced capture: 534×232 pixels, 21,975 bytes, SHA-256
   `92dd6a25df6e810583878a61c5cec6c98e0acebdc6a7ceb267b898cce8843057`,
   stored at `docs/screenshots/integrations/external-editor-settings.png`.
-- GitHub Actions run [`31499381710`](https://github.com/Ding-Ding-Projects/material-download-manager/actions/runs/31499381710) published [v0.1.119](https://github.com/Ding-Ding-Projects/material-download-manager/releases/tag/v0.1.119) in `00:04:43`; Pages run [`31499908812`](https://github.com/Ding-Ding-Projects/material-download-manager/actions/runs/31499908812) verified the live manifest from the same source.
+- Fresh RegexBuilder capture: `docs/screenshots/integrations/external-editor-desktop-exports-regex-post-integration.png`, 1150×720 pixels, 98,762 bytes, SHA-256 `6969fc98bd72787d8213bed44404b557e9ad2f49fd216ff711531ff29dafcf16`.
+- GitHub Actions runs [`31504097235`](https://github.com/Ding-Ding-Projects/material-download-manager/actions/runs/31504097235) and [`31504141685`](https://github.com/Ding-Ding-Projects/material-download-manager/actions/runs/31504141685) published exact-source v0.1.124 and v0.1.125; the final v0.1.125 workflow duration is `00:04:56`. Pages run [`31504646111`](https://github.com/Ding-Ding-Projects/material-download-manager/actions/runs/31504646111) verified the live manifest from source `0d16520`.
 
-The extension and Pages site do not claim a privileged editor bridge because
+The extension and GitHub Pages site do not claim a privileged editor bridge because
 neither has a native-messaging or operating-system filesystem capability.
 
 ## Browser extension authenticator destination (2026-08-11)

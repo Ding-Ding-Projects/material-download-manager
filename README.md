@@ -31,6 +31,10 @@ AB Download Manager codebase.
 - Download engine docs: docs/features/download-engine/
 - Browser handoff docs: [`docs/features/integrations/browser-extension.md`](docs/features/integrations/browser-extension.md)
 - External editor handoff: [`docs/features/integrations/external-editor.md`](docs/features/integrations/external-editor.md)
+  — desktop NotificationCenter, RegexBuilder, AuthenticatorPanel, History, and
+  Changelog exports can also open the last successful file in Visual Studio
+  Code; browser extension and GitHub Pages exports retain local-download-only
+  behavior.
 - Progress-window docs: [`docs/features/download-engine/progress-window.md`](docs/features/download-engine/progress-window.md)
 - Auto-organize docs: [`docs/features/download-engine/auto-organize-downloads.md`](docs/features/download-engine/auto-organize-downloads.md)
 - Distributed SSH worker docs: [`docs/features/download-engine/distributed-ssh-workers.md`](docs/features/download-engine/distributed-ssh-workers.md)
