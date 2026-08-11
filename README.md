@@ -41,12 +41,14 @@ AB Download Manager codebase.
 
 These captures come from the real built Electron renderer on a disposable
 cheap hidden desktop. The displayed base path was deliberately set to the
-generic `C:\Downloads` before capture. The verified 2026-08-11 capture run
-passed all 43 required built-application checks. Its renderer emitted
-`index-ZfTIAB4c.js` (SHA-256
-`E7B0448F42DBA46B86F28428FF15D22CB68437E837F914DC51F985CCD11A6297`)
-and `index-BIukjjFo.css` (SHA-256
-`5ED0A26C08B504D0D9FBF2EDCFD9ACC5D38012CD4A81F3537F9C63EAAD1C5420`).
+generic `C:\Downloads` before capture. Commit
+`92dc67a17fbad4f7471cda5d7d85c1b4b78c44a5` was rebuilt with `npm run build`,
+and the verified 2026-08-11 capture run passed all 42 required
+built-application checks in 10.488 seconds. Its renderer emitted
+`index-CUWEWH76.js` (SHA-256
+`34EF8CF409C1C6B5248E7F345CC9F2F58BD17C1A8022014D275C220F448FFCCC`)
+and `index-CL9UO5Fq.css` (SHA-256
+`23FF81988A28774B46E99E5FC38739905D813F8E7098D218325B9AC7974A0D45`).
 Six gallery frames are 1100 × 900 and the narrow frame is 520 × 760; every
 image decodes as a 24-bit PNG with a unique SHA-256 hash. The exact disposable
 process tree, profile, and hidden desktop were removed after the run.

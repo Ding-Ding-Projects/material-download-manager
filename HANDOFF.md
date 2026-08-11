@@ -1,5 +1,38 @@
 # Handoff: Material Download Manager
 
+## Built-artifact smoke and gallery refresh (2026-08-11)
+
+Commit [`92dc67a`](https://github.com/Ding-Ding-Projects/material-download-manager/commit/92dc67a17fbad4f7471cda5d7d85c1b4b78c44a5)
+rebuilt the renderer and Electron main process with `npm run build` before a
+fresh hidden-desktop/CDP run of `design/ui-tests/smoke.mjs`. The run passed
+**42/42 required checks** in `10.488` seconds from the exact landed source,
+including the protected History setup/unlock path, automatic browser-extension
+folder reveal, manual reveal fallback, narrow bilingual layout, and all seven
+gallery states. The renderer assets were `index-CUWEWH76.js` (SHA-256
+`34EF8CF409C1C6B5248E7F345CC9F2F58BD17C1A8022014D275C220F448FFCCC`) and
+`index-CL9UO5Fq.css` (SHA-256
+`23FF81988A28774B46E99E5FC38739905D813F8E7098D218325B9AC7974A0D45`).
+
+The seven tracked auto-organize gallery images were replaced with the exact
+PNG bytes emitted by that run. Six are 1100×900 and the narrow builder frame is
+520×760; all decode as 24-bit PNGs and have unique hashes:
+
+| Capture | Dimensions | SHA-256 |
+| --- | ---: | --- |
+| `01-six-category-paths.png` | 1100×900 | `6865326A14705FD4229EFDEA4D2A015F38DD1D36AC4061F31951ADB3C0816013` |
+| `02-ordered-rule-editor.png` | 1100×900 | `FCD9BD786DD2B51297226FE1B336F18BC5FA0A1AB96F123E59B3C18EB9B1BC06` |
+| `03-anchored-regex-builder.png` | 1100×900 | `5EC02087A536C3096B96AEDB771EC2AB842321011828B58060250961BD0D6AC1` |
+| `04-inline-invalid-rule.png` | 1100×900 | `C8C81E557613E3C2C971179CCEABD4A249458854B98F794D9BE6CB061B55711C` |
+| `05-narrow-rule-layout.png` | 520×760 | `E48ECF3AD3786EC600C94D8CA7DEBD3C6A666302862370316E48621B5E374A63` |
+| `06-bilingual-category-settings.png` | 1100×900 | `9E0C7FD9B8F11C0A6AD0597E81B8D38AA4622833102EF2EDB7DBF133D8E74D82` |
+| `07-command-palette-destination.png` | 1100×900 | `71324F4523B3D46A47807EE955C8764C2719816016A62D19A6D1C9A1FC6644A5` |
+
+The smoke process tree, disposable profile, and named headless desktop were
+cleaned after the run; the final desktop inventory reported zero entries. The
+negative export probes intentionally emit invalid-format diagnostics while the
+overall smoke result remains passed. No signing material or CRX artifact was
+introduced.
+
 ## Fresh-machine build contract (2026-08-11)
 
 The repository now has root [`build.bat`](build.bat) and

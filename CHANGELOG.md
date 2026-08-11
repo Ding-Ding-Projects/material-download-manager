@@ -5,6 +5,21 @@ or have reached a stable release. Published entries must link the exact commit
 that completed the change. An Unreleased entry names missing evidence instead
 of guessing a commit, release, or date.
 
+## Unreleased — built-artifact smoke and gallery refresh
+
+- **Source commit:** [`92dc67a`](https://github.com/Ding-Ding-Projects/material-download-manager/commit/92dc67a17fbad4f7471cda5d7d85c1b4b78c44a5)
+- **Local verification:** `npm run build` passed; the real hidden-desktop/CDP
+  smoke passed **42/42 required checks** in `10.488` seconds.
+- **Renderer assets:** `index-CUWEWH76.js` SHA-256
+  `34EF8CF409C1C6B5248E7F345CC9F2F58BD17C1A8022014D275C220F448FFCCC` and
+  `index-CL9UO5Fq.css` SHA-256
+  `23FF81988A28774B46E99E5FC38739905D813F8E7098D218325B9AC7974A0D45`.
+- **Gallery:** all seven auto-organize PNGs were replaced from that run; six
+  are 1100×900 and one is 520×760. Per-file hashes are recorded in
+  [`HANDOFF.md`](HANDOFF.md).
+- **Cleanup:** the disposable app/profile/process tree and named headless
+  desktop were removed; the final desktop inventory was zero.
+
 ## Unreleased — protected display-name mutation history
 
 - **Source issue:** [#16 — Protected display-name history](https://github.com/Ding-Ding-Projects/material-download-manager/issues/16)
