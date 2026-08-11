@@ -25,7 +25,13 @@ unverified surface has shipped.
   when the required audit write fails. Broader `snapshot.json` revisions remain
   plaintext local metadata by design; the UI credential is not claimed as
   encryption or filesystem access control. Local focused evidence is 46/46
-  tests, with remote build/release and real-artifact capture still pending.
+  tests and the real locked-surface capture is checked in. GitHub Actions run
+  [`31483227655`](https://github.com/Ding-Ding-Projects/material-download-manager/actions/runs/31483227655)
+  completed successfully and published non-draft, non-prerelease
+  [`v0.1.59`](https://github.com/Ding-Ding-Projects/material-download-manager/releases/tag/v0.1.59)
+  from source commit `2bbcb5993c001e35fbdacd8a0f9266cc2424f2a4` with unsigned
+  Squirrel and extension ZIP assets. The workflow does not run tests; local
+  test evidence remains authoritative.
 - Material-style landing and documentation site, stable unsigned Squirrel
   packaging, pinned GitHub-hosted build/package/publication automation, GitHub
   Pages publication, and monotonic real releases. GitHub Actions runs no tests

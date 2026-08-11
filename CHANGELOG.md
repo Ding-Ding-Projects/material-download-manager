@@ -10,8 +10,10 @@ of guessing a commit, release, or date.
 - **Source issue:** [#16 — Protected display-name history](https://github.com/Ding-Ding-Projects/material-download-manager/issues/16)
 - **Source commit:** [`afb71fd`](https://github.com/Ding-Ding-Projects/material-download-manager/commit/afb71fd)
 - **Publication state:** source and focused local verification are complete on
-  `codex/uh-display-history`; the documentation follow-up and remote workflow
-  evidence are still pending, so this is not a released feature record.
+  `codex/uh-display-history`; the reconciled head
+  [`2bbcb59`](https://github.com/Ding-Ding-Projects/material-download-manager/commit/2bbcb5993c001e35fbdacd8a0f9266cc2424f2a4)
+  is published as non-draft, non-prerelease
+  [`v0.1.59`](https://github.com/Ding-Ding-Projects/material-download-manager/releases/tag/v0.1.59).
 
 ### Added
 
@@ -39,8 +41,11 @@ of guessing a commit, release, or date.
   the locked History setup form from the hidden-desktop/CDP route.
 - Broader `snapshot.json` history revisions remain plaintext local metadata;
   the new UI password is an access lock, not encryption or filesystem access
-  control. Remote build/release evidence remains pending its exact workflow
-  records.
+  control. GitHub Actions run
+  [`31483227655`](https://github.com/Ding-Ding-Projects/material-download-manager/actions/runs/31483227655)
+  completed successfully in `00:03:36` and published unsigned Squirrel and
+  extension ZIP assets. The workflow does not run tests; local results above
+  are the test evidence.
 
 ## Unreleased — authenticated automatic browser download capture
 

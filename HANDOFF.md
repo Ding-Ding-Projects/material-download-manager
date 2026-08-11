@@ -62,6 +62,17 @@ export state. The image is a 1150×720 PNG with SHA-256
 `53DBA85C6FED4704995D5D6D7893F3A51590A6A942E870FE6B074E6F9A5C2361`; the
 temporary profile, process, and hidden desktop were cleaned up after capture.
 
+The pushed head `2bbcb5993c001e35fbdacd8a0f9266cc2424f2a4` was built and
+published by GitHub Actions run
+[`31483227655`](https://github.com/Ding-Ding-Projects/material-download-manager/actions/runs/31483227655),
+which completed successfully in `00:03:36` from
+`2026-08-11T10:40:12.000Z` to `2026-08-11T10:43:48.601Z`. Stable release
+[`v0.1.59`](https://github.com/Ding-Ding-Projects/material-download-manager/releases/tag/v0.1.59)
+is non-draft and non-prerelease, targets that exact commit, and carries
+`Setup.exe`, `RELEASES`, the full `.nupkg`, and the versioned extension ZIP.
+The artifacts are intentionally unsigned and no CRX is attached. The workflow
+does not run tests; the local results above remain the test evidence.
+
 ## Authenticated automatic browser capture and app-prepared extension (2026-08-11)
 
 Issue [#14](https://github.com/Ding-Ding-Projects/material-download-manager/issues/14)
