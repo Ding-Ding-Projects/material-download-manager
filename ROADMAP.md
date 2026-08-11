@@ -5,6 +5,19 @@ unverified surface has shipped.
 
 ## In progress
 
+- Desktop spoken narrator is implemented at source commit
+  [`a7adc431`](https://github.com/Ding-Ding-Projects/material-download-manager/commit/a7adc4313c341bd350a95409adca8b7d651fe2ea). The opt-in Settings
+  surface persists enabled state, English/Cantonese/Both language order, quiet
+  mode, and an explicit assistive-technology safety switch. Completion/error
+  notifications use a serialized debounce/cooldown/replacement queue with
+  School-mode, reduced-motion, screen-reader-signal, speech-availability, and
+  Cantonese-voice boundaries. Local verification is narrator **7/7**, Electron
+  **139/139**, engine **102/102**, built UI smoke **46/46**, docs **2/2**,
+  typecheck/build, and diff check. The built Settings capture is
+  `docs/screenshots/notifications/spoken-narrator.png` with SHA-256
+  `28C29158DE84CCA0ED1DCC8BBAA2CE2B0D89BE53EEF1B23A53BE46F0FC8F5C33`.
+  Release and Pages proof for this commit remains pending.
+
 - Protected local history actions are implemented on
   `codex/uh-history-manager` at hardened source commit
   [`8ae3974`](https://github.com/Ding-Ding-Projects/material-download-manager/commit/8ae397469594585d5d1e062d0a575d8de352551a)

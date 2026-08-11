@@ -1,5 +1,29 @@
 # Handoff: Material Download Manager
 
+## Spoken narrator foundation (verified on `main`, 2026-08-11)
+
+Commit [`a7adc431`](https://github.com/Ding-Ding-Projects/material-download-manager/commit/a7adc4313c341bd350a95409adca8b7d651fe2ea) adds the opt-in desktop narrator. Four persisted controls cover enabled state, English/Cantonese/Both language order, quiet mode, and an explicit assistive-technology safety switch. The queue serializes English then Cantonese output, debounces bursts, replaces stale pending lines, applies per-category cooldowns, and ignores late callbacks after cancellation. School mode, reduced motion, screen-reader signals, unavailable speech synthesis, unavailable Cantonese voices, and synchronous/asynchronous speech failures remain non-blocking and fail safe. Completion and error notifications use the real event path.
+
+### Verification and capture
+
+- Narrator-focused tests — **7/7 passed**.
+- Full compiled Electron suite — **139/139 passed**.
+- Download-engine suite — **102/102 passed**.
+- Built UI smoke — **46/46 passed** with the 60-second timeout.
+- Typecheck, production build, documentation bundle check, documentation tests
+  (**2/2**), and `git diff --check` — passed.
+- Real built capture:
+  [`spoken-narrator.png`](docs/screenshots/notifications/spoken-narrator.png),
+  524×693 pixels, 43,991 bytes, SHA-256
+  `28C29158DE84CCA0ED1DCC8BBAA2CE2B0D89BE53EEF1B23A53BE46F0FC8F5C33`.
+
+The platform does not expose a universal active-screen-reader detector, so
+the Settings surface provides an explicit safety switch and documents that
+boundary. No signing, CRX, native-messaging, or external-service path was
+added. Issue #18 milestone and finished handoffs include the capture and exact
+local evidence; release and Pages publication remain the next integration
+proof for this commit.
+
 ## Protected local history actions (verified on `codex/uh-history-manager`, 2026-08-11)
 
 Issue [#16](https://github.com/Ding-Ding-Projects/material-download-manager/issues/16)

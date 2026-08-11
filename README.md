@@ -41,6 +41,27 @@ AB Download Manager codebase.
 - In-app documentation docs: [`docs/features/documentation/in-app-documentation-browser.md`](docs/features/documentation/in-app-documentation-browser.md)
 - Protected display-name history: [`docs/features/history/display-name-mutation-history.md`](docs/features/history/display-name-mutation-history.md)
 - Local TOTP/authenticator registration: [`docs/features/security/totp-authenticator-core.md`](docs/features/security/totp-authenticator-core.md)
+- Spoken narrator: [`docs/features/notifications/spoken-narrator.md`](docs/features/notifications/spoken-narrator.md)
+
+<details>
+<summary>Spoken narrator (verified)</summary>
+
+The desktop narrator is opt-in and local. Settings persist narrator enabled,
+English/Cantonese/Both language order, quiet mode, and an explicit
+assistive-technology safety switch. Completion and error notifications share a
+serialized debounce/cooldown/replacement queue; School mode, reduced motion,
+screen-reader signals, unavailable speech synthesis, and unavailable Cantonese
+voices fail safe without blocking downloads.
+
+Commit [`a7adc431`](https://github.com/Ding-Ding-Projects/material-download-manager/commit/a7adc4313c341bd350a95409adca8b7d651fe2ea) delivered the slice. Local
+verification is narrator **7/7**, Electron **139/139**, engine **102/102**, UI
+smoke **46/46**, documentation **2/2**, typecheck, build, and diff check.
+The real built Settings capture is
+[`spoken-narrator.png`](docs/screenshots/notifications/spoken-narrator.png),
+524×693 pixels, 43,991 bytes, SHA-256
+`28C29158DE84CCA0ED1DCC8BBAA2CE2B0D89BE53EEF1B23A53BE46F0FC8F5C33`.
+
+</details>
 
 <details>
 <summary>Auto-organize screenshot gallery</summary>

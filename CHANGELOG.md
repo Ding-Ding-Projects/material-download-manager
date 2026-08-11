@@ -5,6 +5,23 @@ or have reached a stable release. Published entries must link the exact commit
 that completed the change. An Unreleased entry names missing evidence instead
 of guessing a commit, release, or date.
 
+## Unreleased — desktop spoken narrator foundation
+
+- **Source issue:** [#18 — Implement the universal feature contract](https://github.com/Ding-Ding-Projects/material-download-manager/issues/18)
+- **Source commit:** [`a7adc431`](https://github.com/Ding-Ding-Projects/material-download-manager/commit/a7adc4313c341bd350a95409adca8b7d651fe2ea)
+- **Scope:** opt-in local completion/error narration with persisted enabled,
+  language-order, quiet-mode, and assistive-technology safety controls;
+  independent English/Cantonese funny-level styling; serialized
+  debounce/cooldown/replacement; School-mode and reduced-motion suppression;
+  explicit screen-reader boundary; speech and Cantonese-voice availability
+  handling; and localized user test narration.
+- **Capture:** `docs/screenshots/notifications/spoken-narrator.png`, 524×693,
+  43,991 bytes, SHA-256
+  `28C29158DE84CCA0ED1DCC8BBAA2CE2B0D89BE53EEF1B23A53BE46F0FC8F5C33`.
+- **Local verification:** narrator **7/7**, Electron **139/139**, engine
+  **102/102**, built UI smoke **46/46**, docs **2/2**, typecheck/build, and
+  diff check passed. No GitHub Actions run or release is claimed yet.
+
 ## Unreleased — protected local history actions
 
 - **Source issue:** [#16 — Protected display-name history and local history manager](https://github.com/Ding-Ding-Projects/material-download-manager/issues/16)
