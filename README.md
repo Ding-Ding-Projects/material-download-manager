@@ -171,8 +171,11 @@ run as the gallery; the 524×233 PNG has SHA-256
 Each stable extension ZIP receives the reserved release version in its staged
 `manifest.json`. Packaging validates that the archive has its manifest and
 manifest-referenced entry points at the archive root, requires the pairing
-module to be empty, rejects embedded capabilities and signing material, and
-records the ZIP's size and SHA-256 for publication verification. The generic
+module to be empty, bounds its entry count and uncompressed size, rejects
+embedded capabilities, CRX magic, private-key or certificate markers, and
+nested signing material, and records the ZIP's size and SHA-256 for publication
+verification. The release manifest requires `extensionArtifact.signed` to be
+the explicit Boolean `false`; missing or null values are rejected. The generic
 ZIP is versioned source/reference material until the app prepares a private
 paired copy; loading it directly into a fresh profile reports an unpaired
 state. The project does not publish a `.crx`: a genuine CRX3 is a signed

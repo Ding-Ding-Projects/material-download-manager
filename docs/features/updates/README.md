@@ -29,4 +29,7 @@ assets. A current production release must come from the stable pinned-hosted
 workflow and prove `Setup.exe`, `RELEASES`, the full package, the extension ZIP,
 `NotSigned`, and `isPrerelease=false`. Absent artifacts are reported rather
 than treated as a successful release. No CRX is produced because the project
-permanently prohibits signing keys and signing operations.
+permanently prohibits signing keys and signing operations. The local release
+contract also proves explicit `extensionArtifact.signed: false`, archive size
+and entry bounds, filename-independent CRX or key detection, and nested archive
+checks; GitHub Actions remains test-free.

@@ -197,13 +197,18 @@ if (-not $hasExtensionAsset -or -not $hasExtensionArtifact) {
 $extensionArtifact = $manifest.extensionArtifact
 $extensionAssetName = [string]$manifest.extensionAsset
 $canonicalExtensionAssetName = "material-download-manager-extension-$([string]$version.version).zip"
+$signedProperty = $extensionArtifact.PSObject.Properties['signed']
+$signedIsExplicitBooleanFalse = $null -ne $signedProperty -and
+  $null -ne $signedProperty.Value -and
+  $signedProperty.Value -is [bool] -and
+  $signedProperty.Value -eq $false
 if ([string]$extensionArtifact.name -ne $extensionAssetName -or
     $extensionAssetName -ne $canonicalExtensionAssetName -or
     [string]$extensionArtifact.format -ne 'zip' -or
     [string]$extensionArtifact.kind -ne 'chromium-extension-load-unpacked' -or
     [string]$extensionArtifact.installMethod -ne 'load-unpacked' -or
     [int]$extensionArtifact.manifestVersion -ne 3 -or
-    [bool]$extensionArtifact.signed) {
+    -not $signedIsExplicitBooleanFalse) {
   Stop-WithMessage 'The structured extension artifact is not the canonical unsigned Manifest V3 Load unpacked ZIP.'
 }
 if (-not $declaredAssetNameSet.Contains($extensionAssetName)) {

@@ -199,6 +199,172 @@ try {
   Assert-ThrowsLike {
     & $packageScript -ExtensionRoot $pemExtensionRoot -OutputDirectory $outputDirectory -ManifestPath $artifactManifestPath -Version '7.8.9' | Out-Null
   } 'forbidden signing or CRX material' 'PEM files are rejected from the package payload'
+
+  $embeddedKeyExtensionRoot = Join-Path $tempRoot 'extension-with-embedded-key'
+  New-Item -ItemType Directory -Path $embeddedKeyExtensionRoot -Force | Out-Null
+  Copy-Item -Path (Join-Path $extensionRoot '*') -Destination $embeddedKeyExtensionRoot -Recurse
+  Set-Content -LiteralPath (Join-Path $embeddedKeyExtensionRoot 'docs/renamed.bin') -Value '-----BEGIN PRIVATE KEY-----`nredacted fixture`n-----END PRIVATE KEY-----' -Encoding utf8NoBOM
+  Assert-ThrowsLike {
+    & $packageScript -ExtensionRoot $embeddedKeyExtensionRoot -OutputDirectory $outputDirectory -ManifestPath $artifactManifestPath -Version '7.8.9' | Out-Null
+  } 'forbidden signing or CRX material' 'embedded private-key markers are rejected regardless of filename'
+
+  $utf16KeyExtensionRoot = Join-Path $tempRoot 'extension-with-utf16-key'
+  New-Item -ItemType Directory -Path $utf16KeyExtensionRoot -Force | Out-Null
+  Copy-Item -Path (Join-Path $extensionRoot '*') -Destination $utf16KeyExtensionRoot -Recurse
+  $utf16KeyMarker = '-----BEGIN PRIVATE KEY-----`nutf16 fixture`n-----END PRIVATE KEY-----'
+  [System.IO.File]::WriteAllBytes((Join-Path $utf16KeyExtensionRoot 'docs/utf16.bin'), [System.Text.Encoding]::Unicode.GetBytes($utf16KeyMarker))
+  Assert-ThrowsLike {
+    & $packageScript -ExtensionRoot $utf16KeyExtensionRoot -OutputDirectory $outputDirectory -ManifestPath $artifactManifestPath -Version '7.8.9' | Out-Null
+  } 'forbidden signing or CRX material' 'UTF-16 private-key markers are rejected regardless of filename'
+
+  $crxMagicExtensionRoot = Join-Path $tempRoot 'extension-with-crx-magic'
+  New-Item -ItemType Directory -Path $crxMagicExtensionRoot -Force | Out-Null
+  Copy-Item -Path (Join-Path $extensionRoot '*') -Destination $crxMagicExtensionRoot -Recurse
+  [System.IO.File]::WriteAllBytes((Join-Path $crxMagicExtensionRoot 'docs/renamed.bin'), [byte[]](0x43, 0x72, 0x32, 0x34, 0x01, 0x02))
+  Assert-ThrowsLike {
+    & $packageScript -ExtensionRoot $crxMagicExtensionRoot -OutputDirectory $outputDirectory -ManifestPath $artifactManifestPath -Version '7.8.9' | Out-Null
+  } 'forbidden signing or CRX material' 'CRX magic is rejected regardless of filename'
+
+  $nestedArchiveExtensionRoot = Join-Path $tempRoot 'extension-with-nested-key'
+  New-Item -ItemType Directory -Path $nestedArchiveExtensionRoot -Force | Out-Null
+  Copy-Item -Path (Join-Path $extensionRoot '*') -Destination $nestedArchiveExtensionRoot -Recurse
+  New-Item -ItemType Directory -Path (Join-Path $nestedArchiveExtensionRoot 'docs/nested-source') -Force | Out-Null
+  Set-Content -LiteralPath (Join-Path $nestedArchiveExtensionRoot 'docs/nested-source/private.key') -Value 'nested fixture' -Encoding utf8NoBOM
+  Compress-Archive -Path (Join-Path $nestedArchiveExtensionRoot 'docs/nested-source/*') -DestinationPath (Join-Path $nestedArchiveExtensionRoot 'docs/nested.bin') -CompressionLevel Optimal
+  Remove-Item -LiteralPath (Join-Path $nestedArchiveExtensionRoot 'docs/nested-source') -Recurse -Force
+  Assert-ThrowsLike {
+    & $packageScript -ExtensionRoot $nestedArchiveExtensionRoot -OutputDirectory $outputDirectory -ManifestPath $artifactManifestPath -Version '7.8.9' | Out-Null
+  } 'forbidden signing or CRX material' 'nested archives are scanned for signing or CRX material'
+
+  $prefixedArchiveExtensionRoot = Join-Path $tempRoot 'extension-with-prefixed-nested-key'
+  New-Item -ItemType Directory -Path $prefixedArchiveExtensionRoot -Force | Out-Null
+  Copy-Item -Path (Join-Path $extensionRoot '*') -Destination $prefixedArchiveExtensionRoot -Recurse
+  $prefixedSourceDirectory = Join-Path $prefixedArchiveExtensionRoot 'docs/prefixed-source'
+  New-Item -ItemType Directory -Path $prefixedSourceDirectory -Force | Out-Null
+  Set-Content -LiteralPath (Join-Path $prefixedSourceDirectory 'private.key') -Value 'prefixed nested fixture' -Encoding utf8NoBOM
+  $prefixedZipPath = Join-Path $prefixedArchiveExtensionRoot 'docs/prefixed-inner.zip'
+  Compress-Archive -Path (Join-Path $prefixedSourceDirectory '*') -DestinationPath $prefixedZipPath -CompressionLevel Optimal
+  $prefixedZipBytes = [System.IO.File]::ReadAllBytes($prefixedZipPath)
+  $prefixedHeader = [byte[]]::new(65537)
+  $fakePrefix = [byte[]](0x73, 0x65, 0x6c, 0x66, 0x2d, 0x50, 0x4b, 0x03, 0x04, 0x66, 0x61, 0x6b, 0x65)
+  [System.Array]::Copy($fakePrefix, 0, $prefixedHeader, 0, $fakePrefix.Length)
+  $prefixedArchiveBytes = [byte[]]::new($prefixedHeader.Length + $prefixedZipBytes.Length)
+  [System.Array]::Copy($prefixedHeader, 0, $prefixedArchiveBytes, 0, $prefixedHeader.Length)
+  [System.Array]::Copy($prefixedZipBytes, 0, $prefixedArchiveBytes, $prefixedHeader.Length, $prefixedZipBytes.Length)
+  [System.IO.File]::WriteAllBytes((Join-Path $prefixedArchiveExtensionRoot 'docs/prefixed.bin'), $prefixedArchiveBytes)
+  Remove-Item -LiteralPath $prefixedSourceDirectory -Recurse -Force
+  Remove-Item -LiteralPath $prefixedZipPath -Force
+  Assert-ThrowsLike {
+    & $packageScript -ExtensionRoot $prefixedArchiveExtensionRoot -OutputDirectory $outputDirectory -ManifestPath $artifactManifestPath -Version '7.8.9' | Out-Null
+  } 'forbidden signing or CRX material' 'prefixed nested archives are scanned for signing or CRX material'
+
+  $deepArchiveExtensionRoot = Join-Path $tempRoot 'extension-with-three-nested-archives'
+  New-Item -ItemType Directory -Path $deepArchiveExtensionRoot -Force | Out-Null
+  Copy-Item -Path (Join-Path $extensionRoot '*') -Destination $deepArchiveExtensionRoot -Recurse
+  $deepLeafDirectory = Join-Path $deepArchiveExtensionRoot 'docs/deep-leaf'
+  New-Item -ItemType Directory -Path $deepLeafDirectory -Force | Out-Null
+  Set-Content -LiteralPath (Join-Path $deepLeafDirectory 'leaf.txt') -Value 'safe nested fixture' -Encoding utf8NoBOM
+  $deepLevel3 = Join-Path $deepArchiveExtensionRoot 'docs/deep-level-3.zip'
+  Compress-Archive -Path (Join-Path $deepLeafDirectory '*') -DestinationPath $deepLevel3 -CompressionLevel Optimal
+  Remove-Item -LiteralPath $deepLeafDirectory -Recurse -Force
+  $deepLevel2Directory = Join-Path $deepArchiveExtensionRoot 'docs/deep-level-2'
+  New-Item -ItemType Directory -Path $deepLevel2Directory -Force | Out-Null
+  Copy-Item -LiteralPath $deepLevel3 -Destination $deepLevel2Directory
+  $deepLevel2 = Join-Path $deepArchiveExtensionRoot 'docs/deep-level-2.zip'
+  Compress-Archive -Path (Join-Path $deepLevel2Directory '*') -DestinationPath $deepLevel2 -CompressionLevel Optimal
+  Remove-Item -LiteralPath $deepLevel2Directory -Recurse -Force
+  Remove-Item -LiteralPath $deepLevel3 -Force
+  $deepLevel1Directory = Join-Path $deepArchiveExtensionRoot 'docs/deep-level-1'
+  New-Item -ItemType Directory -Path $deepLevel1Directory -Force | Out-Null
+  Copy-Item -LiteralPath $deepLevel2 -Destination $deepLevel1Directory
+  Compress-Archive -Path (Join-Path $deepLevel1Directory '*') -DestinationPath (Join-Path $deepArchiveExtensionRoot 'docs/deep-safe.bin') -CompressionLevel Optimal
+  Remove-Item -LiteralPath $deepLevel1Directory -Recurse -Force
+  Remove-Item -LiteralPath $deepLevel2 -Force
+  & $packageScript -ExtensionRoot $deepArchiveExtensionRoot -OutputDirectory $outputDirectory -ManifestPath $artifactManifestPath -Version '7.8.9' | Out-Null
+  Assert-True (Test-Path -LiteralPath (Join-Path $outputDirectory 'material-download-manager-extension-7.8.9.zip') -PathType Leaf) 'three nested archive layers with safe content remain packageable'
+
+  $tooDeepArchiveExtensionRoot = Join-Path $tempRoot 'extension-with-four-nested-archives'
+  New-Item -ItemType Directory -Path $tooDeepArchiveExtensionRoot -Force | Out-Null
+  Copy-Item -Path (Join-Path $extensionRoot '*') -Destination $tooDeepArchiveExtensionRoot -Recurse
+  $tooDeepLeafDirectory = Join-Path $tooDeepArchiveExtensionRoot 'docs/too-deep-leaf'
+  New-Item -ItemType Directory -Path $tooDeepLeafDirectory -Force | Out-Null
+  Set-Content -LiteralPath (Join-Path $tooDeepLeafDirectory 'leaf.txt') -Value 'too deep fixture' -Encoding utf8NoBOM
+  $tooDeepLevel4 = Join-Path $tooDeepArchiveExtensionRoot 'docs/too-deep-level-4.zip'
+  Compress-Archive -Path (Join-Path $tooDeepLeafDirectory '*') -DestinationPath $tooDeepLevel4 -CompressionLevel Optimal
+  Remove-Item -LiteralPath $tooDeepLeafDirectory -Recurse -Force
+  $tooDeepLevel3Directory = Join-Path $tooDeepArchiveExtensionRoot 'docs/too-deep-level-3'
+  New-Item -ItemType Directory -Path $tooDeepLevel3Directory -Force | Out-Null
+  Copy-Item -LiteralPath $tooDeepLevel4 -Destination $tooDeepLevel3Directory
+  $tooDeepLevel3 = Join-Path $tooDeepArchiveExtensionRoot 'docs/too-deep-level-3.zip'
+  Compress-Archive -Path (Join-Path $tooDeepLevel3Directory '*') -DestinationPath $tooDeepLevel3 -CompressionLevel Optimal
+  Remove-Item -LiteralPath $tooDeepLevel3Directory -Recurse -Force
+  Remove-Item -LiteralPath $tooDeepLevel4 -Force
+  $tooDeepLevel2Directory = Join-Path $tooDeepArchiveExtensionRoot 'docs/too-deep-level-2'
+  New-Item -ItemType Directory -Path $tooDeepLevel2Directory -Force | Out-Null
+  Copy-Item -LiteralPath $tooDeepLevel3 -Destination $tooDeepLevel2Directory
+  $tooDeepLevel2 = Join-Path $tooDeepArchiveExtensionRoot 'docs/too-deep-level-2.zip'
+  Compress-Archive -Path (Join-Path $tooDeepLevel2Directory '*') -DestinationPath $tooDeepLevel2 -CompressionLevel Optimal
+  Remove-Item -LiteralPath $tooDeepLevel2Directory -Recurse -Force
+  Remove-Item -LiteralPath $tooDeepLevel3 -Force
+  $tooDeepLevel1Directory = Join-Path $tooDeepArchiveExtensionRoot 'docs/too-deep-level-1'
+  New-Item -ItemType Directory -Path $tooDeepLevel1Directory -Force | Out-Null
+  Copy-Item -LiteralPath $tooDeepLevel2 -Destination $tooDeepLevel1Directory
+  Compress-Archive -Path (Join-Path $tooDeepLevel1Directory '*') -DestinationPath (Join-Path $tooDeepArchiveExtensionRoot 'docs/too-deep.bin') -CompressionLevel Optimal
+  Remove-Item -LiteralPath $tooDeepLevel1Directory -Recurse -Force
+  Remove-Item -LiteralPath $tooDeepLevel2 -Force
+  Assert-ThrowsLike {
+    & $packageScript -ExtensionRoot $tooDeepArchiveExtensionRoot -OutputDirectory $outputDirectory -ManifestPath $artifactManifestPath -Version '7.8.9' | Out-Null
+  } 'beyond the supported depth' 'four nested archive layers are rejected'
+
+  $repeatedSignatureExtensionRoot = Join-Path $tempRoot 'extension-with-repeated-zip-signatures'
+  New-Item -ItemType Directory -Path $repeatedSignatureExtensionRoot -Force | Out-Null
+  Copy-Item -Path (Join-Path $extensionRoot '*') -Destination $repeatedSignatureExtensionRoot -Recurse
+  $repeatedSignatures = [byte[]]::new(40 * 4)
+  for ($signatureIndex = 0; $signatureIndex -lt 40; $signatureIndex += 1) {
+    [System.Array]::Copy([byte[]](0x50, 0x4b, 0x03, 0x04), 0, $repeatedSignatures, $signatureIndex * 4, 4)
+  }
+  [System.IO.File]::WriteAllBytes((Join-Path $repeatedSignatureExtensionRoot 'docs/repeated.bin'), $repeatedSignatures)
+  Assert-ThrowsLike {
+    & $packageScript -ExtensionRoot $repeatedSignatureExtensionRoot -OutputDirectory $outputDirectory -ManifestPath $artifactManifestPath -Version '7.8.9' | Out-Null
+  } 'too many malformed nested archive signatures' 'repeated malformed ZIP signatures are bounded'
+
+  $aggregateBoundExtensionRoot = Join-Path $tempRoot 'extension-with-aggregate-overbound'
+  New-Item -ItemType Directory -Path $aggregateBoundExtensionRoot -Force | Out-Null
+  Copy-Item -Path (Join-Path $extensionRoot '*') -Destination $aggregateBoundExtensionRoot -Recurse
+  $aggregateBoundDirectory = Join-Path $aggregateBoundExtensionRoot 'docs/aggregate-bound'
+  New-Item -ItemType Directory -Path $aggregateBoundDirectory -Force | Out-Null
+  $aggregateBoundChunk = [byte[]]::new(13MB)
+  foreach ($chunkIndex in 1..5) {
+    [System.IO.File]::WriteAllBytes((Join-Path $aggregateBoundDirectory "chunk-$chunkIndex.bin"), $aggregateBoundChunk)
+  }
+  Assert-ThrowsLike {
+    & $packageScript -ExtensionRoot $aggregateBoundExtensionRoot -OutputDirectory $outputDirectory -ManifestPath $artifactManifestPath -Version '7.8.9' | Out-Null
+  } 'Extension payload exceeds' 'aggregate source payload size is rejected before compression'
+  Assert-True (-not (Test-Path -LiteralPath (Join-Path $outputDirectory 'material-download-manager-extension-7.8.9.zip') -PathType Leaf)) 'aggregate-size rejection removes any stale extension ZIP'
+
+  $oversizedManifestExtensionRoot = Join-Path $tempRoot 'extension-with-oversized-manifest'
+  New-Item -ItemType Directory -Path $oversizedManifestExtensionRoot -Force | Out-Null
+  Copy-Item -Path (Join-Path $extensionRoot '*') -Destination $oversizedManifestExtensionRoot -Recurse
+  $oversizedManifestPath = Join-Path $oversizedManifestExtensionRoot 'manifest.json'
+  $oversizedManifest = Get-Content -LiteralPath $oversizedManifestPath -Raw | ConvertFrom-Json -Depth 20
+  $oversizedManifest.name = 'x' * 17000
+  $oversizedManifest | ConvertTo-Json -Depth 20 | Set-Content -LiteralPath $oversizedManifestPath -Encoding utf8NoBOM
+  Assert-ThrowsLike {
+    & $packageScript -ExtensionRoot $oversizedManifestExtensionRoot -OutputDirectory $outputDirectory -ManifestPath $artifactManifestPath -Version '7.8.9' | Out-Null
+  } 'no bounded root manifest' 'oversized root manifests are rejected'
+
+  $oversizedEntriesExtensionRoot = Join-Path $tempRoot 'extension-with-oversized-entry-count'
+  New-Item -ItemType Directory -Path $oversizedEntriesExtensionRoot -Force | Out-Null
+  Copy-Item -Path (Join-Path $extensionRoot '*') -Destination $oversizedEntriesExtensionRoot -Recurse
+  $oversizedEntriesDirectory = Join-Path $oversizedEntriesExtensionRoot 'docs/oversized-entry-count'
+  New-Item -ItemType Directory -Path $oversizedEntriesDirectory -Force | Out-Null
+  foreach ($index in 1..1030) {
+    Set-Content -LiteralPath (Join-Path $oversizedEntriesDirectory "entry-$index.txt") -Value $index -Encoding utf8NoBOM
+  }
+  Assert-ThrowsLike {
+    & $packageScript -ExtensionRoot $oversizedEntriesExtensionRoot -OutputDirectory $outputDirectory -ManifestPath $artifactManifestPath -Version '7.8.9' | Out-Null
+  } 'invalid entry count' 'oversized ZIP entry counts are rejected'
+
   Assert-ThrowsLike {
     & $packageScript -ExtensionRoot $extensionRoot -OutputDirectory $outputDirectory -ManifestPath $artifactManifestPath -Version '70000.1.1' | Out-Null
   } '0-65535 component range' 'Chromium version component bounds are enforced'
@@ -237,6 +403,26 @@ try {
       Name = 'publisher-hash-mismatch'
       Pattern = 'no longer matches its structured size and SHA-256 metadata'
       Mutate = { param($fixture) $fixture.Manifest.extensionArtifact.sha256 = ('0' * 64) }
+    },
+    [pscustomobject]@{
+      Name = 'publisher-missing-signed'
+      Pattern = 'not the canonical unsigned Manifest V3 Load unpacked ZIP'
+      Mutate = { param($fixture) $fixture.Manifest.extensionArtifact.Remove('signed') }
+    },
+    [pscustomobject]@{
+      Name = 'publisher-null-signed'
+      Pattern = 'not the canonical unsigned Manifest V3 Load unpacked ZIP'
+      Mutate = { param($fixture) $fixture.Manifest.extensionArtifact.signed = $null }
+    },
+    [pscustomobject]@{
+      Name = 'publisher-string-signed'
+      Pattern = 'not the canonical unsigned Manifest V3 Load unpacked ZIP'
+      Mutate = { param($fixture) $fixture.Manifest.extensionArtifact.signed = 'false' }
+    },
+    [pscustomobject]@{
+      Name = 'publisher-numeric-signed'
+      Pattern = 'not the canonical unsigned Manifest V3 Load unpacked ZIP'
+      Mutate = { param($fixture) $fixture.Manifest.extensionArtifact.signed = 0 }
     },
     [pscustomobject]@{
       Name = 'publisher-crx-file'

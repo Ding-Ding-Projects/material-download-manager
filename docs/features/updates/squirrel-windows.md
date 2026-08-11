@@ -42,6 +42,26 @@ not block a stable release; the notes record that the code name was
 unavailable. The historical `v0.1.0` unsigned test prerelease remains a
 separate record and is excluded from the stable updater feed.
 
+## Extension package hardening
+
+The release manifest's `extensionArtifact.signed` field is required to be a
+real Boolean `false`; missing, `null`, string, or numeric values are rejected
+before publication. The packaging helper also bounds the ZIP to at most 1,024
+entries and 64 MiB of uncompressed content, limits each entry to 16 MiB, and
+limits `manifest.json` and `src/shared/pairing.js` to 16 KiB and 4 KiB. These
+bounds keep a malformed or unexpectedly large archive from reaching the
+publisher or Pages verifier. The staging tree is totalled before compression,
+and any compression or post-creation validation failure removes the candidate
+ZIP so a stale asset cannot be published accidentally.
+
+Packaging scans source files and final ZIP entries for CRX magic bytes, PEM
+private-key or certificate markers, forbidden signing extensions, and nested
+archives that contain the same material. It never generates, imports, or uses
+a signing key. ZIP signatures are searched through the bounded payload and
+malformed candidate attempts are capped, so repeated fake headers cannot turn
+packaging into an unbounded parser loop. A rejection names the bounded relative
+path while keeping payload contents out of logs.
+
 ## Failure modes and security
 
 - Missing feed configuration fails closed and makes no network call.
@@ -88,6 +108,18 @@ private paired folder for authenticated handoff. A real release is not claimed
 from compilation or from the historical test prerelease. The workflow does not
 create a CRX because a genuine CRX3 requires signing and signing keys are
 permanently prohibited.
+
+Run the package hardening contract from the repository root:
+
+```powershell
+pwsh -NoProfile -File scripts/tests/test-release-package-contract.ps1
+```
+
+That local contract covers explicit `signed:false` metadata, missing and null
+metadata mutations, filename-independent key and CRX detection, nested archive
+inspection, and oversized manifest or ZIP-entry-count rejection. These checks
+are intentionally local evidence; the GitHub Actions workflow remains
+test-free and only builds, packages, and publishes.
 
 ## Suggested articles
 
