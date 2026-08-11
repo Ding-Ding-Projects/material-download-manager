@@ -27,7 +27,7 @@ export, redacted authenticator mutation entries, and a two-key/full-slider
 removal confirmation. URI confirmation reuses the same normalized path as
 manual confirmation, including the regression coverage.
 
-Local verification on this jer: `npm test` from `extension/` **33/33 passed**;
+Local verification on this branch: `npm test` from `extension/` **33/33 passed**;
 new TOTP, QR, and browser-local store modules pass `node --check`; `git diff
 --check` passed with expected line-ending normalization notices. The local QR
 check is a payload-bound matrix invariant because this checkout has no scanner
