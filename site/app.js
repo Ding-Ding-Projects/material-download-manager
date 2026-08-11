@@ -106,6 +106,7 @@
     notificationCentreTitle: ["Review notifications", "檢視通知"],
     notificationCentreDescription: ["Dismissed messages stay here until you delete them. Search and filter the local history without sending it anywhere.", "已收起嘅訊息會留喺度，直到你刪除佢哋；搜尋同篩選只喺本機進行，唔會送去任何地方。"],
     notificationCentreClose: ["Close notification centre", "關閉通知中心"],
+    notificationCentreBulkActions: ["Notification history bulk actions", "通知紀錄批量操作"],
     notificationHistoryLabel: ["Notification history", "通知紀錄"],
     notificationSelect: ["Select notification", "選取通知"],
     notificationSearchLabel: ["Search notification history", "搜尋通知紀錄"],
@@ -126,9 +127,13 @@
     notificationDismiss: ["Dismiss", "收起"],
     notificationSelectedStatus: ["{selected} selected · {visible} visible", "已選 {selected} 項 · 顯示緊 {visible} 項"],
     notificationHistoryCount: ["{count} notifications", "{count} 個通知"],
+    notificationActiveCount: ["{count} active notifications", "{count} 個未收起通知"],
     notificationNoSelection: ["Select one or more visible notifications first.", "請先選取一個或者多個目前顯示嘅通知。"],
     notificationDismissedResult: ["{count} notifications dismissed", "已收起 {count} 個通知"],
+    notificationDismissedSkipped: ["{count} notifications dismissed; {skipped} were already dismissed.", "已收起 {count} 個通知；另外 {skipped} 個之前已經收起。"],
     notificationDeletedResult: ["{count} notifications deleted", "已刪除 {count} 個通知"],
+    notificationDeleteStale: ["The selection changed in another tab. Review it again before deleting.", "另一個分頁改咗選取內容；請重新核對先再刪除。"],
+    notificationPersistenceUnavailable: ["Browser storage is unavailable; this change is only in memory.", "瀏覽器儲存用唔到；今次改動只留喺記憶體。"],
     notificationExportedResult: ["The visible notification history was exported locally.", "目前顯示嘅通知紀錄已經喺本機匯出。"],
     notificationDeleteTitle: ["Delete selected notifications?", "刪除選取嘅通知？"],
     notificationDeleteDescription: ["This permanently removes the selected local history records. Review the count before continuing.", "呢個動作會永久刪除選取嘅本機紀錄；繼續之前請核對數量。"],
@@ -278,7 +283,7 @@
   }
 
   function saveNotificationState() {
-    if (!notificationState) return;
+    if (!notificationState) return false;
     notificationState.records = notificationState.records.slice(-NOTIFICATION_LIMIT);
     notificationState.revision = Number(notificationState.revision || 0) + 1;
     try {
@@ -288,7 +293,12 @@
         records: notificationState.records,
         view: notificationState.view
       }));
-    } catch (_error) { /* Private browsing can refuse persistence; the centre remains live. */ }
+      return true;
+    } catch (_error) {
+      // Private browsing can refuse persistence; keep the live surface honest.
+      if (notificationCentreOpen) setNotificationStatus(localized("notificationPersistenceUnavailable"));
+      return false;
+    }
   }
 
   function readSettings() {
@@ -401,17 +411,38 @@
     notify("success", "Mode reset", "The mode name is back to its shipped value and the mode is off.");
   }
 
+  function clearNotificationTimer(id) {
+    if (!notificationTimers.has(id)) return;
+    clearTimeout(notificationTimers.get(id));
+    notificationTimers.delete(id);
+  }
+
+  function clearAllNotificationTimers() {
+    notificationTimers.forEach((timer) => clearTimeout(timer));
+    notificationTimers.clear();
+  }
+
+  function removeNotificationToast(id) {
+    clearNotificationTimer(id);
+    const region = $("#notification-region");
+    const toast = region ? $$(".notification", region).find((item) => item.dataset.notificationId === id) : null;
+    if (toast) toast.remove();
+  }
+
   function clearNotifications() {
     const region = $("#notification-region");
-    if (!region) return;
-    const ids = $$(".notification", region).map((item) => item.dataset.notificationId).filter(Boolean);
+    const ids = new Set(region ? $$(".notification", region).map((item) => item.dataset.notificationId).filter(Boolean) : []);
+    notificationTimers.forEach((_timer, id) => ids.add(id));
+    let changed = false;
     ids.forEach((id) => {
       const record = notificationState.records.find((item) => item.id === id);
-      if (record) record.dismissed = true;
+      if (record && !record.dismissed) { record.dismissed = true; changed = true; }
     });
-    if (ids.length) saveNotificationState();
-    region.replaceChildren();
+    clearAllNotificationTimers();
+    if (changed) saveNotificationState();
+    if (region) region.replaceChildren();
     updateNotificationCount();
+    renderNotificationCentre();
   }
 
   function formatNotificationTime(value) {
@@ -446,7 +477,7 @@
     const badge = $("#notification-centre-count");
     if (badge) {
       badge.textContent = String(count);
-      badge.setAttribute("aria-label", `${count} active notifications`);
+      badge.setAttribute("aria-label", localized("notificationActiveCount").replace("{count}", String(count)));
     }
   }
 
@@ -476,13 +507,11 @@
 
   function dismissNotification(id, announce = false) {
     const record = notificationState.records.find((item) => item.id === id);
-    const timer = notificationTimers.get(id);
-    if (timer) { clearTimeout(timer); notificationTimers.delete(id); }
+    clearNotificationTimer(id);
     if (!record || record.dismissed) return false;
     record.dismissed = true;
     saveNotificationState();
-    const toast = $$(".notification").find((item) => item.dataset.notificationId === id);
-    if (toast) toast.remove();
+    removeNotificationToast(id);
     updateNotificationCount();
     renderNotificationCentre();
     if (announce) setNotificationStatus(localized("notificationDismissedResult").replace("{count}", "1"));
@@ -493,16 +522,22 @@
     const visible = visibleNotificationRecords();
     const selected = selectedVisibleNotificationRecords(visible);
     if (!selected.length) { setNotificationStatus(localized("notificationNoSelection")); return; }
-    selected.forEach((record) => { record.dismissed = true; });
+    const active = selected.filter((record) => !record.dismissed);
+    const skipped = selected.length - active.length;
+    if (!active.length) {
+      notificationState.selected.clear();
+      renderNotificationCentre();
+      setNotificationStatus(localized("notificationDismissedSkipped").replace("{count}", "0").replace("{skipped}", String(skipped)));
+      return;
+    }
+    active.forEach((record) => { record.dismissed = true; });
     notificationState.selected.clear();
     saveNotificationState();
-    selected.forEach((record) => {
-      const toast = $$(".notification").find((item) => item.dataset.notificationId === record.id);
-      if (toast) toast.remove();
-    });
+    active.forEach((record) => removeNotificationToast(record.id));
     updateNotificationCount();
     renderNotificationCentre();
-    setNotificationStatus(localized("notificationDismissedResult").replace("{count}", String(selected.length)));
+    const resultKey = skipped ? "notificationDismissedSkipped" : "notificationDismissedResult";
+    setNotificationStatus(localized(resultKey).replace("{count}", String(active.length)).replace("{skipped}", String(skipped)));
   }
 
   function updateNotificationDeleteControls() {
@@ -512,10 +547,29 @@
     if (confirm) confirm.disabled = !(acknowledge && phrase);
   }
 
+  function setNotificationDeleteModalState(active) {
+    const centre = $("#notification-centre");
+    const dialog = $("#notification-delete-confirm");
+    if (!centre || !dialog) return;
+    centre.dataset.deleteOpen = active ? "true" : "false";
+    $$(":scope > *", centre).forEach((child) => {
+      if (child === dialog) return;
+      if (active) {
+        child.setAttribute("inert", "");
+        child.setAttribute("aria-hidden", "true");
+      } else {
+        child.removeAttribute("inert");
+        child.removeAttribute("aria-hidden");
+      }
+    });
+  }
+
   function closeNotificationDeleteConfirm(restoreFocus = true) {
     const dialog = $("#notification-delete-confirm");
     if (dialog) dialog.hidden = true;
+    setNotificationDeleteModalState(false);
     notificationDeleteIds = [];
+    notificationDeleteRevision = null;
     if (restoreFocus && notificationDeleteOrigin?.isConnected) notificationDeleteOrigin.focus();
     notificationDeleteOrigin = null;
   }
@@ -524,10 +578,12 @@
     const selected = selectedVisibleNotificationRecords();
     if (!selected.length) { setNotificationStatus(localized("notificationNoSelection")); return; }
     notificationDeleteIds = selected.map((record) => record.id);
+    notificationDeleteRevision = Number(notificationState.revision || 0);
     notificationDeleteOrigin = document.activeElement;
     const dialog = $("#notification-delete-confirm");
     if (!dialog) return;
     dialog.hidden = false;
+    setNotificationDeleteModalState(true);
     $("#notification-delete-ack").checked = false;
     $("#notification-delete-phrase").value = "";
     updateNotificationDeleteControls();
@@ -537,8 +593,16 @@
   function confirmNotificationDelete() {
     updateNotificationDeleteControls();
     if ($("#notification-delete-confirm-button")?.disabled) return;
+    if (notificationDeleteRevision !== null && notificationDeleteRevision !== Number(notificationState.revision || 0)) {
+      closeNotificationDeleteConfirm();
+      renderNotificationCentre();
+      setNotificationStatus(localized("notificationDeleteStale"));
+      return;
+    }
     const ids = new Set(notificationDeleteIds);
     const deleted = notificationState.records.filter((record) => ids.has(record.id)).length;
+    const origin = notificationDeleteOrigin;
+    ids.forEach((id) => removeNotificationToast(id));
     notificationState.records = notificationState.records.filter((record) => !ids.has(record.id));
     notificationState.selected.clear();
     saveNotificationState();
@@ -546,7 +610,8 @@
     updateNotificationCount();
     renderNotificationCentre();
     setNotificationStatus(localized("notificationDeletedResult").replace("{count}", String(deleted)));
-    $("#notification-bulk-delete")?.focus();
+    if (origin?.isConnected) origin.focus();
+    else $("#notification-bulk-delete")?.focus();
   }
 
   function exportVisibleNotifications() {
@@ -565,6 +630,7 @@
     if (isSchoolMode()) {
       centre.hidden = true;
       notificationCentreOpen = false;
+      $("#notification-centre-open")?.setAttribute("aria-expanded", "false");
       list.replaceChildren();
       empty.hidden = true;
       return;
@@ -621,6 +687,7 @@
     if (isSchoolMode()) return;
     notificationCentreOrigin = document.activeElement;
     notificationCentreOpen = true;
+    $("#notification-centre-open")?.setAttribute("aria-expanded", "true");
     const centre = $("#notification-centre");
     if (!centre) return;
     centre.hidden = false;
@@ -632,6 +699,7 @@
     const centre = $("#notification-centre");
     if (centre) centre.hidden = true;
     notificationCentreOpen = false;
+    $("#notification-centre-open")?.setAttribute("aria-expanded", "false");
     closeNotificationDeleteConfirm(false);
     if (restoreFocus && notificationCentreOrigin?.isConnected) notificationCentreOrigin.focus();
     notificationCentreOrigin = null;
@@ -650,13 +718,53 @@
     }
   }
 
+  function reconcileLiveNotificationToasts(records) {
+    const incomingById = new Map(records.map((record) => [record.id, record]));
+    const region = $("#notification-region");
+    const liveIds = new Set(notificationTimers.keys());
+    if (region) $$(".notification", region).forEach((item) => liveIds.add(item.dataset.notificationId));
+    liveIds.forEach((id) => {
+      const record = incomingById.get(id);
+      if (!record || record.dismissed) removeNotificationToast(id);
+    });
+  }
+
+  function clearNotificationStateFromStorage() {
+    clearAllNotificationTimers();
+    $("#notification-region")?.replaceChildren();
+    notificationState = {
+      ...notificationState,
+      revision: Number(notificationState.revision || 0) + 1,
+      records: [],
+      selected: new Set()
+    };
+    updateNotificationCount();
+    renderNotificationCentre();
+  }
+
   function applyIncomingNotificationState(raw) {
+    if (raw === null || raw === undefined) {
+      clearNotificationStateFromStorage();
+      return true;
+    }
     try {
       const incoming = JSON.parse(raw);
       const revision = Number(incoming?.revision);
-      if (!Number.isSafeInteger(revision) || revision <= Number(notificationState.revision || 0)) return false;
+      if (incoming?.schemaVersion !== undefined && incoming.schemaVersion !== 1) return false;
+      if (!Number.isSafeInteger(revision) || revision < Number(notificationState.revision || 0)) return false;
       const records = notificationContract.normalizeRecords(incoming.records, NOTIFICATION_LIMIT);
       const view = incoming.view && typeof incoming.view === "object" ? incoming.view : {};
+      if (revision === Number(notificationState.revision || 0)) {
+        const merged = notificationContract.normalizeRecords([...notificationState.records, ...records], NOTIFICATION_LIMIT);
+        if (JSON.stringify(merged) === JSON.stringify(notificationState.records)) return false;
+        notificationState.records = merged;
+        notificationState.selected = new Set();
+        reconcileLiveNotificationToasts(merged);
+        saveNotificationState();
+        updateNotificationCount();
+        renderNotificationCentre();
+        return true;
+      }
       notificationState = {
         schemaVersion: 1,
         revision,
@@ -670,6 +778,7 @@
           flags: String(view.flags || "g").replace(/[^gimsuy]/g, "").split("").filter((value, index, values) => values.indexOf(value) === index).join("") || "g"
         }
       };
+      reconcileLiveNotificationToasts(records);
       searchStates.notifications.mode = notificationState.view.mode;
       searchStates.notifications.query = notificationState.view.query;
       searchStates.notifications.pattern = notificationState.view.pattern || notificationState.view.query;
@@ -687,7 +796,7 @@
   function bindSettingsSync() {
     window.addEventListener("storage", (event) => {
       if (event.key === STORAGE_KEY && event.newValue) applyIncomingSettings(event.newValue);
-      if (event.key === NOTIFICATION_HISTORY_KEY && event.newValue) applyIncomingNotificationState(event.newValue);
+      if (event.key === NOTIFICATION_HISTORY_KEY) applyIncomingNotificationState(event.newValue);
     });
   }
 
@@ -996,12 +1105,7 @@
   }
 
   function getRegexError(pattern, flags) {
-    if (pattern.length > 2048) return "Pattern is limited to 2,048 characters.";
-    if (!/^[gimsuy]*$/.test(flags)) return "Supported flags are g, i, m, s, u, and y.";
-    if (new Set(flags.split("")).size !== flags.length) return "Each flag can appear only once.";
-    if (/\([^()]*[+*{][^()]*\)(?:[+*]|\{\d)/.test(pattern) || /(?:[+*])\s*[+*]/.test(pattern)) return "Nested quantifiers are rejected before evaluation.";
-    try { new RegExp(pattern, flags); } catch (error) { return error instanceof Error ? error.message : "Invalid regular expression."; }
-    return null;
+    return notificationContract.regexSafetyError(pattern, flags);
   }
 
   function validateSearchState(id) {
@@ -1012,7 +1116,7 @@
 
   function searchMatches(id, value) {
     const state = searchStates[id];
-    const haystack = String(value ?? "");
+    const haystack = String(value ?? "").slice(0, notificationContract.maxInputLength);
     if (state.mode === "text") return !state.query || normalize(haystack).includes(normalize(state.query));
     if (validateSearchState(id)) return false;
     if (!state.pattern) return true;
@@ -1031,7 +1135,8 @@
     const expression = new RegExp(pattern, flags.includes("g") ? flags : `${flags}g`);
     const matches = [];
     let match;
-    while ((match = expression.exec(sample)) && matches.length < 200) {
+    const boundedSample = String(sample ?? "").slice(0, notificationContract.maxInputLength);
+    while ((match = expression.exec(boundedSample)) && matches.length < 200) {
       matches.push({ value: match[0], index: match.index, captures: match.slice(1) });
       if (!match[0]) expression.lastIndex += 1;
     }
@@ -1673,6 +1778,17 @@
   function bindGlobalKeys() {
     document.addEventListener("keydown", (event) => {
       if (event.ctrlKey && event.shiftKey && event.key.toLocaleLowerCase() === "f") { event.preventDefault(); openPalette(); return; }
+      const deleteDialog = $("#notification-delete-confirm");
+      if (deleteDialog && !deleteDialog.hidden && event.key === "Tab") {
+        const focusable = $$('button:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])', deleteDialog).filter((element) => !element.hidden);
+        if (focusable.length) {
+          const first = focusable[0];
+          const last = focusable[focusable.length - 1];
+          if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+          else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+        }
+        return;
+      }
       if (event.key === "Escape") {
         const openBuilder = $(".builder-popover:not([hidden])");
         if (openBuilder) { openBuilder.hidden = true; const toggle = openBuilder.parentElement.querySelector(".builder-toggle"); if (toggle) toggle.setAttribute("aria-expanded", "false"); return; }
@@ -1722,6 +1838,7 @@
   let notificationCentreOrigin = null;
   let notificationDeleteOrigin = null;
   let notificationDeleteIds = [];
+  let notificationDeleteRevision = null;
   let notificationTimers = new Map();
   let settings = readSettings();
   initialize();

@@ -20,7 +20,7 @@
       </div>
       <div class="topbar-actions">
         <span class="status-chip" id="publication-status">Local source · Pages publication unverified</span>
-        <button class="button button-tonal" id="notification-centre-open" type="button" aria-haspopup="dialog" aria-controls="notification-centre" data-school-optional>
+        <button class="button button-tonal" id="notification-centre-open" type="button" aria-haspopup="dialog" aria-expanded="false" aria-controls="notification-centre" data-copy-aria="notificationCentreOpen" data-school-optional>
           <span aria-hidden="true">◌</span>
           <span data-copy="notificationCentreOpen">Notification centre</span>
           <span class="count-badge" id="notification-centre-count" aria-label="0 active notifications">0</span>
@@ -393,7 +393,7 @@
     </div>
     <p class="dialog-help" id="notification-centre-description" data-copy="notificationCentreDescription">Dismissed messages stay here until you delete them. Search and filter the local history without sending it anywhere.</p>
     <div class="search-row" data-search-id="notifications">
-      <label class="search-field" for="notifications-search"><span class="search-icon" aria-hidden="true">⌕</span><span class="sr-only" data-copy="notificationSearchLabel">Search notification history</span><input id="notifications-search" type="search" autocomplete="off" placeholder="Search notification history" data-copy-placeholder="notificationSearchPlaceholder"></label>
+      <label class="search-field" for="notifications-search"><span class="search-icon" aria-hidden="true">⌕</span><span class="sr-only" data-copy="notificationSearchLabel">Search notification history</span><input id="notifications-search" type="search" maxlength="256" autocomplete="off" placeholder="Search notification history" data-copy-placeholder="notificationSearchPlaceholder"></label>
       <button class="button button-outlined builder-toggle" type="button" aria-expanded="false" aria-controls="builder-notifications"><span aria-hidden="true">.*</span><span data-copy="regexBuilder">Regex builder</span></button>
       <span class="search-state" id="notifications-search-state">Plain text</span>
       <div class="builder-popover" id="builder-notifications" role="dialog" aria-label="Notification history regex builder" hidden></div>
@@ -402,7 +402,7 @@
       <label class="field-control compact-control"><span data-copy="notificationFilter">View</span><select id="notification-filter"><option value="all" data-copy="notificationFilterAll">All messages</option><option value="active" data-copy="notificationFilterActive">Active only</option><option value="dismissed" data-copy="notificationFilterDismissed">Dismissed only</option><option value="errors" data-copy="notificationFilterErrors">Warnings and errors</option></select></label>
       <span class="field-help" id="notification-centre-status" role="status" aria-live="polite">0 notifications</span>
     </div>
-    <div class="notification-bulk-actions" role="group" aria-label="Notification history bulk actions">
+    <div class="notification-bulk-actions" role="group" aria-label="Notification history bulk actions" data-copy-aria="notificationCentreBulkActions">
       <button class="button button-outlined" id="notification-select-all" type="button" data-copy="notificationSelectAll">Select visible</button>
       <button class="button button-outlined" id="notification-select-inverse" type="button" data-copy="notificationSelectInverse">Invert selection</button>
       <button class="button button-tonal" id="notification-bulk-dismiss" type="button" data-copy="notificationBulkDismiss">Dismiss selected</button>

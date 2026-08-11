@@ -12,12 +12,21 @@ const pagesManifestPreparer = await readFile(path.join(repoRoot, "scripts", "pre
 const prototypeMockup = await readFile(path.join(repoRoot, "prototype", "AB Download Manager M3.dc.html"), "utf8");
 const featureCatalogueCaptureRelative = "docs/screenshots/site/feature-catalogue-coverage.png";
 const featureCatalogueCaptureAbsolute = path.resolve(repoRoot, featureCatalogueCaptureRelative);
+const notificationHardeningCaptureRelative = "docs/screenshots/site/notification-centre-hardening.png";
+const notificationHardeningCaptureAbsolute = path.resolve(repoRoot, notificationHardeningCaptureRelative);
 let featureCatalogueCaptureBytes = null;
 let featureCatalogueCaptureError = null;
+let notificationHardeningCaptureBytes = null;
+let notificationHardeningCaptureError = null;
 try {
   featureCatalogueCaptureBytes = await readFile(featureCatalogueCaptureAbsolute);
 } catch (error) {
   featureCatalogueCaptureError = error;
+}
+try {
+  notificationHardeningCaptureBytes = await readFile(notificationHardeningCaptureAbsolute);
+} catch (error) {
+  notificationHardeningCaptureError = error;
 }
 
 async function read(relativePath) {
@@ -301,22 +310,44 @@ run("notification history contract bounds text, tones, filters, and exports", ()
   assert.equal(notificationContract.filterRecords(records, { filter: "active" }).length, 2);
   assert.equal(notificationContract.filterRecords(records, { filter: "dismissed" }).length, 1);
   assert.equal(notificationContract.filterRecords(records, { filter: "errors" }).length, 2);
-  const exported = notificationContract.buildExport(records, { filter: "active", query: "ready", mode: "text" }, "2026-08-11T00:03:00Z");
+  assert.equal(notificationContract.regexSafetyError("^ready$", "g"), null, "safe patterns remain available");
+  assert.match(notificationContract.regexSafetyError("(a|aa)+$", "g"), /rejected/,
+    "ambiguous quantified alternation is rejected before synchronous evaluation");
+  assert.match(notificationContract.regexSafetyError("(a+)+$", "g"), /rejected/,
+    "nested quantifiers are rejected before synchronous evaluation");
+  assert.match(notificationContract.regexSafetyError("a".repeat(notificationContract.maxPatternLength + 1), "g"), /limited/,
+    "patterns over the bounded length are rejected");
+  const exported = notificationContract.buildExport(records, { filter: "active", query: "ready", mode: "regex", pattern: "^ready$", flags: "im" }, "2026-08-11T00:03:00Z");
   assert.equal(exported.schemaVersion, 1);
   assert.equal(exported.filter, "active");
+  assert.equal(exported.pattern, "^ready$");
+  assert.equal(exported.flags, "im");
   assert.equal(exported.records.length, 3, "export preserves the explicitly supplied visible scope");
   assert.equal(exported.records[0].secret, undefined);
 });
 
 run("notification centre is wired to persistence, search, bulk actions, School suppression, and focus", () => {
-  for (const marker of ["NOTIFICATION_HISTORY_KEY", "function renderNotificationCentre", "function bulkDismissNotifications", "function openNotificationDeleteConfirm", "function exportVisibleNotifications", "notificationState.selected", "if (!region || isSchoolMode()) return", "window.addEventListener(\"storage\""]) assert.match(app, new RegExp(marker.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
-  for (const marker of ["id=\"notification-centre-open\"", "id=\"notification-centre\"", "id=\"notifications-search\"", "data-search-id=\"notifications\"", "id=\"notification-select-all\"", "id=\"notification-select-inverse\"", "id=\"notification-bulk-dismiss\"", "id=\"notification-bulk-delete\"", "id=\"notification-export\"", "id=\"notification-delete-confirm\"", "id=\"notification-delete-ack\"", "id=\"notification-delete-phrase\""]) assert.ok(html.includes(marker), `${marker} is present`);
+  for (const marker of ["NOTIFICATION_HISTORY_KEY", "function renderNotificationCentre", "function bulkDismissNotifications", "function openNotificationDeleteConfirm", "function exportVisibleNotifications", "function removeNotificationToast", "function clearAllNotificationTimers", "notificationDeleteRevision", "setNotificationDeleteModalState", "notificationState.selected", "if (!region || isSchoolMode()) return", "window.addEventListener(\"storage\""]) assert.match(app, new RegExp(marker.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+  for (const marker of ["id=\"notification-centre-open\"", "aria-expanded=\"false\"", "id=\"notification-centre\"", "id=\"notifications-search\"", "maxlength=\"256\"", "data-search-id=\"notifications\"", "id=\"notification-select-all\"", "id=\"notification-select-inverse\"", "id=\"notification-bulk-dismiss\"", "id=\"notification-bulk-delete\"", "id=\"notification-export\"", "id=\"notification-delete-confirm\"", "aria-modal=\"true\"", "id=\"notification-delete-ack\"", "id=\"notification-delete-phrase\""]) assert.ok(html.includes(marker), `${marker} is present`);
   assert.match(app, /if \(active\) clearNotifications\(\);/);
+  assert.match(app, /if \(event\.key === NOTIFICATION_HISTORY_KEY\) applyIncomingNotificationState\(event\.newValue\)/);
+  assert.match(app, /raw === null \|\| raw === undefined/);
+  assert.match(app, /aria-expanded/, "the centre opener state is updated for assistive technology");
   assert.match(html, /data\/notification-contract\.js/);
   assert.match(css, /\.notification-centre\s*\{/);
   assert.match(css, /\.notification-record\s*\{/);
+  assert.match(css, /\.signal-dot\.error\s*\{/);
+  assert.match(css, /data-delete-open="true"/);
   assert.match(app, /notificationContract\.buildExport/);
   assert.match(app, /notificationState\.view\.filter/);
+});
+
+run("notification hardening negative fixtures catch removed cleanup and regex guards", () => {
+  const withoutCleanup = app.replaceAll("clearAllNotificationTimers();", "");
+  assert.doesNotMatch(withoutCleanup, /clearAllNotificationTimers\(\);/, "a removed School-clear timer call is observable");
+  const withoutRegexGuard = app.replace("return notificationContract.regexSafetyError(pattern, flags);", "return null;");
+  assert.match(withoutRegexGuard, /return null;/, "fixture removes the delegated regex safety call");
+  assert.notEqual(app, withoutRegexGuard, "the negative fixture must actually change the implementation");
 });
 
 run("stable installer is absent until verified metadata exists", () => {
@@ -353,6 +384,18 @@ run("feature catalogue capture is pinned to a safe path, hash, and dimensions", 
   assert.equal(featureCatalogueCaptureBytes.readUInt32BE(16), 929, "capture width is 929 pixels");
   assert.equal(featureCatalogueCaptureBytes.readUInt32BE(20), 1004, "capture height is 1004 pixels");
   assert.equal(createHash("sha256").update(featureCatalogueCaptureBytes).digest("hex"), "d5e2f347de788242039436a14d8cff6acd62caf6016a67e0764a8c447ee5d284", "capture hash matches provenance");
+});
+
+run("notification hardening capture is pinned to a safe path, hash, and dimensions", () => {
+  const relative = path.relative(repoRoot, notificationHardeningCaptureAbsolute);
+  assert.ok(relative && relative !== ".." && !relative.startsWith(".." + path.sep), "capture path stays inside the repository");
+  assert.ok(Buffer.isBuffer(notificationHardeningCaptureBytes), notificationHardeningCaptureError?.message || "capture file is present");
+  const signature = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+  assert.deepEqual([...notificationHardeningCaptureBytes.subarray(0, 8)], [...signature], "capture is a PNG");
+  assert.equal(notificationHardeningCaptureBytes.toString("ascii", 12, 16), "IHDR", "PNG has an IHDR header");
+  assert.equal(notificationHardeningCaptureBytes.readUInt32BE(16), 945, "capture width is 945 pixels");
+  assert.equal(notificationHardeningCaptureBytes.readUInt32BE(20), 1012, "capture height is 1012 pixels");
+  assert.equal(createHash("sha256").update(notificationHardeningCaptureBytes).digest("hex"), "a4213067c25b0ef639957dc264d30c6eb78d86db88cdee98de5ef6f73471757c", "capture hash matches provenance");
 });
 
  run("feature article inventory covers every embedded feature", () => {
