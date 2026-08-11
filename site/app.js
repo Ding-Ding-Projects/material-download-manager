@@ -1207,6 +1207,7 @@
     });
     const grid = $("#feature-grid");
     grid.replaceChildren();
+    $("#feature-metric-count").textContent = String(content.features.length);
     $("#feature-count").textContent = `${list.length} / ${content.features.length} articles`;
     if (!list.length) {
       grid.append(create("div", "release-empty", state.error || "No feature articles match this search."));

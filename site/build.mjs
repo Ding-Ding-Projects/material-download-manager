@@ -35,8 +35,19 @@ if (requestedOutput) {
   }
 }
 const files = ["index.html", "styles.css", "app.js", "content.js", "data", "assets"];
+const runtimeScripts = [
+  "./content.js",
+  "./data/universal-feature-manifest.js",
+  "./data/settings-contract.js",
+  "./data/notification-contract.js",
+  "./data/release-manifest.js",
+  "./app.js"
+];
 for (const file of files) await cp(path.join(siteRoot, file), path.join(outputRoot, file), { recursive: true });
 
 const builtHtml = await readFile(path.join(outputRoot, "index.html"), "utf8");
-if (!builtHtml.includes("./data/release-manifest.js") || !builtHtml.includes("./app.js")) throw new Error("Built HTML is missing local runtime scripts.");
+for (const script of runtimeScripts) {
+  await lstat(path.join(outputRoot, script.slice(2)));
+  if (!builtHtml.includes(`<script src="${script}"></script>`)) throw new Error(`Built HTML is missing local runtime script parity for ${script}.`);
+}
 console.log(`BUILD RESULT: PASS (temporary output ${outputRoot})`);

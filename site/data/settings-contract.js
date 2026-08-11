@@ -57,7 +57,7 @@
     if (settings?.schoolMode?.enabled !== true) return text;
     return text
       .replace(/[\u3400-\u9fff]/g, "")
-      .replace(/\b(Cantonese|bilingual|funny|dim sum|emoji|School mode)\b/gi, (match) => match.toLocaleLowerCase() === "school mode" ? modeName : "English-only")
+      .replace(/\b(Cantonese|bilingual|funny|playful|dim[\s-]?sum|emoji|surprise|School mode)\b/gi, (match) => match.toLocaleLowerCase() === "school mode" ? modeName : "English-only")
       .replace(/\s{2,}/g, " ")
       .trim();
   }
