@@ -67,9 +67,12 @@ Chrome's **Developer mode → Load unpacked** flow.
 GitHub Actions no longer runs tests, lint, type checking, static analysis,
 coverage, accessibility checks, or screenshots. Local checks remain required
 task evidence, while the workflows build, package, publish, deploy, verify
-external assets, and retain safe failure evidence. The implementation is ready
-for integration; the integrating commit and remote release/Pages verdicts are
-still pending until the final dew.
+external assets, and retain safe failure evidence. The implementation is
+integrated on main at
+`f9e92db5d39efe7a33f124f8a2fde0b6b3392c76`. Stable release run
+`31464131995`, release `v0.1.54`, and Pages run `31464419316` are verified
+green. The release carries the unsigned Squirrel assets and versioned
+extension ZIP; no CRX is attached because signing is permanently prohibited.
 
 The final built-artifact capture run passed 43/43 checks on 2026-08-11. The
 same local verification pass also recorded 14/14 extension tests, 95/95 engine

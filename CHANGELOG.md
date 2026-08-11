@@ -8,9 +8,10 @@ of guessing a commit, release, or date.
 ## Unreleased — authenticated automatic browser download capture
 
 - **Source issue:** [#14 — Automatically hand browser downloads to the app and reveal the extension folder](https://github.com/Ding-Ding-Projects/material-download-manager/issues/14)
-- **Publication state:** implemented and locally verified in the current task
-  checkout; the completion commit, release tag, and GitHub Actions result are
-  intentionally left for the final integration and publication records.
+- **Publication state:** integrated on main at
+  `f9e92db5d39efe7a33f124f8a2fde0b6b3392c76`, published as stable release
+  `v0.1.54`, and verified by GitHub Actions run `31464131995` and Pages run
+  `31464419316`.
 
 ### Added
 
