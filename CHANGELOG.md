@@ -8,16 +8,21 @@ of guessing a commit, release, or date.
 ## Unreleased — protected local history actions
 
 - **Source issue:** [#16 — Protected display-name history and local history manager](https://github.com/Ding-Ding-Projects/material-download-manager/issues/16)
-- **Source commit:** [`512aa2c`](https://github.com/Ding-Ding-Projects/material-download-manager/commit/512aa2cfa50ecf06ebe3e47985b0b3c8da31fa73)
+- **Source commits:** [`512aa2c`](https://github.com/Ding-Ding-Projects/material-download-manager/commit/512aa2cfa50ecf06ebe3e47985b0b3c8da31fa73) and [`8ae3974`](https://github.com/Ding-Ding-Projects/material-download-manager/commit/8ae397469594585d5d1e062d0a575d8de352551a)
 - **Scope:** redacted revision diff, bounded user labels, append-only restore
   with validated rollback, and bounded retention pruning through audit
   tombstones. Label, prune, and display-name audit revisions remain visible;
-  no existing Git commit is rewritten or deleted.
+  no existing Git commit is rewritten or deleted. The hardening follow-up
+  rebuilds restored items and queues from an allowlist, keeps restored work
+  dormant, never reuses vault-backed source maps, preserves the live
+  School-mode credential state, and canonicalizes the new audit snapshot.
+  Diff output also redacts credential-like keys, URL userinfo, and complete
+  local paths, including paths with spaces.
 
 ### Verification boundary
 
 - Full compiled Electron suite — **132/132 passed**.
-- Download-engine suite — **101/101 passed**; documentation tests — **2/2**.
+- Download-engine suite — **102/102 passed**; documentation tests — **2/2**.
 - Typecheck, renderer/main build, documentation bundle, and `git diff --check`
   passed; built UI smoke — **45/45 passed**.
 - Real built History captures: `history-manager-actions.png` (1150×720,

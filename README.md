@@ -110,12 +110,16 @@ commit documented in [`HANDOFF.md`](HANDOFF.md). SHA-256:
 <details>
 <summary>Protected History actions and retention</summary>
 
-Commit [`512aa2c`](https://github.com/Ding-Ding-Projects/material-download-manager/commit/512aa2cfa50ecf06ebe3e47985b0b3c8da31fa73)
+Commits [`512aa2c`](https://github.com/Ding-Ding-Projects/material-download-manager/commit/512aa2cfa50ecf06ebe3e47985b0b3c8da31fa73) and
+[`8ae3974`](https://github.com/Ding-Ding-Projects/material-download-manager/commit/8ae397469594585d5d1e062d0a575d8de352551a)
 extends the unlocked History surface with redacted revision diffs, bounded
 user labels, append-only restore, and retention pruning. Labels live in a
-validated sidecar record; restore validates every item and rolls back the live
-state if persistence or the audit commit fails; pruning records tombstones and
-keeps label, prune, and display-name audit revisions visible instead of
+validated sidecar record; restore rebuilds only public dormant item and queue
+fields, drops vault-backed source maps and unknown fields, preserves the live
+School-mode credential state, and rolls back the live state if persistence or
+the audit commit fails. Diff output masks credential-like keys, URL userinfo,
+and full local paths, including paths with spaces. Pruning records tombstones
+and keeps label, prune, and display-name audit revisions visible instead of
 rewriting Git history. The main/preload boundary validates every request and
 result, while the panel uses non-blocking action notifications and reserves
 the two-key blocking confirmation for destructive pruning.
@@ -131,7 +135,7 @@ capture is 84,295 bytes, SHA-256
 `2F7C4290D2809095AC5D463F9DDF4D63C71FF3C3CCAD3A2F7C4CD5D1E6F28930`.
 The diff view visibly replaces local paths with `[LOCAL_PATH_REDACTED]`; the
 capture probe found no absolute path, username, or user-authored display name.
-Local evidence is full Electron **132/132**, engine **101/101**, docs **2/2**,
+Local evidence is full Electron **132/132**, engine **102/102**, docs **2/2**,
 typecheck/build green, and built UI smoke **45/45**.
 
 </details>

@@ -6,9 +6,13 @@ Issue [#16](https://github.com/Ding-Ding-Projects/material-download-manager/issu
 tracks this bounded Windows desktop history slice. Commit
 [`512aa2c`](https://github.com/Ding-Ding-Projects/material-download-manager/commit/512aa2cfa50ecf06ebe3e47985b0b3c8da31fa73)
 adds first-class redacted revision diffs, bounded user labels, validated
-append-only restore, and retention pruning with tombstones. Labels and prune
-metadata are bounded, schema-checked sidecars. Restore validates the complete
-state envelope, pauses active statuses, and restores the previous live state if
+append-only restore, and retention pruning with tombstones. Hardening commit
+[`8ae3974`](https://github.com/Ding-Ding-Projects/material-download-manager/commit/8ae397469594585d5d1e062d0a575d8de352551a)
+rebuilds restored items and queues from explicit public fields, keeps restored
+work dormant, drops vault-backed source maps and unknown fields, preserves the
+live School-mode credential state, and writes a canonical audit snapshot.
+Labels and prune metadata are bounded, schema-checked sidecars. Restore
+validates the complete state envelope and restores the previous live state if
 either persistence or the required audit commit fails. Retention prunes only
 state revisions; label, prune, and display-name audit revisions remain visible
 so the retention decision cannot erase its own audit trail.
@@ -19,11 +23,13 @@ so the retention decision cannot erase its own audit trail.
   restore, prune contracts and IPC constants/validators.
 - `design/electron/history/HistoryStore.ts`: redacted diff generation,
   sidecar labels/tombstones, append-only audit commits, and protected audit
-  retention semantics. Absolute Windows/UNC/POSIX paths and identity/display
-  metadata are redacted before a diff crosses IPC.
+  retention semantics. Credential-like keys, URL userinfo, query material,
+  absolute Windows/UNC/POSIX paths, including paths with spaces, and
+  identity/display metadata are redacted before a diff crosses IPC.
 - `design/electron/download/DownloadManager.ts`, `main.ts`, `preload.ts`, and
   `design/src/global.d.ts`: trusted restore/diff/label/prune wiring with
-  request and result validation and fail-safe rollback.
+  allowlisted dormant restore, no vault-map reuse, request/result validation,
+  display-name audit, and fail-safe rollback.
 - `design/src/components/HistoryPanel.tsx` and `design/src/styles/global.css`:
   accessible row actions, inline diff, label editor, retention controls, and
   non-blocking notifications; only destructive prune uses the blocking
@@ -39,7 +45,7 @@ so the retention decision cannot erase its own audit trail.
 
 - `npm run typecheck` and `npm run build` from `design/` — passed.
 - Full compiled Electron tests — **132/132 passed**.
-- Download-engine tests — **101/101 passed**.
+- Download-engine tests — **102/102 passed**.
 - Documentation tests — **2/2 passed**.
 - Built UI smoke — **45/45 passed**.
 - `git diff --check` and the public-record vocabulary scan — passed.

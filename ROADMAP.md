@@ -6,13 +6,16 @@ unverified surface has shipped.
 ## In progress
 
 - Protected local history actions are implemented on
-  `codex/uh-history-manager` at source commit
-  [`512aa2c`](https://github.com/Ding-Ding-Projects/material-download-manager/commit/512aa2cfa50ecf06ebe3e47985b0b3c8da31fa73)
+  `codex/uh-history-manager` at hardened source commit
+  [`8ae3974`](https://github.com/Ding-Ding-Projects/material-download-manager/commit/8ae397469594585d5d1e062d0a575d8de352551a)
   for issue [#16](https://github.com/Ding-Ding-Projects/material-download-manager/issues/16).
   The History surface now offers main-process redacted revision diffs,
   bounded sidecar labels, validated append-only restore with rollback, and
   retention tombstones that preserve label/prune/display-name audit revisions.
-  Local verification is full Electron **132/132**, engine **101/101**, docs
+  Restored items and queues are rebuilt from a public allowlist, remain dormant,
+  never reuse vault-backed source maps, preserve the live School-mode
+  credential state, and produce a canonical audit revision. Local verification
+  is full Electron **132/132**, engine **102/102**, docs
   **2/2**, typecheck/build, and built UI smoke **45/45**. Fresh built captures
   are `docs/screenshots/history/history-manager-actions.png` (SHA-256
   `845E8EA17410AF2C4CE95CF3531C03CCB100664C768297746F460CE02BC75115`) and
