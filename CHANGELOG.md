@@ -17,6 +17,10 @@ of guessing a commit, release, or date.
 - **Gallery:** all seven auto-organize PNGs were replaced from that run; six
   are 1100×900 and one is 520×760. Per-file hashes are recorded in
   [`HANDOFF.md`](HANDOFF.md).
+- **Install/reveal capture:** the browser-extension card was recaptured from
+  the same run as a 524×233 PNG, SHA-256
+  `B465ABCB5A4B4BBB605B5289A27E75BF2DB473408481C1AE32EEB9997BE08785`, with
+  a generic temporary staging path and no user name in the image.
 - **Cleanup:** the disposable app/profile/process tree and named headless
   desktop were removed; the final desktop inventory was zero.
 

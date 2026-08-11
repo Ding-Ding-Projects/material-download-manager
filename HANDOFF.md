@@ -27,6 +27,13 @@ PNG bytes emitted by that run. Six are 1100×900 and the narrow builder frame is
 | `06-bilingual-category-settings.png` | 1100×900 | `9E0C7FD9B8F11C0A6AD0597E81B8D38AA4622833102EF2EDB7DBF133D8E74D82` |
 | `07-command-palette-destination.png` | 1100×900 | `71324F4523B3D46A47807EE955C8764C2719816016A62D19A6D1C9A1FC6644A5` |
 
+The same landed smoke run also recaptured the browser-extension install/reveal
+card at [`docs/screenshots/browser-extension/settings-install-and-reveal.png`](docs/screenshots/browser-extension/settings-install-and-reveal.png).
+It is a 524×233 PNG with SHA-256
+`B465ABCB5A4B4BBB605B5289A27E75BF2DB473408481C1AE32EEB9997BE08785`; its
+temporary staging path was rooted at a generic `C:\Temp` folder so no user
+name appears in the published image.
+
 The smoke process tree, disposable profile, and named headless desktop were
 cleaned after the run; the final desktop inventory reported zero entries. The
 negative export probes intentionally emit invalid-format diagnostics while the

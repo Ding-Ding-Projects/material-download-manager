@@ -136,7 +136,9 @@ requires **Developer mode → Load unpacked** for this off-store installation.
 
 This is a fresh built-artifact crop of the install-and-reveal card. The
 temporary staging path uses a generic system temporary folder so no user name
-is present in the published image.
+is present in the published image. It came from the same landed 42/42 smoke
+run as the gallery; the 524×233 PNG has SHA-256
+`B465ABCB5A4B4BBB605B5289A27E75BF2DB473408481C1AE32EEB9997BE08785`.
 
 Each stable extension ZIP receives the reserved release version in its staged
 `manifest.json`. Packaging validates that the archive has its manifest and
