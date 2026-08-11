@@ -54,6 +54,29 @@ of guessing a commit, release, or date.
   checks passed **99/99**. Real built-artifact captures are recorded in
   [`HANDOFF.md`](HANDOFF.md), with no signing operation or CRX artifact.
 
+## Unreleased — shared School-mode reset credential
+
+- **Source issue:** [#18 — Implement the universal feature contract](https://github.com/Ding-Ding-Projects/material-download-manager/issues/18)
+- **Source commit:** [`3b76509c684a2fc5c795d92400e10cd803c511e3`](https://github.com/Ding-Ding-Projects/material-download-manager/commit/3b76509c684a2fc5c795d92400e10cd803c511e3)
+- **Added:** main-process setup, change, reset, and turn-off verification
+  for the shared School-mode reset credential, with serialized operations and
+  live metadata propagation to both windows.
+- **Storage boundary:** the operating-system vault stores only a versioned
+  salted scrypt verifier. The credential value is absent from settings,
+  history, exports, logs, notifications, renderer state, and screenshots.
+- **Recovery:** deleting the app-data profile removes an orphaned verifier on
+  startup; a missing verifier for an existing configured profile becomes an
+  `unavailable` fail-closed state. Reset restores the verifier if the metadata
+  write fails.
+- **Built-artifact evidence:** the real Settings capture
+  [`school-mode-credential-turnoff.png`](docs/screenshots/settings/school-mode-credential-turnoff.png)
+  is 1150×720 with SHA-256
+  `1BA68A701556A1957756722A022B6708B32F8D0CAB1C2E71065B5C1DB96F24C1`.
+- **Local verification:** docs bundle, typecheck, build, docs **2/2**,
+  Electron **104/104**, and engine **99/99** passed. This slice does not add
+  TOTP locks, schedules, narration, appearance editors, signing, or CRX
+  artifacts.
+
 ## Unreleased — built-artifact smoke and gallery refresh
 
 - **Source commit:** [`92dc67a`](https://github.com/Ding-Ding-Projects/material-download-manager/commit/92dc67a17fbad4f7471cda5d7d85c1b4b78c44a5)

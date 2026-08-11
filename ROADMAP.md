@@ -63,6 +63,16 @@ unverified surface has shipped.
   suppressed state in `docs/screenshots/settings/`; no password/TOTP
   enrollment, narration, schedules, appearance, or history expansion is part
   of this slice.
+- Shared School-mode reset credential at source commit
+  [`3b76509c684a2fc5c795d92400e10cd803c511e3`](https://github.com/Ding-Ding-Projects/material-download-manager/commit/3b76509c684a2fc5c795d92400e10cd803c511e3): setup, change, reset,
+  and turn-off verification through main-process IPC; salted scrypt verifier
+  in the operating-system vault; metadata-only settings propagation to both
+  windows; deleted-profile recovery; and fail-safe rollback when metadata
+  writes fail. Local evidence is docs bundle, typecheck, build, docs **2/2**,
+  Electron **104/104**, and engine **99/99**, plus the real Settings capture
+  `docs/screenshots/settings/school-mode-credential-turnoff.png`. TOTP locks,
+  schedules, narration, appearance editors, signing, and CRX artifacts remain
+  separate work.
 
 ## Authenticated automatic browser capture implemented
 
