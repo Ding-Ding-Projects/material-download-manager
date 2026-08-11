@@ -433,7 +433,7 @@ export default function App() {
       <CommandPalette commands={paletteCommands} />
       <TitleBar />
       <TabStrip state={tabState} onChange={setTabState} onActivate={activateTab} />
-      <UpdaterBanner hasUnsavedWork={hasUnsavedWork} unsavedWorkReason={unsavedWorkReason} />
+      <UpdaterBanner hasUnsavedWork={hasUnsavedWork} unsavedWorkReason={unsavedWorkReason} copy={copy} />
       <div className="app-body">
         <Sidebar />
         <main className="main-pane" id={`tabpanel-${tabState.activeTabId ?? "downloads"}`} role="tabpanel" aria-labelledby={`app-tab-${tabState.activeTabId ?? "downloads"}`}>

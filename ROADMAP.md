@@ -64,6 +64,10 @@ unverified surface has shipped.
 - Built-artifact UI smoke that fail-closes on the real separate progress
   window, rejects nested interactive labels, and checks narrow Settings layout
   at 2× scale.
+- Main-process updater integrity hardening: bounded HTTPS `RELEASES` parsing,
+  matching full-package SHA-1/size metadata, index SHA-256 evidence, validated
+  ready-state IPC, and a localized unsigned/SmartScreen warning in the ready
+  banner. The path remains unsigned and does not create CRX artifacts.
 - Shared School mode presentation slice at source commit
   [`ecf9bc6`](https://github.com/Ding-Ding-Projects/material-download-manager/commit/ecf9bc65e6f78f08e109abfbed5aa897cbdbb86d): schema-v5 local
   application-data state, user-renamable English-only mode, persisted dialog

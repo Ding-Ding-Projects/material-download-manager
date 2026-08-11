@@ -1,5 +1,40 @@
 # Handoff: Material Download Manager
 
+## Updater ready-state integrity and unsigned warning (2026-08-11)
+
+Issue [#18](https://github.com/Ding-Ding-Projects/material-download-manager/issues/18)
+tracks this bounded desktop updater slice. The main process now verifies the
+feed's Squirrel `RELEASES` metadata before it starts a download or enters
+`ready`. The bounded HTTPS verifier rejects unsafe redirects, oversized or
+malformed indexes, invalid SHA-1 entries, invalid sizes, duplicate full
+packages, and a package whose version does not match the requested update. A
+native Squirrel feed that does not include a version in its `update-available`
+event is resolved from the newest full package in the verified index.
+
+The validated ready state carries the full package name and size, the Squirrel
+SHA-1 digest, and a SHA-256 digest of the `RELEASES` body. Preload validation
+rejects malformed integrity metadata before it reaches the renderer. The ready
+banner displays a localized unsigned-artifact warning naming the missing code
+signature and possible unknown-publisher/SmartScreen warning. No signer, CRX,
+or alternate publication path was added; the native updater remains the only
+staged package downloader.
+
+The focused updater suite covers valid integrity metadata, malformed-index
+rejection before download, unsafe URL handling, native Squirrel version
+resolution, and ready-state validation. Full build/test evidence and any real
+artifact capture are recorded below when this lane is committed.
+
+The built-artifact UI smoke also passed **42/42** required checks, including the
+real Settings surface at the current renderer build. It does not claim an
+updater-ready screenshot: the smoke harness launches an unpacked development
+process, where automatic updates are deliberately disabled. The live stable
+feed probe at `2026-08-11T09:01:28-04:00` resolved to `0.1.108` with a
+115,916,628-byte full package; a packaged capture would immediately start that
+native Squirrel download. No
+fixture or mock was used to manufacture a ready banner, so the updater warning
+remains verified by the renderer build and source-boundary tests rather than a
+misleading image.
+
 ## Authenticator Settings registration surface (2026-08-11)
 
 Issue [#18](https://github.com/Ding-Ding-Projects/material-download-manager/issues/18)

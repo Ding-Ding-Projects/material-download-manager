@@ -1,18 +1,20 @@
 import { useEffect, useState } from "react";
 import type { UpdateState } from "@shared/types";
 import { notify } from "./NotificationCenter";
+import type { UiCopy } from "../i18n/ui";
 import "../styles/updater.css";
 
 interface UpdaterBannerProps {
   hasUnsavedWork: boolean;
   unsavedWorkReason: string;
+  copy: Pick<UiCopy, "text">;
 }
 
 function updateLabel(state: UpdateState): string {
   return state.version ? `version ${state.version}` : "the latest version";
 }
 
-export default function UpdaterBanner({ hasUnsavedWork, unsavedWorkReason }: UpdaterBannerProps) {
+export default function UpdaterBanner({ hasUnsavedWork, unsavedWorkReason, copy }: UpdaterBannerProps) {
   const [state, setState] = useState<UpdateState | null>(null);
   const [busy, setBusy] = useState(false);
   const [deferredVersion, setDeferredVersion] = useState<string | null>(null);
@@ -116,6 +118,12 @@ export default function UpdaterBanner({ hasUnsavedWork, unsavedWorkReason }: Upd
         <div className="updater-copy">
           <strong>Update {state.version} is ready</strong>
           <span>{deferred ? "Installation is deferred; your current session is unchanged." : "Restart is required to install it."}</span>
+          <span className="updater-warning" role="note" data-testid="updater-ready-warning">
+            {copy.text(
+              "Unsigned artifact: this update has no code signature and may trigger an unknown-publisher or SmartScreen warning.",
+              "未簽名素材：呢個更新冇程式碼簽名，可能會出現未知發佈者或 SmartScreen 警告。"
+            )}
+          </span>
         </div>
         {!deferred && (
           <a
