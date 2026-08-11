@@ -96,13 +96,31 @@
       </section>
 
       <section id="panel-preferences" class="tab-panel" role="tabpanel" aria-labelledby="tab-preferences" data-panel="preferences" hidden>
+        <div id="school-mode-card" class="setting-card" data-search="school mode name reset credential local mode">
+          <h2 id="school-mode-heading">School mode</h2>
+          <label class="check-row" for="school-mode">
+            <input id="school-mode" name="schoolModeEnabled" type="checkbox" aria-describedby="school-mode-help school-mode-credential-status">
+            <span id="school-mode-label">Use School mode</span>
+          </label>
+          <label id="school-mode-name-label" for="school-mode-name">School mode name</label>
+          <input id="school-mode-name" name="schoolModeName" type="text" maxlength="80" autocomplete="off" aria-describedby="school-mode-help">
+          <p id="school-mode-help" class="field-help">When enabled, this extension uses English-only serious copy and hides alternate-language and playful controls. Previous choices stay stored. Turning it off needs a locally verified reset credential; this extension slice does not store one.</p>
+          <p id="school-mode-credential-status" class="inline-status" role="status" aria-live="polite">Reset credential state: unavailable in this extension slice. No credential material is stored.</p>
+        </div>
+        <div class="setting-card" data-school-hidden data-search="emoji dialogs message boxes accessibility">
+          <label class="check-row" for="show-emojis">
+            <input id="show-emojis" name="showEmojis" type="checkbox" aria-describedby="show-emojis-help">
+            <span data-l10n="emojiToggleLabel">Show emojis in dialogs and message boxes</span>
+          </label>
+          <p id="show-emojis-help" class="field-help" data-l10n="emojiToggleHelp">When enabled, dialog and message-box copy may include a relevant emoji. Buttons, field labels, and accessible names stay factual.</p>
+        </div>
         <div class="setting-card" data-search="manager name display name title identity">
           <label for="manager-display-name" data-l10n="managerNameLabel">Manager display name</label>
           <input id="manager-display-name" name="managerName" type="text" maxlength="80" autocomplete="off" aria-describedby="manager-name-help">
           <p id="manager-name-help" class="field-help" data-l10n="managerNameHelp">This changes the extension’s labels only; it does not change the desktop app identity or data folder.</p>
           <button id="reset-manager-name" class="button button-secondary" type="button" data-l10n="resetManagerName">Reset name</button>
         </div>
-        <div class="setting-card" data-search="language mode english cantonese bilingual localization">
+        <div class="setting-card" data-school-hidden data-search="language mode english cantonese bilingual localization">
           <label for="language-mode" data-l10n="languageLabel">Language mode</label>
           <select id="language-mode" name="languageMode" aria-describedby="language-help">
             <option value="en" data-l10n="languageEnglish">English</option>
@@ -111,7 +129,7 @@
           </select>
           <p id="language-help" class="field-help" data-l10n="languageHelp">Choose English, playful Hong Kong-style Cantonese, or bilingual copy.</p>
         </div>
-        <div class="setting-card" data-search="funny level english cantonese humour warnings errors messages">
+        <div class="setting-card" data-school-hidden data-search="funny level english cantonese humour warnings errors messages">
           <label for="funny-level-en" data-l10n="funnyEnglishLabel">English funny level</label>
           <div class="range-row"><input id="funny-level-en" name="funnyLevelEn" type="range" min="1" max="5" step="1"><output id="funny-level-en-output" for="funny-level-en">2</output></div>
           <label for="funny-level-yue" data-l10n="funnyCantoneseLabel">Cantonese funny level</label>
@@ -130,7 +148,7 @@
           <p data-l10n="contractBody">The desktop adapter listens at http://127.0.0.1:43771, answers GET /v1/status, and accepts POST /v1/downloads. Redirects, credentials, non-loopback hosts, unknown paths, and oversized values are rejected. A 202 confirms queue dispatch; it is not a completed-download signal.</p>
           <p data-l10n="manualRecovery">Recovery: if the desktop app is closed or the adapter fails, open the app and paste the URL into its real Add download flow.</p>
         </div>
-        <div class="setting-card" data-search="funny level disclosure language settings">
+        <div class="setting-card" data-school-hidden data-search="funny level disclosure language settings">
           <p data-l10n="settingsDisclosure">Funny levels style every message, including warnings and errors; they never change the facts. You can reset them at any time.</p>
         </div>
       </section>
