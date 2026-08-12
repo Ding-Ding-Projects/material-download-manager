@@ -384,9 +384,14 @@ export default function App() {
       }
 
       const name = itemName(item);
-      // Completion is owned by the main-process native notification path. Do
-      // not emit a second renderer toast for the same completed item.
       if (item.status === "completed") {
+        if (settings?.showCompleteDialog) {
+          notify({
+            title: copy.text("Download complete", "下載完成"),
+            message: name,
+            tone: "success",
+          });
+        }
         requestNarration({
           english: `${name} completed.`,
           cantonese: `${name}：完成。`,

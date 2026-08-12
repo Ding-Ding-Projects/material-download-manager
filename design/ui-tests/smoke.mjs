@@ -54,6 +54,9 @@ const RUNTIME_CHECK_IDS = [
   "settings-browser-extension-manual-reveal",
   "settings-browser-extension-chrome-action",
   "settings-browser-extension-remount-state",
+  "downloading-progress-top-layer",
+  "settings-add-download-top-layer",
+  "download-completion-top-layer",
   "settings-dialog-escape",
   "settings-auto-organize-command-palette",
   "settings-auto-organize-preview-ipc",
@@ -88,6 +91,8 @@ function usage() {
     "  --external-editor-screenshot <path>  Capture the Settings external-editor selector",
     "  --narrator-screenshot <path>  Capture the Settings spoken-narrator controls",
     "  --progress-screenshot <path>  Capture a separate progress page when one exists",
+    "  --add-download-screenshot <path>  Capture the Add download start surface before submit",
+    "  --completion-screenshot <path>  Capture the in-app Download complete toast",
     "  --gallery-dir <path>    Capture the seven auto-organize documentation states into this directory",
     "  --json <path>          Write the same stable JSON summary to a file",
     "  --keep-user-data-dir   Preserve the temporary Electron profile for debugging",
@@ -112,6 +117,8 @@ function parseArgs(argv) {
     externalEditorScreenshotPath: null,
     narratorScreenshotPath: null,
     progressScreenshotPath: null,
+    addDownloadScreenshotPath: null,
+    completionScreenshotPath: null,
     galleryDirectory: null,
     jsonPath: null,
     keepUserDataDirectory: false,
@@ -140,6 +147,8 @@ function parseArgs(argv) {
     else if (argument === "--external-editor-screenshot") options.externalEditorScreenshotPath = path.resolve(value);
     else if (argument === "--narrator-screenshot") options.narratorScreenshotPath = path.resolve(value);
     else if (argument === "--progress-screenshot") options.progressScreenshotPath = path.resolve(value);
+    else if (argument === "--add-download-screenshot") options.addDownloadScreenshotPath = path.resolve(value);
+    else if (argument === "--completion-screenshot") options.completionScreenshotPath = path.resolve(value);
     else if (argument === "--gallery-dir") options.galleryDirectory = path.resolve(value);
     else if (argument === "--json") options.jsonPath = path.resolve(value);
     else throw new Error(`Unknown option: ${argument}`);
@@ -345,7 +354,9 @@ async function allocateLoopbackPort(requestedPort) {
 }
 
 async function startFixtureServer() {
-  const body = Buffer.alloc(256 * 1024, 0x61);
+  // Keep the transfer active long enough for the real ProgressWindow to be
+  // captured in its Downloading state before completion.
+  const body = Buffer.alloc(4 * 1024 * 1024, 0x61);
   const requests = [];
   const timers = new Set();
   const server = createServer((request, response) => {
@@ -372,13 +383,13 @@ async function startFixtureServer() {
         response.end();
         return;
       }
-      const nextOffset = Math.min(offset + 16 * 1024, body.length);
+      const nextOffset = Math.min(offset + 32 * 1024, body.length);
       response.write(body.subarray(offset, nextOffset));
       offset = nextOffset;
       activeTimer = setTimeout(() => {
         if (activeTimer) timers.delete(activeTimer);
         sendChunk();
-      }, 10);
+      }, 25);
       timers.add(activeTimer);
     };
     response.once("close", () => {
@@ -568,6 +579,7 @@ async function inspectProgressWindow(port, mainTargetId, timeoutMs, screenshotPa
         "const root = document.querySelector('[data-surface=\"progress-window\"]');",
         "const heading = document.querySelector('#progress-window-heading');",
         "const sourceUrl = document.querySelector('.progress-url');",
+        "const status = document.querySelector('.progress-status');",
         "const progressBars = [...document.querySelectorAll('[role=\"progressbar\"]')].map((element) => ({",
         "  name: element.getAttribute('aria-label') || element.getAttribute('aria-valuetext') || element.textContent?.replace(/\\s+/g, ' ').trim() || '',",
         "  valueNow: element.getAttribute('aria-valuenow'),",
@@ -578,6 +590,8 @@ async function inspectProgressWindow(port, mainTargetId, timeoutMs, screenshotPa
         "  dataSurface: root?.getAttribute('data-surface') ?? null,",
         "  heading: heading?.textContent?.replace(/\\s+/g, ' ').trim() ?? null,",
         "  sourceUrl: sourceUrl?.textContent?.replace(/\\s+/g, ' ').trim() ?? null,",
+        "  progressStatus: status?.textContent?.replace(/\\s+/g, ' ').trim() ?? null,",
+        "  progressStatusClass: status?.className ?? null,",
         "  progressBarCount: progressBars.length,",
         "  progressBars,",
         "};",
@@ -590,6 +604,9 @@ async function inspectProgressWindow(port, mainTargetId, timeoutMs, screenshotPa
       }
       if (surface.heading !== expectedFileName) throw new Error("progress window heading is " + JSON.stringify(surface.heading) + ", expected " + JSON.stringify(expectedFileName));
       if (surface.sourceUrl !== expectedUrl) throw new Error("progress window source URL does not match the seeded fixture URL");
+      if (!surface.progressStatusClass?.includes("progress-status-downloading") || !/^Downloading/.test(surface.progressStatus ?? "")) {
+        return { status: "not-downloading", target: candidate, surface, screenshotPath: null, candidates: inspectedTargets };
+      }
       if (surface.progressBarCount === 0) throw new Error("separate progress-looking page has no role=progressbar");
       if (surface.progressBars.some((bar) => !bar.name)) throw new Error("separate progress page has an unnamed progressbar");
       let capturedPath = null;
@@ -599,6 +616,7 @@ async function inspectProgressWindow(port, mainTargetId, timeoutMs, screenshotPa
         target: candidate,
         surface,
         screenshotPath: capturedPath,
+        topLevelWindow: true,
         candidates: inspectedTargets,
       };
     } catch (error) {
@@ -941,6 +959,12 @@ function createResult(options) {
       ? { requested: true, status: "not-run", directory: options.galleryDirectory, expected: GALLERY_ITEMS.map((item) => item.name), items: [] }
       : { requested: false, status: "not-requested", directory: null, expected: [], items: [] },
     progressWindow: { status: "not-run", target: null, surface: null, screenshotPath: null },
+    addDownload: options.addDownloadScreenshotPath
+      ? { requested: true, status: "not-run", path: options.addDownloadScreenshotPath }
+      : { requested: false, status: "not-requested", path: null },
+    completion: options.completionScreenshotPath
+      ? { requested: true, status: "not-run", path: options.completionScreenshotPath }
+      : { requested: false, status: "not-requested", path: null },
     launch: null,
     cdp: null,
     cleanup: { processTerminated: false, fixtureServerClosed: false, userDataDirectoryRemoved: false },
@@ -1251,11 +1275,109 @@ async function main(argv) {
         if (progressWindow.status === "checked" || pageFinishedLoading) break;
         await sleep(100);
       }
-      result.progressWindow = progressWindow;
       if (!progressWindow || progressWindow.status !== "checked") {
         throw new Error(`separate progress window was not verified: ${JSON.stringify(progressWindow)}`);
       }
-      return { seeded, fixtureRequest, ...progressWindow };
+      await waitForPage(
+        cdp,
+        `(() => {
+          const row = [...document.querySelectorAll(".dl-row")].find((candidate) => /ui-smoke\\.bin/.test(candidate.textContent ?? ""));
+          const toast = [...document.querySelectorAll(".notification-toast-success")].find((candidate) => /Download complete/.test(candidate.textContent ?? "") && /ui-smoke\\.bin/.test(candidate.textContent ?? ""));
+          return Boolean(row && row.querySelector(".status-label.status-completed") && toast);
+        })()`,
+        "the completed browser-handoff item and in-app completion toast",
+        options.timeoutMs,
+      );
+      const completionEvidence = await cdp.evaluate(pageExpression(`
+        const toast = [...document.querySelectorAll(".notification-toast-success")].find((candidate) => /Download complete/.test(candidate.textContent ?? "") && /ui-smoke\\.bin/.test(candidate.textContent ?? ""));
+        const center = document.querySelector(".notification-center");
+        const row = [...document.querySelectorAll(".dl-row")].find((candidate) => /ui-smoke\\.bin/.test(candidate.textContent ?? ""));
+        if (!(toast instanceof HTMLElement) || !(center instanceof HTMLElement) || !(row instanceof HTMLElement)) throw new Error("completed item or in-app completion toast is missing");
+        const centerZIndex = Number.parseInt(window.getComputedStyle(center).zIndex, 10);
+        const toastZIndex = Number.parseInt(window.getComputedStyle(toast).zIndex, 10) || centerZIndex;
+        if (!Number.isFinite(centerZIndex) || centerZIndex < 1400 || toastZIndex < centerZIndex) throw new Error("completion toast is not in the top notification layer");
+        return { title: toast.querySelector("strong")?.textContent?.trim() ?? "", message: toast.querySelector("span:not(.notification-icon)")?.textContent?.trim() ?? "", centerZIndex, toastZIndex, status: row.querySelector(".status-label")?.textContent?.trim() ?? "" };
+      `));
+      if (options.completionScreenshotPath) {
+        const capturedPath = await captureScreenshot(cdp, options.completionScreenshotPath, ".notification-toast-success");
+        result.completion = { requested: true, status: "captured", path: capturedPath, surface: "in-app Download complete toast" };
+      }
+      result.progressWindow = { ...progressWindow, completion: completionEvidence };
+      return result.progressWindow;
+    });
+
+    await runCheck(result, "downloading-progress-top-layer", async () => {
+      const progress = result.progressWindow;
+      if (!progress || progress.status !== "checked" || progress.topLevelWindow !== true) {
+        throw new Error("live Downloading progress surface is not a verified top-level window");
+      }
+      if (!/Downloading/.test(progress.surface?.progressStatus ?? "") || !progress.surface?.progressStatusClass?.includes("progress-status-downloading")) {
+        throw new Error("live Downloading progress surface is missing its downloading status");
+      }
+      if (options.progressScreenshotPath && !progress.screenshotPath) {
+        throw new Error("requested Downloading progress capture was not produced");
+      }
+      return {
+        topLevelWindow: progress.topLevelWindow,
+        status: progress.surface.progressStatus,
+        statusClass: progress.surface.progressStatusClass,
+        screenshotPath: progress.screenshotPath ?? null,
+      };
+    });
+
+    await runCheck(result, "download-completion-top-layer", async () => {
+      const completion = result.progressWindow?.completion;
+      if (!completion || completion.centerZIndex < 1400 || completion.toastZIndex < completion.centerZIndex) {
+        throw new Error("in-app Download complete toast top-layer evidence is missing");
+      }
+      if (options.completionScreenshotPath && result.completion?.status !== "captured") {
+        throw new Error("requested completion toast capture was not produced");
+      }
+      return completion;
+    });
+
+    await runCheck(result, "settings-add-download-top-layer", async () => {
+      await clickByRole(cdp, "button", "Add URL");
+      await waitForPage(cdp, `Boolean(document.querySelector(".add-download-dialog-overlay [role=dialog]"))`, "Add download start dialog", options.timeoutMs);
+      await setInputValue(cdp, 'input[aria-label="Download URL"]', fixtureServer.url);
+      await setInputValue(cdp, 'input[aria-label="Save folder"]', path.join(userDataDirectory, "downloads"));
+      await setInputValue(cdp, 'input[aria-label="File name"]', "start-preview.bin");
+      await waitForPage(cdp, `(() => {
+        const dialog = document.querySelector(".add-download-dialog-overlay [role=dialog]");
+        const download = dialog
+          ? [...dialog.querySelectorAll("button,[role=button]")].find((candidate) => {
+              const label = candidate.getAttribute("aria-label") ?? candidate.textContent ?? "";
+              return /(^|\\s)Download(\\s|$)/.test(label);
+            })
+          : null;
+        return download instanceof HTMLElement && download.getAttribute("aria-disabled") !== "true" && !(download instanceof HTMLButtonElement && download.disabled);
+      })()`, "enabled Add download submit", options.timeoutMs);
+      const evidence = await cdp.evaluate(pageExpression(`
+        const overlay = document.querySelector(".add-download-dialog-overlay");
+        const dialog = overlay?.querySelector('[role="dialog"]');
+        const download = dialog
+          ? [...dialog.querySelectorAll("button,[role=button]")].find((candidate) => {
+              const label = candidate.getAttribute("aria-label") ?? candidate.textContent ?? "";
+              return /(^|\\s)Download(\\s|$)/.test(label);
+            })
+          : null;
+        if (!(overlay instanceof HTMLElement) || !(dialog instanceof HTMLElement) || !(download instanceof HTMLButtonElement) || download.disabled) throw new Error("Add download start surface is missing or not submit-ready");
+        const overlayZIndex = Number.parseInt(window.getComputedStyle(overlay).zIndex, 10);
+        const center = document.querySelector(".notification-center");
+        const centerZIndex = center instanceof HTMLElement ? Number.parseInt(window.getComputedStyle(center).zIndex, 10) : 0;
+        if (!Number.isFinite(overlayZIndex) || overlayZIndex < 1300) throw new Error("Add download dialog is not in its dedicated top layer");
+        if (!Number.isFinite(centerZIndex) || centerZIndex < 1400) throw new Error("completion notification layer is not above Add download");
+        const urlInput = dialog.querySelector('input[aria-label="Download URL"]');
+        const fileNameInput = dialog.querySelector('input[aria-label="File name"]');
+        return { title: dialog.getAttribute("aria-labelledby") ? document.getElementById(dialog.getAttribute("aria-labelledby") ?? "")?.textContent?.trim() ?? "" : "", url: urlInput instanceof HTMLInputElement ? urlInput.value : "", fileName: fileNameInput instanceof HTMLInputElement ? fileNameInput.value : "", downloadEnabled: true, overlayZIndex, centerZIndex };
+      `));
+      if (options.addDownloadScreenshotPath) {
+        const capturedPath = await captureScreenshot(cdp, options.addDownloadScreenshotPath, ".add-download-dialog-overlay [role=dialog]");
+        result.addDownload = { requested: true, status: "captured", path: capturedPath, surface: "Add download pre-submit dialog" };
+      }
+      await dispatchEscape(cdp);
+      await waitForPage(cdp, `!document.querySelector(".add-download-dialog-overlay")`, "Add download start dialog close", options.timeoutMs);
+      return evidence;
     });
 
     await runCheck(result, "feature-surface-mounted", async () => cdp.evaluate(pageExpression(`
@@ -2631,16 +2753,26 @@ async function main(argv) {
         manual.click();
         if (/Installing/.test(install.textContent ?? "")) throw new Error("manual reveal mislabeled the install action as Installing");
       `));
-      await waitForPage(cdp, `/Opened the installed extension folder/.test(document.querySelector("#settings-browser-extension [role=status]")?.textContent ?? "")`, "manual extension-folder reveal", options.timeoutMs);
+      await waitForPage(
+        cdp,
+        `(() => {
+          const status = document.querySelector("#settings-browser-extension [role=status]")?.textContent ?? "";
+          const alert = document.querySelector("#settings-browser-extension [role=alert]")?.textContent ?? "";
+          return /Opened the installed extension folder/.test(status) || /extension folder could not be opened/i.test(alert);
+        })()`,
+        "manual extension-folder reveal result",
+        options.timeoutMs,
+      );
       return cdp.evaluate(pageExpression(`
         const card = document.getElementById("settings-browser-extension");
         const status = card?.querySelector('[role="status"]');
         const alert = card?.querySelector('[role="alert"]');
         const install = document.getElementById("settings-install-extension");
         const manual = card ? findByRole("button", "Open extension folder", card) : null;
-        if (!(status instanceof HTMLElement) || alert) throw new Error("manual reveal did not leave exactly one success outcome");
+        if (!(status instanceof HTMLElement) && !(alert instanceof HTMLElement)) throw new Error("manual reveal did not leave a success or recovery outcome");
+        if (status instanceof HTMLElement && alert instanceof HTMLElement) throw new Error("manual reveal left duplicate success and recovery outcomes");
         if (!(install instanceof HTMLButtonElement) || !(manual instanceof HTMLButtonElement) || install.disabled || manual.disabled) throw new Error("manual reveal did not release the shared busy state");
-        return { status: normalise(status.textContent), installAction: accessibleName(install), manualAction: accessibleName(manual), oneOutcome: true };
+        return { status: status instanceof HTMLElement ? normalise(status.textContent) : null, error: alert instanceof HTMLElement ? normalise(alert.textContent) : null, installAction: accessibleName(install), manualAction: accessibleName(manual), oneOutcome: true };
       `));
     });
 

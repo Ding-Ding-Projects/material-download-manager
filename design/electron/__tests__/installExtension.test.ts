@@ -271,6 +271,15 @@ test("Chrome extensions action uses only the fixed internal page and reports ref
   const refused = await openChromeExtensionsPage(async () => { throw new Error("Chrome is unavailable"); });
   assert.deepEqual(refused, { opened: false, url: CHROME_EXTENSIONS_PAGE, error: "Chrome is unavailable" });
   assert.equal(isBrowserChromeExtensionsResult(refused), true);
+
+  const started = Date.now();
+  const timedOut = await openChromeExtensionsPage(async () => new Promise<void>(() => undefined));
+  assert.ok(Date.now() - started < 3_000, "a hanging shell request must have a bounded result");
+  assert.equal(timedOut.opened, false);
+  assert.equal(timedOut.url, CHROME_EXTENSIONS_PAGE);
+  assert.match(timedOut.error ?? "", /timed out/i);
+  assert.equal(isBrowserChromeExtensionsResult(timedOut), true);
+
   assert.equal(isBrowserChromeExtensionsResult({ opened: true, url: "https://example.test", error: null }), false);
   assert.equal(isBrowserChromeExtensionsResult({ opened: false, url: CHROME_EXTENSIONS_PAGE, error: null }), false);
 });

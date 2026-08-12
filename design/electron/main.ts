@@ -91,6 +91,21 @@ import {
 
 const isDev = isDevelopmentLaunch(app.isPackaged);
 const UPDATE_WORK_STATE_MAX_AGE_MS = 10_000;
+const FILE_MANAGER_OPEN_TIMEOUT_MS = 3_000;
+
+async function openPathWithTimeout(folderPath: string): Promise<string> {
+  let timeoutHandle: NodeJS.Timeout | undefined;
+  try {
+    return await Promise.race([
+      shell.openPath(folderPath),
+      new Promise<string>((resolve) => {
+        timeoutHandle = setTimeout(() => resolve("The file-manager open request timed out."), FILE_MANAGER_OPEN_TIMEOUT_MS);
+      }),
+    ]);
+  } finally {
+    if (timeoutHandle) clearTimeout(timeoutHandle);
+  }
+}
 
 // Windows/Linux: only one instance of a download manager should ever run at
 // once (a second launch — e.g. from a browser's "open with" — should just
@@ -470,7 +485,7 @@ function registerIpcHandlers() {
       () => extensionCapabilityVault.write(capability),
       previousCapability ? () => extensionCapabilityVault.write(previousCapability) : undefined,
     );
-    return createBrowserExtensionInstallResult(installedPath, (folderPath) => shell.openPath(folderPath));
+    return createBrowserExtensionInstallResult(installedPath, openPathWithTimeout);
   });
 
   ipcMain.handle(IPC.EXTENSION_STATE, async (event): Promise<BrowserExtensionInstallState> => {
@@ -489,7 +504,7 @@ function registerIpcHandlers() {
     if (!installedPath) {
       throw new Error("The browser extension has not been installed from this app yet.");
     }
-    const failure = await shell.openPath(installedPath);
+    const failure = await openPathWithTimeout(installedPath);
     if (failure) throw new Error(failure);
   });
 
@@ -997,6 +1012,10 @@ const nativeCompletionNotifications: CompletionNotificationPort = {
 };
 
 function notifyDownloadComplete(item: DownloadItem) {
+  // A visible main window receives the localized renderer toast. Keep the
+  // native notification as the fallback for hidden, minimized, or unavailable
+  // windows so one completion never produces duplicate user-facing claims.
+  if (mainWindow && !mainWindow.isDestroyed() && mainWindow.isVisible() && !mainWindow.isMinimized()) return;
   showCompletionNotification(item, manager.getSettings(), nativeCompletionNotifications, appIconPath);
 }
 

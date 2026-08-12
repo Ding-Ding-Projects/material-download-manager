@@ -10,11 +10,12 @@ interface DialogProps {
   children: ReactNode;
   footer?: ReactNode;
   className?: string;
+  overlayClassName?: string;
   /** Return true when a nested surface owns this Escape press. */
   onEscape?: (event: ReactKeyboardEvent<HTMLDivElement>) => boolean;
 }
 
-export default function Dialog({ title, icon, onClose, width = 460, children, footer, className, onEscape }: DialogProps) {
+export default function Dialog({ title, icon, onClose, width = 460, children, footer, className, overlayClassName, onEscape }: DialogProps) {
   const titleId = `mdm-dialog-title-${useId().replace(/:/g, "")}`;
 
   useEffect(() => {
@@ -32,7 +33,7 @@ export default function Dialog({ title, icon, onClose, width = 460, children, fo
   }
 
   return (
-    <div className="dialog-overlay" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
+    <div className={`dialog-overlay${overlayClassName ? ` ${overlayClassName}` : ""}`} onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
       <div
         className={`dialog${className ? ` ${className}` : ""}`}
         style={{ width }}

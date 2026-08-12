@@ -156,6 +156,7 @@ export default function AddDownloadDialog() {
       icon={<LinkAddIcon size={16} />}
       onClose={closeAddDownload}
       width={520}
+      overlayClassName="add-download-dialog-overlay"
       footer={
         <>
           <button type="button" className="btn btn-secondary" onClick={() => void handleSubmit(false)} disabled={!url.trim() || submitting || Boolean(folderError)}>

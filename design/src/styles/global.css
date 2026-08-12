@@ -876,6 +876,12 @@ textarea {
   -webkit-app-region: no-drag;
 }
 
+/* Download entry is the user's start surface: keep it above ordinary dialogs
+   while leaving the completion toast above it as a non-blocking status layer. */
+.dialog-overlay.add-download-dialog-overlay {
+  z-index: 1300;
+}
+
 .dialog {
   background: var(--bg-dialog);
   border: 1px solid var(--border-color);
@@ -2453,7 +2459,7 @@ textarea {
   position: fixed;
   right: 16px;
   bottom: 40px;
-  z-index: 1100;
+  z-index: 1400;
   width: min(380px, calc(100vw - 32px));
   display: flex;
   flex-direction: column;

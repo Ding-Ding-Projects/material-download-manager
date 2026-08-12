@@ -19,6 +19,7 @@ const REQUIRED_PAYLOAD = ["manifest.json", path.join("src", "service-worker.js")
 const PAYLOAD_ENTRIES = ["manifest.json", "src", "README.md", "docs"];
 const CAPABILITY_MODULE = path.join("src", "shared", "pairing.js");
 const CAPABILITY_PATTERN = /^[A-Za-z0-9_-]{43}$/u;
+const CHROME_OPEN_TIMEOUT_MS = 2_000;
 
 let installQueue: Promise<unknown> = Promise.resolve();
 
@@ -158,8 +159,14 @@ export async function installedExtensionPath(userDataPath: string, expectedCapab
 export async function openChromeExtensionsPage(
   openExternal: (url: string) => Promise<void>,
 ): Promise<BrowserChromeExtensionsResult> {
+  let timeout: ReturnType<typeof setTimeout> | undefined;
   try {
-    await openExternal(CHROME_EXTENSIONS_PAGE);
+    await Promise.race([
+      openExternal(CHROME_EXTENSIONS_PAGE),
+      new Promise<never>((_, reject) => {
+        timeout = setTimeout(() => reject(new Error("The browser open request timed out.")), CHROME_OPEN_TIMEOUT_MS);
+      }),
+    ]);
     return { opened: true, url: CHROME_EXTENSIONS_PAGE, error: null };
   } catch (error) {
     const message = error instanceof Error && error.message.trim()
@@ -170,6 +177,8 @@ export async function openChromeExtensionsPage(
       url: CHROME_EXTENSIONS_PAGE,
       error: message.slice(0, 1_024),
     };
+  } finally {
+    if (timeout) clearTimeout(timeout);
   }
 }
 
