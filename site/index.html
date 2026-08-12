@@ -107,6 +107,7 @@
               <p data-copy="releaseSummary">The repository has a verified unsigned test prerelease, but no stable production installer has passed the release gate. This site keeps the download action absent until the manifest proves one.</p>
               <div class="release-state-row"><span class="status-dot warning" aria-hidden="true"></span><strong id="release-state-label">No stable asset verified</strong></div>
               <div class="stable-download-slot" id="stable-download-slot"></div>
+              <div class="extension-download-slot" id="extension-download-slot" aria-live="polite"></div>
               <button class="text-button" type="button" data-open-tab="changelog" data-copy="viewReleaseEvidence">View release evidence →</button>
             </article>
             <article class="surface-card feature-spotlight">
@@ -428,6 +429,7 @@
   <script src="./data/universal-feature-manifest.js"></script>
   <script src="./data/settings-contract.js"></script>
   <script src="./data/notification-contract.js"></script>
+  <script src="./data/release-manifest-contract.js"></script>
   <script src="./data/release-manifest.js"></script>
   <script src="./app.js"></script>
 </body>
