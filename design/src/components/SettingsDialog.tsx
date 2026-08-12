@@ -33,12 +33,13 @@ import { FolderIcon, SettingsIcon } from "./icons";
 import RegexBuilder from "./RegexBuilder";
 import { notify } from "./NotificationCenter";
 import AuthenticatorPanel from "./AuthenticatorPanel";
+import OllamaSuitePanel from "./OllamaSuitePanel";
 import ScheduledSettingsPanel from "./ScheduledSettingsPanel";
 import { requestNarration, speechSynthesisReadiness } from "../narration/NarratorController";
 
-type SettingsTab = "language" | "appearance" | "downloads" | "authenticator" | "advanced";
+type SettingsTab = "language" | "appearance" | "downloads" | "authenticator" | "ollama" | "advanced";
 
-const SETTINGS_TABS: readonly SettingsTab[] = ["language", "appearance", "downloads", "authenticator", "advanced"];
+const SETTINGS_TABS: readonly SettingsTab[] = ["language", "appearance", "downloads", "authenticator", "ollama", "advanced"];
 const SETTINGS_TAB_STORAGE_KEY = "material-download-manager.settings.active-tab";
 
 const AUTO_ORGANIZE_TARGETS: readonly AutoOrganizeTargetCategory[] = [
@@ -232,6 +233,12 @@ const SETTINGS_SEARCH_INDEX = [
     tab: "authenticator" as const,
     labels: ["Authenticator TOTP QR pairing secret-free metadata export", "Authenticator TOTP QR 配對 secret-free 資料標籤匯出"],
   },
+  {
+    id: "settings-ollama-suite",
+    targetId: "settings-ollama-suite",
+    tab: "ollama" as const,
+    labels: ["Ollama local suite manager provider loopback installed models metadata export import local API credentials vault", "Ollama 本機管理器 供應者 loopback 已安裝模型 資料標籤 匯出 匯入 本機 API 憑證庫"],
+  },
 ] as const;
 
 function readSettingsTab(): SettingsTab {
@@ -257,6 +264,7 @@ function createSettingsSearchStates(): Record<SettingsTab, RegexBuilderState> {
     appearance: createSettingsSearchState("appearance"),
     downloads: createSettingsSearchState("downloads"),
     authenticator: createSettingsSearchState("authenticator"),
+    ollama: createSettingsSearchState("ollama"),
     advanced: createSettingsSearchState("advanced"),
   };
 }
@@ -281,7 +289,7 @@ export default function SettingsDialog() {
   const [accentError, setAccentError] = useState<string | null>(null);
   const [activeSettingsTab, setActiveSettingsTab] = useState<SettingsTab>(() => {
     if (settingsFocus === "language" || settingsFocus === "school-mode" || settingsFocus === "show-emojis" || settingsFocus === "narrator") return "language";
-    if (settingsFocus === "appearance" || settingsFocus === "downloads" || settingsFocus === "authenticator" || settingsFocus === "advanced") return settingsFocus;
+    if (settingsFocus === "appearance" || settingsFocus === "downloads" || settingsFocus === "authenticator" || settingsFocus === "ollama" || settingsFocus === "advanced") return settingsFocus;
     if (settingsFocus === "auto-organize" || settingsFocus === "auto-organize-rules") return "downloads";
     return readSettingsTab();
   });
@@ -634,6 +642,8 @@ export default function SettingsDialog() {
             ? "settings-auto-organize-rules"
           : settingsFocus === "authenticator"
             ? "settings-authenticator-panel"
+            : settingsFocus === "ollama"
+              ? "settings-ollama-suite"
             : settingsFocus === "advanced"
               ? "settings-min-splittable-part-size"
               : "settings-default-save-folder-input";
@@ -1173,6 +1183,7 @@ export default function SettingsDialog() {
     appearance: ui.text("Appearance", "外觀"),
     downloads: ui.text("Downloads", "下載"),
     authenticator: ui.text("Authenticator", "Authenticator"),
+    ollama: ui.text("Ollama", "Ollama"),
     advanced: ui.text("Advanced", "進階"),
   };
 
@@ -2349,6 +2360,11 @@ export default function SettingsDialog() {
       {activeSettingsTab === "authenticator" && <div className="settings-tab-panel" id="settings-panel-authenticator" role="tabpanel" aria-labelledby="settings-tab-authenticator">
         {renderSettingsSearch()}
         <AuthenticatorPanel />
+      </div>}
+
+      {activeSettingsTab === "ollama" && <div className="settings-tab-panel" id="settings-panel-ollama" role="tabpanel" aria-labelledby="settings-tab-ollama">
+        {renderSettingsSearch()}
+        <OllamaSuitePanel />
       </div>}
 
       {activeSettingsTab === "advanced" && <div className="settings-tab-panel" id="settings-panel-advanced" role="tabpanel" aria-labelledby="settings-tab-advanced">

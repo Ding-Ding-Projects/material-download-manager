@@ -11,3 +11,6 @@
   local Visual Studio Code executable, open exported desktop records from an
   application-owned workspace root, and fail safely when the editor is
   unavailable. Browser-extension and Pages exports remain local downloads.
+- [Local Ollama suite manager](../product/ollama-suite-manager.md) — manage
+  credential-free loopback providers and refresh installed-model metadata
+  through the documented local API.

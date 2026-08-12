@@ -613,6 +613,13 @@ export const IPC = {
   EXTERNAL_EDITOR_PICK: "externalEditor:pick",
   EXTERNAL_EDITOR_OPEN_EXPORT: "externalEditor:openExport",
   EXTERNAL_EDITOR_OPEN_WORKSPACE: "externalEditor:openWorkspace",
+  OLLAMA_GET_STATE: "ollama:getState",
+  OLLAMA_ADD_PROVIDER: "ollama:addProvider",
+  OLLAMA_REMOVE_PROVIDER: "ollama:removeProvider",
+  OLLAMA_REFRESH_PROVIDER: "ollama:refreshProvider",
+  OLLAMA_EXPORT_METADATA: "ollama:exportMetadata",
+  OLLAMA_IMPORT_METADATA: "ollama:importMetadata",
+  OLLAMA_RESET_STATE: "ollama:resetState",
 } as const;
 
 export type {

@@ -1148,6 +1148,85 @@ textarea {
   flex-direction: column;
   gap: calc(14px * var(--density-scale, 1));
 }
+
+.ollama-suite-panel {
+  display: grid;
+  gap: 12px;
+}
+
+.ollama-provider-form,
+.ollama-provider-card,
+.ollama-metadata-actions {
+  display: flex;
+  gap: 10px;
+  align-items: end;
+  flex-wrap: wrap;
+}
+
+.ollama-provider-form .field {
+  flex: 1 1 180px;
+}
+
+.ollama-provider-list,
+.ollama-models,
+.ollama-metadata {
+  display: grid;
+  gap: 8px;
+}
+
+.ollama-provider-card {
+  align-items: center;
+  justify-content: space-between;
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  padding: 12px;
+  background: var(--bg-row);
+}
+
+.ollama-provider-card h3,
+.ollama-models h3,
+.ollama-metadata h3 {
+  margin: 0;
+}
+
+.ollama-provider-card code {
+  color: var(--text-secondary);
+  overflow-wrap: anywhere;
+}
+
+.ollama-provider-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.ollama-models ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+}
+
+.ollama-models li {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 8px 10px;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+}
+
+.ollama-models li span {
+  color: var(--text-secondary);
+}
+
+.ollama-import {
+  min-height: 96px;
+  resize: vertical;
+  width: 100%;
+}
 .dialog-body,
 .settings-section,
 .settings-search,

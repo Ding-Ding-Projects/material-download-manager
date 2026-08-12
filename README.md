@@ -42,6 +42,7 @@ AB Download Manager codebase.
 - Protected display-name history: [`docs/features/history/display-name-mutation-history.md`](docs/features/history/display-name-mutation-history.md)
 - Local TOTP/authenticator registration: [`docs/features/security/totp-authenticator-core.md`](docs/features/security/totp-authenticator-core.md)
 - Spoken narrator: [`docs/features/notifications/spoken-narrator.md`](docs/features/notifications/spoken-narrator.md)
+- Local Ollama suite manager foundation: [`docs/features/product/ollama-suite-manager.md`](docs/features/product/ollama-suite-manager.md)
 
 <details>
 <summary>Spoken narrator (verified)</summary>
@@ -471,6 +472,13 @@ either one. The Electron app now has a real add/probe/segmented-download,
 pause/resume, persistence, queue, schedule-clock, header, timeout, settings,
 notification, accessibility, safety, search, navigation, export, a browsable
 local-history tab, loopback browser handoff, and a separate progress window.
+The Settings dialog also exposes a bounded Local Ollama suite foundation:
+credential-free loopback provider records, verified installed-model metadata
+from Ollama's documented local API, and metadata-only JSON transfer. It does
+not claim the exhaustive catalog, chat, attachment, or harness surfaces yet;
+those remain explicit unavailable states.
+
+The real built Settings capture is [`ollama-suite-settings.png`](docs/screenshots/product/ollama-suite-settings.png), 524×558 pixels, SHA-256 `CFA365286EFF01ED73E07DCCFF0B2DC2DFB7B44F4C17DD1AD20A48B1F9A91024`.
 The Settings dialog now has four persisted browser-style tabs with independent
 search builders. Its Downloads tab requires an absolute Windows default folder,
 previews six category paths, and manages an accessible first-match rule list

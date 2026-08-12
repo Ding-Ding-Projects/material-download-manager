@@ -38,6 +38,7 @@ import type {
   TotpRegistrationInput,
   TotpRegistrationMetadata,
 } from "@shared/authenticator";
+import type { OllamaRefreshResult, OllamaSuiteState } from "@shared/ollama";
 
 export interface MaterialDownloadManagerAPI {
   getState(): Promise<StateSnapshot>;
@@ -104,6 +105,13 @@ export interface MaterialDownloadManagerAPI {
   pickExternalEditor(): Promise<string | null>;
   openExportInEditor(content: string, fileName: string): Promise<ExternalEditorOpenResult>;
   openWorkspaceInEditor(): Promise<ExternalEditorOpenResult>;
+  getOllamaSuiteState(): Promise<OllamaSuiteState>;
+  addOllamaProvider(input: { name: string; endpoint: string }): Promise<OllamaSuiteState>;
+  removeOllamaProvider(id: string): Promise<OllamaSuiteState>;
+  refreshOllamaProvider(id: string): Promise<OllamaRefreshResult>;
+  exportOllamaMetadata(format: ExportFormat): Promise<ExportResult>;
+  importOllamaMetadata(value: unknown): Promise<OllamaSuiteState>;
+  resetOllamaSuiteState(): Promise<OllamaSuiteState>;
   createQueue(queue: Partial<DownloadQueue>): Promise<DownloadQueue>;
   updateQueue(queue: DownloadQueue): Promise<void>;
   deleteQueue(id: string): Promise<void>;

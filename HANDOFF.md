@@ -1,5 +1,35 @@
 # Handoff: Material Download Manager
 
+## Local Ollama suite manager foundation (task jer, 2026-08-12)
+
+This task jer adds a bounded desktop foundation for the universal local Ollama
+contract. The Settings dialog and `Ctrl+Shift+F` command palette expose the
+destination. Users can add and remove credential-free loopback providers,
+refresh installed-model metadata through a bounded main-process `GET /api/tags`
+request, copy/import a metadata-only JSON envelope, and reset corrupt local
+metadata behind the existing destructive-action gate. URL userinfo, query,
+fragment, path, redirect, cloud hosts, oversized/chunked responses, and
+non-JSON responses are rejected. Imported metadata is marked unverified until
+a fresh local refresh; credentials are always forced to unconfigured metadata.
+
+The larger contract is intentionally not claimed here: exhaustive official
+catalog pagination, fit verdicts, batch pull cart, chat, attachments, harness
+profiles, per-list bulk/search/history, and every-format file export remain
+follow-up work and are documented as unavailable rather than represented by
+fake controls.
+
+### Evidence
+
+- Focused Ollama tests: **4/4 passed**.
+- Built UI smoke: **56/56 passed**, including the Ollama Settings destination.
+- Typecheck, renderer/main build, documentation bundle check/tests (**2/2**),
+  and `git diff --check` passed.
+- Real built capture: [`ollama-suite-settings.png`](docs/screenshots/product/ollama-suite-settings.png), 524×558, SHA-256 `CFA365286EFF01ED73E07DCCFF0B2DC2DFB7B44F4C17DD1AD20A48B1F9A91024`.
+- Full Electron suite: **147/149**. The two failures are unrelated baseline
+  failures: the narrator sync-throw assertion and a scheduled-settings child
+  test that could not load Electron in its process. No remote CI/release result
+  is claimed for this task jer before integration.
+
 ## Browser-extension download surfaces (integrated on `main`, 2026-08-12)
 
 Main commit [`1e58988`](https://github.com/Ding-Ding-Projects/material-download-manager/commit/1e5898853c7e82e59bd9a94d2f0944f366747846)

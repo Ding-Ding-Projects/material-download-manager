@@ -236,6 +236,14 @@ export default function App() {
         onSelect: () => openSettings("authenticator"),
       },
       {
+        id: "destination.ollama-suite",
+        label: copy.text("Local Ollama suite", "本機 Ollama 管理器"),
+        description: copy.text("Manage loopback providers and verified installed-model metadata", "管理 loopback 供應者同已驗證嘅本機模型資料標籤"),
+        keywords: ["ollama", "local", "loopback", "models", "provider", "metadata", "offline"],
+        section: copy.text("Destinations", "目的地"),
+        onSelect: () => openSettings("ollama"),
+      },
+      {
         id: "destination.all-downloads",
         label: "Downloads · All",
         description: "Show every download in the list",
