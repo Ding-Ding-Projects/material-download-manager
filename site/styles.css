@@ -267,6 +267,15 @@ kbd { display: inline-flex; align-items: center; min-height: 1.4rem; padding: .0
 .release-state-row strong { font-size: .88rem; }
 .stable-download-slot:empty { display: none; }
 .verified-download { display: inline-flex; margin: .25rem 0 1rem; }
+.extension-download-slot:empty { display: none; }
+.extension-install-card { display: grid; gap: .65rem; margin: .25rem 0 1rem; padding: 1rem; border: 1px solid color-mix(in srgb, var(--accent) 36%, var(--outline-variant)); border-radius: var(--radius-md); background: color-mix(in srgb, var(--accent-soft) 22%, var(--surface-container-low)); }
+.extension-install-heading { display: flex; flex-wrap: wrap; align-items: center; gap: .55rem; }
+.extension-install-heading h3 { margin: 0; font-size: 1rem; }
+.extension-install-summary, .extension-install-meta, .extension-install-warning { margin: 0; color: var(--on-surface-variant); font-size: .78rem; }
+.extension-install-meta { overflow-wrap: anywhere; font-family: var(--font-mono); font-size: .7rem; }
+.extension-install-warning { padding: .65rem .75rem; border-left: .22rem solid var(--warning); border-radius: .35rem var(--radius-sm) var(--radius-sm) .35rem; background: color-mix(in srgb, var(--warning) 10%, var(--surface)); }
+.verified-extension-download { justify-self: start; }
+.extension-install-steps { display: grid; gap: .42rem; margin: .15rem 0 0 1.25rem; padding: 0; color: var(--on-surface-variant); font-size: .78rem; }
 .check-list, .detail-list { margin: 1rem 0 1.25rem; padding: 0; list-style: none; }
 .check-list { display: grid; gap: .75rem; }
 .check-list li { align-items: flex-start; gap: .65rem; color: var(--on-surface-variant); }

@@ -91,6 +91,19 @@ unpacked** with the automatically revealed folder. The repository does not
 create or advertise a CRX because a genuine CRX3 requires signing and the
 project permanently prohibits signing keys and signing operations.
 
+When the injected stable record passes the browser-side release contract, the
+release card also exposes a keyboard- and pointer-accessible **Download
+extension source ZIP** action. It shows the exact version, byte count, and SHA-256
+digest from `extensionArtifact`, followed by the three-step pairing route:
+download/extract, run the desktop app's **Settings → Downloads → Install
+browser extension** action, then use **Developer mode → Load unpacked** on the
+app-prepared folder. The card carries an explicit unpaired-ZIP warning so the
+public archive is never mistaken for the paired handoff. Missing, malformed,
+signed, non-GitHub, version-mismatched, digest-mismatched, CRX-bearing, or
+otherwise unverified extension metadata leaves the extension action absent;
+the installer remains independently governed by its own stable-release
+contract.
+
 GitHub Pages publication is not claimed by this source. A real deployment URL
 and built-output verification must be added before the repository advertises a
 published site.

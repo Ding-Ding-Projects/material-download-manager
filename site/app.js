@@ -4,6 +4,7 @@
   const content = window.MDM_SITE_CONTENT;
   const settingsContract = window.MDM_SITE_SETTINGS_CONTRACT;
   const notificationContract = window.MDM_SITE_NOTIFICATION_CONTRACT;
+  const releaseManifestContract = window.MDM_RELEASE_MANIFEST_CONTRACT;
   const manifest = window.MDM_RELEASE_MANIFEST || { stable: null, publication: { pages: "unverified" } };
   const root = document.documentElement;
   const SETTINGS_SCHEMA_VERSION = 2;
@@ -70,6 +71,15 @@
     releaseTitle: ["Stable means proven.", "穩定版，要有證據先算。"],
     releaseSummary: ["This checkout has no injected stable release record yet. The installer stays hidden until the Pages manifest proves a published, unsigned, non-prerelease release and its real Squirrel assets.", "呢個 checkout 暫時未有注入穩定版本紀錄；要等 Pages manifest 證明已發佈、未簽名、非預發版同埋真實 Squirrel 素材齊晒，安裝掣先會出現。"],
     viewReleaseEvidence: ["View release evidence →", "睇版本證據 →"],
+    extensionTitle: ["Browser extension", "瀏覽器擴充功能"],
+    extensionSummary: ["Download the verified Manifest V3 ZIP, then use the desktop app to prepare the private paired folder before loading it in your browser.", "下載驗證過嘅 Manifest V3 ZIP，然後用桌面程式準備私密配對資料夾，再喺瀏覽器載入。"],
+    extensionDownload: ["Download extension source ZIP", "下載擴充功能來源 ZIP"],
+    extensionMetadata: ["Manifest V3 · ZIP · {size} bytes · SHA-256 {sha256}", "Manifest V3 · ZIP · {size} bytes · SHA-256 {sha256}"],
+    extensionUnpairedWarning: ["Unpaired ZIP warning: this public ZIP has an empty pairing module. It cannot capture downloads until the desktop app's Install browser extension action prepares the private paired folder.", "未配對 ZIP 提示：呢個公開 ZIP 內置空白配對模組；要等桌面程式嘅「Install browser extension」準備好私密配對資料夾，先可以捕捉下載。"],
+    extensionStepOne: ["Download this ZIP and extract it to a local folder.", "下載呢個 ZIP，解壓去本機資料夾。"],
+    extensionStepTwo: ["In the desktop app, choose Settings → Downloads → Install browser extension. It prepares the paired folder and opens that exact folder.", "喺桌面程式揀 Settings → Downloads → Install browser extension；程式會準備配對資料夾，同埋開返嗰個資料夾。"],
+    extensionStepThree: ["Open your browser's extensions page, enable Developer mode, choose Load unpacked, and select the app-prepared folder.", "開瀏覽器擴充功能頁，開啟 Developer mode，揀 Load unpacked，再揀程式準備好嘅資料夾。"],
+    extensionUnavailable: ["The extension action stays hidden because this release does not expose a complete verified ZIP record.", "擴充功能操作暫時隱藏，因為呢個版本未有完整驗證過嘅 ZIP 紀錄。"],
     builtAround: ["BUILT AROUND THE WORK", "圍住實際工作起屋"],
     spotlightTitle: ["The useful bits have a paper trail.", "有用嘅嘢，留低晒腳印。"],
     spotlightOne: ["Range transfers and queue schedules stay bounded.", "分段傳輸同隊列時間表有界有數。"],
@@ -373,6 +383,7 @@
     strip.setAttribute("aria-orientation", settings.tabPosition === "top" ? "horizontal" : "vertical");
     $("#brand-name").textContent = settings.displayName || DEFAULTS.displayName;
     applyAppearanceOverrides();
+    renderReleaseGate();
     applyTranslations();
     applySchoolModeSurface();
     renderSettingsControls();
@@ -1399,15 +1410,18 @@
   }
 
   function releaseIsStableVerified(record) {
-    return Boolean(record && record.version && record.verified === true && /^https:\/\//.test(record.installerUrl || "") && Array.isArray(record.assets) && ["Setup.exe", "RELEASES"].every((name) => record.assets.includes(name)));
+    return Boolean(manifest.schemaVersion === 1 && releaseManifestContract && typeof releaseManifestContract.isVerifiedStableRecord === "function" && releaseManifestContract.isVerifiedStableRecord(record));
   }
 
   function renderReleaseGate() {
     const slot = $("#stable-download-slot");
     slot.replaceChildren();
+    const extensionSlot = $("#extension-download-slot");
+    extensionSlot?.replaceChildren();
     const stable = manifest.stable;
     const pagesVerified = ["verified", "workflow-deployed"].includes(manifest.publication?.pages);
-    if (releaseIsStableVerified(stable)) {
+    const stableEligible = pagesVerified && releaseIsStableVerified(stable);
+    if (stableEligible) {
       COPY.releaseSummary = [
         `Stable v${stable.version} is verified with a real unsigned installer and release evidence. Download it from the published release record.`,
         `穩定版 v${stable.version} 已經有真實未簽名安裝程式同 release 證據；可以由已發布嘅版本記錄下載。`
@@ -1425,7 +1439,7 @@
       ];
       COPY.publicationDetail = ["Publication: verified", "發佈：已驗證"];
     }
-    if (releaseIsStableVerified(stable)) {
+    if (stableEligible) {
       const link = create("a", "button button-filled verified-download", `Download stable installer · v${stable.version}`);
       link.href = stable.installerUrl;
       link.target = "_blank";
@@ -1441,6 +1455,37 @@
       $("#release-metric-note").textContent = "not proven";
       $("#release-state-label").textContent = "No stable asset verified";
     }
+    if (!extensionSlot || !stableEligible) return;
+    const descriptor = releaseManifestContract && typeof releaseManifestContract.getVerifiedExtensionDescriptor === "function" ? releaseManifestContract.getVerifiedExtensionDescriptor(stable) : null;
+    const extensionReady = Boolean(descriptor);
+    if (!extensionReady) {
+      extensionSlot.append(create("p", "field-help", localized("extensionUnavailable")));
+      return;
+    }
+    const artifact = stable.extensionArtifact;
+    const card = create("section", "extension-install-card");
+    const heading = create("div", "extension-install-heading");
+    heading.append(create("h3", null, localized("extensionTitle")));
+    heading.append(create("span", "release-badge", "Manifest V3 · ZIP"));
+    card.append(heading);
+    card.append(create("p", "extension-install-summary", localized("extensionSummary")));
+    const download = create("a", "button button-tonal verified-extension-download", `${localized("extensionDownload")} · v${artifact.version}`);
+    download.href = descriptor.href;
+    download.download = descriptor.fileName;
+    download.target = "_blank";
+    download.rel = "noopener noreferrer";
+    download.setAttribute("data-extension-install", "true");
+    download.setAttribute("aria-label", `${localized("extensionDownload")} · v${descriptor.version}`);
+    card.append(download);
+    const metadata = localized("extensionMetadata").replace("{size}", Number(artifact.sizeBytes).toLocaleString()).replace("{sha256}", artifact.sha256);
+    card.append(create("p", "extension-install-meta", metadata));
+    const warning = create("p", "extension-install-warning", localized("extensionUnpairedWarning"));
+    warning.setAttribute("role", "note");
+    card.append(warning);
+    const steps = create("ol", "extension-install-steps");
+    ["extensionStepOne", "extensionStepTwo", "extensionStepThree"].forEach((key) => steps.append(create("li", null, localized(key))));
+    card.append(steps);
+    extensionSlot.append(card);
   }
 
   function formatDate(value) { return value ? new Intl.DateTimeFormat(undefined, { dateStyle: "medium" }).format(new Date(`${value}T00:00:00`)) : "Not recorded in source"; }
@@ -1571,6 +1616,16 @@
       { id: "setting.appearance", label: "Settings · appearance editor", description: "Edit per-surface radius, color, and spacing", action: () => focusElement("appearance-target", "settings") },
       ...content.features.map((feature) => ({ id: `feature.${feature.id}`, label: feature.title, description: `${feature.category} · ${feature.summary}`, action: () => selectArticle(feature.id) }))
     ];
+    const stable = manifest.stable;
+    const pagesVerified = ["verified", "workflow-deployed"].includes(manifest.publication?.pages);
+    if (pagesVerified && releaseIsStableVerified(stable) && releaseManifestContract?.isVerifiedExtensionArtifact?.(stable)) {
+      commands.splice(7, 0, {
+        id: "action.download-extension",
+        label: `${localized("extensionDownload")} · v${stable.extensionArtifact.version}`,
+        description: localized("extensionSummary"),
+        action: () => document.querySelector('[data-extension-install="true"]')?.click()
+      });
+    }
     return isSchoolMode()
       ? commands.filter((command) => !command.schoolOptional).map((command) => ({ ...command, label: schoolSafeText(command.label), description: schoolSafeText(command.description) }))
       : commands;
