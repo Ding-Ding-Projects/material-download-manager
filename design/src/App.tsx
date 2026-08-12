@@ -27,6 +27,7 @@ import DimSumSurprise from "./components/DimSumSurprise";
 import HistoryPanel from "./components/HistoryPanel";
 import ChangelogPanel from "./components/ChangelogPanel";
 import DocumentationPanel from "./components/DocumentationPanel";
+import ConverterPanel from "./components/ConverterPanel";
 import NarratorController, { requestNarration } from "./narration/NarratorController";
 import { setActiveTab } from "@shared/tabModel";
 import { useFilteredItems } from "./hooks/useFilteredItems";
@@ -72,6 +73,20 @@ export default function App() {
   const activeQueueId = filter.kind === "queue" ? filter.queueId : DEFAULT_QUEUE_ID;
   const activeQueue = queues.find((queue) => queue.id === activeQueueId);
   const activeQueueName = activeQueue?.name ?? "Default Queue";
+  const visibleTabState = useMemo<TabState>(() => {
+    if (!settings?.schoolModeEnabled) return tabState;
+    const tabs = tabState.tabs.filter((tab) => tab.id !== "converter");
+    const activeTabId = tabState.activeTabId === "converter"
+      ? tabs.find((tab) => tab.id === "downloads")?.id ?? tabs[0]?.id ?? null
+      : tabState.activeTabId;
+    return {
+      ...tabState,
+      tabs,
+      groups: tabState.groups.map((group) => ({ ...group, tabIds: group.tabIds.filter((id) => id !== "converter") })),
+      activeTabId,
+      activeGroupId: tabs.find((tab) => tab.id === activeTabId)?.groupId ?? null,
+    };
+  }, [settings?.schoolModeEnabled, tabState]);
 
   const paletteCommands = useMemo<PaletteCommand[]>(() => {
     const commands: PaletteCommand[] = [
@@ -240,6 +255,14 @@ export default function App() {
         section: copy.text("Destinations", "目的地"),
         onSelect: () => openSettings("ollama"),
       },
+      ...(!settings?.schoolModeEnabled ? [{
+        id: "destination.file-converter",
+        label: copy.text("Local file converter", "本機檔案轉換器"),
+        description: copy.text("Choose bounded local adapters, inspect source signatures, and manage a private conversion queue", "選擇有界線嘅本機轉換器、檢查來源簽名，同埋管理私隱轉換佇列"),
+        keywords: ["convert", "converter", "file", "json", "csv", "text", "base64", "pdf", "offline"],
+        section: copy.text("Destinations", "目的地"),
+        onSelect: () => selectAppTab("converter"),
+      }] : []),
       {
         id: "destination.all-downloads",
         label: "Downloads · All",
@@ -332,6 +355,11 @@ export default function App() {
   useEffect(() => {
     saveTabState(tabState);
   }, [tabState]);
+
+  useEffect(() => {
+    if (!settings?.schoolModeEnabled || tabState.activeTabId !== "converter") return;
+    setTabState((current) => setActiveTab(current, "downloads"));
+  }, [settings?.schoolModeEnabled, tabState.activeTabId]);
 
   useEffect(() => {
     if (!ready || dimSumDrawn.current) return;
@@ -463,10 +491,33 @@ export default function App() {
     if (tabId === "history") return;
     if (tabId === "changelog") return;
     if (tabId === "documentation") return;
+    if (tabId === "converter") return;
   }
 
   function selectAppTab(tabId: string) {
+    if (tabId === "converter" && settings?.schoolModeEnabled) return;
     setTabState((current) => setActiveTab(current, tabId));
+  }
+
+  function updateVisibleTabState(next: TabState) {
+    if (!settings?.schoolModeEnabled) {
+      setTabState(next);
+      return;
+    }
+    setTabState((current) => {
+      const hidden = current.tabs.filter((tab) => tab.id === "converter").map((tab) => ({
+        ...tab,
+        groupId: next.groups.some((group) => group.id === tab.groupId) ? tab.groupId : null,
+      }));
+      return {
+        ...next,
+        tabs: [...next.tabs, ...hidden],
+        groups: next.groups.map((group) => ({
+          ...group,
+          tabIds: [...group.tabIds, ...hidden.filter((tab) => tab.groupId === group.id).map((tab) => tab.id)],
+        })),
+      };
+    });
   }
 
   return (
@@ -475,17 +526,24 @@ export default function App() {
       <NarratorController />
       <CommandPalette commands={paletteCommands} />
       <TitleBar />
-      <TabStrip state={tabState} onChange={setTabState} onActivate={activateTab} onAddDownload={openAddDownload} />
+      <TabStrip
+        state={visibleTabState}
+        onChange={updateVisibleTabState}
+        onActivate={activateTab}
+        onAddDownload={openAddDownload}
+      />
       <UpdaterBanner hasUnsavedWork={hasUnsavedWork} unsavedWorkReason={unsavedWorkReason} copy={copy} />
       <div className="app-body">
         <Sidebar />
-        <main className="main-pane" id={`tabpanel-${tabState.activeTabId ?? "downloads"}`} role="tabpanel" aria-labelledby={`app-tab-${tabState.activeTabId ?? "downloads"}`}>
-          {tabState.activeTabId === "history" ? (
+        <main className="main-pane" id={`tabpanel-${visibleTabState.activeTabId ?? "downloads"}`} role="tabpanel" aria-labelledby={`app-tab-${visibleTabState.activeTabId ?? "downloads"}`}>
+          {visibleTabState.activeTabId === "history" ? (
             <HistoryPanel />
-          ) : tabState.activeTabId === "changelog" ? (
+          ) : visibleTabState.activeTabId === "changelog" ? (
             <ChangelogPanel />
-          ) : tabState.activeTabId === "documentation" ? (
+          ) : visibleTabState.activeTabId === "documentation" ? (
             <DocumentationPanel />
+          ) : visibleTabState.activeTabId === "converter" && !settings?.schoolModeEnabled ? (
+            <ConverterPanel />
           ) : (
             <>
               <Toolbar

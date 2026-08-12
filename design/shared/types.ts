@@ -620,6 +620,18 @@ export const IPC = {
   OLLAMA_EXPORT_METADATA: "ollama:exportMetadata",
   OLLAMA_IMPORT_METADATA: "ollama:importMetadata",
   OLLAMA_RESET_STATE: "ollama:resetState",
+  CONVERTER_GET_STATE: "converter:getState",
+  CONVERTER_PICK_SOURCES: "converter:pickSources",
+  CONVERTER_CLEAR_STAGED: "converter:clearStaged",
+  CONVERTER_QUEUE_STAGED: "converter:queueStaged",
+  CONVERTER_PAUSE_QUEUE: "converter:pauseQueue",
+  CONVERTER_RESUME_QUEUE: "converter:resumeQueue",
+  CONVERTER_CANCEL_JOB: "converter:cancelJob",
+  CONVERTER_RETRY_JOB: "converter:retryJob",
+  CONVERTER_OPEN_RESULT: "converter:openResult",
+  CONVERTER_OPEN_RESULT_IN_EDITOR: "converter:openResultInEditor",
+  CONVERTER_EXPORT_HISTORY: "converter:exportHistory",
+  CONVERTER_STATE_CHANGED: "converter:stateChanged",
 } as const;
 
 export type {

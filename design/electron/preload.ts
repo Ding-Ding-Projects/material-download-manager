@@ -33,6 +33,7 @@ import { isTotpRegistrationExportRecord, isTotpRegistrationMetadata } from "../s
 import { isSshHostStatus } from "../shared/ssh";
 import { isExportResult } from "../shared/export";
 import { isOllamaRefreshResult, isOllamaSuiteState, type OllamaRefreshResult, type OllamaSuiteState } from "../shared/ollama";
+import { isConverterState, type ConverterState } from "../shared/converter";
 import { isHistoryAccessState, isHistoryDiff, isHistoryPruneResult, isHistoryRevision, isHistoryView } from "../shared/history";
 import { isDownloadCategory } from "../shared/settings";
 import { isRegexEvaluation, type RegexEvaluation } from "../shared/regex";
@@ -414,6 +415,69 @@ const api = {
     const result: unknown = await ipcRenderer.invoke(IPC.OLLAMA_RESET_STATE);
     if (!isOllamaSuiteState(result)) throw new Error("Invalid Ollama reset result from main process");
     return result;
+  },
+
+  getConverterState: async (): Promise<ConverterState> => {
+    const result: unknown = await ipcRenderer.invoke(IPC.CONVERTER_GET_STATE);
+    if (!isConverterState(result)) throw new Error("Invalid converter state from main process");
+    return result;
+  },
+  pickConverterSources: async (): Promise<ConverterState> => {
+    const result: unknown = await ipcRenderer.invoke(IPC.CONVERTER_PICK_SOURCES);
+    if (!isConverterState(result)) throw new Error("Invalid converter source selection from main process");
+    return result;
+  },
+  clearConverterSources: async (): Promise<ConverterState> => {
+    const result: unknown = await ipcRenderer.invoke(IPC.CONVERTER_CLEAR_STAGED);
+    if (!isConverterState(result)) throw new Error("Invalid converter clear result from main process");
+    return result;
+  },
+  queueConverterSources: async (adapterId: string): Promise<ConverterState> => {
+    const result: unknown = await ipcRenderer.invoke(IPC.CONVERTER_QUEUE_STAGED, adapterId);
+    if (!isConverterState(result)) throw new Error("Invalid converter queue result from main process");
+    return result;
+  },
+  pauseConverterQueue: async (): Promise<ConverterState> => {
+    const result: unknown = await ipcRenderer.invoke(IPC.CONVERTER_PAUSE_QUEUE);
+    if (!isConverterState(result)) throw new Error("Invalid converter pause result from main process");
+    return result;
+  },
+  resumeConverterQueue: async (): Promise<ConverterState> => {
+    const result: unknown = await ipcRenderer.invoke(IPC.CONVERTER_RESUME_QUEUE);
+    if (!isConverterState(result)) throw new Error("Invalid converter resume result from main process");
+    return result;
+  },
+  cancelConverterJob: async (id: string): Promise<ConverterState> => {
+    const result: unknown = await ipcRenderer.invoke(IPC.CONVERTER_CANCEL_JOB, id);
+    if (!isConverterState(result)) throw new Error("Invalid converter cancellation result from main process");
+    return result;
+  },
+  retryConverterJob: async (id: string): Promise<ConverterState> => {
+    const result: unknown = await ipcRenderer.invoke(IPC.CONVERTER_RETRY_JOB, id);
+    if (!isConverterState(result)) throw new Error("Invalid converter retry result from main process");
+    return result;
+  },
+  openConverterResult: async (id: string): Promise<boolean> => {
+    const result: unknown = await ipcRenderer.invoke(IPC.CONVERTER_OPEN_RESULT, id);
+    if (result !== true) throw new Error("The converter result could not be opened.");
+    return true;
+  },
+  openConverterResultInEditor: async (id: string): Promise<boolean> => {
+    const result: unknown = await ipcRenderer.invoke(IPC.CONVERTER_OPEN_RESULT_IN_EDITOR, id);
+    if (typeof result !== "boolean") throw new Error("Invalid converter external-editor result from main process");
+    return result;
+  },
+  exportConverterHistory: async (format: ExportFormat): Promise<ExportResult> => {
+    const result: unknown = await ipcRenderer.invoke(IPC.CONVERTER_EXPORT_HISTORY, format);
+    if (!isExportResult(result)) throw new Error("Invalid converter history export from main process");
+    return result;
+  },
+  onConverterStateChanged: (cb: (state: ConverterState) => void) => {
+    const listener = (_: unknown, state: unknown) => {
+      if (isConverterState(state)) cb(state);
+    };
+    ipcRenderer.on(IPC.CONVERTER_STATE_CHANGED, listener);
+    return () => ipcRenderer.removeListener(IPC.CONVERTER_STATE_CHANGED, listener);
   },
 
   createQueue: (queue: Partial<DownloadQueue>): Promise<DownloadQueue> =>

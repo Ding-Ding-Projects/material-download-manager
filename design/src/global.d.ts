@@ -39,6 +39,7 @@ import type {
   TotpRegistrationMetadata,
 } from "@shared/authenticator";
 import type { OllamaRefreshResult, OllamaSuiteState } from "@shared/ollama";
+import type { ConverterState } from "@shared/converter";
 
 export interface MaterialDownloadManagerAPI {
   getState(): Promise<StateSnapshot>;
@@ -112,6 +113,18 @@ export interface MaterialDownloadManagerAPI {
   exportOllamaMetadata(format: ExportFormat): Promise<ExportResult>;
   importOllamaMetadata(value: unknown): Promise<OllamaSuiteState>;
   resetOllamaSuiteState(): Promise<OllamaSuiteState>;
+  getConverterState(): Promise<ConverterState>;
+  pickConverterSources(): Promise<ConverterState>;
+  clearConverterSources(): Promise<ConverterState>;
+  queueConverterSources(adapterId: string): Promise<ConverterState>;
+  pauseConverterQueue(): Promise<ConverterState>;
+  resumeConverterQueue(): Promise<ConverterState>;
+  cancelConverterJob(id: string): Promise<ConverterState>;
+  retryConverterJob(id: string): Promise<ConverterState>;
+  openConverterResult(id: string): Promise<boolean>;
+  openConverterResultInEditor(id: string): Promise<boolean>;
+  exportConverterHistory(format: ExportFormat): Promise<ExportResult>;
+  onConverterStateChanged(cb: (state: ConverterState) => void): () => void;
   createQueue(queue: Partial<DownloadQueue>): Promise<DownloadQueue>;
   updateQueue(queue: DownloadQueue): Promise<void>;
   deleteQueue(id: string): Promise<void>;
