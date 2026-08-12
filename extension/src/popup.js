@@ -1,8 +1,19 @@
 import { DEFAULT_SETTINGS, SETTINGS_KEY, sanitizeSettings } from "./shared/settings.js";
 import { normalizeDownloadUrl } from "./shared/handoff.js";
-import { decorateMessage, localize } from "./shared/localization.js";
+import { decorateMessage, localize, setActivePersonalVocabulary } from "./shared/localization.js";
+import { PERSONAL_VOCABULARY_STORAGE_KEY, readPersonalVocabulary } from "./shared/personal-vocabulary.js";
 
 let settings = sanitizeSettings(DEFAULT_SETTINGS);
+let lastResult = null;
+
+async function refreshPersonalVocabulary() {
+  try {
+    const state = await readPersonalVocabulary(chrome.storage.local);
+    setActivePersonalVocabulary(state.replacements);
+  } catch {
+    setActivePersonalVocabulary(null);
+  }
+}
 
 const elements = {
   managerName: document.querySelector("#manager-name"),
@@ -67,12 +78,18 @@ function resultMessage(value) {
   return localize(known.includes(key) ? key : "handoffFailed", settings, { detail: value.detail ?? "", name: settings.schoolModeName });
 }
 
-function renderState(state) {
+async function renderState(state) {
   settings = sanitizeSettings(state?.settings ?? DEFAULT_SETTINGS);
+  lastResult = state?.lastResult ?? null;
+  await refreshPersonalVocabulary();
   applyLanguage();
-  elements.statusMessage.textContent = decorateMessage(resultMessage(state?.lastResult), settings, state?.lastResult?.ok === false ? "⚠️" : "✅");
-  elements.statusMessage.classList.toggle("is-error", state?.lastResult?.ok === false);
+  renderStatus();
   elements.sendButton.disabled = !settings.handoffEndpoint || !normalizeDownloadUrl(elements.url.value);
+}
+
+function renderStatus() {
+  elements.statusMessage.textContent = decorateMessage(resultMessage(lastResult), settings, lastResult?.ok === false ? "⚠️" : "✅");
+  elements.statusMessage.classList.toggle("is-error", lastResult?.ok === false);
 }
 
 async function getState() {
@@ -114,8 +131,8 @@ elements.handoffForm.addEventListener("submit", async (event) => {
   try {
     const response = await chrome.runtime.sendMessage({ type: "HANDOFF_URL", url });
     if (!response?.ok) throw new Error("worker");
-    elements.statusMessage.textContent = decorateMessage(resultMessage(response.result), settings, response.result?.ok === false ? "⚠️" : "✅");
-    elements.statusMessage.classList.toggle("is-error", response.result?.ok === false);
+    lastResult = response.result ?? null;
+    renderStatus();
   } catch {
     elements.statusMessage.textContent = decorateMessage(localize("serviceWorkerUnavailable", settings), settings, "⚠️");
     elements.statusMessage.classList.add("is-error");
@@ -129,13 +146,20 @@ elements.optionsButton.addEventListener("click", () => {
 });
 
 chrome.storage.onChanged.addListener((changes, areaName) => {
-  if (areaName !== "local" || !changes[SETTINGS_KEY]) return;
-  settings = sanitizeSettings(changes[SETTINGS_KEY].newValue);
-  applyLanguage();
-  elements.sendButton.disabled = !settings.handoffEndpoint || !normalizeDownloadUrl(elements.url.value);
+  if (areaName !== "local" || (!changes[SETTINGS_KEY] && !changes[PERSONAL_VOCABULARY_STORAGE_KEY])) return;
+  void (async () => {
+    if (changes[SETTINGS_KEY]) settings = sanitizeSettings(changes[SETTINGS_KEY].newValue);
+    if (changes[PERSONAL_VOCABULARY_STORAGE_KEY]) await refreshPersonalVocabulary();
+    applyLanguage();
+    renderStatus();
+    elements.sendButton.disabled = !settings.handoffEndpoint || !normalizeDownloadUrl(elements.url.value);
+  })();
 });
 
 const state = await getState();
 await loadActiveTabUrl();
-if (state) renderState(state);
-else applyLanguage();
+if (state) await renderState(state);
+else {
+  await refreshPersonalVocabulary();
+  applyLanguage();
+}

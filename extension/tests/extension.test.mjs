@@ -33,7 +33,21 @@ import {
   validateIncomingMessage,
 } from "../src/shared/handoff.js";
 import { appendRegexFragment, evaluateRegex, validateRegex } from "../src/shared/regex.js";
-import { decorateMessage, hasLocalizationKey, localize, narrationParts } from "../src/shared/localization.js";
+import { decorateMessage, hasLocalizationKey, localize, narrationParts, setActivePersonalVocabulary } from "../src/shared/localization.js";
+import {
+  MAX_PERSONAL_VOCABULARY_BYTES,
+  PERSONAL_VOCABULARY_CLEAR_KEYS,
+  PERSONAL_VOCABULARY_SCHEMA,
+  PERSONAL_VOCABULARY_STORAGE_KEY,
+  PERSONAL_VOCABULARY_VERSION,
+  applyPersonalVocabulary,
+  canConfirmPersonalVocabularyClear,
+  clearPersonalVocabulary,
+  decodePersonalVocabularyUtf8,
+  importPersonalVocabulary,
+  readPersonalVocabulary,
+  validatePersonalVocabularyText,
+} from "../src/shared/personal-vocabulary.js";
 import { RESET_CREDENTIAL_STATES, createCredentialAbstraction } from "../src/shared/credential.js";
 import {
   DISPLAY_NAME_MUTATION_JOURNAL_KEY,
@@ -66,6 +80,39 @@ const extensionRoot = dirname(dirname(fileURLToPath(import.meta.url)));
 const read = (relativePath) => readFile(join(extensionRoot, relativePath), "utf8");
 let nextHarnessId = 0;
 const TEST_CAPABILITY = "a".repeat(43);
+
+function assertPersonalVocabularyInventory({ options, optionsScript, popupScript, worker, article, docsIndex }) {
+  const required = [
+    [options, 'id="personal-vocabulary-file" type="file" accept="application/json,.json"', "semantic JSON file picker"],
+    [options, 'id="personal-vocabulary-choose"', "choose control"],
+    [options, 'id="personal-vocabulary-replace"', "replace control"],
+    [options, 'id="personal-vocabulary-clear"', "clear control"],
+    [options, 'id="personal-vocabulary-clear-key-one"', "clear key one"],
+    [options, 'id="personal-vocabulary-clear-key-two"', "clear key two"],
+    [options, 'id="personal-vocabulary-clear-slider"', "clear confirmation slider"],
+    [options, 'id="personal-vocabulary-clear-confirm"', "clear confirmation action"],
+    [options, 'id="personal-vocabulary-clear-cancel"', "clear cancellation action"],
+    [options, 'id="personal-vocabulary-status"', "live status"],
+    [options, 'data-school-hidden data-search="personal vocabulary local json upload replace clear reset original wording"', "School-mode searchable settings card"],
+    [optionsScript, '"personal-vocabulary-file"', "hand-written settings-search entry"],
+    [optionsScript, 'type: "IMPORT_PERSONAL_VOCABULARY", text', "bounded import message"],
+    [optionsScript, 'type: "CLEAR_PERSONAL_VOCABULARY"', "clear message"],
+    [optionsScript, "updatePersonalVocabularyClearGate", "clear confirmation gate"],
+    [popupScript, "PERSONAL_VOCABULARY_STORAGE_KEY", "popup cache refresh"],
+    [worker, "GET_PERSONAL_VOCABULARY_STATE", "worker state boundary"],
+    [worker, "IMPORT_PERSONAL_VOCABULARY", "worker import boundary"],
+    [worker, "CLEAR_PERSONAL_VOCABULARY", "worker clear boundary"],
+    [article, "# Personal vocabulary JSON control", "feature article"],
+    [article, "## Neutral JSON contract", "schema documentation"],
+    [article, "## Privacy and security", "privacy documentation"],
+    [article, "## Verification and evidence", "verification documentation"],
+    [article, "two-key", "clear confirmation documentation"],
+    [docsIndex, "[Personal vocabulary JSON control](personal-vocabulary.md)", "documentation index"],
+  ];
+  for (const [source, fragment, label] of required) {
+    if (!source.includes(fragment)) throw new Error(`Personal vocabulary inventory missing ${label}.`);
+  }
+}
 
 function handoffProof(input) {
   return createHmac("sha256", TEST_CAPABILITY).update(input, "utf8").digest("hex");
@@ -283,6 +330,28 @@ test("service worker, popup, options, and runtime message boundary are wired", a
   assert.doesNotMatch(worker, /console\.(log|info|debug|error)\(/);
 });
 
+test("personal vocabulary has a hand-written fail-closed surface inventory", async () => {
+  const sources = {
+    options: await read("src/options.html"),
+    optionsScript: await read("src/options.js"),
+    popupScript: await read("src/popup.js"),
+    worker: await read("src/service-worker.js"),
+    article: await read("docs/personal-vocabulary.md"),
+    docsIndex: await read("docs/README.md"),
+  };
+  assertPersonalVocabularyInventory(sources);
+  const removedControl = {
+    ...sources,
+    options: sources.options.replace('id="personal-vocabulary-clear"', 'id="personal-vocabulary-clear-removed"'),
+  };
+  assert.throws(() => assertPersonalVocabularyInventory(removedControl), /inventory missing clear control/u);
+  const removedArticle = {
+    ...sources,
+    article: sources.article.replace("## Privacy and security", "## Removed privacy section"),
+  };
+  assert.throws(() => assertPersonalVocabularyInventory(removedArticle), /inventory missing privacy documentation/u);
+});
+
 test("service worker runtime boundary stores settings and reports disabled handoff", async () => {
   const storage = new Map();
   const runtime = { id: "extension-test", onInstalled: new FakeEvent(), onStartup: new FakeEvent(), onMessage: new FakeEvent() };
@@ -381,6 +450,30 @@ test("service worker runtime boundary stores settings and reports disabled hando
     assert.equal(initial.ok, true);
     assert.equal(initial.settings.handoffEndpoint, DEFAULT_HANDOFF_ENDPOINT);
     assert.equal(initial.settings.autoCaptureDownloads, true);
+    assert.equal(initial.personalVocabulary.status, "empty");
+    assert.doesNotMatch(JSON.stringify(initial), /Sunlit label|Quiet label/u);
+    const vocabularyPayload = JSON.stringify({
+      schema: PERSONAL_VOCABULARY_SCHEMA,
+      version: PERSONAL_VOCABULARY_VERSION,
+      replacements: { "Sunlit label": "Quiet label" },
+    });
+    const importedVocabulary = await send({ type: "IMPORT_PERSONAL_VOCABULARY", text: vocabularyPayload });
+    assert.equal(importedVocabulary.ok, true);
+    assert.deepEqual(importedVocabulary.result, { ok: true, status: "loaded" });
+    const postImportState = await send({ type: "GET_STATE" });
+    assert.equal(postImportState.personalVocabulary.status, "loaded");
+    assert.doesNotMatch(JSON.stringify(postImportState), /Sunlit label|Quiet label/u);
+    const vocabularyState = await send({ type: "GET_PERSONAL_VOCABULARY_STATE" });
+    assert.deepEqual(vocabularyState.result, { ok: true, status: "loaded" });
+    assert.equal(storage.get(PERSONAL_VOCABULARY_STORAGE_KEY).replacements["Sunlit label"], "Quiet label");
+    const rejectedVocabulary = await send({ type: "IMPORT_PERSONAL_VOCABULARY", text: "{" });
+    assert.equal(rejectedVocabulary.ok, false);
+    assert.equal(rejectedVocabulary.result.status, "rejected");
+    assert.equal(storage.get(PERSONAL_VOCABULARY_STORAGE_KEY).replacements["Sunlit label"], "Quiet label");
+    const clearedVocabulary = await send({ type: "CLEAR_PERSONAL_VOCABULARY" });
+    assert.deepEqual(clearedVocabulary.result, { ok: true, status: "empty" });
+    assert.equal((await send({ type: "GET_PERSONAL_VOCABULARY_STATE" })).result.status, "empty");
+    assert.doesNotMatch(JSON.stringify(storage.get("lastResult") ?? {}), /Sunlit label|Quiet label/u);
     const optedOut = await send({ type: "SAVE_SETTINGS", settings: { autoCaptureDownloads: false } });
     assert.equal(optedOut.settings.autoCaptureDownloads, false);
     const persistedOptOut = await send({ type: "GET_STATE" });
@@ -833,6 +926,117 @@ test("settings are bounded, persistable, and exportable without arbitrary endpoi
   assert.equal(sanitizeSettings({}).handoffEndpoint, DEFAULT_HANDOFF_ENDPOINT);
 });
 
+test("personal vocabulary validates atomically, stays local, and preserves technical text", async () => {
+  const payload = JSON.stringify({
+    schema: PERSONAL_VOCABULARY_SCHEMA,
+    version: PERSONAL_VOCABULARY_VERSION,
+    replacements: {
+      "Send URL": "Deliver link",
+      "Search settings": "Find preferences",
+    },
+  });
+  const validated = validatePersonalVocabularyText(payload);
+  assert.equal(validated.schema, PERSONAL_VOCABULARY_SCHEMA);
+  assert.equal(validated.version, PERSONAL_VOCABULARY_VERSION);
+  assert.equal(Object.getPrototypeOf(validated.replacements), null);
+  assert.equal(validated.replacements["Send URL"], "Deliver link");
+
+  const values = new Map();
+  const storage = {
+    async get(key) { return { [key]: values.get(key) }; },
+    async set(entries) { Object.entries(entries).forEach(([key, value]) => values.set(key, value)); },
+    async remove(key) { values.delete(key); },
+  };
+  assert.deepEqual(await readPersonalVocabulary(storage), { status: "empty", replacements: Object.freeze(Object.create(null)) });
+  await importPersonalVocabulary(storage, payload);
+  const loaded = await readPersonalVocabulary(storage);
+  assert.equal(loaded.status, "loaded");
+  assert.equal(loaded.replacements["Send URL"], "Deliver link");
+  const exported = makeSettingsExport({ ...DEFAULT_SETTINGS });
+  assert.doesNotMatch(JSON.stringify(exported), /Deliver link|Find preferences|personalVocabulary/iu);
+  assert.equal(applyPersonalVocabulary("Send URL to https://example.test/Send%20URL and {{name}} with `Send URL`.", loaded.replacements), "Deliver link to https://example.test/Send%20URL and {{name}} with `Send URL`.");
+  const commandMappings = Object.freeze(Object.assign(Object.create(null), {
+    "npm install": "Changed command",
+    install: "Changed argument",
+  }));
+  assert.equal(
+    applyPersonalVocabulary("Run npm install before continuing.", commandMappings),
+    "Run npm install before continuing.",
+  );
+  const technicalMappings = Object.freeze(Object.assign(Object.create(null), {
+    HandoffServer: "Changed identifier",
+    "GET /v1/status": "Changed route",
+    JSON: "Changed acronym",
+    "C:\\Tools\\Manager": "Changed path",
+  }));
+  assert.equal(
+    applyPersonalVocabulary("HandoffServer accepts GET /v1/status from JSON at C:\\Tools\\Manager.", technicalMappings),
+    "HandoffServer accepts GET /v1/status from JSON at C:\\Tools\\Manager.",
+  );
+  assert.equal(localize("popupTitle", DEFAULT_SETTINGS, { name: "Send URL" }, loaded.replacements), "Send to Send URL");
+  assert.equal(localize("popupTitle", { ...DEFAULT_SETTINGS, schoolModeEnabled: true }, { name: "Send URL" }, loaded.replacements), "Send to Send URL");
+  assert.equal(localize("settingsSearch", DEFAULT_SETTINGS, {}, loaded.replacements), "Find preferences");
+  assert.equal(localize("settingsSearch", { ...DEFAULT_SETTINGS, schoolModeEnabled: true }, {}, loaded.replacements), "Search settings");
+  setActivePersonalVocabulary(loaded.replacements);
+  assert.equal(localize("settingsSearch", DEFAULT_SETTINGS), "Find preferences");
+  setActivePersonalVocabulary(null);
+  await clearPersonalVocabulary(storage);
+  assert.equal((await readPersonalVocabulary(storage)).status, "empty");
+});
+
+test("personal vocabulary clear requires its two keys and a full slider", () => {
+  assert.deepEqual(PERSONAL_VOCABULARY_CLEAR_KEYS, ["CLEAR", "CACHE"]);
+  assert.equal(canConfirmPersonalVocabularyClear("", "", 0), false);
+  assert.equal(canConfirmPersonalVocabularyClear("clear", "", 100), false);
+  assert.equal(canConfirmPersonalVocabularyClear("clear", "cache", 99), false);
+  assert.equal(canConfirmPersonalVocabularyClear(" clear ", " CACHE ", 100), true);
+});
+
+test("personal vocabulary fails closed on malformed, duplicate, unsafe, oversized, or corrupted input", async () => {
+  const payload = JSON.stringify({ schema: PERSONAL_VOCABULARY_SCHEMA, version: PERSONAL_VOCABULARY_VERSION, replacements: { Plain: "Clear" } });
+  const invalidPayloads = [
+    "{",
+    JSON.stringify({ schema: PERSONAL_VOCABULARY_SCHEMA, version: 99, replacements: {} }),
+    JSON.stringify({ schema: PERSONAL_VOCABULARY_SCHEMA, version: PERSONAL_VOCABULARY_VERSION, replacements: { Plain: "Clear" }, extra: true }),
+    `{"schema":"${PERSONAL_VOCABULARY_SCHEMA}","version":${PERSONAL_VOCABULARY_VERSION},"replacements":{"Plain":"Clear","Plain":"Other"}}`,
+    `{"schema":"${PERSONAL_VOCABULARY_SCHEMA}","version":${PERSONAL_VOCABULARY_VERSION},"replacements":{"__proto__":"Other"}}`,
+    JSON.stringify({ schema: PERSONAL_VOCABULARY_SCHEMA, version: PERSONAL_VOCABULARY_VERSION, replacements: { "npm install": "Changed" } }),
+    JSON.stringify({ schema: PERSONAL_VOCABULARY_SCHEMA, version: PERSONAL_VOCABULARY_VERSION, replacements: { Plain: { too: { deeply: { nested: { for: { this: "contract" } } } } } } }),
+    " ".repeat(MAX_PERSONAL_VOCABULARY_BYTES + 1),
+  ];
+  for (const value of invalidPayloads) assert.throws(() => validatePersonalVocabularyText(value));
+  const values = new Map([[PERSONAL_VOCABULARY_STORAGE_KEY, { schema: PERSONAL_VOCABULARY_SCHEMA, version: PERSONAL_VOCABULARY_VERSION, replacements: { Plain: 42 } }]]);
+  const storage = { async get(key) { return { [key]: values.get(key) }; } };
+  const corrupt = await readPersonalVocabulary(storage);
+  assert.equal(corrupt.status, "invalid");
+  assert.equal(applyPersonalVocabulary("Plain text", corrupt.replacements), "Plain text");
+
+  assert.throws(() => decodePersonalVocabularyUtf8(new Uint8Array([0xc3, 0x28])));
+  const oversizedCacheReplacements = Object.fromEntries(
+    Array.from({ length: 256 }, (_, index) => [`word${index}`, "v".repeat(512)]),
+  );
+  const oversizedCacheStorage = {
+    async get(key) {
+      return {
+        [key]: {
+          schema: PERSONAL_VOCABULARY_SCHEMA,
+          version: PERSONAL_VOCABULARY_VERSION,
+          replacements: oversizedCacheReplacements,
+        },
+      };
+    },
+  };
+  assert.equal((await readPersonalVocabulary(oversizedCacheStorage)).status, "invalid");
+
+  const previous = new Map([[PERSONAL_VOCABULARY_STORAGE_KEY, validatePersonalVocabularyText(payload)]]);
+  const transactionalStorage = {
+    async get(key) { return { [key]: previous.get(key) }; },
+    async set(entries) { Object.entries(entries).forEach(([key, value]) => previous.set(key, value)); },
+  };
+  await assert.rejects(() => importPersonalVocabulary(transactionalStorage, invalidPayloads[0]));
+  assert.equal((await readPersonalVocabulary(transactionalStorage)).replacements.Plain, "Clear");
+});
+
 test("School mode and emoji settings persist without credential material", () => {
   const safe = sanitizeSettings({
     schoolModeEnabled: true,
@@ -905,6 +1109,20 @@ test("authenticator message boundary is strict and secret-bearing only for expli
   assert.equal(validateIncomingMessage({ type: "PREPARE_AUTHENTICATOR", input: { ...input, secret: "bad!" } }), null);
   assert.equal(validateIncomingMessage({ type: "GET_AUTHENTICATOR_CODE", id: "bad id" }), null);
   assert.deepEqual(validateIncomingMessage({ type: "REMOVE_AUTHENTICATOR", id: "authenticator-test-001" }), { type: "REMOVE_AUTHENTICATOR", id: "authenticator-test-001" });
+});
+
+test("personal vocabulary runtime messages accept bounded text only and never return a cache payload", () => {
+  assert.deepEqual(validateIncomingMessage({ type: "GET_PERSONAL_VOCABULARY_STATE" }), { type: "GET_PERSONAL_VOCABULARY_STATE" });
+  assert.deepEqual(validateIncomingMessage({ type: "CLEAR_PERSONAL_VOCABULARY" }), { type: "CLEAR_PERSONAL_VOCABULARY" });
+  assert.deepEqual(
+    validateIncomingMessage({ type: "IMPORT_PERSONAL_VOCABULARY", text: "{}" }),
+    { type: "IMPORT_PERSONAL_VOCABULARY", text: "{}" },
+  );
+  assert.equal(validateIncomingMessage({ type: "IMPORT_PERSONAL_VOCABULARY", text: "{}", replacement: "extra" }), null);
+  assert.equal(validateIncomingMessage({ type: "IMPORT_PERSONAL_VOCABULARY", text: "x".repeat(MAX_PERSONAL_VOCABULARY_BYTES + 1) }), null);
+  assert.equal(validateIncomingMessage({ type: "IMPORT_PERSONAL_VOCABULARY", text: "😀".repeat(Math.ceil(MAX_PERSONAL_VOCABULARY_BYTES / 4) + 1) }), null);
+  assert.equal(validateIncomingMessage({ type: "GET_PERSONAL_VOCABULARY_STATE", extra: true }), null);
+  assert.equal(validateIncomingMessage({ type: "CLEAR_PERSONAL_VOCABULARY", extra: true }), null);
 });
 
 test("extension authenticator mirrors RFC 6238 vectors and compact URI defaults", async () => {
@@ -1416,6 +1634,10 @@ test("School mode, emoji controls, live settings refresh, and redacted journal w
   assert.match(optionsScript, /displayNameHistoryRecorded/);
   assert.match(popupScript, /document\.documentElement\.lang/);
   assert.match(popupScript, /chrome\.storage\.onChanged\.addListener/);
+  assert.match(popupScript, /function renderStatus\(\)/);
+  assert.match(popupScript, /applyLanguage\(\);\s*renderStatus\(\);/);
+  assert.match(optionsScript, /clearToast\(\);/);
+  assert.match(optionsScript, /updateConnectionState\(lastConnectionResult\)/);
   assert.match(popupScript, /school-mode-reset-unavailable/);
   assert.match(worker, /appendDisplayNameMutation/);
   assert.match(worker, /school-mode-reset-unavailable/);

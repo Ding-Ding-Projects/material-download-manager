@@ -1,5 +1,6 @@
 import { HANDOFF_PROTOCOL_VERSION } from "./settings.js";
 import { normalizeTotpRegistration, parseTotpUri } from "./totp.js";
+import { MAX_PERSONAL_VOCABULARY_BYTES } from "./personal-vocabulary.js";
 
 export const HANDOFF_SOURCE = "material-download-manager-extension";
 export const MAX_URL_LENGTH = 8192;
@@ -8,6 +9,10 @@ export const MAX_SELECTION_LENGTH = 2048;
 export const MAX_FILE_NAME_LENGTH = 512;
 export const AUTH_NONCE_PATTERN = /^[a-f0-9]{64}$/u;
 export const AUTH_PROOF_PATTERN = /^[a-f0-9]{64}$/u;
+
+function isBoundedPersonalVocabularyText(value) {
+  return typeof value === "string" && new TextEncoder().encode(value).byteLength <= MAX_PERSONAL_VOCABULARY_BYTES;
+}
 
 function isRecord(value) {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -136,8 +141,13 @@ export function validateIncomingMessage(value) {
   if (value.type === "GET_STATE") return { type: value.type };
   if (value.type === "TEST_HANDOFF") return { type: value.type };
   if (value.type === "TEST_NARRATION") return { type: value.type };
-  if (["GET_AUTHENTICATOR_STATE", "CANCEL_AUTHENTICATOR", "EXPORT_AUTHENTICATOR_METADATA"].includes(value.type)) {
+  if (["GET_AUTHENTICATOR_STATE", "CANCEL_AUTHENTICATOR", "EXPORT_AUTHENTICATOR_METADATA", "GET_PERSONAL_VOCABULARY_STATE", "CLEAR_PERSONAL_VOCABULARY"].includes(value.type)) {
     return hasOnlyKeys(value, ["type"]) ? { type: value.type } : null;
+  }
+  if (value.type === "IMPORT_PERSONAL_VOCABULARY") {
+    return isBoundedPersonalVocabularyText(value.text) && hasOnlyKeys(value, ["type", "text"])
+      ? { type: value.type, text: value.text }
+      : null;
   }
   if (value.type === "PREPARE_AUTHENTICATOR") {
     const input = normalizeAuthenticatorInput(value.input);

@@ -168,6 +168,33 @@
           <div class="range-row"><input id="funny-level-yue" name="funnyLevelYue" type="range" min="1" max="5" step="1"><output id="funny-level-yue-output" for="funny-level-yue">2</output></div>
           <p class="field-help" data-l10n="funnyHelp">1 is fully serious; 5 is maximum playfulness. Facts, affected data, and choices stay explicit.</p>
         </div>
+        <div id="personal-vocabulary-card" class="setting-card" data-school-hidden data-search="personal vocabulary local json upload replace clear reset original wording">
+          <h2 data-l10n="personalVocabularyHeading">Personal vocabulary</h2>
+          <p id="personal-vocabulary-help" class="field-help" data-l10n="personalVocabularyHelp">Choose a local JSON file to apply your approved wording only in this extension. The file is validated before it is kept, never uploaded, and its path is not stored.</p>
+          <input id="personal-vocabulary-file" type="file" accept="application/json,.json" hidden data-l10n-aria="personalVocabularyChoose" aria-label="Choose JSON file" aria-describedby="personal-vocabulary-help personal-vocabulary-status personal-vocabulary-provenance">
+          <div class="inline-actions">
+            <button id="personal-vocabulary-choose" class="button button-secondary" type="button" data-l10n="personalVocabularyChoose">Choose JSON file</button>
+            <button id="personal-vocabulary-replace" class="button button-secondary" type="button" data-l10n="personalVocabularyReplace">Replace JSON file</button>
+            <button id="personal-vocabulary-clear" class="button button-danger" type="button" aria-controls="personal-vocabulary-clear-card" aria-expanded="false" data-l10n="personalVocabularyClear">Clear local vocabulary</button>
+          </div>
+          <p id="personal-vocabulary-status" class="inline-status" role="status" aria-live="polite"></p>
+          <p id="personal-vocabulary-provenance" class="field-help" data-l10n="personalVocabularyProvenance">Current values come only from a validated local cache. Settings exports, history, and diagnostics omit the vocabulary data and file metadata.</p>
+          <div id="personal-vocabulary-clear-card" class="setting-card danger-card" data-school-hidden hidden role="group" aria-labelledby="personal-vocabulary-clear-heading">
+            <h2 id="personal-vocabulary-clear-heading" data-l10n="personalVocabularyClearHeading">Confirm local vocabulary clear</h2>
+            <p class="field-help" data-l10n="personalVocabularyClearHelp">This permanently removes the active local vocabulary cache. Type both visible labels, then move the confirmation slider all the way across. Escape or Cancel exits without deleting.</p>
+            <label for="personal-vocabulary-clear-key-one" data-l10n="personalVocabularyClearKeyOne">Key 1: type CLEAR</label>
+            <input id="personal-vocabulary-clear-key-one" type="text" autocomplete="off" spellcheck="false">
+            <label for="personal-vocabulary-clear-key-two" data-l10n="personalVocabularyClearKeyTwo">Key 2: type CACHE</label>
+            <input id="personal-vocabulary-clear-key-two" type="text" autocomplete="off" spellcheck="false">
+            <label for="personal-vocabulary-clear-slider" data-l10n="personalVocabularyClearSlider">Confirmation progress</label>
+            <input id="personal-vocabulary-clear-slider" type="range" min="0" max="100" value="0" step="1" aria-describedby="personal-vocabulary-clear-confirm-status">
+            <p id="personal-vocabulary-clear-confirm-status" class="inline-status" role="status" aria-live="polite"></p>
+            <div class="inline-actions">
+              <button id="personal-vocabulary-clear-confirm" class="button button-danger" type="button" disabled data-l10n="personalVocabularyClearConfirm">Clear local vocabulary</button>
+              <button id="personal-vocabulary-clear-cancel" class="button button-secondary" type="button" data-l10n="personalVocabularyClearCancel">Cancel</button>
+            </div>
+          </div>
+        </div>
       </section>
 
       <section id="panel-authenticator" class="tab-panel" role="tabpanel" aria-labelledby="tab-authenticator" data-panel="authenticator" hidden>

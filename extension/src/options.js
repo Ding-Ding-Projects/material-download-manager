@@ -7,7 +7,15 @@ import {
   validateEndpoint,
 } from "./shared/settings.js";
 import { appendRegexFragment, evaluateRegex, validateRegex } from "./shared/regex.js";
-import { decorateMessage, localize } from "./shared/localization.js";
+import { decorateMessage, localize, setActivePersonalVocabulary } from "./shared/localization.js";
+import {
+  MAX_PERSONAL_VOCABULARY_BYTES,
+  PERSONAL_VOCABULARY_CLEAR_KEYS,
+  PERSONAL_VOCABULARY_STORAGE_KEY,
+  canConfirmPersonalVocabularyClear,
+  decodePersonalVocabularyUtf8,
+  readPersonalVocabulary,
+} from "./shared/personal-vocabulary.js";
 import { normalizeTotpRegistration, parseTotpUri } from "./shared/totp.js";
 import { createQrMatrix, qrMatrixToSvg } from "./shared/qr.js";
 
@@ -21,6 +29,10 @@ let authenticatorStateLoadInFlight = false;
 let authenticatorListRegexOpen = false;
 let authenticatorListRegexMode = false;
 let pendingAuthenticatorRemoval = null;
+let personalVocabularyStatus = "empty";
+let personalVocabularyFeedback = null;
+let pendingPersonalVocabularyClear = null;
+let lastConnectionResult = null;
 const REQUIRED_SEARCHABLE_SETTING_IDS = Object.freeze([
   "handoff-endpoint",
   "auto-capture-downloads",
@@ -36,6 +48,10 @@ const REQUIRED_SEARCHABLE_SETTING_IDS = Object.freeze([
   "language-mode",
   "funny-level-en",
   "funny-level-yue",
+  "personal-vocabulary-file",
+  "personal-vocabulary-choose",
+  "personal-vocabulary-replace",
+  "personal-vocabulary-clear",
   "authenticator-uri",
   "authenticator-issuer",
   "authenticator-account",
@@ -91,6 +107,18 @@ const elements = {
   funnyEnOutput: document.querySelector("#funny-level-en-output"),
   funnyYue: document.querySelector("#funny-level-yue"),
   funnyYueOutput: document.querySelector("#funny-level-yue-output"),
+  personalVocabularyFile: document.querySelector("#personal-vocabulary-file"),
+  personalVocabularyChoose: document.querySelector("#personal-vocabulary-choose"),
+  personalVocabularyReplace: document.querySelector("#personal-vocabulary-replace"),
+  personalVocabularyClear: document.querySelector("#personal-vocabulary-clear"),
+  personalVocabularyStatus: document.querySelector("#personal-vocabulary-status"),
+  personalVocabularyClearCard: document.querySelector("#personal-vocabulary-clear-card"),
+  personalVocabularyClearKeyOne: document.querySelector("#personal-vocabulary-clear-key-one"),
+  personalVocabularyClearKeyTwo: document.querySelector("#personal-vocabulary-clear-key-two"),
+  personalVocabularyClearSlider: document.querySelector("#personal-vocabulary-clear-slider"),
+  personalVocabularyClearConfirm: document.querySelector("#personal-vocabulary-clear-confirm"),
+  personalVocabularyClearCancel: document.querySelector("#personal-vocabulary-clear-cancel"),
+  personalVocabularyClearConfirmStatus: document.querySelector("#personal-vocabulary-clear-confirm-status"),
   resetManagerName: document.querySelector("#reset-manager-name"),
   saveSettings: document.querySelector("#save-settings"),
   dirtyState: document.querySelector("#dirty-state"),
@@ -179,11 +207,107 @@ function localizePage() {
   document.querySelectorAll("[data-school-hidden]").forEach((element) => {
     element.hidden = settings.schoolModeEnabled;
   });
+  if (settings.schoolModeEnabled && pendingPersonalVocabularyClear) closePersonalVocabularyClear({ restoreFocus: false });
   elements.funnyEnOutput.value = String(settings.funnyLevelEn);
   elements.funnyEnOutput.textContent = String(settings.funnyLevelEn);
   elements.funnyYueOutput.value = String(settings.funnyLevelYue);
   elements.funnyYueOutput.textContent = String(settings.funnyLevelYue);
+  updatePersonalVocabularyStatus();
+  clearToast();
   elements.dirtyState.textContent = "";
+}
+
+function updatePersonalVocabularyStatus() {
+  const key = personalVocabularyFeedback === "rejected"
+    ? "personalVocabularyRejected"
+    : personalVocabularyFeedback === "cleared"
+      ? "personalVocabularyCleared"
+      : personalVocabularyStatus === "loaded"
+        ? "personalVocabularyLoaded"
+        : personalVocabularyStatus === "invalid"
+          ? "personalVocabularyInvalid"
+          : "personalVocabularyNoFile";
+  elements.personalVocabularyStatus.textContent = localize(key, settings);
+  elements.personalVocabularyChoose.hidden = personalVocabularyStatus === "loaded";
+  elements.personalVocabularyReplace.hidden = personalVocabularyStatus !== "loaded";
+  elements.personalVocabularyClear.disabled = (personalVocabularyStatus !== "loaded" && personalVocabularyStatus !== "invalid") || Boolean(pendingPersonalVocabularyClear);
+  elements.personalVocabularyClear.setAttribute("aria-expanded", String(Boolean(pendingPersonalVocabularyClear)));
+}
+
+async function refreshPersonalVocabulary({ keepFeedback = false } = {}) {
+  try {
+    const state = await readPersonalVocabulary(chrome.storage.local);
+    personalVocabularyStatus = state.status;
+    setActivePersonalVocabulary(state.replacements);
+  } catch {
+    personalVocabularyStatus = "invalid";
+    setActivePersonalVocabulary(null);
+  }
+  if (!keepFeedback) personalVocabularyFeedback = null;
+  updatePersonalVocabularyStatus();
+}
+
+function closePersonalVocabularyClear({ restoreFocus = true } = {}) {
+  const trigger = pendingPersonalVocabularyClear?.trigger;
+  pendingPersonalVocabularyClear = null;
+  elements.personalVocabularyClearCard.hidden = true;
+  elements.personalVocabularyClearCard.removeAttribute("data-state");
+  elements.personalVocabularyClearKeyOne.value = "";
+  elements.personalVocabularyClearKeyTwo.value = "";
+  elements.personalVocabularyClearSlider.value = "0";
+  elements.personalVocabularyClearConfirm.disabled = true;
+  elements.personalVocabularyClearConfirmStatus.textContent = "";
+  updatePersonalVocabularyStatus();
+  if (restoreFocus) trigger?.focus();
+}
+
+function updatePersonalVocabularyClearGate() {
+  if (!pendingPersonalVocabularyClear) return;
+  const keysMatch = elements.personalVocabularyClearKeyOne.value.trim().toUpperCase() === PERSONAL_VOCABULARY_CLEAR_KEYS[0]
+    && elements.personalVocabularyClearKeyTwo.value.trim().toUpperCase() === PERSONAL_VOCABULARY_CLEAR_KEYS[1];
+  const sliderComplete = Number(elements.personalVocabularyClearSlider.value) === 100;
+  const sliderMoving = Number(elements.personalVocabularyClearSlider.value) > 0;
+  elements.personalVocabularyClearConfirm.disabled = !canConfirmPersonalVocabularyClear(
+    elements.personalVocabularyClearKeyOne.value,
+    elements.personalVocabularyClearKeyTwo.value,
+    elements.personalVocabularyClearSlider.value,
+  );
+  elements.personalVocabularyClearCard.dataset.state = keysMatch || sliderMoving ? "arming" : "idle";
+  elements.personalVocabularyClearConfirmStatus.textContent = localize(
+    keysMatch ? "personalVocabularyClearReady" : "personalVocabularyClearIncomplete",
+    settings,
+  );
+}
+
+function openPersonalVocabularyClear(trigger) {
+  if (elements.personalVocabularyClear.disabled) return;
+  pendingPersonalVocabularyClear = { trigger };
+  elements.personalVocabularyClearCard.hidden = false;
+  elements.personalVocabularyClearKeyOne.value = "";
+  elements.personalVocabularyClearKeyTwo.value = "";
+  elements.personalVocabularyClearSlider.value = "0";
+  updatePersonalVocabularyStatus();
+  updatePersonalVocabularyClearGate();
+  elements.personalVocabularyClearKeyOne.focus();
+}
+
+async function confirmPersonalVocabularyClear() {
+  if (!pendingPersonalVocabularyClear || elements.personalVocabularyClearConfirm.disabled) return;
+  elements.personalVocabularyClearConfirm.disabled = true;
+  try {
+    const response = await chrome.runtime.sendMessage({ type: "CLEAR_PERSONAL_VOCABULARY" });
+    if (!response?.ok) throw new Error("clear");
+    personalVocabularyFeedback = "cleared";
+    await refreshPersonalVocabulary({ keepFeedback: true });
+    elements.personalVocabularyClearCard.dataset.state = "completed";
+    elements.personalVocabularyClearConfirmStatus.textContent = localize("personalVocabularyClearCompleted", settings);
+    localizePage();
+    refreshSearch();
+    window.setTimeout(() => closePersonalVocabularyClear(), 420);
+  } catch {
+    personalVocabularyFeedback = "rejected";
+    updatePersonalVocabularyClearGate();
+  }
 }
 
 function formatAuthenticatorSecret(value) {
@@ -569,6 +693,10 @@ function showToast(text) {
   elements.toast.textContent = decorateMessage(text, settings);
 }
 
+function clearToast() {
+  elements.toast.textContent = "";
+}
+
 function resultMessage(value) {
   const key = {
     "handoff-success": "handoffSuccess",
@@ -618,6 +746,7 @@ function resultMessage(value) {
 }
 
 function updateConnectionState(value = null) {
+  lastConnectionResult = value;
   elements.recoveryCard.hidden = Boolean(settings.handoffEndpoint);
   if (value) {
     elements.connectionStatus.textContent = resultMessage(value);
@@ -757,13 +886,16 @@ async function loadState() {
     const response = await chrome.runtime.sendMessage({ type: "GET_STATE" });
     if (!response?.ok) throw new Error("worker");
     settings = sanitizeSettings(response?.settings ?? DEFAULT_SETTINGS);
+    personalVocabularyStatus = response?.personalVocabulary?.status ?? "empty";
     fillForm();
     updateConnectionState(response?.lastResult);
     refreshSearch();
+    await refreshPersonalVocabulary();
     await loadAuthenticatorState();
   } catch {
     showToast(localize("serviceWorkerUnavailable", settings));
     fillForm();
+    await refreshPersonalVocabulary();
     await loadAuthenticatorState();
   }
 }
@@ -870,6 +1002,37 @@ elements.resetManagerName.addEventListener("click", () => {
   localizePage();
   markDirty();
 });
+function choosePersonalVocabularyFile() {
+  elements.personalVocabularyFile.click();
+}
+elements.personalVocabularyChoose.addEventListener("click", choosePersonalVocabularyFile);
+elements.personalVocabularyReplace.addEventListener("click", choosePersonalVocabularyFile);
+elements.personalVocabularyFile.addEventListener("change", async () => {
+  const file = elements.personalVocabularyFile.files?.[0];
+  if (!file) return;
+  try {
+    if (file.size > MAX_PERSONAL_VOCABULARY_BYTES) throw new Error("size");
+    const text = decodePersonalVocabularyUtf8(await file.arrayBuffer());
+    const response = await chrome.runtime.sendMessage({ type: "IMPORT_PERSONAL_VOCABULARY", text });
+    if (!response?.ok) throw new Error("rejected");
+    personalVocabularyFeedback = null;
+    await refreshPersonalVocabulary();
+    localizePage();
+    refreshSearch();
+  } catch {
+    // A rejected import never replaces the last valid cache or exposes its payload.
+    personalVocabularyFeedback = "rejected";
+    await refreshPersonalVocabulary({ keepFeedback: true });
+  } finally {
+    elements.personalVocabularyFile.value = "";
+  }
+});
+elements.personalVocabularyClear.addEventListener("click", (event) => openPersonalVocabularyClear(event.currentTarget));
+[elements.personalVocabularyClearKeyOne, elements.personalVocabularyClearKeyTwo, elements.personalVocabularyClearSlider].forEach((control) => {
+  control.addEventListener("input", updatePersonalVocabularyClearGate);
+});
+elements.personalVocabularyClearConfirm.addEventListener("click", () => void confirmPersonalVocabularyClear());
+elements.personalVocabularyClearCancel.addEventListener("click", () => closePersonalVocabularyClear());
 elements.form.addEventListener("submit", async (event) => {
   event.preventDefault();
   await persistSettings();
@@ -1106,11 +1269,21 @@ elements.authenticatorExport.addEventListener("click", async () => {
 });
 
 chrome.storage.onChanged.addListener((changes, areaName) => {
-  if (areaName !== "local" || !changes[SETTINGS_KEY]) return;
-  settings = sanitizeSettings(changes[SETTINGS_KEY].newValue);
-  fillForm();
-  refreshSearch();
-  refreshAuthenticatorPresentation();
+  if (areaName !== "local") return;
+  if (changes[SETTINGS_KEY]) {
+    settings = sanitizeSettings(changes[SETTINGS_KEY].newValue);
+    fillForm();
+    refreshSearch();
+    refreshAuthenticatorPresentation();
+  }
+  if (changes[PERSONAL_VOCABULARY_STORAGE_KEY]) {
+    void refreshPersonalVocabulary().then(() => {
+      localizePage();
+      updateConnectionState(lastConnectionResult);
+      refreshSearch();
+    });
+  }
+  if (changes[SETTINGS_KEY]) updateConnectionState(lastConnectionResult);
 });
 
 await loadState();

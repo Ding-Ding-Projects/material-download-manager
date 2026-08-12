@@ -93,8 +93,9 @@ output { min-height: 36px; padding: 8px; border-radius: 10px; background: var(--
 .authenticator-code-row { display: flex; flex-wrap: wrap; gap: 10px; align-items: baseline; }
 .authenticator-code { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 22px; letter-spacing: .14em; font-variant-numeric: tabular-nums; }
 .authenticator-countdown { color: var(--md-on-surface-variant); font-variant-numeric: tabular-nums; }
-#authenticator-remove-card[data-state="arming"] { animation: authenticator-remove-pulse 700ms ease-in-out infinite alternate; }
-#authenticator-remove-card[data-state="completed"] { animation: authenticator-remove-complete 420ms ease-out both; }
+#authenticator-remove-card[data-state="arming"], #personal-vocabulary-clear-card[data-state="arming"] { animation: authenticator-remove-pulse 700ms ease-in-out infinite alternate; }
+#authenticator-remove-card[data-state="completed"], #personal-vocabulary-clear-card[data-state="completed"] { animation: authenticator-remove-complete 420ms ease-out both; }
+#personal-vocabulary-clear-card { margin-top: 16px; }
 
 @keyframes authenticator-remove-pulse {
   from { box-shadow: 0 0 0 0 #ba1a1a20; }
