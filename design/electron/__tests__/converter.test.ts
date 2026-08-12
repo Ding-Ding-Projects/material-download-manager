@@ -28,6 +28,15 @@ async function waitForJob(service: ConverterService, id: string, timeoutMs = 8_0
   throw new Error("Timed out waiting for converter job");
 }
 
+function assertStreamingQueueSource(source: string): void {
+  if (!/fsp\.opendir\(this\.jobsRoot\)/u.test(source)) {
+    throw new Error("Converter queue must stream durable job directory entries with opendir.");
+  }
+  if (/fsp\.readdir(?:Sync)?\(this\.jobsRoot\)/u.test(source)) {
+    throw new Error("Converter queue must not materialize every durable job path with readdir.");
+  }
+}
+
 test("converter registry is categorized and fails closed when an unbundled adapter is enabled", () => {
   validateConverterRegistry();
   const disabled = CONVERTER_ADAPTERS.find((adapter) => !adapter.enabled);
@@ -119,6 +128,50 @@ test("converter persists queued cancellation and resumes a bounded UTF-8 text no
   }
 });
 
+test("converter keeps a bounded public history page while durable job records exceed that page", async () => {
+  const root = await temporaryDirectory();
+  const appData = path.join(root, "app-data");
+  const sourceDirectory = path.join(root, "source");
+  const outputDirectory = path.join(root, "output");
+  await fsp.mkdir(sourceDirectory);
+  await fsp.mkdir(outputDirectory);
+  const service = new ConverterService(appData);
+  try {
+    await service.init();
+    const jobsDirectory = path.join(appData, "converter", "jobs");
+    const now = new Date().toISOString();
+    for (let index = 0; index < 201; index += 1) {
+      const id = `converter-job-${String(1_700_000_000_000 + index)}-${index.toString(16).padStart(8, "0")}-0000-4000-8000-000000000000`;
+      await fsp.writeFile(path.join(jobsDirectory, `${id}.json`), `${JSON.stringify({
+        schemaVersion: 1,
+        id,
+        sourceName: `record-${index}.txt`,
+        destinationName: `record-${index}.txt`,
+        adapterId: "text-normalize-utf8",
+        status: "failed",
+        inputBytes: 1,
+        processedBytes: 0,
+        outputBytes: null,
+        error: "Fixture failure.",
+        createdAt: now,
+        updatedAt: now,
+        completedAt: now,
+        retryCount: 0,
+        outputAvailable: false,
+        sourcePath: path.join(sourceDirectory, `record-${index}.txt`),
+        destinationDirectory: outputDirectory,
+        outputPath: null,
+      })}\n`, "utf8");
+    }
+    const state = await service.getState();
+    assert.equal(state.jobs.length, 200);
+    assert.equal(state.hasMoreJobs, true);
+  } finally {
+    await service.shutdown();
+    await fsp.rm(root, { recursive: true, force: true });
+  }
+});
+
 test("converter rejects unavailable adapters before creating a job and Base64 output round-trips source bytes", async () => {
   const root = await temporaryDirectory();
   const sourceDirectory = path.join(root, "source");
@@ -160,5 +213,9 @@ test("converter worker contract stays local-only and rejects ambient transport o
   assert.doesNotMatch(service, /node:(?:child_process|http|https|net)/u);
   assert.match(service, /new Worker\(/u);
   assert.match(service, /env:\s*\{\}/u);
-  assert.match(service, /opendir\(this\.jobsRoot\)/u);
+  assertStreamingQueueSource(service);
+  assert.throws(
+    () => assertStreamingQueueSource(service.replace("fsp.opendir(this.jobsRoot)", "fsp.readdir(this.jobsRoot)")),
+    /must not materialize every durable job path/u,
+  );
 });

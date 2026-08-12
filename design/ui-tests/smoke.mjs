@@ -36,6 +36,7 @@ const RUNTIME_CHECK_IDS = [
   "settings-scheduled-settings",
   "settings-authenticator-surface",
   "settings-ollama-suite",
+  "converter-built-interaction",
   "settings-authenticator-live-management",
   "settings-dialog-a11y",
   "settings-auto-organize-ui",
@@ -90,6 +91,7 @@ function usage() {
     "  --scheduled-screenshot <path>  Capture the built Settings scheduled-settings surface",
     "  --authenticator-screenshot <path>  Capture the secret-free Authenticator Settings registration surface",
     "  --ollama-screenshot <path>  Capture the bounded Local Ollama Settings foundation",
+    "  --converter-screenshot <path>  Capture the built Local file converter catalog",
     "  --external-editor-screenshot <path>  Capture the Settings external-editor selector",
     "  --narrator-screenshot <path>  Capture the Settings spoken-narrator controls",
     "  --progress-screenshot <path>  Capture a separate progress page when one exists",
@@ -117,6 +119,7 @@ function parseArgs(argv) {
     scheduledScreenshotPath: null,
     authenticatorScreenshotPath: null,
     ollamaScreenshotPath: null,
+    converterScreenshotPath: null,
     externalEditorScreenshotPath: null,
     narratorScreenshotPath: null,
     progressScreenshotPath: null,
@@ -148,6 +151,7 @@ function parseArgs(argv) {
     else if (argument === "--scheduled-screenshot") options.scheduledScreenshotPath = path.resolve(value);
     else if (argument === "--authenticator-screenshot") options.authenticatorScreenshotPath = path.resolve(value);
     else if (argument === "--ollama-screenshot") options.ollamaScreenshotPath = path.resolve(value);
+    else if (argument === "--converter-screenshot") options.converterScreenshotPath = path.resolve(value);
     else if (argument === "--external-editor-screenshot") options.externalEditorScreenshotPath = path.resolve(value);
     else if (argument === "--narrator-screenshot") options.narratorScreenshotPath = path.resolve(value);
     else if (argument === "--progress-screenshot") options.progressScreenshotPath = path.resolve(value);
@@ -955,6 +959,9 @@ function createResult(options) {
       : { requested: false, status: "not-requested", path: null },
     ollama: options.ollamaScreenshotPath
       ? { requested: true, status: "not-run", path: options.ollamaScreenshotPath }
+      : { requested: false, status: "not-requested", path: null },
+    converter: options.converterScreenshotPath
+      ? { requested: true, status: "not-run", path: options.converterScreenshotPath }
       : { requested: false, status: "not-requested", path: null },
     externalEditor: options.externalEditorScreenshotPath
       ? { requested: true, status: "not-run", path: options.externalEditorScreenshotPath }
@@ -1942,6 +1949,69 @@ async function main(argv) {
         return { ...evidence, screenshotPath: capturedPath };
       }
       return evidence;
+    });
+
+    await runCheck(result, "converter-built-interaction", async () => {
+      await dispatchEscape(cdp);
+      await waitForPage(cdp, `!document.querySelector('[role="dialog"]')`, "Settings close before converter interaction", options.timeoutMs);
+      await cdp.evaluate(pageExpression(`
+        document.dispatchEvent(new KeyboardEvent("keydown", { key: "f", code: "KeyF", ctrlKey: true, shiftKey: true, bubbles: true }));
+      `));
+      await waitForPage(cdp, `Boolean(document.querySelector(".command-palette"))`, "command palette open before converter navigation", options.timeoutMs);
+      await setInputValue(cdp, '.command-palette input[aria-label="Command palette search"]', "Local file converter");
+      const destination = await cdp.evaluate(pageExpression(`
+        const palette = document.querySelector(".command-palette");
+        const result = palette ? [...palette.querySelectorAll("button")].find((button) => isVisible(button) && /Local file converter/.test(accessibleName(button))) : null;
+        if (!(result instanceof HTMLButtonElement)) throw new Error("File converter destination is missing from the visible command palette");
+        result.focus();
+        result.click();
+        return { resultName: accessibleName(result) };
+      `));
+      await waitForPage(cdp, `Boolean(document.getElementById("file-converter-panel")) && !document.querySelector(".command-palette")`, "File converter palette destination activation", options.timeoutMs);
+      const initial = await cdp.evaluate(pageExpression(`
+        const panel = document.getElementById("file-converter-panel");
+        if (!(panel instanceof HTMLElement) || !isVisible(panel)) throw new Error("File converter panel did not mount after the visible tab action");
+        const categories = [...panel.querySelectorAll(".converter-category")];
+        const regexControls = [...panel.querySelectorAll(".converter-category .converter-search-row button")].filter(isVisible);
+        const unavailable = [...panel.querySelectorAll(".converter-adapter-card.unavailable")];
+        const enabled = [...panel.querySelectorAll(".converter-adapter-card:not(.unavailable) button")].filter((control) => control instanceof HTMLButtonElement && !control.disabled);
+        const sourceButton = findByRole("button", "Choose files", panel);
+        const queueButton = findByRole("button", "Choose output folder and queue", panel);
+        if (categories.length !== 8) throw new Error("converter catalog does not render all eight required categories");
+        if (regexControls.length !== 8) throw new Error("each converter category must expose its own Regex builder affordance");
+        if (unavailable.length === 0) throw new Error("unbundled adapters are not visibly disabled");
+        if (enabled.length === 0) throw new Error("no bundled converter adapter is visibly selectable");
+        if (!(sourceButton instanceof HTMLButtonElement) || !(queueButton instanceof HTMLButtonElement) || !queueButton.disabled) throw new Error("guided picker/destination controls are missing or queue is not safely disabled before source selection");
+        return { categoryCount: categories.length, regexControls: regexControls.length, unavailable: unavailable.length, enabled: enabled.length, paletteDestination: ${JSON.stringify(destination.resultName)} };
+      `));
+      await clickByRole(cdp, "button", "Select format", "#file-converter-panel");
+      await waitForPage(cdp, `Boolean(document.querySelector("#file-converter-panel .converter-adapter-card.selected"))`, "bundled converter adapter selection", options.timeoutMs);
+      await clickByRole(cdp, "button", "Regex", "#file-converter-panel .converter-category");
+      await waitForPage(cdp, `Boolean(document.querySelector("#file-converter-panel .converter-category .regex-builder"))`, "converter category regex builder", options.timeoutMs);
+      const selected = await cdp.evaluate(pageExpression(`
+        const panel = document.getElementById("file-converter-panel");
+        const selected = panel?.querySelector(".converter-adapter-card.selected");
+        const builder = panel?.querySelector(".converter-category .regex-builder");
+        const unavailableText = [...(panel?.querySelectorAll(".converter-adapter-card.unavailable .setting-helper") ?? [])].map((node) => node.textContent ?? "").join(" ");
+        if (!(selected instanceof HTMLElement) || !selected.querySelector(".converter-availability.enabled")) throw new Error("visible adapter selection did not choose a bundled adapter");
+        if (!(builder instanceof HTMLElement)) throw new Error("visible Regex action did not open its anchored builder");
+        if (!/no bundled offline PDF parser has packaged-artifact proof/i.test(unavailableText)) throw new Error("disabled PDF adapter does not state its exact bundled-proof boundary");
+        return { selected: selected.querySelector("h3")?.textContent?.trim() ?? "", regexBuilder: true, disabledPdfReason: "visible" };
+      `));
+      await clickByRole(cdp, "button", "Refresh", "#file-converter-panel");
+      await waitForPage(cdp, `/Refreshed local converter state\./.test(document.querySelector("#file-converter-panel .converter-action-status")?.textContent ?? "")`, "visible converter Refresh renderer-to-IPC action", options.timeoutMs);
+      const refresh = await cdp.evaluate(pageExpression(`
+        const status = document.querySelector("#file-converter-panel .converter-action-status");
+        if (!(status instanceof HTMLElement) || !/Refreshed local converter state\./.test(status.textContent ?? "")) throw new Error("visible Refresh handler did not receive the converter IPC result");
+        return { status: status.textContent?.trim() ?? "", rendererHandler: "Refresh", preloadMethod: "getConverterState", ipc: "converter:getState" };
+      `));
+      if (options.converterScreenshotPath) {
+        await cdp.send("Emulation.setDeviceMetricsOverride", { width: 1400, height: 980, deviceScaleFactor: 1, mobile: false });
+        const capturedPath = await captureScreenshot(cdp, options.converterScreenshotPath, "#file-converter-panel");
+        result.converter = { requested: true, status: "captured", path: capturedPath, surface: "Local file converter catalog with bundled and unavailable adapters" };
+        return { ...initial, ...selected, ...refresh, screenshotPath: capturedPath };
+      }
+      return { ...initial, ...selected, ...refresh };
     });
 
     await runCheck(result, "settings-authenticator-live-management", async () => {
