@@ -381,27 +381,37 @@ function boundedSize(value, label) {
   return size;
 }
 
-function assertBlobLike(value, label = "The source") {
+function assertBlobLike(value, runtime, label = "The source") {
+  if (!runtime || typeof runtime.Blob !== "function" || !(value instanceof runtime.Blob)) {
+    throw new ConverterError("source-invalid", `${label} must be a browser Blob or File selected in this extension page.`);
+  }
   const size = boundedSize(value?.size, label);
   if (typeof value?.slice !== "function") throw new ConverterError("source-invalid", `${label} does not support bounded slices.`);
   return size;
 }
 
-async function readBoundedSlice(source, start, end) {
-  const slice = source.slice(start, end);
-  if (!slice || typeof slice.arrayBuffer !== "function") throw new ConverterError("source-invalid", "A bounded source slice could not be read.");
+async function readBoundedSlice(source, start, end, runtime) {
+  // Invoke the native Blob implementation directly. A forged or overridden
+  // `slice` method must not run before this bounded-read Chong Leung.
+  const slice = runtime.Blob.prototype.slice.call(source, start, end);
+  const expected = Math.max(0, end - start);
+  // A native Blob's size constrains the allocation performed by arrayBuffer().
+  // Reject a forged or oversized slice *before* reading it; accepting a
+  // duck-typed object and checking only after arrayBuffer() would already have
+  // paid the unbounded allocation we are trying to prevent.
+  assertBlobLike(slice, runtime, "A selected source slice");
+  if (slice.size !== expected) throw new ConverterError("source-invalid", "A source slice did not match the requested byte boundary.");
   const buffer = await slice.arrayBuffer();
   const bytes = new Uint8Array(buffer);
-  const expected = Math.max(0, end - start);
-  if (bytes.byteLength !== expected) throw new ConverterError("source-invalid", "A source slice did not match the requested byte boundary.");
+  if (bytes.byteLength !== expected) throw new ConverterError("source-invalid", "A native source slice did not return its declared byte count.");
   return bytes;
 }
 
-export async function sniffFileType(file, { signatureBytes = CONVERTER_LIMITS.signatureBytes } = {}) {
-  const size = assertBlobLike(file, "The selected source");
+export async function sniffFileType(file, { signatureBytes = CONVERTER_LIMITS.signatureBytes, runtime = globalThis } = {}) {
+  const size = assertBlobLike(file, runtime, "The selected source");
   const limit = Math.min(CONVERTER_LIMITS.signatureBytes, Math.max(1, Number(signatureBytes) || CONVERTER_LIMITS.signatureBytes));
   const inspectedBytes = Math.min(size, limit);
-  const prefix = await readBoundedSlice(file, 0, inspectedBytes);
+  const prefix = await readBoundedSlice(file, 0, inspectedBytes, runtime);
   const identified = identifyBytes(prefix);
   return Object.freeze({
     ...identified,
@@ -411,8 +421,8 @@ export async function sniffFileType(file, { signatureBytes = CONVERTER_LIMITS.si
   });
 }
 
-async function* sourceChunks(source, { chunkBytes = CONVERTER_LIMITS.chunkBytes, maxBytes = CONVERTER_LIMITS.inputBytes, signal, onProgress } = {}) {
-  const size = assertBlobLike(source, "The selected source");
+async function* sourceChunks(source, { chunkBytes = CONVERTER_LIMITS.chunkBytes, maxBytes = CONVERTER_LIMITS.inputBytes, signal, onProgress, runtime = globalThis } = {}) {
+  const size = assertBlobLike(source, runtime, "The selected source");
   const safeMaximum = Math.max(0, Number(maxBytes) || 0);
   if (size > safeMaximum) throw new ConverterError("source-too-large", `The selected source exceeds the ${safeMaximum}-byte local adapter limit.`);
   const chunkSize = Math.min(CONVERTER_LIMITS.chunkBytes, Math.max(1, Number(chunkBytes) || CONVERTER_LIMITS.chunkBytes));
@@ -421,7 +431,7 @@ async function* sourceChunks(source, { chunkBytes = CONVERTER_LIMITS.chunkBytes,
   while (offset < size) {
     throwIfCancelled(signal);
     const next = Math.min(size, offset + chunkSize);
-    const bytes = await readBoundedSlice(source, offset, next);
+    const bytes = await readBoundedSlice(source, offset, next, runtime);
     offset += bytes.byteLength;
     reportProgress(onProgress, offset, size);
     yield bytes;
@@ -510,7 +520,10 @@ function bytesToHex(bytes) {
 }
 
 function isStrictBase64(value) {
-  return /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/u.test(value);
+  if (!/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/u.test(value)) return false;
+  if (value.endsWith("==")) return (BASE64_LOOKUP.get(value[value.length - 3]) & 0x0f) === 0;
+  if (value.endsWith("=")) return (BASE64_LOOKUP.get(value[value.length - 2]) & 0x03) === 0;
+  return true;
 }
 
 function base64ToBytes(value) {
@@ -631,7 +644,11 @@ async function digestDecodedText(source, encoding, runtime, options) {
 }
 
 async function validateOutput(output, direction, expectedDigest, runtime, options) {
-  if (!output || typeof output.slice !== "function") throw new ConverterError("validation-failed", "The local adapter did not produce a readable output blob.");
+  try {
+    assertBlobLike(output, runtime, "The local adapter output");
+  } catch {
+    throw new ConverterError("validation-failed", "The local adapter did not produce a readable output blob.");
+  }
   if (typeof options.expectedMime === "string" && output.type !== options.expectedMime) throw new ConverterError("validation-failed", "The local adapter output MIME type did not match its registered target.");
   if (boundedSize(output.size, "The output") > CONVERTER_LIMITS.outputBytes) throw new ConverterError("validation-failed", "The output exceeded the adapter byte limit after conversion.");
   let observed;
@@ -642,6 +659,7 @@ async function validateOutput(output, direction, expectedDigest, runtime, option
     chunkBytes: options.chunkBytes,
     maxBytes: CONVERTER_LIMITS.outputBytes,
     onProgress: null,
+    runtime,
   };
   if (direction === "encode-base64") observed = await digestDecodedText(output, "base64", runtime, validationOptions);
   else if (direction === "encode-hex") observed = await digestDecodedText(output, "hex", runtime, validationOptions);
@@ -673,12 +691,12 @@ export async function convertLocalFile({ file, adapterId, signal = null, onProgr
   const adapter = getAdapter(adapterId);
   const availability = resolveAdapterAvailability(adapter, { runtime });
   if (!availability.enabled) throw new ConverterError("adapter-unavailable", availability.reasons[0] || "The selected adapter is unavailable.");
-  const sourceBytes = assertBlobLike(file, "The selected source");
+  const sourceBytes = assertBlobLike(file, runtime, "The selected source");
   if (sourceBytes > CONVERTER_LIMITS.inputBytes) throw new ConverterError("source-too-large", `The selected source exceeds the ${CONVERTER_LIMITS.inputBytes}-byte local adapter limit.`);
-  const detected = await sniffFileType(file);
+  const detected = await sniffFileType(file, { runtime });
   if (!adapterAcceptsSource(adapter, detected)) throw new ConverterError("unsupported-source", "The selected source type is not compatible with this local adapter.");
   const collector = outputCollector(runtime, adapter.target.mime);
-  const options = { signal, onProgress, chunkBytes: adapter.limits.chunkBytes };
+  const options = { signal, onProgress, chunkBytes: adapter.limits.chunkBytes, runtime };
   let transformed;
   if (adapter.direction === "encode-base64") transformed = await encodeBinary(file, collector, "base64", options);
   else if (adapter.direction === "encode-hex") transformed = await encodeBinary(file, collector, "hex", options);

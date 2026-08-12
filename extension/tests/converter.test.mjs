@@ -27,31 +27,28 @@ function bytes(value) {
   return new TextEncoder().encode(value);
 }
 
-function chunkedFile(content, { name = "selected.bin", type = "application/octet-stream" } = {}) {
-  const source = content instanceof Uint8Array ? content.slice() : new Uint8Array(content);
-  const slices = [];
-  let rootReadCount = 0;
-  return {
-    name,
-    type,
-    size: source.byteLength,
-    slices,
-    get rootReadCount() { return rootReadCount; },
-    async arrayBuffer() {
-      rootReadCount += 1;
-      throw new Error("whole-file reads are forbidden in this fixture");
-    },
-    slice(start = 0, end = source.byteLength) {
-      slices.push([start, end]);
-      const part = source.slice(start, end);
-      return {
-        size: part.byteLength,
-        async arrayBuffer() {
-          return part.buffer.slice(part.byteOffset, part.byteOffset + part.byteLength);
-        },
-      };
-    },
-  };
+class ChunkedFile extends Blob {
+  constructor(content, { name = "selected.bin", type = "application/octet-stream" } = {}) {
+    const source = content instanceof Uint8Array ? content.slice() : new Uint8Array(content);
+    super([source], { type });
+    this.name = name;
+    this.slices = [];
+    this.rootReadCount = 0;
+  }
+
+  async arrayBuffer() {
+    this.rootReadCount += 1;
+    throw new Error("whole-file reads are forbidden in this fixture");
+  }
+
+  slice(start = 0, end = this.size) {
+    this.slices.push([start, end]);
+    return Blob.prototype.slice.call(this, start, end);
+  }
+}
+
+function chunkedFile(content, options) {
+  return new ChunkedFile(content, options);
 }
 
 function createLocalStorage(initial = {}) {
@@ -130,20 +127,31 @@ test("bounded signature inspection ignores filename and MIME claims", async () =
   assert.equal(detected.category, "documents-pdf");
   assert.equal(detected.mime, "application/pdf");
   assert.equal(disguisedPdf.rootReadCount, 0);
-  assert.equal(disguisedPdf.slices.every(([start, end]) => start === 0 && end - start <= CONVERTER_LIMITS.signatureBytes), true);
+  assert.equal(disguisedPdf.slices.length, 0, "converter uses native Blob slicing instead of an overridden instance method");
 });
 
-test("type inspection fails closed when a slice does not match its requested bound", async () => {
-  const truncatedSlice = {
-    size: 8,
+test("type inspection rejects duck-typed sources before a forged slice or buffer read can run", async () => {
+  let sliceTouched = false;
+  let bufferRead = false;
+  const forgedSource = {
+    size: 1,
     slice() {
-      return { size: 1, async arrayBuffer() { return new Uint8Array([0]).buffer; } };
+      sliceTouched = true;
+      return {
+        size: CONVERTER_LIMITS.outputBytes,
+        async arrayBuffer() {
+          bufferRead = true;
+          return new Uint8Array(CONVERTER_LIMITS.outputBytes).buffer;
+        },
+      };
     },
   };
   await assert.rejects(
-    () => sniffFileType(truncatedSlice),
+    () => sniffFileType(forgedSource),
     (error) => error instanceof ConverterError && error.code === "source-invalid",
   );
+  assert.equal(sliceTouched, false);
+  assert.equal(bufferRead, false);
 });
 
 test("bundled Base64 and hexadecimal adapters use slices only and validate lossless round trips", async () => {
@@ -191,6 +199,14 @@ test("conversion cancellation and malformed textual input fail before an output 
     () => convertLocalFile({ file: chunkedFile(bytes("not-base64%%%")), adapterId: "binary.base64.decode" }),
     (error) => error instanceof ConverterError && error.code === "source-invalid",
   );
+  for (const nonCanonical of ["AB==", "AAB="]) {
+    await assert.rejects(
+      () => convertLocalFile({ file: chunkedFile(bytes(nonCanonical)), adapterId: "binary.base64.decode" }),
+      (error) => error instanceof ConverterError && error.code === "source-invalid",
+    );
+  }
+  const canonical = await convertLocalFile({ file: chunkedFile(bytes("AA==")), adapterId: "binary.base64.decode" });
+  assert.deepEqual(new Uint8Array(await canonical.output.arrayBuffer()), new Uint8Array([0]));
 });
 
 test("converter export boundary never invents a native editor route", () => {
