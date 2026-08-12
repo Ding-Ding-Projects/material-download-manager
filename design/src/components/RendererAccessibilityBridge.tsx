@@ -303,16 +303,6 @@ export default function RendererAccessibilityBridge() {
         return;
       }
 
-      const sidebarItem = target?.closest<HTMLElement>(".sidebar [role='button']");
-      if (
-        sidebarItem &&
-        !target?.closest(".sidebar-chevron-btn") &&
-        (event.key === "Enter" || event.key === " ")
-      ) {
-        event.preventDefault();
-        sidebarItem.click();
-      }
-
       const dialog = activeDialog();
       if (dialog && event.key === "Escape" && !dialog.contains(target)) {
         event.preventDefault();

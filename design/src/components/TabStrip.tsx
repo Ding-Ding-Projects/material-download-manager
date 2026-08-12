@@ -48,6 +48,7 @@ export default function TabStrip({ state, onChange, onActivate }: TabStripProps)
   const [groupPickerTabId, setGroupPickerTabId] = useState<string | null>(null);
   const [groupSearchQuery, setGroupSearchQuery] = useState<RegexBuilderState>(createDefaultRegexBuilderState);
   const [newGroupName, setNewGroupName] = useState("");
+  const [temporarilyRevealedGroupId, setTemporarilyRevealedGroupId] = useState<string | null>(null);
   const [queries, setQueries] = useState<Record<TabSearchScope, TabSearchQuery>>({
     strip: defaultTabSearchQuery(),
     group: defaultTabSearchQuery(),
@@ -57,8 +58,8 @@ export default function TabStrip({ state, onChange, onActivate }: TabStripProps)
   const stripRef = useRef<HTMLDivElement>(null);
 
   const collapsedGroupIds = useMemo(
-    () => new Set(state.groups.filter((group) => group.collapsed).map((group) => group.id)),
-    [state.groups]
+    () => new Set(state.groups.filter((group) => group.collapsed && group.id !== temporarilyRevealedGroupId).map((group) => group.id)),
+    [state.groups, temporarilyRevealedGroupId]
   );
   const pinnedTabs = useMemo(() => state.tabs.filter((tab) => tab.pinned), [state.tabs]);
   const ordinaryTabs = useMemo(
@@ -94,9 +95,40 @@ export default function TabStrip({ state, onChange, onActivate }: TabStripProps)
   }
 
   function activate(tabId: string) {
+    const targetGroupId = state.tabs.find((tab) => tab.id === tabId)?.groupId ?? null;
+    const targetGroup = targetGroupId ? state.groups.find((group) => group.id === targetGroupId) : null;
+    const shouldReveal = Boolean(targetGroup?.collapsed);
+    setTemporarilyRevealedGroupId(shouldReveal ? targetGroupId : null);
     onChange(setActiveTab(state, tabId));
     onActivate(tabId);
     setOverflowOpen(false);
+    if (tabId === "settings" || tabId === "queues") return;
+    window.requestAnimationFrame(() => {
+      (document.getElementById(tabButtonId(tabId))
+        ?? (targetGroupId ? document.getElementById(`tab-group-toggle-${targetGroupId}`) : null))?.focus();
+    });
+  }
+
+  function activateGroup(groupId: string) {
+    const group = state.groups.find((candidate) => candidate.id === groupId);
+    if (!group) return;
+    setTemporarilyRevealedGroupId(group.collapsed ? groupId : null);
+    const revealedState: TabState = { ...state, activeGroupId: groupId };
+    const firstTab = state.tabs.find((tab) => tab.groupId === groupId);
+    if (firstTab) {
+      onChange(setActiveTab(revealedState, firstTab.id));
+      onActivate(firstTab.id);
+      if (firstTab.id === "settings" || firstTab.id === "queues") {
+        return;
+      }
+      window.requestAnimationFrame(() => {
+        const target = document.getElementById(tabButtonId(firstTab.id));
+        (target ?? document.getElementById(`tab-group-toggle-${groupId}`))?.focus();
+      });
+    } else {
+      onChange(revealedState);
+      window.requestAnimationFrame(() => document.getElementById(`tab-group-toggle-${groupId}`)?.focus());
+    }
   }
 
   function handleTabKeyDown(event: React.KeyboardEvent<HTMLButtonElement>, tabId: string) {
@@ -112,7 +144,6 @@ export default function TabStrip({ state, onChange, onActivate }: TabStripProps)
     event.preventDefault();
     const next = tabs[nextIndex];
     activate(next.id);
-    focusTab(next.id);
   }
 
   function openContextMenu(event: React.MouseEvent, tab: TabRecord) {
@@ -188,19 +219,24 @@ export default function TabStrip({ state, onChange, onActivate }: TabStripProps)
         <div className="tab-strip-pinned" aria-label={copy.text("Pinned tabs", "已釘選分頁")}>
           {pinnedTabs.map((tab) => <TabButton key={tab.id} tab={tab} state={state} onActivate={activate} onKeyDown={handleTabKeyDown} onContextMenu={openContextMenu} />)}
         </div>
-        {state.groups.map((group) => (
-          <div className="tab-group" key={group.id} data-collapsed={group.collapsed ? "true" : "false"}>
+        {state.groups.map((group) => {
+          const groupExpanded = !group.collapsed || temporarilyRevealedGroupId === group.id;
+          return <div className="tab-group" key={group.id} data-collapsed={group.collapsed && temporarilyRevealedGroupId !== group.id ? "true" : "false"}>
             <div className="tab-group-header">
               <button
-                type="button"
-                className="tab-group-toggle"
-                aria-expanded={!group.collapsed}
-                aria-controls={`tab-group-${group.id}`}
-                onClick={() => onChange(setGroupCollapsed(state, group.id, !group.collapsed))}
-              >
-                <span className="tab-group-color" style={{ backgroundColor: group.color }} aria-hidden="true" />
-                <span>{group.name}</span>
-                <small>{group.tabIds.length}</small>
+                  type="button"
+                  className="tab-group-toggle"
+                  id={`tab-group-toggle-${group.id}`}
+                  aria-expanded={groupExpanded}
+                  aria-controls={`tab-group-${group.id}`}
+                  onClick={() => {
+                    setTemporarilyRevealedGroupId(null);
+                    onChange(setGroupCollapsed(state, group.id, groupExpanded));
+                  }}
+                >
+                  <span className="tab-group-color" style={{ backgroundColor: group.color }} aria-hidden="true" />
+                  <span>{group.name}</span>
+                  <small>{group.tabIds.length}</small>
               </button>
               <button
                 type="button"
@@ -219,7 +255,7 @@ export default function TabStrip({ state, onChange, onActivate }: TabStripProps)
               {(groupedTabs.get(group.id) ?? []).map((tab) => <TabButton key={tab.id} tab={tab} state={state} onActivate={activate} onKeyDown={handleTabKeyDown} onContextMenu={openContextMenu} />)}
             </div>
           </div>
-        ))}
+        })}
         {ungroupedTabs.length > 0 && (
           <div className="tab-group tab-group-ungrouped">
             <div className="tab-group-tabs" aria-label={copy.text("Ungrouped tabs", "未分組分頁")}>
@@ -321,7 +357,7 @@ export default function TabStrip({ state, onChange, onActivate }: TabStripProps)
             { scope: "groups" as const, label: copy.text("Tab groups", "分頁群組") },
             { scope: "master" as const, label: copy.text("All tabs", "全部分頁") },
           ]).map(({ scope, label }) => (
-            <TabSearchControl key={scope} label={label} scope={scope} query={queries[scope]} state={state} onQuery={(patch) => setQuery(scope, patch)} onActivate={activate} copy={copy} />
+          <TabSearchControl key={scope} label={label} scope={scope} query={queries[scope]} state={state} onQuery={(patch) => setQuery(scope, patch)} onActivate={activate} onActivateGroup={activateGroup} copy={copy} />
           ))}
         </div>
       )}
@@ -549,6 +585,7 @@ function TabSearchControl({
   state,
   onQuery,
   onActivate,
+  onActivateGroup,
   copy,
 }: {
   label: string;
@@ -557,6 +594,7 @@ function TabSearchControl({
   state: TabState;
   onQuery: (patch: Partial<TabSearchQuery>) => void;
   onActivate: (tabId: string) => void;
+  onActivateGroup: (groupId: string) => void;
   copy: ReturnType<typeof getUiCopy>;
 }) {
   const [builderOpen, setBuilderOpen] = useState(false);
@@ -663,7 +701,16 @@ function TabSearchControl({
                 <button type="button" onClick={() => onActivate(result.tab!.id)}>
                   {result.tab.label} · {result.group?.name ?? copy.text("Ungrouped", "未分組")} · {result.tab.pinned ? copy.text("Pinned", "已釘選") : copy.text("Tab", "分頁")} · {result.location?.windowId}/{result.location?.workspaceId}/{result.location?.stripId}
                 </button>
-              ) : <span>{result.group?.name}</span>}
+              ) : result.group ? (
+                <button
+                  type="button"
+                  onClick={() => onActivateGroup(result.group!.id)}
+                  aria-controls={`tab-group-${result.group.id}`}
+                  aria-label={copy.text(`Open group ${result.group.name}`, `開啟群組 ${result.group.name}`)}
+                >
+                  {result.group.name} · {copy.text("Group", "群組")} · {result.group.tabIds.length}
+                </button>
+              ) : null}
             </li>
           ))}
         </ul>

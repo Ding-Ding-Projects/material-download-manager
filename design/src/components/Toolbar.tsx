@@ -1,6 +1,6 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { DEFAULT_QUEUE_ID } from "@shared/types";
-import type { RegexBuilderState } from "@shared/regex";
+import { createDefaultRegexBuilderState, type RegexBuilderState } from "@shared/regex";
 import { useAppStore } from "../store/useAppStore";
 import { getUiCopy } from "../i18n/ui";
 import {
@@ -14,13 +14,197 @@ import {
 } from "./icons";
 import RegexBuilder from "./RegexBuilder";
 import { getSearchValidationError } from "../hooks/useFilteredItems";
-import { localizedRegexEvaluationError } from "../hooks/useIsolatedRegex";
+import { localizedRegexEvaluationError, useIsolatedRegexBatch } from "../hooks/useIsolatedRegex";
 
-const MENU_ITEMS = ["File", "Tasks", "Tools", "Help"];
+type ToolbarMenuAction = {
+  id: string;
+  label: string;
+  onSelect: () => void;
+  disabled?: boolean;
+};
 
 interface ToolbarProps {
   searchEvaluationError?: string | null;
   searchEvaluationPending?: boolean;
+}
+
+function ToolbarMenu({
+  menu,
+  open,
+  onClose,
+  copy,
+}: {
+  menu: { id: string; label: string; actions: ToolbarMenuAction[] };
+  open: boolean;
+  onClose: (restoreFocus?: boolean) => void;
+  copy: ReturnType<typeof getUiCopy>;
+}) {
+  const [query, setQuery] = useState<RegexBuilderState>(() => createDefaultRegexBuilderState());
+  const [builderOpen, setBuilderOpen] = useState(false);
+  const [sampleText, setSampleText] = useState("");
+  const panelRef = useRef<HTMLDivElement>(null);
+  const searchRef = useRef<HTMLInputElement>(null);
+  const regexToggleRef = useRef<HTMLButtonElement>(null);
+  const actionSamples = useMemo(() => menu.actions.map((action) => action.label), [menu.actions]);
+  const regexBatch = useIsolatedRegexBatch(
+    query.pattern,
+    query.flags,
+    actionSamples,
+    query.mode === "regex" && query.pattern.length > 0,
+    true,
+  );
+  const filteredActions = useMemo(() => {
+    if (!query.pattern) return menu.actions;
+    if (query.mode === "text") {
+      const needle = query.pattern.toLocaleLowerCase();
+      return menu.actions.filter((action) => action.label.toLocaleLowerCase().includes(needle));
+    }
+    if (!regexBatch.evaluations) return [];
+    return menu.actions.filter((_, index) => regexBatch.evaluations?.[index]?.matches.length);
+  }, [menu.actions, query.mode, query.pattern, regexBatch.evaluations]);
+  const searchError = query.mode === "regex" && regexBatch.error
+    ? localizedRegexEvaluationError(regexBatch.error, copy.text)
+    : null;
+
+  useEffect(() => {
+    if (!open) return;
+    window.requestAnimationFrame(() => {
+      searchRef.current?.focus();
+    });
+  }, [open]);
+
+  useEffect(() => {
+    if (open) return;
+    setQuery(createDefaultRegexBuilderState());
+    setBuilderOpen(false);
+    setSampleText("");
+  }, [open]);
+
+  function updateQuery(next: RegexBuilderState) {
+    setQuery(next);
+    setSampleText(next.sample);
+  }
+
+  function handleMenuKeyDown(event: React.KeyboardEvent<HTMLDivElement>) {
+    const menuItems = Array.from(panelRef.current?.querySelectorAll<HTMLButtonElement>("[role='menuitem']:not(:disabled)") ?? []);
+    if (event.key === "Escape") {
+      event.preventDefault();
+      if (builderOpen) {
+        setBuilderOpen(false);
+        event.stopPropagation();
+        window.requestAnimationFrame(() => regexToggleRef.current?.focus());
+        return;
+      }
+      if (query.pattern) {
+        setQuery(createDefaultRegexBuilderState());
+        setSampleText("");
+        event.stopPropagation();
+        searchRef.current?.focus();
+        return;
+      }
+      onClose();
+      return;
+    }
+    if (!(event.target instanceof HTMLButtonElement) || event.target.getAttribute("role") !== "menuitem") return;
+    if (!menuItems.length) return;
+    const currentIndex = menuItems.indexOf(document.activeElement as HTMLButtonElement);
+    const nextIndex = event.key === "ArrowDown" ? (currentIndex < 0 ? 0 : (currentIndex + 1) % menuItems.length)
+      : event.key === "ArrowUp" ? (currentIndex < 0 ? menuItems.length - 1 : (currentIndex - 1 + menuItems.length) % menuItems.length)
+        : event.key === "Home" ? 0
+          : event.key === "End" ? menuItems.length - 1
+            : -1;
+    if (nextIndex < 0) return;
+    event.preventDefault();
+    menuItems[nextIndex]?.focus();
+  }
+
+  return open ? (
+    <div
+      ref={panelRef}
+      id={`toolbar-menu-${menu.id}`}
+      className="toolbar-menu-panel"
+      role="menu"
+      aria-label={menu.label}
+      onKeyDown={handleMenuKeyDown}
+    >
+      <div className="toolbar-menu-search">
+        <input
+          ref={searchRef}
+          className="toolbar-menu-search-input"
+          type="search"
+          value={query.pattern}
+          placeholder={copy.text("Search this menu", "搜尋呢個選單")}
+          aria-label={copy.text(`${menu.label} menu search`, `${menu.label}選單搜尋`)}
+          onChange={(event) => setQuery((current) => ({ ...current, pattern: event.target.value }))}
+          onKeyDown={(event) => {
+            if (event.key === "Enter") {
+              event.preventDefault();
+              panelRef.current?.querySelector<HTMLButtonElement>("[role='menuitem']:not(:disabled)")?.click();
+              return;
+            }
+            if (event.key === "ArrowDown") {
+              event.preventDefault();
+              panelRef.current?.querySelector<HTMLButtonElement>("[role='menuitem']:not(:disabled)")?.focus();
+              return;
+            }
+            if (event.key === "ArrowUp") {
+              event.preventDefault();
+              const menuItems = panelRef.current?.querySelectorAll<HTMLButtonElement>("[role='menuitem']:not(:disabled)");
+              menuItems?.[menuItems.length - 1]?.focus();
+              return;
+            }
+            if (event.key === "Escape" && !builderOpen && !query.pattern) {
+              event.preventDefault();
+              onClose();
+            }
+          }}
+        />
+        <button
+          ref={regexToggleRef}
+          type="button"
+          className="toolbar-menu-regex-toggle"
+          aria-expanded={builderOpen}
+          aria-controls={`toolbar-menu-regex-${menu.id}`}
+          onClick={() => {
+            if (!builderOpen && !sampleText) setSampleText(actionSamples.join("\n"));
+            setBuilderOpen((current) => !current);
+          }}
+        >
+          {copy.text("Regex", "正則")}
+        </button>
+      </div>
+      {builderOpen && (
+        <div id={`toolbar-menu-regex-${menu.id}`} className="toolbar-menu-regex" role="dialog" aria-label={copy.text(`${menu.label} menu regex builder`, `${menu.label}選單正則建立器`)}>
+          <RegexBuilder
+            value={{ ...query, sample: sampleText }}
+            onChange={updateQuery}
+            title={copy.text(`${menu.label} menu regex builder`, `${menu.label}選單正則建立器`)}
+            text={copy.text}
+          />
+        </div>
+      )}
+      {searchError && <p className="field-error" role="alert">{searchError}</p>}
+      {!searchError && regexBatch.pending && <p className="setting-helper" role="status">{copy.text("Evaluating safely…", "安全評估緊…")}</p>}
+      {!regexBatch.pending && !searchError && filteredActions.length === 0 && <p className="toolbar-menu-empty" role="status">{copy.text("No menu actions match.", "冇相符嘅選單操作。")}</p>}
+      {filteredActions.map((action) => (
+        <button
+          key={action.id}
+          type="button"
+          role="menuitem"
+          className="toolbar-menu-action"
+          disabled={action.disabled}
+          title={action.disabled ? copy.text("Unavailable until a download is active.", "要有下載進行中先可以用。") : undefined}
+          onClick={() => {
+            if (action.disabled) return;
+            action.onSelect();
+            onClose(!["add-url", "queues", "settings"].includes(action.id));
+          }}
+        >
+          {action.label}
+        </button>
+      ))}
+    </div>
+  ) : null;
 }
 
 export default function Toolbar({ searchEvaluationError = null, searchEvaluationPending = false }: ToolbarProps) {
@@ -43,7 +227,9 @@ export default function Toolbar({ searchEvaluationError = null, searchEvaluation
   const copy = getUiCopy(settings);
   const [regexOpen, setRegexOpen] = useState(false);
   const [sampleText, setSampleText] = useState("");
+  const [openMenu, setOpenMenu] = useState<string | null>(null);
   const regexToggleRef = useRef<HTMLButtonElement>(null);
+  const menuTriggerRefs = useRef<Record<string, HTMLButtonElement | null>>({});
 
   const activeQueueId = filter.kind === "queue" ? filter.queueId : DEFAULT_QUEUE_ID;
   const activeQueue = queues.find((q) => q.id === activeQueueId);
@@ -90,15 +276,94 @@ export default function Toolbar({ searchEvaluationError = null, searchEvaluation
     setSampleText(next.sample);
   }
 
+  useEffect(() => {
+    if (!openMenu) return;
+    const closeOnOutsidePointer = (event: MouseEvent) => {
+      if (!(event.target instanceof Element) || !event.target.closest(".toolbar-menu")) {
+        closeMenu();
+      }
+    };
+    document.addEventListener("mousedown", closeOnOutsidePointer, true);
+    return () => {
+      document.removeEventListener("mousedown", closeOnOutsidePointer, true);
+    };
+  }, [openMenu]);
+
+  const toolbarMenus: Array<{ id: string; label: string; actions: ToolbarMenuAction[] }> = [
+    {
+      id: "file",
+      label: copy.text("File", "檔案"),
+      actions: [
+        { id: "add-url", label: copy.text("Add URL", "新增網址"), onSelect: () => openAddDownload() },
+        { id: "queues", label: copy.text("Open Queues", "開啟佇列"), onSelect: openQueues },
+      ],
+    },
+    {
+      id: "tasks",
+      label: copy.text("Tasks", "工作"),
+      actions: [
+        { id: "start-queue", label: copy.text(`Start ${activeQueueName}`, `開始${activeQueueName}`), onSelect: () => void startQueue(activeQueueId) },
+        { id: "stop-queue", label: copy.text(`Stop ${activeQueueName}`, `停止${activeQueueName}`), onSelect: () => void stopQueue(activeQueueId) },
+        { id: "stop-all", label: copy.text("Stop All", "全部停止"), onSelect: stopAllActive },
+      ],
+    },
+    {
+      id: "tools",
+      label: copy.text("Tools", "工具"),
+      actions: [
+        {
+          id: "progress",
+          label: copy.text("Progress Window", "進度視窗"),
+          onSelect: () => progressItem && void window.api.openProgressWindow(progressItem.id),
+          disabled: !progressItem,
+        },
+        { id: "settings", label: copy.settings, onSelect: openSettings },
+      ],
+    },
+    {
+      id: "help",
+      label: copy.text("Help", "幫助"),
+      actions: [
+        { id: "check-updates", label: copy.text("Check for updates", "檢查更新"), onSelect: () => void window.api.checkForUpdates() },
+      ],
+    },
+  ];
+
+  function closeMenu(restoreFocus = true) {
+    const closingMenu = openMenu;
+    setOpenMenu(null);
+    if (restoreFocus && closingMenu) window.requestAnimationFrame(() => menuTriggerRefs.current[closingMenu]?.focus());
+  }
+
   return (
     <div className="toolbar-wrap">
       <div className="menu-row">
         <div className="menu-items">
-          {MENU_ITEMS.map((label) => (
-            <span key={label} className="menu-item">
-              <u>{label[0]}</u>
-              {label.slice(1)}
-            </span>
+          {toolbarMenus.map((menu) => (
+            <div className="toolbar-menu" key={menu.id}>
+              <button
+                ref={(element) => { menuTriggerRefs.current[menu.id] = element; }}
+                type="button"
+                className="menu-item"
+                id={`toolbar-menu-trigger-${menu.id}`}
+                aria-haspopup="menu"
+                aria-expanded={openMenu === menu.id}
+                aria-controls={`toolbar-menu-${menu.id}`}
+                onClick={() => openMenu === menu.id ? closeMenu() : setOpenMenu(menu.id)}
+                onKeyDown={(event) => {
+                  if (event.key === "ArrowDown" || event.key === "Enter" || event.key === " ") {
+                    event.preventDefault();
+                    setOpenMenu(menu.id);
+                  } else if (event.key === "Escape") {
+                    event.preventDefault();
+                    closeMenu();
+                  }
+                }}
+              >
+                {menu.label}
+              </button>
+              <ToolbarMenu menu={menu} open={openMenu === menu.id} onClose={closeMenu} copy={copy} />
+            </div>
           ))}
         </div>
         <div className="search-builder-anchor">
