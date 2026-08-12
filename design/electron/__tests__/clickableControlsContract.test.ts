@@ -18,6 +18,10 @@ test("sidebar owns one keyboard activation path and protects its chevron", async
   assert.match(sidebar, /onKeyDown=\{\(e\) => e\.stopPropagation\(\)\}/u);
   assert.match(sidebar, /const openQueues = useAppStore\(\(s\) => s\.openQueues\);/u);
   assert.match(sidebar, /label=\{copy\.queues\}[\s\S]{0,180}onSelect=\{openQueues\}/u);
+  assert.match(sidebar, /\{children && \([\s\S]{0,220}className="sidebar-chevron-btn"/u);
+  assert.doesNotMatch(sidebar, /finishedExpanded|unfinishedExpanded/u);
+  assert.match(sidebar, /label=\{copy\.text\("Finished", "已完成"\)\}[\s\S]{0,220}expanded=\{false\}/u);
+  assert.match(sidebar, /label=\{copy\.text\("Unfinished", "未完成"\)\}[\s\S]{0,220}expanded=\{false\}/u);
   assert.doesNotMatch(bridge, /sidebarItem\.click\(\)/u);
 });
 

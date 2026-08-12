@@ -18,7 +18,7 @@ function SidebarSection({
   active?: boolean;
   count?: number;
   expanded: boolean;
-  onToggleExpand: () => void;
+  onToggleExpand?: () => void;
   onSelect?: () => void;
   bold?: boolean;
   children?: React.ReactNode;
@@ -43,18 +43,20 @@ function SidebarSection({
         <FolderIcon size={16} className="sidebar-item-icon" />
         <span className={`sidebar-item-label${bold ? " bold" : ""}`}>{label}</span>
         {typeof count === "number" && <span className="sidebar-item-count">{count}</span>}
-        <button
-          type="button"
-          className="sidebar-chevron-btn"
-          aria-label={expanded ? "Collapse" : "Expand"}
-          onClick={(e) => {
-            e.stopPropagation();
-            onToggleExpand();
-          }}
-          onKeyDown={(e) => e.stopPropagation()}
-        >
-          {expanded ? <ChevronUpIcon size={14} /> : <ChevronDownIcon size={14} />}
-        </button>
+        {children && (
+          <button
+            type="button"
+            className="sidebar-chevron-btn"
+            aria-label={expanded ? "Collapse" : "Expand"}
+            onClick={(e) => {
+              e.stopPropagation();
+              onToggleExpand?.();
+            }}
+            onKeyDown={(e) => e.stopPropagation()}
+          >
+            {expanded ? <ChevronUpIcon size={14} /> : <ChevronDownIcon size={14} />}
+          </button>
+        )}
       </div>
       {expanded && children}
     </div>
@@ -71,8 +73,6 @@ export default function Sidebar() {
   const copy = getUiCopy(settings);
 
   const [allExpanded, setAllExpanded] = useState(true);
-  const [finishedExpanded, setFinishedExpanded] = useState(true);
-  const [unfinishedExpanded, setUnfinishedExpanded] = useState(true);
   const [queuesExpanded, setQueuesExpanded] = useState(true);
 
   const categoryCounts = useMemo(() => {
@@ -131,8 +131,7 @@ export default function Sidebar() {
         label={copy.text("Finished", "已完成")}
         active={filter.kind === "status" && filter.status === "finished"}
         count={finishedCount}
-        expanded={finishedExpanded}
-        onToggleExpand={() => setFinishedExpanded((v) => !v)}
+        expanded={false}
         onSelect={() => setFilter({ kind: "status", status: "finished" })}
       />
 
@@ -140,8 +139,7 @@ export default function Sidebar() {
         label={copy.text("Unfinished", "未完成")}
         active={filter.kind === "status" && filter.status === "unfinished"}
         count={unfinishedCount}
-        expanded={unfinishedExpanded}
-        onToggleExpand={() => setUnfinishedExpanded((v) => !v)}
+        expanded={false}
         onSelect={() => setFilter({ kind: "status", status: "unfinished" })}
       />
 
