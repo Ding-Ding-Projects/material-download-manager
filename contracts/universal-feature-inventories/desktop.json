@@ -1,0 +1,376 @@
+{
+  "schemaVersion": 1,
+  "contract": "universal-feature-inventory",
+  "surface": {
+    "id": "desktop",
+    "title": "Windows desktop Electron application",
+    "root": "design"
+  },
+  "requiredEvidenceKinds": [
+    "implementation",
+    "documentation",
+    "localization",
+    "persistence",
+    "focusedTest",
+    "builtInteraction",
+    "capture"
+  ],
+  "evidenceProfiles": {
+    "baseline-unverified": {
+      "implementation": {
+        "state": "unverified",
+        "anchors": [],
+        "reason": "No row-local exact anchor has been registered yet. Do not inherit evidence from another surface or a related feature."
+      },
+      "documentation": {
+        "state": "unverified",
+        "anchors": [],
+        "reason": "No row-local exact anchor has been registered yet. Do not inherit evidence from another surface or a related feature."
+      },
+      "localization": {
+        "state": "unverified",
+        "anchors": [],
+        "reason": "No row-local exact anchor has been registered yet. Do not inherit evidence from another surface or a related feature."
+      },
+      "persistence": {
+        "state": "unverified",
+        "anchors": [],
+        "reason": "No row-local exact anchor has been registered yet. Do not inherit evidence from another surface or a related feature."
+      },
+      "focusedTest": {
+        "state": "unverified",
+        "anchors": [],
+        "reason": "No row-local exact anchor has been registered yet. Do not inherit evidence from another surface or a related feature."
+      },
+      "builtInteraction": {
+        "state": "unverified",
+        "anchors": [],
+        "reason": "No row-local exact anchor has been registered yet. Do not inherit evidence from another surface or a related feature."
+      },
+      "capture": {
+        "state": "unverified",
+        "anchors": [],
+        "reason": "No row-local exact anchor has been registered yet. Do not inherit evidence from another surface or a related feature."
+      }
+    },
+    "not-started": {
+      "implementation": {
+        "state": "missing",
+        "anchors": [],
+        "reason": "No surface-specific implementation or evidence has been registered."
+      },
+      "documentation": {
+        "state": "missing",
+        "anchors": [],
+        "reason": "No surface-specific implementation or evidence has been registered."
+      },
+      "localization": {
+        "state": "missing",
+        "anchors": [],
+        "reason": "No surface-specific implementation or evidence has been registered."
+      },
+      "persistence": {
+        "state": "missing",
+        "anchors": [],
+        "reason": "No surface-specific implementation or evidence has been registered."
+      },
+      "focusedTest": {
+        "state": "missing",
+        "anchors": [],
+        "reason": "No surface-specific implementation or evidence has been registered."
+      },
+      "builtInteraction": {
+        "state": "missing",
+        "anchors": [],
+        "reason": "No surface-specific implementation or evidence has been registered."
+      },
+      "capture": {
+        "state": "missing",
+        "anchors": [],
+        "reason": "No surface-specific implementation or evidence has been registered."
+      }
+    }
+  },
+  "rows": [
+    {
+      "featureId": "language-modes",
+      "status": "partial",
+      "evidenceProfile": "baseline-unverified",
+      "completionReference": "contracts/README.md#completing-a-row",
+      "note": "The desktop baseline includes historical partial foundations. This inventory does not promote any of them to complete until every evidence field names exact row-local proof."
+    },
+    {
+      "featureId": "funny-levels",
+      "status": "partial",
+      "evidenceProfile": "baseline-unverified",
+      "completionReference": "contracts/README.md#completing-a-row",
+      "note": "The desktop baseline includes historical partial foundations. This inventory does not promote any of them to complete until every evidence field names exact row-local proof."
+    },
+    {
+      "featureId": "emoji-toggle",
+      "status": "partial",
+      "evidenceProfile": "baseline-unverified",
+      "completionReference": "contracts/README.md#completing-a-row",
+      "note": "The desktop baseline includes historical partial foundations. This inventory does not promote any of them to complete until every evidence field names exact row-local proof."
+    },
+    {
+      "featureId": "school-mode",
+      "status": "partial",
+      "evidenceProfile": "baseline-unverified",
+      "completionReference": "contracts/README.md#completing-a-row",
+      "note": "The desktop baseline includes historical partial foundations. This inventory does not promote any of them to complete until every evidence field names exact row-local proof."
+    },
+    {
+      "featureId": "narration",
+      "status": "partial",
+      "evidenceProfile": "baseline-unverified",
+      "completionReference": "contracts/README.md#completing-a-row",
+      "note": "The desktop baseline includes historical partial foundations. This inventory does not promote any of them to complete until every evidence field names exact row-local proof."
+    },
+    {
+      "featureId": "scheduled-settings",
+      "status": "partial",
+      "evidenceProfile": "baseline-unverified",
+      "completionReference": "contracts/README.md#completing-a-row",
+      "note": "The desktop baseline includes historical partial foundations. This inventory does not promote any of them to complete until every evidence field names exact row-local proof."
+    },
+    {
+      "featureId": "external-settings-sources",
+      "status": "partial",
+      "evidenceProfile": "baseline-unverified",
+      "completionReference": "contracts/README.md#completing-a-row",
+      "note": "The desktop baseline includes historical partial foundations. This inventory does not promote any of them to complete until every evidence field names exact row-local proof."
+    },
+    {
+      "featureId": "dim-sum-surprise",
+      "status": "partial",
+      "evidenceProfile": "baseline-unverified",
+      "completionReference": "contracts/README.md#completing-a-row",
+      "note": "The desktop baseline includes historical partial foundations. This inventory does not promote any of them to complete until every evidence field names exact row-local proof."
+    },
+    {
+      "featureId": "regex-builder",
+      "status": "partial",
+      "evidenceProfile": "baseline-unverified",
+      "completionReference": "contracts/README.md#completing-a-row",
+      "note": "The desktop baseline includes historical partial foundations. This inventory does not promote any of them to complete until every evidence field names exact row-local proof."
+    },
+    {
+      "featureId": "notifications",
+      "status": "partial",
+      "evidenceProfile": "baseline-unverified",
+      "completionReference": "contracts/README.md#completing-a-row",
+      "note": "The desktop baseline includes historical partial foundations. This inventory does not promote any of them to complete until every evidence field names exact row-local proof."
+    },
+    {
+      "featureId": "appearance-editor",
+      "status": "partial",
+      "evidenceProfile": "baseline-unverified",
+      "completionReference": "contracts/README.md#completing-a-row",
+      "note": "The desktop baseline includes historical partial foundations. This inventory does not promote any of them to complete until every evidence field names exact row-local proof."
+    },
+    {
+      "featureId": "tabs",
+      "status": "partial",
+      "evidenceProfile": "baseline-unverified",
+      "completionReference": "contracts/README.md#completing-a-row",
+      "note": "The desktop baseline includes historical partial foundations. This inventory does not promote any of them to complete until every evidence field names exact row-local proof."
+    },
+    {
+      "featureId": "tab-locks",
+      "status": "partial",
+      "evidenceProfile": "baseline-unverified",
+      "completionReference": "contracts/README.md#completing-a-row",
+      "note": "The desktop baseline includes historical partial foundations. This inventory does not promote any of them to complete until every evidence field names exact row-local proof."
+    },
+    {
+      "featureId": "support-tickets",
+      "status": "partial",
+      "evidenceProfile": "baseline-unverified",
+      "completionReference": "contracts/README.md#completing-a-row",
+      "note": "The desktop baseline includes historical partial foundations. This inventory does not promote any of them to complete until every evidence field names exact row-local proof."
+    },
+    {
+      "featureId": "authenticator",
+      "status": "partial",
+      "evidenceProfile": "baseline-unverified",
+      "completionReference": "contracts/README.md#completing-a-row",
+      "note": "The desktop baseline includes historical partial foundations. This inventory does not promote any of them to complete until every evidence field names exact row-local proof."
+    },
+    {
+      "featureId": "mutation-history",
+      "status": "partial",
+      "evidenceProfile": "baseline-unverified",
+      "completionReference": "contracts/README.md#completing-a-row",
+      "note": "The desktop baseline includes historical partial foundations. This inventory does not promote any of them to complete until every evidence field names exact row-local proof."
+    },
+    {
+      "featureId": "landing-and-docs",
+      "status": "partial",
+      "evidenceProfile": "baseline-unverified",
+      "completionReference": "contracts/README.md#completing-a-row",
+      "note": "The desktop baseline includes historical partial foundations. This inventory does not promote any of them to complete until every evidence field names exact row-local proof."
+    },
+    {
+      "featureId": "command-palette",
+      "status": "partial",
+      "evidenceProfile": "baseline-unverified",
+      "completionReference": "contracts/README.md#completing-a-row",
+      "note": "The desktop baseline includes historical partial foundations. This inventory does not promote any of them to complete until every evidence field names exact row-local proof."
+    },
+    {
+      "featureId": "destructive-confirmation",
+      "status": "partial",
+      "evidenceProfile": "baseline-unverified",
+      "completionReference": "contracts/README.md#completing-a-row",
+      "note": "The desktop baseline includes historical partial foundations. This inventory does not promote any of them to complete until every evidence field names exact row-local proof."
+    },
+    {
+      "featureId": "local-history",
+      "status": "partial",
+      "evidenceProfile": "baseline-unverified",
+      "completionReference": "contracts/README.md#completing-a-row",
+      "note": "The desktop baseline includes historical partial foundations. This inventory does not promote any of them to complete until every evidence field names exact row-local proof."
+    },
+    {
+      "featureId": "changelog",
+      "status": "partial",
+      "evidenceProfile": "baseline-unverified",
+      "completionReference": "contracts/README.md#completing-a-row",
+      "note": "The desktop baseline includes historical partial foundations. This inventory does not promote any of them to complete until every evidence field names exact row-local proof."
+    },
+    {
+      "featureId": "external-editor",
+      "status": "partial",
+      "evidenceProfile": "baseline-unverified",
+      "completionReference": "contracts/README.md#completing-a-row",
+      "note": "The desktop baseline includes historical partial foundations. This inventory does not promote any of them to complete until every evidence field names exact row-local proof."
+    },
+    {
+      "featureId": "exports",
+      "status": "partial",
+      "evidenceProfile": "baseline-unverified",
+      "completionReference": "contracts/README.md#completing-a-row",
+      "note": "The desktop baseline includes historical partial foundations. This inventory does not promote any of them to complete until every evidence field names exact row-local proof."
+    },
+    {
+      "featureId": "bulk-actions",
+      "status": "partial",
+      "evidenceProfile": "baseline-unverified",
+      "completionReference": "contracts/README.md#completing-a-row",
+      "note": "The desktop baseline includes historical partial foundations. This inventory does not promote any of them to complete until every evidence field names exact row-local proof."
+    },
+    {
+      "featureId": "accessibility-responsive",
+      "status": "partial",
+      "evidenceProfile": "baseline-unverified",
+      "completionReference": "contracts/README.md#completing-a-row",
+      "note": "The desktop baseline includes historical partial foundations. This inventory does not promote any of them to complete until every evidence field names exact row-local proof."
+    },
+    {
+      "featureId": "offline-documentation",
+      "status": "partial",
+      "evidenceProfile": "baseline-unverified",
+      "completionReference": "contracts/README.md#completing-a-row",
+      "note": "The desktop baseline includes historical partial foundations. This inventory does not promote any of them to complete until every evidence field names exact row-local proof."
+    },
+    {
+      "featureId": "overlay-surfaces",
+      "status": "partial",
+      "evidenceProfile": "baseline-unverified",
+      "completionReference": "contracts/README.md#completing-a-row",
+      "note": "The desktop baseline includes historical partial foundations. This inventory does not promote any of them to complete until every evidence field names exact row-local proof."
+    },
+    {
+      "featureId": "rich-controls",
+      "status": "partial",
+      "evidenceProfile": "baseline-unverified",
+      "completionReference": "contracts/README.md#completing-a-row",
+      "note": "The desktop baseline includes historical partial foundations. This inventory does not promote any of them to complete until every evidence field names exact row-local proof."
+    },
+    {
+      "featureId": "guided-forms",
+      "status": "partial",
+      "evidenceProfile": "baseline-unverified",
+      "completionReference": "contracts/README.md#completing-a-row",
+      "note": "The desktop baseline includes historical partial foundations. This inventory does not promote any of them to complete until every evidence field names exact row-local proof."
+    },
+    {
+      "featureId": "filter-collapse",
+      "status": "partial",
+      "evidenceProfile": "baseline-unverified",
+      "completionReference": "contracts/README.md#completing-a-row",
+      "note": "The desktop baseline includes historical partial foundations. This inventory does not promote any of them to complete until every evidence field names exact row-local proof."
+    },
+    {
+      "featureId": "blank-slate-presets",
+      "status": "partial",
+      "evidenceProfile": "baseline-unverified",
+      "completionReference": "contracts/README.md#completing-a-row",
+      "note": "The desktop baseline includes historical partial foundations. This inventory does not promote any of them to complete until every evidence field names exact row-local proof."
+    },
+    {
+      "featureId": "provider-authored-markup",
+      "status": "partial",
+      "evidenceProfile": "baseline-unverified",
+      "completionReference": "contracts/README.md#completing-a-row",
+      "note": "The desktop baseline includes historical partial foundations. This inventory does not promote any of them to complete until every evidence field names exact row-local proof."
+    },
+    {
+      "featureId": "release-evidence",
+      "status": "partial",
+      "evidenceProfile": "baseline-unverified",
+      "completionReference": "contracts/README.md#completing-a-row",
+      "note": "The desktop baseline includes historical partial foundations. This inventory does not promote any of them to complete until every evidence field names exact row-local proof."
+    },
+    {
+      "featureId": "local-assets-and-no-signing",
+      "status": "partial",
+      "evidenceProfile": "baseline-unverified",
+      "completionReference": "contracts/README.md#completing-a-row",
+      "note": "The desktop baseline includes historical partial foundations. This inventory does not promote any of them to complete until every evidence field names exact row-local proof."
+    },
+    {
+      "featureId": "captures-and-evidence",
+      "status": "partial",
+      "evidenceProfile": "baseline-unverified",
+      "completionReference": "contracts/README.md#completing-a-row",
+      "note": "The desktop baseline includes historical partial foundations. This inventory does not promote any of them to complete until every evidence field names exact row-local proof."
+    },
+    {
+      "featureId": "personal-vocabulary-upload",
+      "status": "missing",
+      "evidenceProfile": "not-started",
+      "completionReference": "contracts/README.md#completing-a-row",
+      "note": "The desktop baseline includes historical partial foundations. This inventory does not promote any of them to complete until every evidence field names exact row-local proof."
+    },
+    {
+      "featureId": "app-logo-customization",
+      "status": "missing",
+      "evidenceProfile": "not-started",
+      "completionReference": "contracts/README.md#completing-a-row",
+      "note": "The desktop baseline includes historical partial foundations. This inventory does not promote any of them to complete until every evidence field names exact row-local proof."
+    },
+    {
+      "featureId": "universal-file-converter",
+      "status": "missing",
+      "evidenceProfile": "not-started",
+      "completionReference": "contracts/README.md#completing-a-row",
+      "note": "The desktop baseline includes historical partial foundations. This inventory does not promote any of them to complete until every evidence field names exact row-local proof."
+    },
+    {
+      "featureId": "ollama-suite-manager",
+      "status": "partial",
+      "evidenceProfile": "baseline-unverified",
+      "completionReference": "contracts/README.md#completing-a-row",
+      "note": "The desktop baseline includes historical partial foundations. This inventory does not promote any of them to complete until every evidence field names exact row-local proof."
+    },
+    {
+      "featureId": "every-element-locks",
+      "status": "missing",
+      "evidenceProfile": "not-started",
+      "completionReference": "contracts/README.md#completing-a-row",
+      "note": "The desktop baseline includes historical partial foundations. This inventory does not promote any of them to complete until every evidence field names exact row-local proof."
+    }
+  ]
+}

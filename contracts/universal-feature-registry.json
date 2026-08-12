@@ -1,0 +1,261 @@
+{
+  "schemaVersion": 1,
+  "contract": "universal-feature-inventory",
+  "title": "Canonical universal user-facing feature registry",
+  "surfaceIds": [
+    "desktop",
+    "extension",
+    "pages"
+  ],
+  "evidenceKinds": [
+    "implementation",
+    "documentation",
+    "localization",
+    "persistence",
+    "focusedTest",
+    "builtInteraction",
+    "capture"
+  ],
+  "features": [
+    {
+      "id": "language-modes",
+      "title": "English, playful Hong Kong Cantonese, and bilingual language modes",
+      "source": "existing-pages-manifest",
+      "completion": "Persist all three modes, localize every surface, and prove switching changes rendered copy."
+    },
+    {
+      "id": "funny-levels",
+      "title": "Independent English and Cantonese funny-level controls",
+      "source": "existing-pages-manifest",
+      "completion": "Persist one 1–5 control per language and prove both alter rendered voice without altering facts."
+    },
+    {
+      "id": "emoji-toggle",
+      "title": "Dialog and message-box emoji preference",
+      "source": "existing-pages-manifest",
+      "completion": "Persist the decorative-only preference and prove labels and accessible names remain factual."
+    },
+    {
+      "id": "school-mode",
+      "title": "Shared user-renamable School mode",
+      "source": "existing-pages-manifest",
+      "completion": "Provide the live shared lock, reset route, suppression behavior, and exact recovery disclosure."
+    },
+    {
+      "id": "narration",
+      "title": "Opt-in serialized spoken narrator",
+      "source": "existing-pages-manifest",
+      "completion": "Provide an off-by-default local narrator with selected language, queue, cooldown, and assistive-technology behavior."
+    },
+    {
+      "id": "scheduled-settings",
+      "title": "Scheduled language and appearance settings",
+      "source": "existing-pages-manifest",
+      "completion": "Provide a versioned, timezone-aware editor with deterministic precedence and restart persistence."
+    },
+    {
+      "id": "external-settings-sources",
+      "title": "Validated external settings sources",
+      "source": "existing-pages-manifest",
+      "completion": "Provide bounded HTTPS and Home Assistant source handling with local fallback and honest failures."
+    },
+    {
+      "id": "dim-sum-surprise",
+      "title": "Non-blocking dim sum surprise",
+      "source": "existing-pages-manifest",
+      "completion": "Provide the 10% local surprise with accessible bilingual dish data and all suppression boundaries."
+    },
+    {
+      "id": "regex-builder",
+      "title": "Anchored full regex builder beside every search",
+      "source": "existing-pages-manifest",
+      "completion": "Provide guided and raw regex editing, bounded evaluation, and one anchored builder for every search field."
+    },
+    {
+      "id": "notifications",
+      "title": "Non-blocking notifications and notification history",
+      "source": "existing-pages-manifest",
+      "completion": "Provide accessible corner notifications, reviewable history, real actions, and truthful error recovery."
+    },
+    {
+      "id": "appearance-editor",
+      "title": "Material appearance editor for every rendered element",
+      "source": "existing-pages-manifest",
+      "completion": "Provide per-element editing, infinite color controls, typography depth, persistence, and reset paths."
+    },
+    {
+      "id": "tabs",
+      "title": "Browser-style tabs, groups, searches, and bulk close",
+      "source": "existing-pages-manifest",
+      "completion": "Provide dockable tabs, overflow, grouping, pinning, all four tab searches, and persisted tab state."
+    },
+    {
+      "id": "tab-locks",
+      "title": "Per-tab and per-property toy locks",
+      "source": "existing-pages-manifest",
+      "completion": "Provide opt-in tab and appearance locks with local recovery, independent credentials, and search visibility."
+    },
+    {
+      "id": "support-tickets",
+      "title": "Local Support Tickets recovery desk",
+      "source": "existing-pages-manifest",
+      "completion": "Provide the clearly fictional local ticket flow, no-network disclosure, and user-driven folder recovery."
+    },
+    {
+      "id": "authenticator",
+      "title": "Built-in TOTP authenticator and QR pairing",
+      "source": "existing-pages-manifest",
+      "completion": "Provide local RFC 6238 registration, pairing confirmation, code display, list management, and secret-safe storage."
+    },
+    {
+      "id": "mutation-history",
+      "title": "Protected redacted mutation history",
+      "source": "existing-pages-manifest",
+      "completion": "Record append-only redacted history with protected browse, restore, retention, and export routes."
+    },
+    {
+      "id": "landing-and-docs",
+      "title": "Landing page and documentation site",
+      "source": "existing-pages-manifest",
+      "completion": "Document every feature on a local-asset Material 3 site with current release boundaries."
+    },
+    {
+      "id": "command-palette",
+      "title": "Ctrl+Shift+F command palette",
+      "source": "existing-pages-manifest",
+      "completion": "Index every command, setting, article, and appearance control and teleport to the exact target."
+    },
+    {
+      "id": "destructive-confirmation",
+      "title": "Two-key destructive-action confirmation",
+      "source": "existing-pages-manifest",
+      "completion": "Require both independent controls and the full confirmation slider before the actual destructive operation."
+    },
+    {
+      "id": "local-history",
+      "title": "Local version history and restore",
+      "source": "existing-pages-manifest",
+      "completion": "Provide isolated local history for user-managed records with append-only restore and export."
+    },
+    {
+      "id": "changelog",
+      "title": "In-app changelog viewer",
+      "source": "existing-pages-manifest",
+      "completion": "Show every released version with date, exact commit links, filtering, search, copy, and export."
+    },
+    {
+      "id": "external-editor",
+      "title": "External editor and Visual Studio Code handoff",
+      "source": "existing-pages-manifest",
+      "completion": "Detect or configure editors, open the exact exported file or workspace, and explain unavailable routes."
+    },
+    {
+      "id": "exports",
+      "title": "Complete coding-format exports",
+      "source": "existing-pages-manifest",
+      "completion": "Export every owned record faithfully in applicable formats while declaring intentional omissions first."
+    },
+    {
+      "id": "bulk-actions",
+      "title": "Bulk selection, preview, and undo",
+      "source": "existing-pages-manifest",
+      "completion": "Provide multiselect, scope-aware select all, preview, cancellation, and truthful partial outcomes for every collection."
+    },
+    {
+      "id": "accessibility-responsive",
+      "title": "Accessibility, contrast, sizing, and responsive layout",
+      "source": "existing-pages-manifest",
+      "completion": "Prove keyboard, screen-reader, contrast, reduced-motion, narrow-width, and high-scale behavior."
+    },
+    {
+      "id": "offline-documentation",
+      "title": "Bundled offline documentation browser",
+      "source": "existing-pages-manifest",
+      "completion": "Bundle all feature articles, render them safely, resolve internal links, and fail when an article is absent."
+    },
+    {
+      "id": "overlay-surfaces",
+      "title": "Painted, bounded, movable, and resizable overlays",
+      "source": "existing-pages-manifest",
+      "completion": "Give every overlay its own visible surface, viewport bounds, scroll path, keyboard movement, and resize path."
+    },
+    {
+      "id": "rich-controls",
+      "title": "Rich controls wherever values are shown",
+      "source": "existing-pages-manifest",
+      "completion": "Use the real persistent, validated control inline or state the precise reason it cannot be inline."
+    },
+    {
+      "id": "guided-forms",
+      "title": "Guided forms with real pickers and validation",
+      "source": "existing-pages-manifest",
+      "completion": "Offer real choices, browse controls, suggested values, and plain inline validation before submission."
+    },
+    {
+      "id": "filter-collapse",
+      "title": "Collapsible filters and statistics",
+      "source": "existing-pages-manifest",
+      "completion": "Persist collapse state and expose active filtering so controls never hide why results changed."
+    },
+    {
+      "id": "blank-slate-presets",
+      "title": "Presets for blank-slate editors",
+      "source": "existing-pages-manifest",
+      "completion": "Offer shipped-default-derived presets with exact descriptions and normal undo/history behavior."
+    },
+    {
+      "id": "provider-authored-markup",
+      "title": "Safe rendering of provider-authored markup",
+      "source": "existing-pages-manifest",
+      "completion": "Render markup through the shared isolated renderer with safe links, emoji resolution, and honest empty states."
+    },
+    {
+      "id": "release-evidence",
+      "title": "Verified release links and publication state",
+      "source": "existing-pages-manifest",
+      "completion": "Show immutable installer and release facts only after their exact version, assets, and verification are proven."
+    },
+    {
+      "id": "local-assets-and-no-signing",
+      "title": "Local assets and permanent no-signing policy",
+      "source": "existing-pages-manifest",
+      "completion": "Bundle consumer assets locally and preserve the unsigned installer and ZIP-only extension boundary."
+    },
+    {
+      "id": "captures-and-evidence",
+      "title": "Real built-artifact captures and evidence",
+      "source": "existing-pages-manifest",
+      "completion": "Capture each claimed user-facing surface from the built artifact and record checked dimensions and hashes."
+    },
+    {
+      "id": "personal-vocabulary-upload",
+      "title": "Local personal-vocabulary JSON upload",
+      "source": "2026-08-universal-expansion",
+      "completion": "Provide the bounded local JSON picker, validation, private cache, replace/reset controls, and no-leak proof."
+    },
+    {
+      "id": "app-logo-customization",
+      "title": "App-logo customization and safe display conversion",
+      "source": "2026-08-universal-expansion",
+      "completion": "Provide presets, bounded local custom-image processing, editable rendering choices, conversion verification, and rollback."
+    },
+    {
+      "id": "universal-file-converter",
+      "title": "Universal local file converter",
+      "source": "2026-08-universal-expansion",
+      "completion": "Provide the categorized offline adapter catalog, bounded queue, PDF tools, validation, cancellation, and recovery."
+    },
+    {
+      "id": "ollama-suite-manager",
+      "title": "Complete local Ollama suite manager",
+      "source": "2026-08-universal-expansion",
+      "completion": "Provide exhaustive catalog refresh, evidence-backed fit, pull cart, chat, harness profiles, rollback, and offline recovery."
+    },
+    {
+      "id": "every-element-locks",
+      "title": "Per-element toy lock wizards",
+      "source": "2026-08-universal-expansion",
+      "completion": "Expose an independently credentialed, locally recoverable lock wizard and shortcut for every rendered element."
+    }
+  ]
+}

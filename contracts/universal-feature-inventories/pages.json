@@ -1,0 +1,376 @@
+{
+  "schemaVersion": 1,
+  "contract": "universal-feature-inventory",
+  "surface": {
+    "id": "pages",
+    "title": "GitHub Pages landing and documentation site",
+    "root": "site"
+  },
+  "requiredEvidenceKinds": [
+    "implementation",
+    "documentation",
+    "localization",
+    "persistence",
+    "focusedTest",
+    "builtInteraction",
+    "capture"
+  ],
+  "evidenceProfiles": {
+    "baseline-unverified": {
+      "implementation": {
+        "state": "unverified",
+        "anchors": [],
+        "reason": "No row-local exact anchor has been registered yet. Do not inherit evidence from another surface or a related feature."
+      },
+      "documentation": {
+        "state": "unverified",
+        "anchors": [],
+        "reason": "No row-local exact anchor has been registered yet. Do not inherit evidence from another surface or a related feature."
+      },
+      "localization": {
+        "state": "unverified",
+        "anchors": [],
+        "reason": "No row-local exact anchor has been registered yet. Do not inherit evidence from another surface or a related feature."
+      },
+      "persistence": {
+        "state": "unverified",
+        "anchors": [],
+        "reason": "No row-local exact anchor has been registered yet. Do not inherit evidence from another surface or a related feature."
+      },
+      "focusedTest": {
+        "state": "unverified",
+        "anchors": [],
+        "reason": "No row-local exact anchor has been registered yet. Do not inherit evidence from another surface or a related feature."
+      },
+      "builtInteraction": {
+        "state": "unverified",
+        "anchors": [],
+        "reason": "No row-local exact anchor has been registered yet. Do not inherit evidence from another surface or a related feature."
+      },
+      "capture": {
+        "state": "unverified",
+        "anchors": [],
+        "reason": "No row-local exact anchor has been registered yet. Do not inherit evidence from another surface or a related feature."
+      }
+    },
+    "not-started": {
+      "implementation": {
+        "state": "missing",
+        "anchors": [],
+        "reason": "No surface-specific implementation or evidence has been registered."
+      },
+      "documentation": {
+        "state": "missing",
+        "anchors": [],
+        "reason": "No surface-specific implementation or evidence has been registered."
+      },
+      "localization": {
+        "state": "missing",
+        "anchors": [],
+        "reason": "No surface-specific implementation or evidence has been registered."
+      },
+      "persistence": {
+        "state": "missing",
+        "anchors": [],
+        "reason": "No surface-specific implementation or evidence has been registered."
+      },
+      "focusedTest": {
+        "state": "missing",
+        "anchors": [],
+        "reason": "No surface-specific implementation or evidence has been registered."
+      },
+      "builtInteraction": {
+        "state": "missing",
+        "anchors": [],
+        "reason": "No surface-specific implementation or evidence has been registered."
+      },
+      "capture": {
+        "state": "missing",
+        "anchors": [],
+        "reason": "No surface-specific implementation or evidence has been registered."
+      }
+    }
+  },
+  "rows": [
+    {
+      "featureId": "language-modes",
+      "status": "partial",
+      "evidenceProfile": "baseline-unverified",
+      "completionReference": "contracts/README.md#completing-a-row",
+      "note": "The existing Pages-only manifest is a predecessor, not evidence for desktop or extension rows. This inventory records the site independently."
+    },
+    {
+      "featureId": "funny-levels",
+      "status": "partial",
+      "evidenceProfile": "baseline-unverified",
+      "completionReference": "contracts/README.md#completing-a-row",
+      "note": "The existing Pages-only manifest is a predecessor, not evidence for desktop or extension rows. This inventory records the site independently."
+    },
+    {
+      "featureId": "emoji-toggle",
+      "status": "partial",
+      "evidenceProfile": "baseline-unverified",
+      "completionReference": "contracts/README.md#completing-a-row",
+      "note": "The existing Pages-only manifest is a predecessor, not evidence for desktop or extension rows. This inventory records the site independently."
+    },
+    {
+      "featureId": "school-mode",
+      "status": "partial",
+      "evidenceProfile": "baseline-unverified",
+      "completionReference": "contracts/README.md#completing-a-row",
+      "note": "The existing Pages-only manifest is a predecessor, not evidence for desktop or extension rows. This inventory records the site independently."
+    },
+    {
+      "featureId": "narration",
+      "status": "partial",
+      "evidenceProfile": "baseline-unverified",
+      "completionReference": "contracts/README.md#completing-a-row",
+      "note": "The existing Pages-only manifest is a predecessor, not evidence for desktop or extension rows. This inventory records the site independently."
+    },
+    {
+      "featureId": "scheduled-settings",
+      "status": "partial",
+      "evidenceProfile": "baseline-unverified",
+      "completionReference": "contracts/README.md#completing-a-row",
+      "note": "The existing Pages-only manifest is a predecessor, not evidence for desktop or extension rows. This inventory records the site independently."
+    },
+    {
+      "featureId": "external-settings-sources",
+      "status": "partial",
+      "evidenceProfile": "baseline-unverified",
+      "completionReference": "contracts/README.md#completing-a-row",
+      "note": "The existing Pages-only manifest is a predecessor, not evidence for desktop or extension rows. This inventory records the site independently."
+    },
+    {
+      "featureId": "dim-sum-surprise",
+      "status": "partial",
+      "evidenceProfile": "baseline-unverified",
+      "completionReference": "contracts/README.md#completing-a-row",
+      "note": "The existing Pages-only manifest is a predecessor, not evidence for desktop or extension rows. This inventory records the site independently."
+    },
+    {
+      "featureId": "regex-builder",
+      "status": "partial",
+      "evidenceProfile": "baseline-unverified",
+      "completionReference": "contracts/README.md#completing-a-row",
+      "note": "The existing Pages-only manifest is a predecessor, not evidence for desktop or extension rows. This inventory records the site independently."
+    },
+    {
+      "featureId": "notifications",
+      "status": "partial",
+      "evidenceProfile": "baseline-unverified",
+      "completionReference": "contracts/README.md#completing-a-row",
+      "note": "The existing Pages-only manifest is a predecessor, not evidence for desktop or extension rows. This inventory records the site independently."
+    },
+    {
+      "featureId": "appearance-editor",
+      "status": "partial",
+      "evidenceProfile": "baseline-unverified",
+      "completionReference": "contracts/README.md#completing-a-row",
+      "note": "The existing Pages-only manifest is a predecessor, not evidence for desktop or extension rows. This inventory records the site independently."
+    },
+    {
+      "featureId": "tabs",
+      "status": "partial",
+      "evidenceProfile": "baseline-unverified",
+      "completionReference": "contracts/README.md#completing-a-row",
+      "note": "The existing Pages-only manifest is a predecessor, not evidence for desktop or extension rows. This inventory records the site independently."
+    },
+    {
+      "featureId": "tab-locks",
+      "status": "partial",
+      "evidenceProfile": "baseline-unverified",
+      "completionReference": "contracts/README.md#completing-a-row",
+      "note": "The existing Pages-only manifest is a predecessor, not evidence for desktop or extension rows. This inventory records the site independently."
+    },
+    {
+      "featureId": "support-tickets",
+      "status": "partial",
+      "evidenceProfile": "baseline-unverified",
+      "completionReference": "contracts/README.md#completing-a-row",
+      "note": "The existing Pages-only manifest is a predecessor, not evidence for desktop or extension rows. This inventory records the site independently."
+    },
+    {
+      "featureId": "authenticator",
+      "status": "partial",
+      "evidenceProfile": "baseline-unverified",
+      "completionReference": "contracts/README.md#completing-a-row",
+      "note": "The existing Pages-only manifest is a predecessor, not evidence for desktop or extension rows. This inventory records the site independently."
+    },
+    {
+      "featureId": "mutation-history",
+      "status": "partial",
+      "evidenceProfile": "baseline-unverified",
+      "completionReference": "contracts/README.md#completing-a-row",
+      "note": "The existing Pages-only manifest is a predecessor, not evidence for desktop or extension rows. This inventory records the site independently."
+    },
+    {
+      "featureId": "landing-and-docs",
+      "status": "partial",
+      "evidenceProfile": "baseline-unverified",
+      "completionReference": "contracts/README.md#completing-a-row",
+      "note": "The existing Pages-only manifest is a predecessor, not evidence for desktop or extension rows. This inventory records the site independently."
+    },
+    {
+      "featureId": "command-palette",
+      "status": "partial",
+      "evidenceProfile": "baseline-unverified",
+      "completionReference": "contracts/README.md#completing-a-row",
+      "note": "The existing Pages-only manifest is a predecessor, not evidence for desktop or extension rows. This inventory records the site independently."
+    },
+    {
+      "featureId": "destructive-confirmation",
+      "status": "partial",
+      "evidenceProfile": "baseline-unverified",
+      "completionReference": "contracts/README.md#completing-a-row",
+      "note": "The existing Pages-only manifest is a predecessor, not evidence for desktop or extension rows. This inventory records the site independently."
+    },
+    {
+      "featureId": "local-history",
+      "status": "partial",
+      "evidenceProfile": "baseline-unverified",
+      "completionReference": "contracts/README.md#completing-a-row",
+      "note": "The existing Pages-only manifest is a predecessor, not evidence for desktop or extension rows. This inventory records the site independently."
+    },
+    {
+      "featureId": "changelog",
+      "status": "partial",
+      "evidenceProfile": "baseline-unverified",
+      "completionReference": "contracts/README.md#completing-a-row",
+      "note": "The existing Pages-only manifest is a predecessor, not evidence for desktop or extension rows. This inventory records the site independently."
+    },
+    {
+      "featureId": "external-editor",
+      "status": "partial",
+      "evidenceProfile": "baseline-unverified",
+      "completionReference": "contracts/README.md#completing-a-row",
+      "note": "The existing Pages-only manifest is a predecessor, not evidence for desktop or extension rows. This inventory records the site independently."
+    },
+    {
+      "featureId": "exports",
+      "status": "partial",
+      "evidenceProfile": "baseline-unverified",
+      "completionReference": "contracts/README.md#completing-a-row",
+      "note": "The existing Pages-only manifest is a predecessor, not evidence for desktop or extension rows. This inventory records the site independently."
+    },
+    {
+      "featureId": "bulk-actions",
+      "status": "partial",
+      "evidenceProfile": "baseline-unverified",
+      "completionReference": "contracts/README.md#completing-a-row",
+      "note": "The existing Pages-only manifest is a predecessor, not evidence for desktop or extension rows. This inventory records the site independently."
+    },
+    {
+      "featureId": "accessibility-responsive",
+      "status": "partial",
+      "evidenceProfile": "baseline-unverified",
+      "completionReference": "contracts/README.md#completing-a-row",
+      "note": "The existing Pages-only manifest is a predecessor, not evidence for desktop or extension rows. This inventory records the site independently."
+    },
+    {
+      "featureId": "offline-documentation",
+      "status": "partial",
+      "evidenceProfile": "baseline-unverified",
+      "completionReference": "contracts/README.md#completing-a-row",
+      "note": "The existing Pages-only manifest is a predecessor, not evidence for desktop or extension rows. This inventory records the site independently."
+    },
+    {
+      "featureId": "overlay-surfaces",
+      "status": "partial",
+      "evidenceProfile": "baseline-unverified",
+      "completionReference": "contracts/README.md#completing-a-row",
+      "note": "The existing Pages-only manifest is a predecessor, not evidence for desktop or extension rows. This inventory records the site independently."
+    },
+    {
+      "featureId": "rich-controls",
+      "status": "partial",
+      "evidenceProfile": "baseline-unverified",
+      "completionReference": "contracts/README.md#completing-a-row",
+      "note": "The existing Pages-only manifest is a predecessor, not evidence for desktop or extension rows. This inventory records the site independently."
+    },
+    {
+      "featureId": "guided-forms",
+      "status": "partial",
+      "evidenceProfile": "baseline-unverified",
+      "completionReference": "contracts/README.md#completing-a-row",
+      "note": "The existing Pages-only manifest is a predecessor, not evidence for desktop or extension rows. This inventory records the site independently."
+    },
+    {
+      "featureId": "filter-collapse",
+      "status": "partial",
+      "evidenceProfile": "baseline-unverified",
+      "completionReference": "contracts/README.md#completing-a-row",
+      "note": "The existing Pages-only manifest is a predecessor, not evidence for desktop or extension rows. This inventory records the site independently."
+    },
+    {
+      "featureId": "blank-slate-presets",
+      "status": "partial",
+      "evidenceProfile": "baseline-unverified",
+      "completionReference": "contracts/README.md#completing-a-row",
+      "note": "The existing Pages-only manifest is a predecessor, not evidence for desktop or extension rows. This inventory records the site independently."
+    },
+    {
+      "featureId": "provider-authored-markup",
+      "status": "partial",
+      "evidenceProfile": "baseline-unverified",
+      "completionReference": "contracts/README.md#completing-a-row",
+      "note": "The existing Pages-only manifest is a predecessor, not evidence for desktop or extension rows. This inventory records the site independently."
+    },
+    {
+      "featureId": "release-evidence",
+      "status": "partial",
+      "evidenceProfile": "baseline-unverified",
+      "completionReference": "contracts/README.md#completing-a-row",
+      "note": "The existing Pages-only manifest is a predecessor, not evidence for desktop or extension rows. This inventory records the site independently."
+    },
+    {
+      "featureId": "local-assets-and-no-signing",
+      "status": "partial",
+      "evidenceProfile": "baseline-unverified",
+      "completionReference": "contracts/README.md#completing-a-row",
+      "note": "The existing Pages-only manifest is a predecessor, not evidence for desktop or extension rows. This inventory records the site independently."
+    },
+    {
+      "featureId": "captures-and-evidence",
+      "status": "partial",
+      "evidenceProfile": "baseline-unverified",
+      "completionReference": "contracts/README.md#completing-a-row",
+      "note": "The existing Pages-only manifest is a predecessor, not evidence for desktop or extension rows. This inventory records the site independently."
+    },
+    {
+      "featureId": "personal-vocabulary-upload",
+      "status": "missing",
+      "evidenceProfile": "not-started",
+      "completionReference": "contracts/README.md#completing-a-row",
+      "note": "The existing Pages-only manifest is a predecessor, not evidence for desktop or extension rows. This inventory records the site independently."
+    },
+    {
+      "featureId": "app-logo-customization",
+      "status": "missing",
+      "evidenceProfile": "not-started",
+      "completionReference": "contracts/README.md#completing-a-row",
+      "note": "The existing Pages-only manifest is a predecessor, not evidence for desktop or extension rows. This inventory records the site independently."
+    },
+    {
+      "featureId": "universal-file-converter",
+      "status": "missing",
+      "evidenceProfile": "not-started",
+      "completionReference": "contracts/README.md#completing-a-row",
+      "note": "The existing Pages-only manifest is a predecessor, not evidence for desktop or extension rows. This inventory records the site independently."
+    },
+    {
+      "featureId": "ollama-suite-manager",
+      "status": "missing",
+      "evidenceProfile": "not-started",
+      "completionReference": "contracts/README.md#completing-a-row",
+      "note": "The existing Pages-only manifest is a predecessor, not evidence for desktop or extension rows. This inventory records the site independently."
+    },
+    {
+      "featureId": "every-element-locks",
+      "status": "missing",
+      "evidenceProfile": "not-started",
+      "completionReference": "contracts/README.md#completing-a-row",
+      "note": "The existing Pages-only manifest is a predecessor, not evidence for desktop or extension rows. This inventory records the site independently."
+    }
+  ]
+}

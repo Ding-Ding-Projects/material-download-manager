@@ -1,0 +1,119 @@
+{
+  "schemaVersion": 1,
+  "contract": "universal-feature-inventory",
+  "surface": {
+    "id": "extension",
+    "title": "extension fixture",
+    "root": "."
+  },
+  "requiredEvidenceKinds": [
+    "implementation",
+    "documentation",
+    "localization",
+    "persistence",
+    "focusedTest",
+    "builtInteraction",
+    "capture"
+  ],
+  "evidenceProfiles": {},
+  "rows": [
+    {
+      "featureId": "fixture-feature",
+      "status": "implemented",
+      "completionReference": "completion.md#fixture",
+      "note": "Complete fixture row with one exact evidence anchor per required evidence kind.",
+      "evidence": {
+        "implementation": {
+          "state": "implemented",
+          "anchors": [
+            {
+        "kind": "line",
+        "file": "evidence/extension.txt",
+        "lineNumber": 1,
+        "line": "IMPLEMENTATION_ANCHOR"
+            }
+          ],
+          "reason": "Fixture proof for exact-boundary regression."
+        },
+        "documentation": {
+          "state": "implemented",
+          "anchors": [
+            {
+        "kind": "line",
+        "file": "evidence/extension.txt",
+        "lineNumber": 2,
+        "line": "DOCUMENTATION_ANCHOR"
+            }
+          ],
+          "reason": "Fixture proof for exact-boundary regression."
+        },
+        "localization": {
+          "state": "implemented",
+          "anchors": [
+            {
+        "kind": "line",
+        "file": "evidence/extension.txt",
+        "lineNumber": 3,
+        "line": "LOCALIZATION_ANCHOR"
+            }
+          ],
+          "reason": "Fixture proof for exact-boundary regression."
+        },
+        "persistence": {
+          "state": "implemented",
+          "anchors": [
+            {
+        "kind": "line",
+        "file": "evidence/extension.txt",
+        "lineNumber": 4,
+        "line": "PERSISTENCE_ANCHOR"
+            }
+          ],
+          "reason": "Fixture proof for exact-boundary regression."
+        },
+        "focusedTest": {
+          "state": "implemented",
+          "anchors": [
+            {
+        "kind": "line",
+        "file": "evidence/extension.txt",
+        "lineNumber": 5,
+        "line": "FOCUSED_TEST_ANCHOR"
+            }
+          ],
+          "reason": "Fixture proof for exact-boundary regression."
+        },
+        "builtInteraction": {
+          "state": "implemented",
+          "anchors": [
+            {
+        "kind": "line",
+        "file": "evidence/extension.txt",
+        "lineNumber": 6,
+        "line": "BUILT_INTERACTION_ANCHOR"
+            }
+          ],
+          "reason": "Fixture proof for exact-boundary regression."
+        },
+        "capture": {
+          "state": "implemented",
+          "anchors": [
+            {
+        "kind": "line",
+        "file": "evidence/extension.txt",
+        "lineNumber": 7,
+        "line": "CAPTURE_ANCHOR"
+            }
+          ],
+          "reason": "Fixture proof for exact-boundary regression.",
+          "captureMetadata": {
+            "sourceCommit": "abcdef0",
+            "dimensions": "640x480",
+            "surfaceLocator": "extension-fixture-surface",
+            "harness": "fixture exact-anchor harness"
+          }
+        }
+      }
+    }
+  ]
+}

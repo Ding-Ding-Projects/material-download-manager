@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "fixture": true,
+  "contract": "universal-feature-inventory",
+  "title": "Exact-boundary fixture",
+  "surfaceIds": [
+    "desktop",
+    "extension",
+    "pages"
+  ],
+  "evidenceKinds": [
+    "implementation",
+    "documentation",
+    "localization",
+    "persistence",
+    "focusedTest",
+    "builtInteraction",
+    "capture"
+  ],
+  "features": [
+    {
+      "id": "fixture-feature",
+      "title": "Fixture feature",
+      "source": "fixture",
+      "completion": "Exercise every evidence field."
+    }
+  ]
+}
