@@ -32,6 +32,7 @@ import type {
 import { isTotpRegistrationExportRecord, isTotpRegistrationMetadata } from "../shared/authenticator";
 import { isSshHostStatus } from "../shared/ssh";
 import { isExportResult } from "../shared/export";
+import { isOllamaRefreshResult, isOllamaSuiteState, type OllamaRefreshResult, type OllamaSuiteState } from "../shared/ollama";
 import { isHistoryAccessState, isHistoryDiff, isHistoryPruneResult, isHistoryRevision, isHistoryView } from "../shared/history";
 import { isDownloadCategory } from "../shared/settings";
 import { isRegexEvaluation, type RegexEvaluation } from "../shared/regex";
@@ -376,6 +377,42 @@ const api = {
   openWorkspaceInEditor: async (): Promise<ExternalEditorOpenResult> => {
     const result: unknown = await ipcRenderer.invoke(IPC.EXTERNAL_EDITOR_OPEN_WORKSPACE);
     if (!isExternalEditorOpenResult(result)) throw new Error("Invalid external editor workspace result from main process");
+    return result;
+  },
+
+  getOllamaSuiteState: async (): Promise<OllamaSuiteState> => {
+    const result: unknown = await ipcRenderer.invoke(IPC.OLLAMA_GET_STATE);
+    if (!isOllamaSuiteState(result)) throw new Error("Invalid Ollama suite state from main process");
+    return result;
+  },
+  addOllamaProvider: async (input: { name: string; endpoint: string }): Promise<OllamaSuiteState> => {
+    const result: unknown = await ipcRenderer.invoke(IPC.OLLAMA_ADD_PROVIDER, input);
+    if (!isOllamaSuiteState(result)) throw new Error("Invalid Ollama provider result from main process");
+    return result;
+  },
+  removeOllamaProvider: async (id: string): Promise<OllamaSuiteState> => {
+    const result: unknown = await ipcRenderer.invoke(IPC.OLLAMA_REMOVE_PROVIDER, id);
+    if (!isOllamaSuiteState(result)) throw new Error("Invalid Ollama provider removal result from main process");
+    return result;
+  },
+  refreshOllamaProvider: async (id: string): Promise<OllamaRefreshResult> => {
+    const result: unknown = await ipcRenderer.invoke(IPC.OLLAMA_REFRESH_PROVIDER, id);
+    if (!isOllamaRefreshResult(result)) throw new Error("Invalid Ollama refresh result from main process");
+    return result;
+  },
+  exportOllamaMetadata: async (format: ExportFormat): Promise<ExportResult> => {
+    const result: unknown = await ipcRenderer.invoke(IPC.OLLAMA_EXPORT_METADATA, format);
+    if (!isExportResult(result)) throw new Error("Invalid Ollama metadata export from main process");
+    return result;
+  },
+  importOllamaMetadata: async (value: unknown): Promise<OllamaSuiteState> => {
+    const result: unknown = await ipcRenderer.invoke(IPC.OLLAMA_IMPORT_METADATA, value);
+    if (!isOllamaSuiteState(result)) throw new Error("Invalid Ollama metadata import result from main process");
+    return result;
+  },
+  resetOllamaSuiteState: async (): Promise<OllamaSuiteState> => {
+    const result: unknown = await ipcRenderer.invoke(IPC.OLLAMA_RESET_STATE);
+    if (!isOllamaSuiteState(result)) throw new Error("Invalid Ollama reset result from main process");
     return result;
   },
 

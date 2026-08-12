@@ -35,6 +35,7 @@ const RUNTIME_CHECK_IDS = [
   "settings-external-editor",
   "settings-scheduled-settings",
   "settings-authenticator-surface",
+  "settings-ollama-suite",
   "settings-authenticator-live-management",
   "settings-dialog-a11y",
   "settings-auto-organize-ui",
@@ -88,6 +89,7 @@ function usage() {
     "  --screenshot <path>    Capture a PNG of the installed browser-extension card after automatic folder reveal",
     "  --scheduled-screenshot <path>  Capture the built Settings scheduled-settings surface",
     "  --authenticator-screenshot <path>  Capture the secret-free Authenticator Settings registration surface",
+    "  --ollama-screenshot <path>  Capture the bounded Local Ollama Settings foundation",
     "  --external-editor-screenshot <path>  Capture the Settings external-editor selector",
     "  --narrator-screenshot <path>  Capture the Settings spoken-narrator controls",
     "  --progress-screenshot <path>  Capture a separate progress page when one exists",
@@ -114,6 +116,7 @@ function parseArgs(argv) {
     screenshotPath: null,
     scheduledScreenshotPath: null,
     authenticatorScreenshotPath: null,
+    ollamaScreenshotPath: null,
     externalEditorScreenshotPath: null,
     narratorScreenshotPath: null,
     progressScreenshotPath: null,
@@ -144,6 +147,7 @@ function parseArgs(argv) {
     else if (argument === "--screenshot") options.screenshotPath = path.resolve(value);
     else if (argument === "--scheduled-screenshot") options.scheduledScreenshotPath = path.resolve(value);
     else if (argument === "--authenticator-screenshot") options.authenticatorScreenshotPath = path.resolve(value);
+    else if (argument === "--ollama-screenshot") options.ollamaScreenshotPath = path.resolve(value);
     else if (argument === "--external-editor-screenshot") options.externalEditorScreenshotPath = path.resolve(value);
     else if (argument === "--narrator-screenshot") options.narratorScreenshotPath = path.resolve(value);
     else if (argument === "--progress-screenshot") options.progressScreenshotPath = path.resolve(value);
@@ -948,6 +952,9 @@ function createResult(options) {
       : { requested: false, status: "not-requested", path: null },
     authenticator: options.authenticatorScreenshotPath
       ? { requested: true, status: "not-run", path: options.authenticatorScreenshotPath }
+      : { requested: false, status: "not-requested", path: null },
+    ollama: options.ollamaScreenshotPath
+      ? { requested: true, status: "not-run", path: options.ollamaScreenshotPath }
       : { requested: false, status: "not-requested", path: null },
     externalEditor: options.externalEditorScreenshotPath
       ? { requested: true, status: "not-run", path: options.externalEditorScreenshotPath }
@@ -1916,6 +1923,27 @@ async function main(argv) {
       return evidence;
     });
 
+    await runCheck(result, "settings-ollama-suite", async () => {
+      await clickByRole(cdp, "tab", "Ollama", '[role="dialog"]');
+      await waitForPage(cdp, `Boolean(document.querySelector("#settings-ollama-suite"))`, "Local Ollama Settings panel", options.timeoutMs);
+      const evidence = await cdp.evaluate(pageExpression(`
+        const panel = document.getElementById("settings-ollama-suite");
+        const endpoint = panel?.querySelector('input[aria-label="Loopback endpoint"]');
+        const add = panel ? [...panel.querySelectorAll("button")].find((button) => /Add provider|加入供應者/.test(accessibleName(button))) : null;
+        const search = document.querySelector('input[aria-label="Search settings"]');
+        if (!(panel instanceof HTMLElement) || !isVisible(panel)) throw new Error("Local Ollama Settings panel is missing or hidden");
+        if (!(endpoint instanceof HTMLInputElement) || !(add instanceof HTMLButtonElement)) throw new Error("Local Ollama provider controls are incomplete");
+        if (!(search instanceof HTMLInputElement)) throw new Error("Ollama Settings tab lost its local search field");
+        return { panel: panel.id, endpoint: endpoint.value, addDisabled: add.disabled, tabSearch: search.getAttribute("aria-label") };
+      `));
+      if (options.ollamaScreenshotPath) {
+        const capturedPath = await captureScreenshot(cdp, options.ollamaScreenshotPath, "#settings-ollama-suite");
+        result.ollama = { requested: true, status: "captured", path: capturedPath };
+        return { ...evidence, screenshotPath: capturedPath };
+      }
+      return evidence;
+    });
+
     await runCheck(result, "settings-authenticator-live-management", async () => {
       const registration = await cdp.evaluate(pageExpression(`return (async () => {
         const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
@@ -2491,7 +2519,7 @@ async function main(argv) {
         const selected = tabs.filter((tab) => tab.getAttribute("aria-selected") === "true");
         const panelId = selected[0]?.getAttribute("aria-controls");
         const panel = panelId ? document.getElementById(panelId) : null;
-        if (!tabList || tabs.length !== 5) throw new Error("Settings surface must expose five browser-style tabs");
+        if (!tabList || tabs.length !== 6) throw new Error("Settings surface must expose six browser-style tabs");
         if (selected.length !== 1 || !panel || !isVisible(panel)) throw new Error("Settings tab selection does not expose one visible panel");
         return { tabCount: tabs.length, selected: accessibleName(selected[0]), panel: panel.id };
       `));

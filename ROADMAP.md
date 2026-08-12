@@ -5,6 +5,18 @@ unverified surface has shipped.
 
 ## In progress
 
+- Local Ollama suite manager foundation is implemented on this task jer: the
+  Settings and command-palette destination records credential-free loopback
+  providers, refreshes installed-model metadata through `GET /api/tags` with
+  bounded main-process validation, and transfers metadata without credentials.
+  The exhaustive catalog, chat, attachments, harness launch, full list bulk
+  actions, and local-history integration remain explicit follow-up gaps.
+  Focused Ollama tests are **4/4**, UI smoke is **56/56**, typecheck/build and
+  docs checks pass. The real built capture is
+  [`ollama-suite-settings.png`](docs/screenshots/product/ollama-suite-settings.png),
+  524×558, SHA-256
+  `CFA365286EFF01ED73E07DCCFF0B2DC2DFB7B44F4C17DD1AD20A48B1F9A91024`.
+
 - Browser-extension installation and download-surface follow-up is integrated
   into `main` at [`1e58988`](https://github.com/Ding-Ding-Projects/material-download-manager/commit/1e5898853c7e82e59bd9a94d2f0944f366747846). The Add download start form
   uses z-index 1300, the separate progress window visibly reports

@@ -88,6 +88,7 @@ import {
   readUpdateReleaseNotesBaseUrl,
   UpdateService,
 } from "./updater/UpdateService";
+import { OllamaSuiteStore } from "./ollama/OllamaSuiteStore";
 
 const isDev = isDevelopmentLaunch(app.isPackaged);
 const UPDATE_WORK_STATE_MAX_AGE_MS = 10_000;
@@ -126,6 +127,7 @@ let historyAccessVault: HistoryAccessVault;
 let schoolModeCredentialService: SchoolModeCredentialService;
 let authenticatorService: TotpRegistrationService;
 let externalEditorService: ExternalEditorService;
+let ollamaSuiteStore: OllamaSuiteStore;
 const historyAccessSession = new HistoryAccessSession();
 let updater: UpdateService | null = null;
 let handoffServer: HandoffServer | null = null;
@@ -506,6 +508,38 @@ function registerIpcHandlers() {
     }
     const failure = await openPathWithTimeout(installedPath);
     if (failure) throw new Error(failure);
+  });
+
+  ipcMain.handle(IPC.OLLAMA_GET_STATE, (event) => {
+    assertTrustedSender(event);
+    return ollamaSuiteStore.getState();
+  });
+  ipcMain.handle(IPC.OLLAMA_ADD_PROVIDER, async (event, input: unknown) => {
+    assertTrustedSender(event);
+    return ollamaSuiteStore.addProvider(input);
+  });
+  ipcMain.handle(IPC.OLLAMA_REMOVE_PROVIDER, async (event, id: unknown) => {
+    assertTrustedSender(event);
+    if (typeof id !== "string") throw new Error("Invalid Ollama provider identifier");
+    return ollamaSuiteStore.removeProvider(id);
+  });
+  ipcMain.handle(IPC.OLLAMA_REFRESH_PROVIDER, async (event, id: unknown) => {
+    assertTrustedSender(event);
+    if (typeof id !== "string") throw new Error("Invalid Ollama provider identifier");
+    return ollamaSuiteStore.refreshProvider(id);
+  });
+  ipcMain.handle(IPC.OLLAMA_EXPORT_METADATA, (event, format: unknown) => {
+    assertTrustedSender(event);
+    if (!isExportFormat(format)) throw new Error("Unsupported Ollama metadata export format");
+    return ollamaSuiteStore.exportMetadata(format);
+  });
+  ipcMain.handle(IPC.OLLAMA_IMPORT_METADATA, async (event, value: unknown) => {
+    assertTrustedSender(event);
+    return ollamaSuiteStore.importMetadata(value);
+  });
+  ipcMain.handle(IPC.OLLAMA_RESET_STATE, async (event) => {
+    assertTrustedSender(event);
+    return ollamaSuiteStore.reset();
   });
 
   ipcMain.handle(IPC.SETTINGS_GET, (event) => {
@@ -1053,8 +1087,10 @@ app.whenReady().then(async () => {
   sshProvisioning = new SshProvisioningService({ bundlePath: workerBundlePath, vault: sshVault, client: sshWorkerClient });
   manager = new DownloadManager(app.getPath("userData"), undefined, { credentialVault: sshVault });
   externalEditorService = new ExternalEditorService(app.getPath("userData"));
+  ollamaSuiteStore = new OllamaSuiteStore(app.getPath("userData"));
   const hadStateFile = await fsp.stat(path.join(app.getPath("userData"), "state.json")).then(() => true, () => false);
   await manager.init();
+  await ollamaSuiteStore.init();
   schoolModeCredentialService = new SchoolModeCredentialService(schoolModeResetVault, manager);
   await schoolModeCredentialService.synchronize(hadStateFile).catch((error: unknown) => {
     console.warn(`School mode reset credential metadata could not be reconciled: ${error instanceof Error ? error.message : "unknown failure"}`);

@@ -34,7 +34,7 @@ interface DialogsState {
   detailsItemId: string | null;
 }
 
-export type SettingsFocus = "language" | "school-mode" | "show-emojis" | "narrator" | "appearance" | "downloads" | "auto-organize" | "auto-organize-rules" | "authenticator" | "advanced" | null;
+export type SettingsFocus = "language" | "school-mode" | "show-emojis" | "narrator" | "appearance" | "downloads" | "auto-organize" | "auto-organize-rules" | "authenticator" | "ollama" | "advanced" | null;
 
 interface AppState {
   // live data, mirrored from the main process

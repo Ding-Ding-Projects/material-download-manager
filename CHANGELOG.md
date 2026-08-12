@@ -13,6 +13,13 @@ of guessing a commit, release, or date.
 - **Captures:** Add download before submit (568×431, SHA-256 `120ccdda66856fa057c50c6e7a94eff5dfcf2da2964e6b5809b850b7ae0c183f`), active Downloading progress window (980×640, SHA-256 `cb4145c8e3ecb4c0f2ec9d129e8e73657142bfbf4f5a0de2e7bb3f56836a9a46`), and completion toast (420×108, SHA-256 `c80c9e0befc81f748178979d1fa48d5677fb94f1db2f9c08b77fe3167c1133c7`).
 - **Local verification:** Electron **149/149**, browser extension **33/33**, documentation **2/2**, typecheck/build, and real built UI smoke **55/55**. The release-only workflow [31628649158](https://github.com/Ding-Ding-Projects/material-download-manager/actions/runs/31628649158) is still running; no release publication is claimed yet.
 
+## Unreleased — local Ollama suite manager foundation
+
+- **Source issue:** [#18 — Implement the universal feature contract](https://github.com/Ding-Ding-Projects/material-download-manager/issues/18)
+- **Scope:** Added a Settings and command-palette destination for credential-free loopback Ollama providers, bounded `GET /api/tags` installed-model refresh through the main process, metadata-only JSON transfer, OS-vault metadata boundary, destructive local reset recovery, localized copy, and IPC/runtime validation. The exhaustive catalog, chat, attachments, harness launch, full bulk/search/history contract, and every-format file export remain explicit follow-up gaps.
+- **Capture:** [`ollama-suite-settings.png`](docs/screenshots/product/ollama-suite-settings.png), 524×558, SHA-256 `CFA365286EFF01ED73E07DCCFF0B2DC2DFB7B44F4C17DD1AD20A48B1F9A91024`.
+- **Local verification:** Focused Ollama **4/4**, UI smoke **56/56**, typecheck, renderer/main build, documentation bundle **2/2**, and diff check passed. The full Electron suite remains **147/149** because the existing narrator assertion fails and the scheduled-settings test cannot load the Electron binary in its child process; these are not Ollama failures. No remote run or release is claimed until this jer is integrated.
+
 ## Unreleased — desktop spoken narrator foundation
 
 - **Source issue:** [#18 — Implement the universal feature contract](https://github.com/Ding-Ding-Projects/material-download-manager/issues/18)
