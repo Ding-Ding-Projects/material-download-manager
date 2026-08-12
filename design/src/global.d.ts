@@ -22,6 +22,8 @@ import type {
   HistoryRevision,
   HistoryView,
   HistoryAccessState,
+  BrowserExtensionInstallState,
+  BrowserChromeExtensionsResult,
 } from "@shared/types";
 import type { ScheduledSettingsRecord } from "@shared/scheduledSettings";
 import type {
@@ -59,6 +61,8 @@ export interface MaterialDownloadManagerAPI {
   openFile(id: string): Promise<void>;
   openFolder(id: string): Promise<void>;
   installBrowserExtension(): Promise<import("@shared/types").BrowserExtensionInstallResult>;
+  getBrowserExtensionInstallState(): Promise<BrowserExtensionInstallState>;
+  openChromeExtensions(): Promise<BrowserChromeExtensionsResult>;
   revealBrowserExtension(): Promise<void>;
   getSettings(): Promise<AppSettings>;
   setSettings(settings: SettingsPatch, resetKeys?: SettingKey[]): Promise<AppSettings>;

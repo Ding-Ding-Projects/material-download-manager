@@ -37,9 +37,13 @@ The desktop app provides the supported install and pairing route: open
 creates a paired private copy in its stable application-data folder. The app-
 side capability is kept in the operating-system credential vault; the matching
 value is written only into that staged copy. The app automatically opens the
-exact folder so it can be selected in Chrome. **Open extension folder** remains
-available if the folder needs to be opened again or the automatic file-manager
-launch failed.
+exact folder so it can be selected in Chrome. The Settings card rechecks that
+validated staged folder whenever it opens, so **Open extension folder** remains
+available after an app restart or dialog remount if the pairing is still
+usable. **Open Chrome extensions** requests Chrome's fixed
+`chrome://extensions/` manager page; if the operating system routes or refuses
+that internal URL, the card keeps the manual route visible instead of claiming
+that Chrome opened.
 
 Every stable GitHub Release also attaches the extension as
 `material-download-manager-extension-<version>.zip`, packaged from the same

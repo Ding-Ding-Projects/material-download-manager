@@ -71,13 +71,17 @@ interface AutoOrganizeRuleError {
 type ExtensionStatus =
   | { kind: "installed-opened"; path: string }
   | { kind: "installed"; path: string }
+  | { kind: "existing"; path: string }
   | { kind: "revealed" }
+  | { kind: "chrome-opened" }
   | null;
 
 type ExtensionError =
   | { kind: "automatic-open"; detail: string }
   | { kind: "install"; detail: string }
   | { kind: "reveal"; detail: string }
+  | { kind: "state"; detail: string }
+  | { kind: "chrome-open"; detail: string }
   | null;
 
 type SchoolModeCredentialAction = "setup" | "change" | "reset" | "disable" | null;
@@ -292,8 +296,9 @@ export default function SettingsDialog() {
   const [activeAutoOrganizeRuleId, setActiveAutoOrganizeRuleId] = useState<string | null>(null);
   const [autoOrganizeRuleSamples, setAutoOrganizeRuleSamples] = useState<Map<string, string>>(() => new Map());
   const [autoOrganizeRuleStatus, setAutoOrganizeRuleStatus] = useState("");
-  const [extensionOperation, setExtensionOperation] = useState<"install" | "reveal" | null>(null);
-  const extensionOperationRef = useRef<"install" | "reveal" | null>(null);
+  const [extensionOperation, setExtensionOperation] = useState<"install" | "reveal" | "chrome" | null>(null);
+  const extensionOperationRef = useRef<"install" | "reveal" | "chrome" | null>(null);
+  const extensionStateRequestId = useRef(0);
   const [extensionStatus, setExtensionStatus] = useState<ExtensionStatus>(null);
   const [extensionError, setExtensionError] = useState<ExtensionError>(null);
   const [extensionPath, setExtensionPath] = useState<string | null>(null);
@@ -347,6 +352,30 @@ export default function SettingsDialog() {
     return () => { current = false; };
   }, [editorDiscoveryUnavailableText]);
 
+  useEffect(() => {
+    let current = true;
+    const requestId = ++extensionStateRequestId.current;
+    window.api.getBrowserExtensionInstallState().then((state) => {
+      if (
+        !current
+        || requestId !== extensionStateRequestId.current
+        || extensionOperationRef.current !== null
+        || !state.installed
+        || !state.path
+      ) return;
+      setExtensionPath(state.path);
+      setExtensionStatus({ kind: "existing", path: state.path });
+      setExtensionError(null);
+    }).catch((error) => {
+      if (!current || requestId !== extensionStateRequestId.current || extensionOperationRef.current !== null) return;
+      setExtensionError({
+        kind: "state",
+        detail: error instanceof Error ? error.message : String(error),
+      });
+    });
+    return () => { current = false; };
+  }, []);
+
   async function openWorkspaceInEditor() {
     setExternalEditorWorkspaceBusy(true);
     setExternalEditorWorkspaceMessage(null);
@@ -379,8 +408,12 @@ export default function SettingsDialog() {
       )
     : extensionStatus?.kind === "installed"
       ? ui.text(`Installed successfully at: ${extensionStatus.path}`, `安裝成功，位置係：${extensionStatus.path}`)
+      : extensionStatus?.kind === "existing"
+        ? ui.text(`A paired browser extension is ready at: ${extensionStatus.path}`, `已經有配對好嘅瀏覽器擴充功能，位置係：${extensionStatus.path}`)
       : extensionStatus?.kind === "revealed"
         ? ui.text("Opened the installed extension folder.", "已打開安裝好嘅擴充功能資料夾。")
+        : extensionStatus?.kind === "chrome-opened"
+          ? ui.text("Browser open request sent for Chrome's extension manager. If it did not appear, enter chrome://extensions/ in Chrome, turn on Developer mode, choose Load unpacked, and select the paired folder.", "已發出打開 Chrome 擴充功能管理頁嘅要求。如果頁面冇出現，請喺 Chrome 輸入 chrome://extensions/，開啟開發者模式，揀 Load unpacked，再揀配對好嘅資料夾。")
         : "";
   const extensionErrorText = extensionError?.kind === "automatic-open"
     ? ui.text(
@@ -391,6 +424,10 @@ export default function SettingsDialog() {
       ? ui.text(`The extension could not be installed: ${extensionError.detail}`, `未能安裝擴充功能：${extensionError.detail}`)
       : extensionError?.kind === "reveal"
         ? ui.text(`The extension folder could not be opened: ${extensionError.detail}`, `未能打開擴充功能資料夾：${extensionError.detail}`)
+        : extensionError?.kind === "state"
+          ? ui.text(`The existing extension state could not be read: ${extensionError.detail}. You can prepare it again.`, `未能讀取現有擴充功能狀態：${extensionError.detail}。可以再準備一次。`)
+          : extensionError?.kind === "chrome-open"
+            ? ui.text(`Chrome's extension manager could not open automatically: ${extensionError.detail}. Enter chrome://extensions/ in Chrome, then choose Developer mode → Load unpacked.`, `未能自動打開 Chrome 擴充功能管理頁：${extensionError.detail}。請喺 Chrome 輸入 chrome://extensions/，再揀開發者模式 → Load unpacked。`)
         : "";
   const compiledDefaults = useMemo(
     () => createDefaultSettings(form.defaultSaveFolder),
@@ -803,6 +840,7 @@ export default function SettingsDialog() {
 
   async function handleInstallExtension() {
     if (extensionOperationRef.current !== null) return;
+    extensionStateRequestId.current += 1;
     extensionOperationRef.current = "install";
     setExtensionOperation("install");
     setExtensionError(null);
@@ -828,6 +866,7 @@ export default function SettingsDialog() {
 
   async function handleRevealExtension() {
     if (extensionOperationRef.current !== null) return;
+    extensionStateRequestId.current += 1;
     extensionOperationRef.current = "reveal";
     setExtensionOperation("reveal");
     setExtensionError(null);
@@ -837,6 +876,28 @@ export default function SettingsDialog() {
       setExtensionStatus({ kind: "revealed" });
     } catch (error) {
       setExtensionError({ kind: "reveal", detail: error instanceof Error ? error.message : String(error) });
+    } finally {
+      extensionOperationRef.current = null;
+      setExtensionOperation(null);
+    }
+  }
+
+  async function handleOpenChromeExtensions() {
+    if (extensionOperationRef.current !== null) return;
+    extensionStateRequestId.current += 1;
+    extensionOperationRef.current = "chrome";
+    setExtensionOperation("chrome");
+    setExtensionError(null);
+    setExtensionStatus(null);
+    try {
+      const result = await window.api.openChromeExtensions();
+      if (result.opened) {
+        setExtensionStatus({ kind: "chrome-opened" });
+      } else {
+        setExtensionError({ kind: "chrome-open", detail: result.error ?? ui.text("The browser refused the internal page.", "瀏覽器拒絕咗內置頁面。") });
+      }
+    } catch (error) {
+      setExtensionError({ kind: "chrome-open", detail: error instanceof Error ? error.message : String(error) });
     } finally {
       extensionOperationRef.current = null;
       setExtensionOperation(null);
@@ -2233,7 +2294,7 @@ export default function SettingsDialog() {
         </span>
         <p className="setting-helper" id="settings-install-extension-helper">
           {ui.text(
-            "Install the bundled Chromium extension to hand eligible browser downloads to this app automatically; pages and links can still be sent manually. It creates a private pairing for this app installation, stages the extension in a stable folder, and opens that folder automatically. In Chrome, turn on Developer mode, choose Load unpacked, and select that folder; use Reload there after preparing it again.",
+            "Install the bundled Chromium extension to hand eligible browser downloads to this app automatically; pages and links can still be sent manually. It creates a private pairing for this app installation, stages the extension in a stable folder, and opens that folder automatically. Use Open Chrome extensions to reach Chrome's manager, then turn on Developer mode, choose Load unpacked, and select that folder; use Reload there after preparing it again.",
             "安裝內置嘅 Chromium 擴充功能，就會自動將合資格嘅瀏覽器下載交畀呢個 app；網頁同連結仍然可以手動傳送。佢會為今次程式安裝建立私人配對、將擴充功能放入固定資料夾並自動打開。之後喺 Chrome 開開發者模式，揀 Load unpacked 再揀嗰個資料夾；如果再次準備，就要喺嗰度㩒 Reload。"
           )}
         </p>
@@ -2262,6 +2323,18 @@ export default function SettingsDialog() {
                 : ui.text("Open extension folder", "開啟擴充功能資料夾")}
             </button>
           )}
+          <button
+            type="button"
+            id="settings-open-chrome-extensions"
+            className="btn btn-ghost btn-sm"
+            aria-describedby="settings-install-extension-helper"
+            disabled={extensionOperation !== null}
+            onClick={() => void handleOpenChromeExtensions()}
+          >
+            {extensionOperation === "chrome"
+              ? ui.text("Opening Chrome…", "Chrome 打開緊…")
+              : ui.text("Open Chrome extensions", "開啟 Chrome 擴充功能")}
+          </button>
         </div>
         {extensionStatusText && (
           <p className="setting-helper" role="status" aria-live="polite">{extensionStatusText}</p>

@@ -48,7 +48,19 @@ app-side capability is stored in the operating-system credential vault and its
 matching value is written only into that staged copy. The app automatically
 opens the exact folder. A file-manager launch failure is reported separately
 and does not undo or misreport successful preparation. **Open extension
-folder** remains available as a manual fallback.
+folder** remains available as a manual fallback. The Settings surface reads the
+validated staged-folder state from the main process each time it opens, so the
+manual action remains visible after an app restart or Settings remount; a
+malformed, redirected, incomplete, or capability-mismatched folder is not
+reported as ready.
+
+The same card includes **Open Chrome extensions**, which requests Chrome's
+fixed `chrome://extensions/` manager page without accepting an arbitrary URL.
+Because the operating system may route that internal-page request to another
+browser or refuse it, success copy says only that the open request was sent and
+the card always retains the exact manual route: enter `chrome://extensions/` in
+Chrome, enable **Developer mode**, choose **Load unpacked**, and select the
+paired folder. A refusal is a non-blocking error with that same fallback.
 
 Chrome still requires the user to open `chrome://extensions`, enable
 **Developer mode**, choose **Load unpacked**, and select the app-prepared
@@ -143,10 +155,13 @@ one-use and expired challenges, rate/concurrency bounds, credential-free ranged
 GET proof, durable acceptance, client-disconnect rollback, protected-query URL
 storage and cleanup, optional safe basename validation, website-origin
 rejection, bounded bodies, extension preparation, automatic folder opening,
-and the separate folder-open failure result. The built-app smoke exercises the
-real IPC boundary and the Settings surface on a hidden desktop. The fresh
-built-artifact capture below frames the automatic folder-open status and its
-manual fallback without exposing a user-specific application-data path:
+the separate folder-open failure result, validated remount state, malformed
+staged pairing rejection, concurrent install serialization, redirected-manifest
+rejection, and the fixed Chrome-manager request/refusal result. The built-app
+smoke exercises the real IPC boundary and the Settings surface on a hidden
+desktop, including the Chrome action and state after a Settings remount. The
+fresh built-artifact capture below frames the automatic folder-open status and
+its manual fallback without exposing a user-specific application-data path:
 
 ![Downloads Settings browser-extension installation and automatic folder-open status](../../screenshots/browser-extension/settings-install-and-reveal.png)
 

@@ -4,6 +4,8 @@ import path from "node:path";
 import {
   createBrowserExtensionInstallResult,
   IPC,
+  type BrowserChromeExtensionsResult,
+  type BrowserExtensionInstallState,
   isUpdateUnsavedWorkState,
   type PresentationPatch,
   type PresentationSettings,
@@ -12,9 +14,12 @@ import {
 } from "../shared/types";
 import {
   installBrowserExtension,
+  browserExtensionInstallState,
   installedExtensionPath,
+  openChromeExtensionsPage,
   resolveBundledExtensionRoot,
 } from "./extension/installExtension";
+import { createExtensionCapability } from "./extension/ExtensionCapabilityVault";
 import type { AddDownloadRequest, AppSettings, DownloadItem, DownloadQueue, SettingKey, SettingsPatch } from "../shared/types";
 import { isScheduledSettingsRecords, type ScheduledSettingsRecord } from "../shared/scheduledSettings";
 import { isExportFormat } from "../shared/export";
@@ -86,6 +91,21 @@ import {
 
 const isDev = isDevelopmentLaunch(app.isPackaged);
 const UPDATE_WORK_STATE_MAX_AGE_MS = 10_000;
+const FILE_MANAGER_OPEN_TIMEOUT_MS = 3_000;
+
+async function openPathWithTimeout(folderPath: string): Promise<string> {
+  let timeoutHandle: NodeJS.Timeout | undefined;
+  try {
+    return await Promise.race([
+      shell.openPath(folderPath),
+      new Promise<string>((resolve) => {
+        timeoutHandle = setTimeout(() => resolve("The file-manager open request timed out."), FILE_MANAGER_OPEN_TIMEOUT_MS);
+      }),
+    ]);
+  } finally {
+    if (timeoutHandle) clearTimeout(timeoutHandle);
+  }
+}
 
 // Windows/Linux: only one instance of a download manager should ever run at
 // once (a second launch — e.g. from a browser's "open with" — should just
@@ -456,18 +476,35 @@ function registerIpcHandlers() {
       resourcesPath: process.resourcesPath,
       appRoot: app.getAppPath(),
     });
-    const capability = await extensionCapabilityVault.rotate();
-    const installedPath = await installBrowserExtension(sourceRoot, app.getPath("userData"), capability);
-    return createBrowserExtensionInstallResult(installedPath, (folderPath) => shell.openPath(folderPath));
+    const capability = createExtensionCapability();
+    const previousCapability = await extensionCapabilityVault.load();
+    const installedPath = await installBrowserExtension(
+      sourceRoot,
+      app.getPath("userData"),
+      capability,
+      () => extensionCapabilityVault.write(capability),
+      previousCapability ? () => extensionCapabilityVault.write(previousCapability) : undefined,
+    );
+    return createBrowserExtensionInstallResult(installedPath, openPathWithTimeout);
+  });
+
+  ipcMain.handle(IPC.EXTENSION_STATE, async (event): Promise<BrowserExtensionInstallState> => {
+    assertTrustedSender(event);
+    return browserExtensionInstallState(app.getPath("userData"), await extensionCapabilityVault.load());
+  });
+
+  ipcMain.handle(IPC.EXTENSION_OPEN_CHROME, async (event): Promise<BrowserChromeExtensionsResult> => {
+    assertTrustedSender(event);
+    return openChromeExtensionsPage((url) => shell.openExternal(url));
   });
 
   ipcMain.handle(IPC.EXTENSION_REVEAL, async (event) => {
     assertTrustedSender(event);
-    const installedPath = await installedExtensionPath(app.getPath("userData"));
+    const installedPath = await installedExtensionPath(app.getPath("userData"), await extensionCapabilityVault.load());
     if (!installedPath) {
       throw new Error("The browser extension has not been installed from this app yet.");
     }
-    const failure = await shell.openPath(installedPath);
+    const failure = await openPathWithTimeout(installedPath);
     if (failure) throw new Error(failure);
   });
 
@@ -975,6 +1012,10 @@ const nativeCompletionNotifications: CompletionNotificationPort = {
 };
 
 function notifyDownloadComplete(item: DownloadItem) {
+  // A visible main window receives the localized renderer toast. Keep the
+  // native notification as the fallback for hidden, minimized, or unavailable
+  // windows so one completion never produces duplicate user-facing claims.
+  if (mainWindow && !mainWindow.isDestroyed() && mainWindow.isVisible() && !mainWindow.isMinimized()) return;
   showCompletionNotification(item, manager.getSettings(), nativeCompletionNotifications, appIconPath);
 }
 

@@ -41,11 +41,28 @@ Run `npm run typecheck`, `npm run build`, `npm run test:electron`, and
 fixture, creates a real queued item through the preload bridge, opens the
 separate window through the main-process IPC handler, resolves its CDP page
 target dynamically, waits for the built page to finish mounting, and rejects
-any result without a named `role="progressbar"`. A cheap hidden-desktop capture must show the
-primary window and the separately resolved progress window from a real active
-download before release verification is complete. The latest hidden-desktop
-pass resolved the second `Chrome_WidgetWin_1` at 980×640 and captured its live
-download-progress surface without touching the visible desktop.
+any result without a named `role="progressbar"`. A cheap hidden-desktop capture
+must show the primary window and the separately resolved progress window from a
+real active download before release verification is complete. The downloading
+surface is treated as a top-level layer: the capture requires a visible
+`Downloading` status, a named progressbar, and the separate window target. The
+same smoke run also captures the pre-submit Add download form and the
+completion success toast, so start, active transfer, and completion remain
+inspectable as three distinct built-artifact states.
+
+## Capture evidence
+
+These three PNGs were captured from the built desktop artifact by the same
+cheap hidden-desktop smoke run. The Add download image is a populated,
+submit-ready form before the `Download` action; the progress image is the
+separate top-level window while its status reads `Downloading`; the completion
+image is the non-blocking success toast after the loopback transfer completes.
+
+| State | Capture | Dimensions | SHA-256 |
+| --- | --- | --- | --- |
+| Add download before submit | ![Add download dialog before submit](../../screenshots/download-engine/add-download-pre-submit.png) | 568 × 431 | `120ccdda66856fa057c50c6e7a94eff5dfcf2da2964e6b5809b850b7ae0c183f` |
+| Active Downloading progress window | ![Active Downloading progress window](../../screenshots/download-engine/downloading-progress-window.png) | 980 × 640 | `cb4145c8e3ecb4c0f2ec9d129e8e73657142bfbf4f5a0de2e7bb3f56836a9a46` |
+| Download complete toast | ![Download complete toast](../../screenshots/notifications/download-complete-toast.png) | 420 × 108 | `c80c9e0befc81f748178979d1fa48d5677fb94f1db2f9c08b77fe3167c1133c7` |
 
 ## Suggested articles
 
