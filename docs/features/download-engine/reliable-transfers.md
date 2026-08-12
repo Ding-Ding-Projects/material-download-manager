@@ -37,6 +37,9 @@ The queue and transfer controls are persisted in the app state:
   local-time window; equal endpoints mean all day.
 - Request headers are supplied through the add-download request and remain
   main-process-only after persistence.
+- When queues exist, selecting the sidebar **Queues** header opens the real
+  queue manager; its chevron independently expands or collapses the visible
+  queue rows.
 
 ## Failure modes and recovery
 

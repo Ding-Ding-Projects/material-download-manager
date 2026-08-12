@@ -66,6 +66,7 @@ export default function Sidebar() {
   const queues = useAppStore((s) => s.queues);
   const filter = useAppStore((s) => s.filter);
   const setFilter = useAppStore((s) => s.setFilter);
+  const openQueues = useAppStore((s) => s.openQueues);
   const settings = useAppStore((s) => s.settings);
   const copy = getUiCopy(settings);
 
@@ -149,6 +150,7 @@ export default function Sidebar() {
           label={copy.queues}
           expanded={queuesExpanded}
           onToggleExpand={() => setQueuesExpanded((v) => !v)}
+          onSelect={openQueues}
         >
           <div className="sidebar-children">
             {queues.map((queue) => (
