@@ -1,7 +1,6 @@
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import {
   closeTab,
-  createTab,
   createTabGroup,
   defaultTabSearchQuery,
   moveTabToGroup,
@@ -29,6 +28,7 @@ interface TabStripProps {
   state: TabState;
   onChange: (state: TabState) => void;
   onActivate: (tabId: string) => void;
+  onAddDownload: () => void;
 }
 
 type ContextMenuState = { tabId: string; x: number; y: number } | null;
@@ -39,7 +39,7 @@ function tabButtonId(tabId: string): string {
   return `app-tab-${tabId}`;
 }
 
-export default function TabStrip({ state, onChange, onActivate }: TabStripProps) {
+export default function TabStrip({ state, onChange, onActivate, onAddDownload }: TabStripProps) {
   const settings = useAppStore((current) => current.settings);
   const copy = getUiCopy(settings);
   const [searchOpen, setSearchOpen] = useState(false);
@@ -175,13 +175,6 @@ export default function TabStrip({ state, onChange, onActivate }: TabStripProps)
     setGroupPickerTabId(null);
   }
 
-  function addTab() {
-    const result = createTab(state);
-    onChange(result.state);
-    onActivate(result.tab.id);
-    focusTab(result.tab.id);
-  }
-
   function moveIntoGroup(groupId: string | null) {
     if (!groupPickerTabId) return;
     onChange(moveTabToGroup(state, groupPickerTabId, groupId));
@@ -286,7 +279,16 @@ export default function TabStrip({ state, onChange, onActivate }: TabStripProps)
         <button type="button" className="tab-search-toggle" onClick={() => setGroupPickerTabId("__new__")}>
           {copy.newGroup}
         </button>
-        <button type="button" className="tab-search-toggle tab-new-button" onClick={addTab} aria-label={copy.text("New tab", "新分頁")} title={copy.text("New tab", "新分頁")}>+</button>
+        <button
+          type="button"
+          className="tab-search-toggle tab-new-button"
+          onClick={onAddDownload}
+          aria-label={copy.text("Add download", "新增下載")}
+          title={copy.text("Add download", "新增下載")}
+        >
+          <span aria-hidden="true">+</span>
+          <span className="tab-new-button-label">{copy.text("Add download", "新增下載")}</span>
+        </button>
       </div>
 
       {contextMenu && contextTab && (
