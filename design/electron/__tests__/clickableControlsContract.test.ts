@@ -100,6 +100,8 @@ test("updater exposes honest available and downloading states", async () => {
   assert.match(updater, /role="progressbar"/u);
   assert.match(updater, /Number\.isFinite\(state\.percent\)/u);
   assert.doesNotMatch(updater, /Checking for updates…[\s\S]{0,120}updater-progress/u);
+  assert.match(updater, /\{deferred \? \([\s\S]{0,240}Show update actions[\s\S]{0,240}\) : \([\s\S]{0,280}Restart to install update[\s\S]{0,360}Later/u);
+  assert.equal((updater.match(/setDeferredVersion\(state\.version\)/gu) ?? []).length, 1);
 });
 
 test("toolbar menus have real actions, local search, regex builders, and keyboard semantics", async () => {

@@ -141,13 +141,15 @@ export default function UpdaterBanner({ hasUnsavedWork, unsavedWorkReason, copy 
               Show update actions
             </button>
           ) : (
-            <button type="button" className="btn btn-primary btn-sm" onClick={() => void installUpdate()} disabled={busy}>
-              Restart to install update
-            </button>
+            <>
+              <button type="button" className="btn btn-primary btn-sm" onClick={() => void installUpdate()} disabled={busy}>
+                Restart to install update
+              </button>
+              <button type="button" className="btn btn-ghost btn-sm" onClick={() => setDeferredVersion(state.version)} disabled={busy}>
+                Later
+              </button>
+            </>
           )}
-          <button type="button" className="btn btn-ghost btn-sm" onClick={() => setDeferredVersion(state.version)} disabled={busy}>
-            Later
-          </button>
         </div>
       </section>
     );
