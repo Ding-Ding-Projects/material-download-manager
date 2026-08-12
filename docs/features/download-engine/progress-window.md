@@ -60,8 +60,8 @@ image is the non-blocking success toast after the loopback transfer completes.
 
 | State | Capture | Dimensions | SHA-256 |
 | --- | --- | --- | --- |
-| Add download before submit | ![Add download dialog before submit](../../screenshots/download-engine/add-download-pre-submit.png) | 568 × 431 | `c75e7aa7e466f7f6dd2ae3c4fff6b8741fd2f2fd5a456cd2da36d80734db7613` |
-| Active Downloading progress window | ![Active Downloading progress window](../../screenshots/download-engine/downloading-progress-window.png) | 980 × 640 | `d106d4b894bb3c22641cc088e5e9dbaaf6a89fe9a72103c81d5f742b14047ac2` |
+| Add download before submit | ![Add download dialog before submit](../../screenshots/download-engine/add-download-pre-submit.png) | 568 × 431 | `120ccdda66856fa057c50c6e7a94eff5dfcf2da2964e6b5809b850b7ae0c183f` |
+| Active Downloading progress window | ![Active Downloading progress window](../../screenshots/download-engine/downloading-progress-window.png) | 980 × 640 | `cb4145c8e3ecb4c0f2ec9d129e8e73657142bfbf4f5a0de2e7bb3f56836a9a46` |
 | Download complete toast | ![Download complete toast](../../screenshots/notifications/download-complete-toast.png) | 420 × 108 | `c80c9e0befc81f748178979d1fa48d5677fb94f1db2f9c08b77fe3167c1133c7` |
 
 ## Suggested articles
