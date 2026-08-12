@@ -1,4 +1,7 @@
 import { presentationSettings } from "./settings.js";
+import { applyPersonalVocabulary, presentationPersonalVocabulary } from "./personal-vocabulary.js";
+
+let activePersonalVocabulary = Object.freeze(Object.create(null));
 
 const UI_TEXT = {
   popupTitle: { en: "Send to {{name}}", yue: "傳送到 {{name}}" },
@@ -95,6 +98,27 @@ const UI_TEXT = {
   exportSettings: { en: "Export settings", yue: "匯出設定" },
   importSettings: { en: "Import settings", yue: "匯入設定" },
   resetSettings: { en: "Reset all settings", yue: "重設所有設定" },
+  personalVocabularyHeading: { en: "Personal vocabulary", yue: "個人詞彙" },
+  personalVocabularyHelp: { en: "Choose a local JSON file to apply your approved wording only in this extension. The file is validated before it is kept, never uploaded, and its path is not stored.", yue: "揀一個本機 JSON 檔，淨係喺呢個 extension 套用你已批准嘅用詞。檔案會先驗證先保留，永遠唔會上傳，亦唔會儲存路徑。" },
+  personalVocabularyProvenance: { en: "Current values come only from a validated local cache. Settings exports, history, and diagnostics omit the vocabulary data and file metadata.", yue: "目前文字只會來自已驗證嘅本機快取。設定匯出、歷史同診斷都會省略詞彙資料同檔案 metadata。" },
+  personalVocabularyChoose: { en: "Choose JSON file", yue: "揀 JSON 檔" },
+  personalVocabularyReplace: { en: "Replace JSON file", yue: "更換 JSON 檔" },
+  personalVocabularyClear: { en: "Clear local vocabulary", yue: "清除本機詞彙" },
+  personalVocabularyNoFile: { en: "No local vocabulary file is active. Original extension wording is shown.", yue: "暫時冇啟用本機詞彙檔。extension 會顯示原本用詞。" },
+  personalVocabularyLoaded: { en: "A validated local vocabulary is active. File name and path are not retained.", yue: "已驗證嘅本機詞彙已啟用。檔名同路徑唔會保留。" },
+  personalVocabularyInvalid: { en: "The local vocabulary cache is invalid, so original extension wording is shown. Choose a valid JSON file or clear the cache.", yue: "本機詞彙快取無效，所以 extension 會顯示原本用詞。請揀有效 JSON 檔，或者清除快取。" },
+  personalVocabularyRejected: { en: "The selected JSON file was not accepted. The previous valid local vocabulary, if any, remains active.", yue: "所選 JSON 檔未獲接受。如之前有有效本機詞彙，會繼續生效。" },
+  personalVocabularyCleared: { en: "The local vocabulary was cleared. Original extension wording is shown immediately.", yue: "本機詞彙已清除。extension 立即顯示原本用詞。" },
+  personalVocabularyClearHeading: { en: "Confirm local vocabulary clear", yue: "確認清除本機詞彙" },
+  personalVocabularyClearHelp: { en: "This permanently removes the active local vocabulary cache. Type both visible labels, then move the confirmation slider all the way across. Escape or Cancel exits without deleting.", yue: "呢個動作會永久移除已啟用嘅本機詞彙快取。先輸入兩個可見標籤，再將確認滑桿推到底。Escape 或取消會離開而唔會刪除。" },
+  personalVocabularyClearKeyOne: { en: "Key 1: type CLEAR", yue: "鎖匙一：輸入 CLEAR" },
+  personalVocabularyClearKeyTwo: { en: "Key 2: type CACHE", yue: "鎖匙二：輸入 CACHE" },
+  personalVocabularyClearSlider: { en: "Confirmation progress", yue: "確認進度" },
+  personalVocabularyClearConfirm: { en: "Clear local vocabulary", yue: "清除本機詞彙" },
+  personalVocabularyClearCancel: { en: "Cancel", yue: "取消" },
+  personalVocabularyClearReady: { en: "Both labels match. Move the slider fully across to authorize the clear.", yue: "兩個標籤都相符。將滑桿推到底先授權清除。" },
+  personalVocabularyClearIncomplete: { en: "Two matching labels and a full slider are required; nothing has been cleared.", yue: "需要兩個相符標籤同完整滑桿；目前冇清除任何資料。" },
+  personalVocabularyClearCompleted: { en: "Local vocabulary cleared. Original wording is active immediately.", yue: "本機詞彙已清除。原本用詞即刻生效。" },
   helpHeading: { en: "Handoff help", yue: "交接說明" },
   bridgeAuditTitle: { en: "Why recovery can still appear", yue: "點解仍然可能見到恢復狀態" },
   bridgeAuditBody: { en: "The desktop app starts a loopback HandoffServer at http://127.0.0.1:43771. Chrome uses that authenticated HTTP seam, never renderer IPC. If the app is closed, the port is occupied, pairing is stale, or the adapter rejects a request, the extension shows failure and keeps manual recovery available.", yue: "桌面程式會喺 http://127.0.0.1:43771 啟動本機 HandoffServer。Chrome 用呢條已驗證嘅 HTTP seam，永遠唔會直入 renderer IPC。如果程式關閉、port 被佔用、配對已過期，或者 adapter 拒絕請求，extension 會顯示失敗，同時保留手動恢復方法。" },
@@ -221,17 +245,30 @@ function languageText(value, settings) {
   return english;
 }
 
-export function localize(key, settings, variables = {}) {
-  const value = UI_TEXT[key] ?? UI_TEXT.protocolDetail;
-  return replaceTokens(languageText(value, presentationSettings(settings)), variables);
+export function setActivePersonalVocabulary(replacements) {
+  activePersonalVocabulary = replacements && typeof replacements === "object" && !Array.isArray(replacements)
+    ? replacements
+    : Object.freeze(Object.create(null));
 }
 
-export function narrationParts(key, settings, variables = {}) {
+export function localize(key, settings, variables = {}, personalVocabulary = activePersonalVocabulary) {
   const value = UI_TEXT[key] ?? UI_TEXT.protocolDetail;
   const effective = presentationSettings(settings);
+  // Apply substitutions only to localized template text. Variables can contain
+  // URLs, identifiers, names, or factual external values and must stay exact.
+  return replaceTokens(
+    applyPersonalVocabulary(languageText(value, effective), presentationPersonalVocabulary(effective, personalVocabulary)),
+    variables,
+  );
+}
+
+export function narrationParts(key, settings, variables = {}, personalVocabulary = activePersonalVocabulary) {
+  const value = UI_TEXT[key] ?? UI_TEXT.protocolDetail;
+  const effective = presentationSettings(settings);
+  const replacements = presentationPersonalVocabulary(effective, personalVocabulary);
   return {
-    en: replaceTokens(languageText(value, { ...effective, languageMode: "en" }), variables),
-    yue: replaceTokens(languageText(value, { ...effective, languageMode: "yue" }), variables),
+    en: replaceTokens(applyPersonalVocabulary(languageText(value, { ...effective, languageMode: "en" }), replacements), variables),
+    yue: replaceTokens(applyPersonalVocabulary(languageText(value, { ...effective, languageMode: "yue" }), replacements), variables),
   };
 }
 

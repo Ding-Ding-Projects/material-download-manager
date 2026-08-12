@@ -11,6 +11,9 @@ capabilities, credentials, or user-specific paths.
 - [Settings foundation](settings-foundation.md) — School mode, the emoji
   preference, and the redacted display-name mutation journal introduced in the
   current slice.
+- [Personal vocabulary JSON control](personal-vocabulary.md) — local-only,
+  bounded wording replacement, validation, clear/reset behavior, School-mode
+  suppression, and privacy boundary.
 - [Spoken narrator](narrator.md) — opt-in service-worker narration, language
   order, queue safety, quiet handling, and Chrome TTS boundaries.
 - [Extension authenticator](authenticator.md) — local RFC 6238 registration,

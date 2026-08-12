@@ -18,7 +18,13 @@ import {
   normalizeDownloadUrl,
   validateIncomingMessage,
 } from "./shared/handoff.js";
-import { localize } from "./shared/localization.js";
+import { localize, setActivePersonalVocabulary } from "./shared/localization.js";
+import {
+  PERSONAL_VOCABULARY_STORAGE_KEY,
+  clearPersonalVocabulary,
+  importPersonalVocabulary,
+  readPersonalVocabulary,
+} from "./shared/personal-vocabulary.js";
 import { HANDOFF_CAPABILITY } from "./shared/pairing.js";
 import { createCredentialAbstraction } from "./shared/credential.js";
 import { appendDisplayNameMutation } from "./shared/mutation-journal.js";
@@ -97,6 +103,12 @@ async function readSettings() {
 async function readLastResult() {
   const stored = await chrome.storage.local.get(LAST_RESULT_KEY);
   return stored[LAST_RESULT_KEY] ?? null;
+}
+
+async function refreshPersonalVocabulary() {
+  const state = await readPersonalVocabulary(chrome.storage.local);
+  setActivePersonalVocabulary(state.replacements);
+  return state;
 }
 
 async function narrateResult(value) {
@@ -575,6 +587,7 @@ function initialize() {
     initializationPromise = (async () => {
       const settings = await readSettings();
       await chrome.storage.local.set({ [SETTINGS_KEY]: settings });
+      await refreshPersonalVocabulary();
       await refreshContextMenu(settings);
       await recoverAutomaticDownloads();
     })();
@@ -604,7 +617,14 @@ chrome.runtime.onStartup.addListener(() => {
 });
 
 chrome.storage.onChanged.addListener((changes, areaName) => {
-  if (areaName !== "local" || !changes[SETTINGS_KEY]) return;
+  if (areaName !== "local") return;
+  if (changes[PERSONAL_VOCABULARY_STORAGE_KEY]) {
+    void refreshPersonalVocabulary()
+      .then(readSettings)
+      .then(refreshContextMenu)
+      .catch(() => setActivePersonalVocabulary(null));
+  }
+  if (!changes[SETTINGS_KEY]) return;
   const settings = sanitizeSettings(changes[SETTINGS_KEY].newValue);
   // Revalidate every narrator-affecting setting change, including School mode,
   // language, funny levels, sound, and reduced-motion state. This prevents an
@@ -649,7 +669,29 @@ chrome.runtime.onMessage.addListener((rawMessage, sender, sendResponse) => {
 
   void (async () => {
     if (message.type === "GET_STATE") {
-      sendResponse({ ok: true, settings: await readSettings(), lastResult: await readLastResult() });
+      const personalVocabulary = await refreshPersonalVocabulary();
+      sendResponse({ ok: true, settings: await readSettings(), lastResult: await readLastResult(), personalVocabulary: { status: personalVocabulary.status } });
+      return;
+    }
+    if (message.type === "GET_PERSONAL_VOCABULARY_STATE") {
+      const personalVocabulary = await refreshPersonalVocabulary();
+      sendResponse({ ok: true, result: { ok: personalVocabulary.status === "loaded", status: personalVocabulary.status } });
+      return;
+    }
+    if (message.type === "IMPORT_PERSONAL_VOCABULARY") {
+      try {
+        const imported = await importPersonalVocabulary(chrome.storage.local, message.text);
+        setActivePersonalVocabulary(imported.replacements);
+        sendResponse({ ok: true, result: { ok: true, status: imported.status } });
+      } catch (error) {
+        sendResponse({ ok: false, result: { ok: false, status: "rejected", code: error?.code === "personal-vocabulary-too-large" ? "personal-vocabulary-too-large" : "personal-vocabulary-rejected" } });
+      }
+      return;
+    }
+    if (message.type === "CLEAR_PERSONAL_VOCABULARY") {
+      await clearPersonalVocabulary(chrome.storage.local);
+      setActivePersonalVocabulary(null);
+      sendResponse({ ok: true, result: { ok: true, status: "empty" } });
       return;
     }
     if (message.type === "GET_AUTHENTICATOR_STATE") {

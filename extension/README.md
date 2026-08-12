@@ -117,6 +117,18 @@ turned off without removing manual handoff actions. School mode keeps previous
 language and funny-level choices stored, but presents serious English and
 removes those controls while it is enabled.
 
+The Preferences tab also contains a persistent **Personal vocabulary** JSON
+control. It is a local, keyboard-accessible file picker with clear, replace,
+loaded, invalid, and no-file states. A strict neutral versioned schema bounds
+the payload before a separate local cache is applied to extension template copy;
+until then the shipped wording is unchanged. The cache and its file metadata are
+not included in settings export/import, mutation history, handoff records,
+diagnostics, or any network request. School mode hides the control and suppresses
+the cache while retaining it for later restoration. The settings search and its
+adjacent regex builder index the control. See
+[`docs/personal-vocabulary.md`](docs/personal-vocabulary.md) for the neutral
+schema, limits, recovery, privacy rules, and verification.
+
 Display-name changes are recorded before success in a local redacted mutation
 journal. Journal entries contain hashes and action metadata only; they never
 contain a display name or credential. The extension's reset-credential
@@ -210,7 +222,10 @@ construction, entrypoint wiring for the service worker, popup, and options
 surfaces, the runtime message boundary, URL and endpoint validation, settings
 export sanitization, regex safety limits, accessible UI markers, and narrator
 queue/permission/result wiring. The full regex builder remains adjacent to the
-settings search; this change adds no search field without its own builder.
+settings search; this change adds no search field without its own builder. The
+suite also verifies the personal-vocabulary parser, strict runtime boundary,
+cache corruption and replacement rollback, School-mode suppression/restoration,
+privacy exclusion, and the hand-written Options/popup/worker/docs inventory.
 
 ## File map
 
@@ -224,12 +239,14 @@ settings search; this change adds no search field without its own builder.
 - `src/shared/` — pure validation, protocol-2 proofs, handoff envelope, pairing
   module, regex, settings, localization, the capability-free credential
   abstraction, redacted display-name/authenticator journal, serialized narrator,
-  Chrome TTS adapter, RFC 6238 TOTP core, local QR encoder, and browser-local
-  authenticator store. The repository pairing module is intentionally empty;
+  Chrome TTS adapter, bounded local personal-vocabulary validator/cache,
+  RFC 6238 TOTP core, local QR encoder, and browser-local authenticator store.
+  The repository pairing module is intentionally empty;
   only the app's private staged copy is paired.
 - `docs/README.md`, `docs/settings-foundation.md`, `docs/narrator.md`, and
-  `docs/authenticator.md` — documentation index, shared settings/journal
-  boundary, spoken narrator contract, and the local authenticator boundary.
+  `docs/authenticator.md`, plus `docs/personal-vocabulary.md` — documentation
+  index, shared settings/journal boundary, spoken narrator contract, local
+  authenticator boundary, and local personal-vocabulary contract.
 - `docs/handoff-contract.md` — adapter contract and security boundary.
 - `docs/electron-integration-seam.md` — implemented Electron seam and truthful
   failure behavior.
