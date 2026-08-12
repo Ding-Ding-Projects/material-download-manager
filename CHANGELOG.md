@@ -5,6 +5,14 @@ or have reached a stable release. Published entries must link the exact commit
 that completed the change. An Unreleased entry names missing evidence instead
 of guessing a commit, release, or date.
 
+## Unreleased — browser-extension download surfaces
+
+- **Source issue:** [#18 — Implement the universal feature contract](https://github.com/Ding-Ding-Projects/material-download-manager/issues/18)
+- **Source commits:** [`edadf34`](https://github.com/Ding-Ding-Projects/material-download-manager/commit/edadf34d8768e52be78147ce5c50f45764724669), [`05e3347`](https://github.com/Ding-Ding-Projects/material-download-manager/commit/05e3347a483722f463664c29d8c1241d4e2d8fde), and integrated main [`1e58988`](https://github.com/Ding-Ding-Projects/material-download-manager/commit/1e5898853c7e82e59bd9a94d2f0944f366747846)
+- **Scope:** the Add download form is a dedicated top-layer start surface; a separate progress window exposes the live `Downloading` state; and visible completions use one localized, non-blocking renderer toast above the Add form, with native notification fallback only when the main window is hidden, minimized, or unavailable. Chrome and file-manager requests retain bounded timeout and manual recovery paths.
+- **Captures:** Add download before submit (568×431, SHA-256 `120ccdda66856fa057c50c6e7a94eff5dfcf2da2964e6b5809b850b7ae0c183f`), active Downloading progress window (980×640, SHA-256 `cb4145c8e3ecb4c0f2ec9d129e8e73657142bfbf4f5a0de2e7bb3f56836a9a46`), and completion toast (420×108, SHA-256 `c80c9e0befc81f748178979d1fa48d5677fb94f1db2f9c08b77fe3167c1133c7`).
+- **Local verification:** Electron **149/149**, browser extension **33/33**, documentation **2/2**, typecheck/build, and real built UI smoke **55/55**. The release-only workflow [31628649158](https://github.com/Ding-Ding-Projects/material-download-manager/actions/runs/31628649158) is still running; no release publication is claimed yet.
+
 ## Unreleased — desktop spoken narrator foundation
 
 - **Source issue:** [#18 — Implement the universal feature contract](https://github.com/Ding-Ding-Projects/material-download-manager/issues/18)

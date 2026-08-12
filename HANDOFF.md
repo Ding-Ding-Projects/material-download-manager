@@ -1,5 +1,23 @@
 # Handoff: Material Download Manager
 
+## Browser-extension download surfaces (integrated on `main`, 2026-08-12)
+
+Main commit [`1e58988`](https://github.com/Ding-Ding-Projects/material-download-manager/commit/1e5898853c7e82e59bd9a94d2f0944f366747846)
+integrates the extension installation hardening and the requested real download
+captures. The Add download form is a dedicated z-index 1300 start layer. The
+separate frameless progress window requires a visible `Downloading` status and
+named progress bar. When the main window is visible, completion renders once as
+a localized non-blocking toast in the z-index 1400 notification layer; hidden,
+minimized, or unavailable main windows use the native fallback instead.
+
+### Evidence and verification
+
+- Add download before submit: [`add-download-pre-submit.png`](docs/screenshots/download-engine/add-download-pre-submit.png), 568×431, SHA-256 `120ccdda66856fa057c50c6e7a94eff5dfcf2da2964e6b5809b850b7ae0c183f`.
+- Active Downloading progress window: [`downloading-progress-window.png`](docs/screenshots/download-engine/downloading-progress-window.png), 980×640, SHA-256 `cb4145c8e3ecb4c0f2ec9d129e8e73657142bfbf4f5a0de2e7bb3f56836a9a46`.
+- Download complete toast: [`download-complete-toast.png`](docs/screenshots/notifications/download-complete-toast.png), 420×108, SHA-256 `c80c9e0befc81f748178979d1fa48d5677fb94f1db2f9c08b77fe3167c1133c7`.
+- Local checks: Electron **149/149**, browser extension **33/33**, documentation **2/2**, typecheck/build, and real built UI smoke **55/55**.
+- Release-only workflow [31628649158](https://github.com/Ding-Ding-Projects/material-download-manager/actions/runs/31628649158) is running; publication is not yet verified.
+
 ## Spoken narrator foundation (verified on `main`, 2026-08-11)
 
 Commit [`a7adc431`](https://github.com/Ding-Ding-Projects/material-download-manager/commit/a7adc4313c341bd350a95409adca8b7d651fe2ea) adds the opt-in desktop narrator. Four persisted controls cover enabled state, English/Cantonese/Both language order, quiet mode, and an explicit assistive-technology safety switch. The queue serializes English then Cantonese output, debounces bursts, replaces stale pending lines, applies per-category cooldowns, and ignores late callbacks after cancellation. School mode, reduced motion, screen-reader signals, unavailable speech synthesis, unavailable Cantonese voices, and synchronous/asynchronous speech failures remain non-blocking and fail safe. Completion and error notifications use the real event path.

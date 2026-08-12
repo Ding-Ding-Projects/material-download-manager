@@ -64,6 +64,24 @@ The real built Settings capture is
 </details>
 
 <details>
+<summary>Browser-extension download surfaces (verified locally)</summary>
+
+The real built artifact now keeps the Add download form above ordinary dialog
+layers, shows the separate `Downloading` progress window, and places the single
+visible completion toast above the start form. The native completion notice is
+only the fallback for a hidden, minimized, or unavailable main window.
+
+<p>
+<img src="docs/screenshots/download-engine/add-download-pre-submit.png" alt="Add download dialog before submit with enabled Download action" width="568">
+<img src="docs/screenshots/download-engine/downloading-progress-window.png" alt="Separate Downloading progress window with pause and cancel controls" width="980">
+<img src="docs/screenshots/notifications/download-complete-toast.png" alt="Non-blocking Download complete toast" width="420">
+</p>
+
+The integrated main commit is [`1e58988`](https://github.com/Ding-Ding-Projects/material-download-manager/commit/1e5898853c7e82e59bd9a94d2f0944f366747846). Local verification is Electron **149/149**, browser extension **33/33**, documentation **2/2**, typecheck/build, and built UI smoke **55/55**. Exact image dimensions and SHA-256 values are recorded in the [progress-window article](docs/features/download-engine/progress-window.md).
+
+</details>
+
+<details>
 <summary>Auto-organize screenshot gallery</summary>
 
 These captures were freshly reproduced from the real built Electron renderer

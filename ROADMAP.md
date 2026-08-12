@@ -5,6 +5,18 @@ unverified surface has shipped.
 
 ## In progress
 
+- Browser-extension installation and download-surface follow-up is integrated
+  into `main` at [`1e58988`](https://github.com/Ding-Ding-Projects/material-download-manager/commit/1e5898853c7e82e59bd9a94d2f0944f366747846). The Add download start form
+  uses z-index 1300, the separate progress window visibly reports
+  `Downloading`, and visible completion uses one renderer toast at z-index
+  1400 with native fallback only for hidden or unavailable main windows. Real
+  built captures and exact hashes are documented in
+  [`docs/features/download-engine/progress-window.md`](docs/features/download-engine/progress-window.md).
+  Local verification is Electron **149/149**, extension **33/33**, docs **2/2**,
+  typecheck/build, and UI smoke **55/55**. Release-only workflow
+  [31628649158](https://github.com/Ding-Ding-Projects/material-download-manager/actions/runs/31628649158)
+  remains in progress.
+
 - Desktop spoken narrator is implemented at source commit
   [`a7adc431`](https://github.com/Ding-Ding-Projects/material-download-manager/commit/a7adc4313c341bd350a95409adca8b7d651fe2ea). The opt-in Settings
   surface persists enabled state, English/Cantonese/Both language order, quiet
