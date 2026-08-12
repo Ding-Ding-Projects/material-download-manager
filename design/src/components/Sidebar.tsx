@@ -27,9 +27,18 @@ function SidebarSection({
     <div className="sidebar-section">
       <div
         className={`sidebar-item sidebar-item-group${active ? " active" : ""}`}
-        onClick={onSelect}
+        onClick={(event) => {
+          if (event.target instanceof HTMLElement && event.target.closest(".sidebar-chevron-btn")) return;
+          onSelect?.();
+        }}
         role="button"
         tabIndex={0}
+        onKeyDown={(event) => {
+          if (!onSelect || (event.key !== "Enter" && event.key !== " ")) return;
+          if (event.target instanceof HTMLElement && event.target.closest(".sidebar-chevron-btn")) return;
+          event.preventDefault();
+          onSelect();
+        }}
       >
         <FolderIcon size={16} className="sidebar-item-icon" />
         <span className={`sidebar-item-label${bold ? " bold" : ""}`}>{label}</span>
@@ -42,6 +51,7 @@ function SidebarSection({
             e.stopPropagation();
             onToggleExpand();
           }}
+          onKeyDown={(e) => e.stopPropagation()}
         >
           {expanded ? <ChevronUpIcon size={14} /> : <ChevronDownIcon size={14} />}
         </button>
@@ -102,6 +112,11 @@ export default function Sidebar() {
               role="button"
               tabIndex={0}
               onClick={() => setFilter({ kind: "category", category })}
+              onKeyDown={(event) => {
+                if (event.key !== "Enter" && event.key !== " ") return;
+                event.preventDefault();
+                setFilter({ kind: "category", category });
+              }}
             >
               <CategoryIcon category={category} size={15} className="sidebar-item-icon" />
               <span className="sidebar-item-label">{CATEGORY_LABELS[category]}</span>
@@ -145,6 +160,11 @@ export default function Sidebar() {
                 role="button"
                 tabIndex={0}
                 onClick={() => setFilter({ kind: "queue", queueId: queue.id })}
+                onKeyDown={(event) => {
+                  if (event.key !== "Enter" && event.key !== " ") return;
+                  event.preventDefault();
+                  setFilter({ kind: "queue", queueId: queue.id });
+                }}
               >
                 <span className={`queue-dot${queue.isRunning ? " running" : ""}`} />
                 <span className="sidebar-item-label">{queue.name}</span>

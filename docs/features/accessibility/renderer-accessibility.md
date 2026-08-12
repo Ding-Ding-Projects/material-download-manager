@@ -4,9 +4,11 @@
 
 RendererAccessibilityBridge decorates the existing Electron UI with dialog and
 alert-dialog roles, modal labelling, focus containment and restoration, menu
-and menu-item semantics, keyboard navigation/typeahead, sidebar keyboard
-activation, and visible shortcut metadata when a menu item supplies a binding.
-The bridge keeps these behaviors centralized so individual dialogs do not drift.
+and menu-item semantics, keyboard navigation/typeahead, and visible shortcut
+metadata when a menu item supplies a binding. Sidebar controls own their
+Enter/Space activation in the Sidebar component so their click and keyboard
+paths remain one action; the bridge keeps cross-surface behavior centralized
+without duplicating that activation.
 Authored `aria-labelledby` and `aria-describedby` values remain intact, including
 the exact warning description on the destructive-action gate. Shared dialog
 Escape handling also honours a nested surface that consumes Escape first.

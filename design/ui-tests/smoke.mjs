@@ -20,8 +20,12 @@ const RUNTIME_CHECK_IDS = [
   "cdp-connected",
   "renderer-root-mounted",
   "feature-surface-mounted",
+  "sidebar-keyboard-activation",
+  "toolbar-menu-actions",
   "tab-strip-no-overlap",
   "tab-search-builders",
+  "tab-group-search-action",
+  "updater-status-control",
   "history-panel",
   "history-action-error-separation",
   "changelog-action-error-separation",
@@ -1268,6 +1272,58 @@ async function main(argv) {
       return { tabStripMounted: Boolean(tabList), tabs, fallbackSurface: tabList ? null : "toolbar + Settings" };
     `)));
 
+    await runCheck(result, "sidebar-keyboard-activation", async () => {
+      await cdp.evaluate(pageExpression(`
+      const sidebar = document.querySelector(".sidebar");
+      const leaf = sidebar?.querySelector(".sidebar-item-leaf");
+      const section = sidebar?.querySelector(".sidebar-item-group");
+      const chevron = sidebar?.querySelector(".sidebar-chevron-btn");
+      if (!(leaf instanceof HTMLElement) || !(section instanceof HTMLElement) || !(chevron instanceof HTMLElement)) throw new Error("sidebar keyboard targets are incomplete");
+      leaf.focus();
+      return { leafFocused: true };
+    `));
+      await dispatchKey(cdp, "Enter", "Enter", 13);
+      await waitForPage(cdp, `document.querySelector(".sidebar .sidebar-item-leaf.active") !== null`, "sidebar leaf Enter activation", options.timeoutMs);
+      const activeBeforeChevron = await cdp.evaluate(`document.querySelector(".sidebar .sidebar-item.active")?.textContent ?? ""`);
+      await cdp.evaluate(`document.querySelector(".sidebar .sidebar-chevron-btn")?.focus()`);
+      await dispatchKey(cdp, "Enter", "Enter", 13);
+      await waitForPage(cdp, `!document.querySelector(".sidebar .sidebar-section:first-child .sidebar-children")`, "sidebar chevron collapse", options.timeoutMs);
+      await dispatchKey(cdp, "Enter", "Enter", 13);
+      await waitForPage(cdp, `Boolean(document.querySelector(".sidebar .sidebar-section:first-child .sidebar-children"))`, "sidebar chevron expand", options.timeoutMs);
+      const activeAfterChevron = await cdp.evaluate(`document.querySelector(".sidebar .sidebar-item.active")?.textContent ?? ""`);
+      if (activeBeforeChevron !== activeAfterChevron) throw new Error("chevron Enter bubbled into section selection");
+      return { leafActivated: true, chevronSelectionPreserved: true };
+    });
+
+    await runCheck(result, "toolbar-menu-actions", async () => {
+      const evidence = await cdp.evaluate(pageExpression(`
+      const triggers = [...document.querySelectorAll(".menu-item")].filter(isVisible);
+      if (triggers.length !== 4) throw new Error("expected four visible toolbar menu triggers");
+      const first = triggers[0];
+      if (!(first instanceof HTMLButtonElement) || first.getAttribute("aria-haspopup") !== "menu") throw new Error("toolbar menu trigger is not a menu button");
+      first.focus();
+      return { triggerCount: triggers.length, firstId: first.id, panelId: first.getAttribute("aria-controls") };
+    `));
+      await dispatchKey(cdp, "ArrowDown", "ArrowDown", 40);
+      await waitForPage(cdp, `Boolean(document.getElementById(${JSON.stringify(evidence.panelId)}))`, "toolbar menu opens from keyboard", options.timeoutMs);
+      const menuEvidence = await cdp.evaluate(pageExpression(`
+        const panel = document.getElementById(${JSON.stringify(evidence.panelId)});
+        const first = document.getElementById(${JSON.stringify(evidence.firstId)});
+        if (!(panel instanceof HTMLElement) || !isVisible(panel)) throw new Error("ArrowDown did not open the File menu");
+        if (!(panel.querySelector(".toolbar-menu-search-input") instanceof HTMLInputElement)) throw new Error("toolbar menu has no local search field");
+        if (!(panel.querySelector(".toolbar-menu-regex-toggle") instanceof HTMLButtonElement)) throw new Error("toolbar menu has no regex builder affordance");
+        if (panel.querySelectorAll('[role="menuitem"]').length === 0) throw new Error("toolbar menu has no action items");
+        const action = panel.querySelector('[role="menuitem"]:not(:disabled)');
+        if (!(action instanceof HTMLButtonElement)) throw new Error("toolbar menu has no enabled action");
+        action.focus();
+        return { menuSearch: true, regexBuilder: true, panelId: panel.id, triggerId: first?.id };
+      `));
+      await dispatchKey(cdp, "Escape", "Escape", 27);
+      await waitForPage(cdp, `!document.getElementById(${JSON.stringify(menuEvidence.panelId)})`, "toolbar menu closes with Escape", options.timeoutMs);
+      await waitForPage(cdp, `document.activeElement?.id === ${JSON.stringify(menuEvidence.triggerId)}`, "toolbar menu restores trigger focus", options.timeoutMs);
+      return { triggers: evidence.triggerCount, menuSearch: menuEvidence.menuSearch, regexBuilder: menuEvidence.regexBuilder, escapeFocusReturn: true };
+    });
+
     await runCheck(result, "tab-strip-no-overlap", async () => cdp.evaluate(pageExpression(`
       const strip = document.querySelector('[role="tablist"][aria-label="Open tabs"]');
       if (!strip) throw new Error("Open tabs strip is missing");
@@ -1371,6 +1427,47 @@ async function main(argv) {
       await waitForPage(cdp, `!document.querySelector(".tab-search-panel")`, "close tab discovery searches", options.timeoutMs);
       return { toggles, states, uniqueness, groupPickerBuilder: true, contextMenuBuilder: true, escapeFocus: true };
     });
+
+    await runCheck(result, "tab-group-search-action", async () => {
+      await clickByRole(cdp, "button", "Search tabs", '[role="tablist"][aria-label="Open tabs"]');
+      await waitForPage(cdp, `document.querySelectorAll(".tab-search-control").length === 4`, "tab discovery searches for group action", options.timeoutMs);
+      await cdp.evaluate(pageExpression(`
+        const groupToggle = document.querySelector(".tab-group-toggle");
+        if (groupToggle instanceof HTMLButtonElement && groupToggle.getAttribute("aria-expanded") === "true") groupToggle.click();
+      `));
+      await waitForPage(cdp, `document.querySelector(".tab-group-toggle")?.getAttribute("aria-expanded") === "false"`, "collapsed group before search", options.timeoutMs);
+      await setInputValue(cdp, 'input[aria-label="Tab groups search"]', "Downloads");
+      await waitForPage(cdp, `Boolean([...document.querySelectorAll('.tab-search-control button')].find((button) => /Downloads/.test(button.textContent ?? "") && /Group/.test(button.textContent ?? "")))`, "group search result action", options.timeoutMs);
+      const evidence = await cdp.evaluate(pageExpression(`
+        const result = [...document.querySelectorAll('.tab-search-control button')].find((button) => /Downloads/.test(button.textContent ?? "") && /Group/.test(button.textContent ?? ""));
+        if (!(result instanceof HTMLButtonElement)) throw new Error("group search result is not a button");
+        const groupId = result.getAttribute("aria-controls")?.replace(/^tab-group-/, "");
+        result.click();
+        return { result: accessibleName(result), groupId, action: true };
+      `));
+      await waitForPage(cdp, `document.activeElement?.id === ${JSON.stringify(`tab-group-toggle-${evidence.groupId}`)} || document.activeElement?.id?.startsWith("app-tab-")`, "group search activation focus", options.timeoutMs);
+      const collapsedAfterReveal = await cdp.evaluate(pageExpression(`
+        const toggle = document.getElementById(${JSON.stringify(`tab-group-toggle-${evidence.groupId}`)});
+        if (!(toggle instanceof HTMLButtonElement) || toggle.getAttribute("aria-expanded") !== "true") throw new Error("group result did not reveal its collapsed group");
+        toggle.click();
+        return JSON.parse(localStorage.getItem("material-download-manager.tab-state.v1") ?? "null")?.groups?.find((group) => group.id === ${JSON.stringify(evidence.groupId)})?.collapsed === true;
+      `));
+      await waitForPage(cdp, `document.getElementById(${JSON.stringify(`tab-group-toggle-${evidence.groupId}`)})?.getAttribute("aria-expanded") === "false"`, "restore collapsed group after search", options.timeoutMs);
+      if (!collapsedAfterReveal) throw new Error("group search reveal overwrote the persisted collapsed preference");
+      await cdp.evaluate(`document.getElementById(${JSON.stringify(`tab-group-toggle-${evidence.groupId}`)})?.click()`);
+      await waitForPage(cdp, `document.getElementById(${JSON.stringify(`tab-group-toggle-${evidence.groupId}`)})?.getAttribute("aria-expanded") === "true"`, "restore visible tabs after collapse assertion", options.timeoutMs);
+      await clickByRole(cdp, "button", "Search tabs", '[role="tablist"][aria-label="Open tabs"]');
+      return { ...evidence, collapsedPreferencePreserved: true };
+    });
+
+    await runCheck(result, "updater-status-control", async () => cdp.evaluate(pageExpression(`
+      const status = document.querySelector(".updater-banner");
+      if (status && status.querySelector(".updater-progress[role=progressbar]")) {
+        const value = status.querySelector(".updater-progress[role=progressbar]");
+        if (!value?.getAttribute("aria-valuetext")) throw new Error("updater progress has no accessible value text");
+      }
+      return { rendered: Boolean(status), progressAccessible: Boolean(status?.querySelector(".updater-progress[role=progressbar]")) };
+    `)));
 
     await runCheck(result, "documentation-panel", async () => {
       await clickByRole(cdp, "tab", "Documentation");
