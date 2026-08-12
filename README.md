@@ -303,9 +303,13 @@ The desktop app's **Install browser extension** action creates the paired
 private copy in its stable application-data folder: the app-side capability is
 kept in the operating-system credential vault and its match is written only to
 that staged extension. The app automatically opens the exact folder. The
-existing **Open extension folder** action remains available if the file manager
-could not be opened or the folder needs to be shown again. Chrome still
-requires **Developer mode → Load unpacked** for this off-store installation.
+validated **Open extension folder** action remains available after a Settings
+remount or app restart when that pairing is still usable, and it remains
+available when the file manager could not be opened. **Open Chrome extensions**
+requests Chrome's fixed `chrome://extensions/` manager page; because an
+operating-system shell cannot prove which browser handled an internal URL, the
+status keeps the exact manual fallback: enter that URL in Chrome, enable
+**Developer mode**, choose **Load unpacked**, and select the paired folder.
 
 ![Downloads Settings showing automatic browser-extension installation, the automatic folder-open status, and the manual fallback](docs/screenshots/browser-extension/settings-install-and-reveal.png)
 

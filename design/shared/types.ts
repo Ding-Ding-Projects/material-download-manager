@@ -285,6 +285,29 @@ export interface BrowserExtensionInstallResult {
   folderOpenError: string | null;
 }
 
+/**
+ * The validated state of the app-prepared extension folder. The renderer uses
+ * this query after a Settings remount so the manual reveal action does not
+ * disappear merely because the dialog was reopened.
+ */
+export interface BrowserExtensionInstallState {
+  installed: boolean;
+  path: string | null;
+}
+
+/**
+ * Result of asking the operating system to open Chrome's extension manager.
+ * The URL is fixed by the main process; the renderer cannot supply an
+ * arbitrary external destination.
+ */
+export interface BrowserChromeExtensionsResult {
+  opened: boolean;
+  url: string;
+  error: string | null;
+}
+
+export const CHROME_EXTENSIONS_PAGE = "chrome://extensions/";
+
 export function isBrowserExtensionInstallResult(value: unknown): value is BrowserExtensionInstallResult {
   if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
   const record = value as Record<string, unknown>;
@@ -294,6 +317,22 @@ export function isBrowserExtensionInstallResult(value: unknown): value is Browse
     return false;
   }
   return record.folderOpened ? record.folderOpenError === null : typeof record.folderOpenError === "string";
+}
+
+export function isBrowserExtensionInstallState(value: unknown): value is BrowserExtensionInstallState {
+  if (!isRecord(value) || typeof value.installed !== "boolean") return false;
+  if (value.installed) {
+    return typeof value.path === "string" && value.path.length > 0 && value.path.length <= 32_768;
+  }
+  return value.path === null;
+}
+
+export function isBrowserChromeExtensionsResult(value: unknown): value is BrowserChromeExtensionsResult {
+  return isRecord(value)
+    && typeof value.opened === "boolean"
+    && value.url === CHROME_EXTENSIONS_PAGE
+    && isOptionalString(value.error, 1_024)
+    && (value.opened ? value.error === null : typeof value.error === "string");
 }
 
 /**
@@ -510,6 +549,8 @@ export const IPC = {
   OPEN_FOLDER: "download:openFolder",
   EXTENSION_INSTALL: "extension:install",
   EXTENSION_REVEAL: "extension:reveal",
+  EXTENSION_STATE: "extension:state",
+  EXTENSION_OPEN_CHROME: "extension:openChrome",
   HANDOFF_ADD_DOWNLOAD: "download:handoffAdd",
   GET_STATE: "state:get",
   STATE_CHANGED: "state:changed",

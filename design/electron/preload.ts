@@ -35,8 +35,15 @@ import { isExportResult } from "../shared/export";
 import { isHistoryAccessState, isHistoryDiff, isHistoryPruneResult, isHistoryRevision, isHistoryView } from "../shared/history";
 import { isDownloadCategory } from "../shared/settings";
 import { isRegexEvaluation, type RegexEvaluation } from "../shared/regex";
+import {
+  isBrowserChromeExtensionsResult,
+  isBrowserExtensionInstallResult,
+  isBrowserExtensionInstallState,
+  type BrowserChromeExtensionsResult,
+  type BrowserExtensionInstallResult,
+  type BrowserExtensionInstallState,
+} from "../shared/types";
 import { isPresentationSettings, isUpdateInstallResult, isUpdateState, isUpdateUnsavedWorkState } from "../shared/types";
-import { isBrowserExtensionInstallResult, type BrowserExtensionInstallResult } from "../shared/types";
 import { isScheduledSettingsRecords, type ScheduledSettingsRecord } from "../shared/scheduledSettings";
 import {
   isExternalEditorDiscovery,
@@ -203,6 +210,20 @@ const api = {
     const result: unknown = await ipcRenderer.invoke(IPC.EXTENSION_INSTALL);
     if (!isBrowserExtensionInstallResult(result)) {
       throw new Error("The main process returned a malformed extension install result.");
+    }
+    return result;
+  },
+  getBrowserExtensionInstallState: async (): Promise<BrowserExtensionInstallState> => {
+    const result: unknown = await ipcRenderer.invoke(IPC.EXTENSION_STATE);
+    if (!isBrowserExtensionInstallState(result)) {
+      throw new Error("The main process returned a malformed extension install state.");
+    }
+    return result;
+  },
+  openChromeExtensions: async (): Promise<BrowserChromeExtensionsResult> => {
+    const result: unknown = await ipcRenderer.invoke(IPC.EXTENSION_OPEN_CHROME);
+    if (!isBrowserChromeExtensionsResult(result)) {
+      throw new Error("The main process returned a malformed Chrome extensions result.");
     }
     return result;
   },

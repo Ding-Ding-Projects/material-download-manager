@@ -41,9 +41,16 @@ export function createExtensionCapability(): string {
 export class ExtensionCapabilityVault {
   constructor(private readonly adapter: ExtensionCapabilityAdapter = new OperatingSystemExtensionCapabilityAdapter()) {}
 
+  async write(value: string): Promise<void> {
+    if (!CAPABILITY_PATTERN.test(value)) {
+      throw new Error("The extension handoff capability is invalid");
+    }
+    await this.adapter.write(value);
+  }
+
   async rotate(): Promise<string> {
     const capability = createExtensionCapability();
-    await this.adapter.write(capability);
+    await this.write(capability);
     return capability;
   }
 

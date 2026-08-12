@@ -4,7 +4,9 @@
   downloads through an app-prepared protocol-2 pairing, prove the app before a
   URL is sent, require final durable acceptance, resume the browser fallback on
   every failed takeover, retain manual page/link capture, and automatically
-  reveal the exact private staged folder.
+  reveal the exact private staged folder. The Settings card rechecks that
+  folder after remount/restart and can request the fixed Chrome extensions
+  manager URL while retaining a manual `chrome://extensions/` fallback.
 - [External editor handoff](./external-editor.md) — discover or browse for a
   local Visual Studio Code executable, open exported desktop records from an
   application-owned workspace root, and fail safely when the editor is

@@ -48,6 +48,8 @@ const RUNTIME_CHECK_IDS = [
   "escape-closes-builder-and-restores-focus",
   "settings-browser-extension-install-and-reveal",
   "settings-browser-extension-manual-reveal",
+  "settings-browser-extension-chrome-action",
+  "settings-browser-extension-remount-state",
   "settings-dialog-escape",
   "settings-auto-organize-command-palette",
   "settings-auto-organize-preview-ipc",
@@ -2460,6 +2462,54 @@ async function main(argv) {
         await waitForPage(cdp, `Boolean(document.getElementById("settings-browser-extension"))`, "browser-extension card after restoring smoke metrics", options.timeoutMs).catch(() => undefined);
       }
       return { before, after, narrowBilingual };
+    });
+
+    await runCheck(result, "settings-browser-extension-chrome-action", async () => {
+      const button = await cdp.evaluate(pageExpression(`
+        const card = document.getElementById("settings-browser-extension");
+        const openChrome = card ? findByRole("button", "Open Chrome extensions", card) : null;
+        if (!(openChrome instanceof HTMLButtonElement) || !isVisible(openChrome) || openChrome.disabled) throw new Error("Open Chrome extensions action is missing, hidden, or disabled");
+        return { accessibleName: accessibleName(openChrome), ariaDescribedBy: openChrome.getAttribute("aria-describedby") };
+      `));
+      await clickByRole(cdp, "button", "Open Chrome extensions", "#settings-browser-extension");
+      const busy = await cdp.evaluate(pageExpression(`
+        const card = document.getElementById("settings-browser-extension");
+        const openChrome = card ? findByRole("button", "Opening Chrome…", card) : null;
+        if (!(openChrome instanceof HTMLButtonElement) || !openChrome.disabled) throw new Error("Chrome manager action did not expose its disabled busy state");
+        return { accessibleName: accessibleName(openChrome), disabled: true };
+      `));
+      await waitForPage(cdp, `(() => Boolean(document.querySelector("#settings-browser-extension [role=status], #settings-browser-extension [role=alert]")))()`, "Chrome extension manager request/fallback status", options.timeoutMs);
+      const resultState = await cdp.evaluate(pageExpression(`
+        const card = document.getElementById("settings-browser-extension");
+        const status = card?.querySelector('[role="status"]');
+        const alert = card?.querySelector('[role="alert"]');
+        const openChrome = card ? findByRole("button", "Open Chrome extensions", card) : null;
+        const message = status instanceof HTMLElement ? status.textContent ?? "" : alert instanceof HTMLElement ? alert.textContent ?? "" : "";
+        if (!(openChrome instanceof HTMLButtonElement) || openChrome.disabled || !message) throw new Error("Chrome open-request action did not recover its idle state");
+        if (!new RegExp("chrome://extensions/").test(message)) throw new Error("Chrome open-request status omitted the manual chrome://extensions/ fallback");
+        return { status: normalise(message), outcome: status instanceof HTMLElement ? "request-sent" : "manual-fallback", accessibleName: accessibleName(openChrome), idle: true };
+      `));
+      return { button, busy, ...resultState };
+    });
+
+    await runCheck(result, "settings-browser-extension-remount-state", async () => {
+      await dispatchEscape(cdp);
+      await waitForPage(cdp, `!document.querySelector(".dialog")`, "Settings dialog to close before extension state remount", options.timeoutMs);
+      await clickByRole(cdp, "button", "Settings");
+      await waitForPage(cdp, `Boolean(document.querySelector(".dialog"))`, "Settings dialog to reopen for extension state remount", options.timeoutMs);
+      await clickByRole(cdp, "tab", "Downloads", '[role="dialog"]');
+      await waitForPage(cdp, `document.getElementById("settings-tab-downloads")?.getAttribute("aria-selected") === "true"`, "Downloads tab after extension state remount", options.timeoutMs);
+      await waitForPage(cdp, `(() => Boolean(document.querySelector("#settings-browser-extension [role=status]")))()`, "extension state status after Settings remount", options.timeoutMs);
+      return cdp.evaluate(pageExpression(`
+        const card = document.getElementById("settings-browser-extension");
+        const status = card?.querySelector('[role="status"]');
+        const manual = card ? findByRole("button", "Open extension folder", card) : null;
+        const openChrome = card ? findByRole("button", "Open Chrome extensions", card) : null;
+        if (!(manual instanceof HTMLButtonElement) || !isVisible(manual)) throw new Error("existing paired extension lost its Open extension folder action after Settings remount");
+        if (!(openChrome instanceof HTMLButtonElement) || !isVisible(openChrome)) throw new Error("Chrome manager action lost after Settings remount");
+        if (!(status instanceof HTMLElement) || !/browser extension|extension folder/i.test(status.textContent ?? "")) throw new Error("existing extension state status is missing after Settings remount");
+        return { status: normalise(status.textContent), manualAction: accessibleName(manual), chromeAction: accessibleName(openChrome), persisted: true };
+      `));
     });
 
     if (options.screenshotPath) {
