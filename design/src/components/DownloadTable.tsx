@@ -19,7 +19,7 @@ import {
 } from "./icons";
 import ContextMenu, { ContextMenuItem } from "./ContextMenu";
 import { type DestructiveActionRequest } from "./DestructiveActionGate";
-import { getUiCopy } from "../i18n/ui";
+import { useUiCopy } from "../i18n/useUiCopy";
 import RegexBuilder from "./RegexBuilder";
 import { localizedRegexEvaluationError, useIsolatedRegexBatch } from "../hooks/useIsolatedRegex";
 
@@ -218,7 +218,7 @@ function ContextActionList({
 
 export default function DownloadTable({ filteredItems, regexError, regexPending, onRequestDestructiveAction }: DownloadTableProps) {
   const settings = useAppStore((state) => state.settings);
-  const copy = getUiCopy(settings);
+  const copy = useUiCopy(settings);
   const sort = useAppStore((state) => state.sort);
   const setSort = useAppStore((state) => state.setSort);
   const selectedIds = useAppStore((state) => state.selectedIds);

@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import type { DimSumDish } from "../dimSum";
-import { getUiCopy } from "../i18n/ui";
+import { useUiCopy } from "../i18n/useUiCopy";
 import { useAppStore } from "../store/useAppStore";
 
 interface DimSumSurpriseProps {
@@ -10,7 +10,7 @@ interface DimSumSurpriseProps {
 
 export default function DimSumSurprise({ dish, onDismiss }: DimSumSurpriseProps) {
   const settings = useAppStore((state) => state.settings);
-  const copy = getUiCopy(settings);
+  const copy = useUiCopy(settings);
 
   useEffect(() => {
     const timeoutId = window.setTimeout(onDismiss, 8_000);

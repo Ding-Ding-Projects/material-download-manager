@@ -20,6 +20,7 @@ import {
 import { createDefaultRegexBuilderState, type RegexBuilderState } from "@shared/regex";
 import { useAppStore } from "../store/useAppStore";
 import { getUiCopy } from "../i18n/ui";
+import { useUiCopy } from "../i18n/useUiCopy";
 import RegexBuilder from "./RegexBuilder";
 import { localizedRegexEvaluationError, useIsolatedRegexBatch } from "../hooks/useIsolatedRegex";
 import "../styles/tabs.css";
@@ -41,7 +42,7 @@ function tabButtonId(tabId: string): string {
 
 export default function TabStrip({ state, onChange, onActivate, onAddDownload }: TabStripProps) {
   const settings = useAppStore((current) => current.settings);
-  const copy = getUiCopy(settings);
+  const copy = useUiCopy(settings);
   const [searchOpen, setSearchOpen] = useState(false);
   const [overflowOpen, setOverflowOpen] = useState(false);
   const [contextMenu, setContextMenu] = useState<ContextMenuState>(null);

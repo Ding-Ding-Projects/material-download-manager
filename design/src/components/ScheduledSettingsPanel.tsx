@@ -8,7 +8,7 @@ import {
   createDefaultScheduledSettingsRecord,
   SCHEDULE_WEEKDAYS,
 } from "@shared/scheduledSettings";
-import { getUiCopy } from "../i18n/ui";
+import { useUiCopy } from "../i18n/useUiCopy";
 import { useAppStore } from "../store/useAppStore";
 import { notify } from "./NotificationCenter";
 import { DEFAULT_APP_LOGO_SETTINGS, type AppLogoPreset } from "@shared/appLogo";
@@ -67,7 +67,7 @@ function withSourceLogoPreset(source: PersistedScheduleSource, preset: AppLogoPr
 
 export default function ScheduledSettingsPanel() {
   const settings = useAppStore((state) => state.settings);
-  const ui = getUiCopy(settings);
+  const ui = useUiCopy(settings);
   const [rules, setRules] = useState<ScheduledSettingsRecord[]>([]);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);

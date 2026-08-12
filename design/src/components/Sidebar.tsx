@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { useAppStore } from "../store/useAppStore";
-import { getUiCopy } from "../i18n/ui";
+import { useUiCopy } from "../i18n/useUiCopy";
 import { CATEGORY_LABELS, CATEGORY_ORDER } from "../utils/category";
 import { CategoryIcon, ChevronDownIcon, ChevronUpIcon, FolderIcon } from "./icons";
 
@@ -70,7 +70,7 @@ export default function Sidebar() {
   const setFilter = useAppStore((s) => s.setFilter);
   const openQueues = useAppStore((s) => s.openQueues);
   const settings = useAppStore((s) => s.settings);
-  const copy = getUiCopy(settings);
+  const copy = useUiCopy(settings);
 
   const [allExpanded, setAllExpanded] = useState(true);
   const [queuesExpanded, setQueuesExpanded] = useState(true);

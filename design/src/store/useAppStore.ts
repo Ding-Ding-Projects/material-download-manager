@@ -12,7 +12,9 @@ import type {
   SettingKey,
   SettingsPatch,
 } from "@shared/types";
+import { createPersonalVocabularyRuntime, type PersonalVocabularyRuntime } from "@shared/personalVocabulary";
 import { applyAppearanceSettings } from "./settingsAppearance";
+import { setPersonalVocabularyRuntime as setRendererPersonalVocabularyRuntime } from "../personalVocabulary/runtime";
 
 export type SidebarFilter =
   | { kind: "all" }
@@ -34,13 +36,33 @@ interface DialogsState {
   detailsItemId: string | null;
 }
 
-export type SettingsFocus = "language" | "school-mode" | "show-emojis" | "narrator" | "appearance" | "app-logo" | "downloads" | "auto-organize" | "auto-organize-rules" | "authenticator" | "ollama" | "advanced" | null;
+export type SettingsFocus =
+  | "language"
+  | "school-mode"
+  | "show-emojis"
+  | "narrator"
+  | "personal-vocabulary"
+  | "personal-vocabulary-upload"
+  | "personal-vocabulary-status"
+  | "personal-vocabulary-replace"
+  | "personal-vocabulary-clear"
+  | "appearance"
+  | "app-logo"
+  | "downloads"
+  | "auto-organize"
+  | "auto-organize-rules"
+  | "authenticator"
+  | "ollama"
+  | "advanced"
+  | null;
 
 interface AppState {
   // live data, mirrored from the main process
   items: DownloadItem[];
   queues: DownloadQueue[];
   settings: AppSettings | null;
+  /** Runtime-only local mappings. Never included in the download state snapshot. */
+  personalVocabulary: PersonalVocabularyRuntime;
   ready: boolean;
 
   // local UI state
@@ -91,6 +113,7 @@ interface AppState {
   setSettings: (settings: SettingsPatch, resetKeys?: SettingKey[]) => Promise<AppSettings>;
   getPresentationSettings: () => Promise<PresentationSettings>;
   setPresentationSettings: (settings: PresentationPatch, resetKeys?: PresentationSettingKey[]) => Promise<PresentationSettings>;
+  setPersonalVocabularyRuntime: (runtime: PersonalVocabularyRuntime) => void;
   createQueue: (queue: Partial<DownloadQueue>) => Promise<DownloadQueue>;
   updateQueue: (queue: DownloadQueue) => Promise<void>;
   deleteQueue: (id: string) => Promise<void>;
@@ -109,6 +132,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   items: [],
   queues: [],
   settings: null,
+  personalVocabulary: createPersonalVocabularyRuntime(),
   ready: false,
 
   filter: { kind: "all" },
@@ -122,6 +146,30 @@ export const useAppStore = create<AppState>((set, get) => ({
   addDownloadPrefillUrl: "",
 
   init: () => {
+    let personalVocabularyGeneration = 0;
+    const clearPersonalVocabularyRendererMemory = () => {
+      const empty = createPersonalVocabularyRuntime();
+      setRendererPersonalVocabularyRuntime(empty);
+      set({ personalVocabulary: empty });
+    };
+    const applyPersonalVocabularyRuntime = (runtime: PersonalVocabularyRuntime) => {
+      if (get().settings?.schoolModeEnabled) {
+        clearPersonalVocabularyRendererMemory();
+        return;
+      }
+      setRendererPersonalVocabularyRuntime(runtime);
+      set({ personalVocabulary: runtime });
+    };
+    const refreshPersonalVocabularyRendererMemory = () => {
+      const generation = ++personalVocabularyGeneration;
+      void window.api.getPersonalVocabularyRuntime().then((runtime) => {
+        if (generation !== personalVocabularyGeneration) return;
+        applyPersonalVocabularyRuntime(runtime);
+      }).catch(() => {
+        if (generation !== personalVocabularyGeneration) return;
+        clearPersonalVocabularyRendererMemory();
+      });
+    };
     window.api.getState().then((s) =>
       set(() => {
         applyAppearanceSettings(s.settings);
@@ -129,22 +177,46 @@ export const useAppStore = create<AppState>((set, get) => ({
       })
     );
     const unsubscribe = window.api.onStateChanged((s) => {
+      const wasSchoolModeEnabled = get().settings?.schoolModeEnabled === true;
       set(() => {
         applyAppearanceSettings(s.settings);
         return { items: s.items, queues: s.queues, settings: s.settings };
       });
+      if (s.settings.schoolModeEnabled) {
+        personalVocabularyGeneration += 1;
+        clearPersonalVocabularyRendererMemory();
+      } else if (wasSchoolModeEnabled) {
+        // Leaving School mode fetches a fresh validated main-process cache; no
+        // replacement list is retained in renderer memory across the mode.
+        refreshPersonalVocabularyRendererMemory();
+      }
     });
     const unsubscribePresentation = window.api.onPresentationChanged((presentation) => {
+      const wasSchoolModeEnabled = get().settings?.schoolModeEnabled === true;
       set((state) => {
         if (!state.settings) return state;
         const nextSettings = { ...state.settings, ...presentation };
         applyAppearanceSettings(nextSettings);
         return { settings: nextSettings };
       });
+      if (presentation.schoolModeEnabled) {
+        personalVocabularyGeneration += 1;
+        clearPersonalVocabularyRendererMemory();
+      } else if (wasSchoolModeEnabled) {
+        // Presentation changes are the live School-mode route, so clear first
+        // and only then reacquire a freshly validated private cache.
+        refreshPersonalVocabularyRendererMemory();
+      }
+    });
+    refreshPersonalVocabularyRendererMemory();
+    const unsubscribePersonalVocabulary = window.api.onPersonalVocabularyChanged((runtime) => {
+      personalVocabularyGeneration += 1;
+      applyPersonalVocabularyRuntime(runtime);
     });
     return () => {
       unsubscribe();
       unsubscribePresentation();
+      unsubscribePersonalVocabulary();
     };
   },
 
@@ -219,6 +291,16 @@ export const useAppStore = create<AppState>((set, get) => ({
       return { settings: nextSettings };
     });
     return updated;
+  },
+  setPersonalVocabularyRuntime: (runtime) => {
+    if (get().settings?.schoolModeEnabled) {
+      const empty = createPersonalVocabularyRuntime();
+      setRendererPersonalVocabularyRuntime(empty);
+      set({ personalVocabulary: empty });
+      return;
+    }
+    setRendererPersonalVocabularyRuntime(runtime);
+    set({ personalVocabulary: runtime });
   },
   createQueue: (queue) => window.api.createQueue(queue),
   updateQueue: (queue) => window.api.updateQueue(queue),

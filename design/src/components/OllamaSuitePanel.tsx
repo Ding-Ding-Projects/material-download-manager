@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { isOllamaEndpoint, type OllamaProviderRecord, type OllamaSuiteState } from "@shared/ollama";
 import { getUiCopy } from "../i18n/ui";
+import { useUiCopy } from "../i18n/useUiCopy";
 import { useAppStore } from "../store/useAppStore";
 import DestructiveActionGate, { type DestructiveActionRequest } from "./DestructiveActionGate";
 import { notify } from "./NotificationCenter";
@@ -27,7 +28,7 @@ function modelSize(value: number | null, text: (english: string, cantonese: stri
 
 export default function OllamaSuitePanel() {
   const settings = useAppStore((state) => state.settings);
-  const ui = useMemo(() => getUiCopy(settings), [settings]);
+  const ui = useUiCopy(settings);
   const [state, setState] = useState<OllamaSuiteState>(initialState);
   const [name, setName] = useState("Local Ollama");
   const [endpoint, setEndpoint] = useState("http://127.0.0.1:11434");

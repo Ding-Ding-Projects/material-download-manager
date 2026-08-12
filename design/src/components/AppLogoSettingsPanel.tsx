@@ -13,6 +13,7 @@ import {
 import { createDefaultRegexBuilderState, validateRegexPattern, type RegexBuilderState } from "@shared/regex";
 import { useIsolatedRegexBatch } from "../hooks/useIsolatedRegex";
 import { getUiCopy } from "../i18n/ui";
+import { useUiCopy } from "../i18n/useUiCopy";
 import { useAppStore } from "../store/useAppStore";
 import { AppLogoPresetMark } from "./AppLogo";
 import RegexBuilder from "./RegexBuilder";
@@ -59,7 +60,7 @@ export default function AppLogoSettingsPanel({
   onChange: (next: AppLogoSettings) => void;
 }) {
   const appSettings = useAppStore((state) => state.settings);
-  const ui = useMemo(() => getUiCopy(appSettings), [appSettings]);
+  const ui = useUiCopy(appSettings);
   const [snapshot, setSnapshot] = useState<AppLogoSnapshot | null>(null);
   const [busy, setBusy] = useState<"pick" | "apply" | "clear" | null>(null);
   const [message, setMessage] = useState<string | null>(null);

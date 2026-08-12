@@ -48,6 +48,7 @@ import {
 import { isPresentationSettings, isUpdateInstallResult, isUpdateState, isUpdateUnsavedWorkState } from "../shared/types";
 import { isScheduledSettingsRecords, type ScheduledSettingsRecord } from "../shared/scheduledSettings";
 import { isAppLogoSettings, isAppLogoSnapshot, type AppLogoSettings, type AppLogoSnapshot } from "../shared/appLogo";
+import { isPersonalVocabularyRuntime, type PersonalVocabularyRuntime } from "../shared/personalVocabulary";
 import {
   isExternalEditorDiscovery,
   isExternalEditorOpenResult,
@@ -113,6 +114,32 @@ const api = {
     };
     ipcRenderer.on(IPC.PRESENTATION_CHANGED, listener);
     return () => ipcRenderer.removeListener(IPC.PRESENTATION_CHANGED, listener);
+  },
+
+  getPersonalVocabularyRuntime: async (): Promise<PersonalVocabularyRuntime> => {
+    const value: unknown = await ipcRenderer.invoke(IPC.PERSONAL_VOCABULARY_GET);
+    if (!isPersonalVocabularyRuntime(value)) throw new Error("Invalid personal vocabulary runtime state from main process");
+    return value;
+  },
+
+  choosePersonalVocabularyFile: async (): Promise<PersonalVocabularyRuntime> => {
+    const value: unknown = await ipcRenderer.invoke(IPC.PERSONAL_VOCABULARY_CHOOSE);
+    if (!isPersonalVocabularyRuntime(value)) throw new Error("Invalid personal vocabulary load result from main process");
+    return value;
+  },
+
+  clearPersonalVocabulary: async (): Promise<PersonalVocabularyRuntime> => {
+    const value: unknown = await ipcRenderer.invoke(IPC.PERSONAL_VOCABULARY_CLEAR);
+    if (!isPersonalVocabularyRuntime(value)) throw new Error("Invalid personal vocabulary clear result from main process");
+    return value;
+  },
+
+  onPersonalVocabularyChanged: (cb: (runtime: PersonalVocabularyRuntime) => void) => {
+    const listener = (_: unknown, value: unknown) => {
+      if (isPersonalVocabularyRuntime(value)) cb(value);
+    };
+    ipcRenderer.on(IPC.PERSONAL_VOCABULARY_CHANGED, listener);
+    return () => ipcRenderer.removeListener(IPC.PERSONAL_VOCABULARY_CHANGED, listener);
   },
 
   getScheduleRules: async (): Promise<ScheduledSettingsRecord[]> => {

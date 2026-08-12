@@ -10,6 +10,7 @@ import {
 } from "@shared/converter";
 import { createDefaultRegexBuilderState, validateRegexPattern, type RegexBuilderState } from "@shared/regex";
 import { getUiCopy, type UiCopy } from "../i18n/ui";
+import { useUiCopy } from "../i18n/useUiCopy";
 import { useAppStore } from "../store/useAppStore";
 import { localizedRegexEvaluationError, useIsolatedRegexBatch } from "../hooks/useIsolatedRegex";
 import { notify } from "./NotificationCenter";
@@ -121,7 +122,7 @@ interface CatalogCategoryProps {
 
 function CatalogCategory({ category, selectedAdapterId, onSelect }: CatalogCategoryProps) {
   const settings = useAppStore((state) => state.settings);
-  const copy = getUiCopy(settings);
+  const copy = useUiCopy(settings);
   const categoryLabel = localizedCategory(category, copy);
   const [query, setQuery] = useState<RegexBuilderState>(createDefaultRegexBuilderState);
   const [builderOpen, setBuilderOpen] = useState(false);
@@ -249,10 +250,7 @@ function filterStagedSources(sources: ConverterState["stagedSources"], query: Re
 
 export default function ConverterPanel() {
   const settings = useAppStore((state) => state.settings);
-  const copy = useMemo(
-    () => getUiCopy(settings),
-    [settings?.funnyLevelCantonese, settings?.funnyLevelEnglish, settings?.languageMode, settings?.schoolModeEnabled, settings?.schoolModeName, settings?.showEmojis],
-  );
+  const copy = useUiCopy(settings);
   const [state, setState] = useState<ConverterState>(createEmptyConverterState);
   const [selectedAdapterId, setSelectedAdapterId] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);

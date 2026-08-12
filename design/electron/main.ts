@@ -93,6 +93,8 @@ import { ConverterService } from "./converter/ConverterService";
 import { isConverterAdapterId, type ConverterState } from "../shared/converter";
 import { LogoCustomizationStore, type PreparedLogoVersion } from "./logo/LogoCustomizationStore";
 import { cloneAppLogoSettings, DEFAULT_APP_LOGO_SETTINGS, isAppLogoSettings, type AppLogoSettings } from "../shared/appLogo";
+import { PersonalVocabularyStore } from "./personalVocabulary/PersonalVocabularyStore";
+import { createPersonalVocabularyRuntime, type PersonalVocabularyRuntime } from "../shared/personalVocabulary";
 
 const isDev = isDevelopmentLaunch(app.isPackaged);
 const UPDATE_WORK_STATE_MAX_AGE_MS = 10_000;
@@ -134,6 +136,7 @@ let externalEditorService: ExternalEditorService;
 let ollamaSuiteStore: OllamaSuiteStore;
 let converterService: ConverterService;
 let logoCustomizationStore: LogoCustomizationStore;
+let personalVocabularyStore: PersonalVocabularyStore;
 const historyAccessSession = new HistoryAccessSession();
 let updater: UpdateService | null = null;
 let handoffServer: HandoffServer | null = null;
@@ -171,6 +174,9 @@ function createWindow() {
     if (mainWindow && !mainWindow.isDestroyed()) {
       mainWindow.webContents.send(IPC.PRESENTATION_CHANGED, manager.getPresentationSettings());
       mainWindow.webContents.send(IPC.SCHEDULE_CHANGED, manager.getScheduleRules());
+      void getRendererPersonalVocabularyRuntime().then((runtime) => {
+        if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send(IPC.PERSONAL_VOCABULARY_CHANGED, runtime);
+      });
     }
   });
 
@@ -200,6 +206,9 @@ function createProgressWindow(itemId: string): boolean {
     progressWindow.webContents.send(IPC.STATE_CHANGED, manager.getState());
     progressWindow.webContents.send(IPC.PRESENTATION_CHANGED, manager.getPresentationSettings());
     progressWindow.webContents.send(IPC.SCHEDULE_CHANGED, manager.getScheduleRules());
+    void getRendererPersonalVocabularyRuntime().then((runtime) => {
+      if (progressWindow && !progressWindow.isDestroyed()) progressWindow.webContents.send(IPC.PERSONAL_VOCABULARY_CHANGED, runtime);
+    });
     return true;
   }
 
@@ -227,6 +236,9 @@ function createProgressWindow(itemId: string): boolean {
       progressWindow.webContents.send(IPC.STATE_CHANGED, manager.getState());
       progressWindow.webContents.send(IPC.PRESENTATION_CHANGED, manager.getPresentationSettings());
       progressWindow.webContents.send(IPC.SCHEDULE_CHANGED, manager.getScheduleRules());
+      void getRendererPersonalVocabularyRuntime().then((runtime) => {
+        if (progressWindow && !progressWindow.isDestroyed()) progressWindow.webContents.send(IPC.PERSONAL_VOCABULARY_CHANGED, runtime);
+      });
     }
   });
   if (isDev) {
@@ -338,6 +350,9 @@ function broadcastState() {
 function broadcastPresentation(presentation: PresentationSettings) {
   if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send(IPC.PRESENTATION_CHANGED, presentation);
   if (progressWindow && !progressWindow.isDestroyed()) progressWindow.webContents.send(IPC.PRESENTATION_CHANGED, presentation);
+  void getRendererPersonalVocabularyRuntime(presentation.schoolModeEnabled).then(broadcastPersonalVocabulary).catch(() => {
+    broadcastPersonalVocabulary(createPersonalVocabularyRuntime());
+  });
 }
 
 function broadcastScheduleRules(records: ScheduledSettingsRecord[]) {
@@ -358,6 +373,18 @@ function logoPickerCopy(settings: AppSettings): { title: string; filterName: str
     title: `${english.title} · ${cantonese.title}`,
     filterName: `${english.filterName} · ${cantonese.filterName}`,
   };
+}
+
+function broadcastPersonalVocabulary(runtime: PersonalVocabularyRuntime) {
+  const visibleRuntime = manager.getSettings().schoolModeEnabled ? createPersonalVocabularyRuntime() : runtime;
+  if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send(IPC.PERSONAL_VOCABULARY_CHANGED, visibleRuntime);
+  if (progressWindow && !progressWindow.isDestroyed()) progressWindow.webContents.send(IPC.PERSONAL_VOCABULARY_CHANGED, visibleRuntime);
+}
+
+async function getRendererPersonalVocabularyRuntime(schoolModeEnabled = manager.getSettings().schoolModeEnabled): Promise<PersonalVocabularyRuntime> {
+  return schoolModeEnabled
+    ? createPersonalVocabularyRuntime()
+    : personalVocabularyStore.getRuntime();
 }
 
 async function processBrowserHandoffs(commandLine: readonly string[]) {
@@ -590,6 +617,26 @@ function registerIpcHandlers() {
     }
     const failure = await openPathWithTimeout(installedPath);
     if (failure) throw new Error(failure);
+  });
+
+  ipcMain.handle(IPC.PERSONAL_VOCABULARY_GET, async (event) => {
+    assertTrustedSender(event);
+    return getRendererPersonalVocabularyRuntime();
+  });
+  ipcMain.handle(IPC.PERSONAL_VOCABULARY_CHOOSE, async (event) => {
+    assertTrustedSender(event);
+    if (manager.getSettings().schoolModeEnabled || !mainWindow) return getRendererPersonalVocabularyRuntime();
+    const picked = await dialog.showOpenDialog(mainWindow, {
+      properties: ["openFile"],
+      filters: [{ name: "JSON files", extensions: ["json"] }],
+    });
+    if (picked.canceled || picked.filePaths.length === 0) return getRendererPersonalVocabularyRuntime();
+    return personalVocabularyStore.replaceFromFile(picked.filePaths[0]);
+  });
+  ipcMain.handle(IPC.PERSONAL_VOCABULARY_CLEAR, async (event) => {
+    assertTrustedSender(event);
+    if (manager.getSettings().schoolModeEnabled) return getRendererPersonalVocabularyRuntime();
+    return personalVocabularyStore.clear();
   });
 
   ipcMain.handle(IPC.OLLAMA_GET_STATE, (event) => {
@@ -1292,10 +1339,12 @@ app.whenReady().then(async () => {
   externalEditorService = new ExternalEditorService(app.getPath("userData"));
   ollamaSuiteStore = new OllamaSuiteStore(app.getPath("userData"));
   converterService = new ConverterService(app.getPath("userData"), { onStateChanged: broadcastConverterState });
+  personalVocabularyStore = new PersonalVocabularyStore(app.getPath("userData"));
   const hadStateFile = await fsp.stat(path.join(app.getPath("userData"), "state.json")).then(() => true, () => false);
   await manager.init();
   await ollamaSuiteStore.init();
   await converterService.init();
+  await personalVocabularyStore.init();
   schoolModeCredentialService = new SchoolModeCredentialService(schoolModeResetVault, manager);
   await schoolModeCredentialService.synchronize(hadStateFile).catch((error: unknown) => {
     console.warn(`School mode reset credential metadata could not be reconciled: ${error instanceof Error ? error.message : "unknown failure"}`);
@@ -1303,6 +1352,7 @@ app.whenReady().then(async () => {
   manager.on("stateChanged", broadcastState);
   manager.on("presentationChanged", broadcastPresentation);
   manager.on("scheduleChanged", broadcastScheduleRules);
+  personalVocabularyStore.on("changed", broadcastPersonalVocabulary);
   manager.on("itemCompleted", notifyDownloadComplete);
   await processBrowserHandoffs(process.argv);
   handoffServer = new HandoffServer({

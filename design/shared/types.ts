@@ -560,6 +560,10 @@ export const IPC = {
   STATE_CHANGED: "state:changed",
   SETTINGS_GET: "settings:get",
   SETTINGS_SET: "settings:set",
+  PERSONAL_VOCABULARY_GET: "personalVocabulary:get",
+  PERSONAL_VOCABULARY_CHOOSE: "personalVocabulary:choose",
+  PERSONAL_VOCABULARY_CLEAR: "personalVocabulary:clear",
+  PERSONAL_VOCABULARY_CHANGED: "personalVocabulary:changed",
   SCHEDULE_GET: "schedule:get",
   SCHEDULE_SET: "schedule:set",
   SCHEDULE_CHANGED: "schedule:changed",
@@ -651,3 +655,9 @@ export type {
   HistoryAccessState,
 } from "./history";
 export type { ExportFormat, ExportResult } from "./export";
+export type {
+  PersonalVocabularyReplacement,
+  PersonalVocabularyRuntime,
+  PersonalVocabularyState,
+  PersonalVocabularyStatus,
+} from "./personalVocabulary";

@@ -1,5 +1,6 @@
 import type { AppSettings, FunnyLevel, LanguageMode } from "@shared/types";
 import { effectivePresentationSettings } from "@shared/settings";
+import { personalizeUiCopy } from "../personalVocabulary/runtime";
 
 type SettingsLike = Pick<
   AppSettings,
@@ -70,6 +71,15 @@ export interface UiCopy {
   schoolModeCredentialWrong: string;
   showEmojisLabel: string;
   showEmojisHelp: string;
+  personalVocabularyTitle: string;
+  personalVocabularyHelp: string;
+  personalVocabularyChoose: string;
+  personalVocabularyReplace: string;
+  personalVocabularyClear: string;
+  personalVocabularyNoFile: string;
+  personalVocabularyLoaded: (count: number) => string;
+  personalVocabularyInvalid: string;
+  personalVocabularyBusy: string;
   funnyPreview: string;
   metadataFallback: string;
   dimSumTitle: (dish: string) => string;
@@ -83,13 +93,20 @@ export interface UiCopy {
 
 export function getUiCopy(settings: SettingsLike): UiCopy {
   const effective = settings ? effectivePresentationSettings(settings) : null;
+  const schoolModeEnabled = settings?.schoolModeEnabled === true;
   const languageMode = effective?.languageMode ?? "english";
   const englishLevel = effective?.funnyLevelEnglish ?? 1;
   const cantoneseLevel = effective?.funnyLevelCantonese ?? 3;
   const schoolModeName = settings?.schoolModeName ?? "School mode";
-  const text = (english: string, cantonese: string) => bilingual(languageMode, english, cantonese);
+  const text = (english: string, cantonese: string) => personalizeUiCopy(
+    bilingual(languageMode, english, cantonese),
+    schoolModeEnabled,
+  );
   const funny = (english: readonly string[], cantonese: readonly string[]) =>
-    bilingual(languageMode, choose(englishLevel, english), choose(cantoneseLevel, cantonese));
+    personalizeUiCopy(
+      bilingual(languageMode, choose(englishLevel, english), choose(cantoneseLevel, cantonese)),
+      schoolModeEnabled,
+    );
 
   return {
     languageMode,
@@ -166,6 +183,24 @@ export function getUiCopy(settings: SettingsLike): UiCopy {
       "When enabled, dialogs and message boxes may include a relevant decorative emoji. Buttons, field labels, accessible names, and exports stay factual.",
       "開啟後，對話框同訊息框可以加入相關裝飾 emoji；按鈕、欄位標籤、讀屏名稱同匯出內容仍然保持事實清楚。"
     ),
+    personalVocabularyTitle: text("Personal vocabulary", "個人詞彙"),
+    personalVocabularyHelp: text(
+      "Choose a private local JSON file to replace approved on-screen wording on this device. The file name and path are never saved; values stay local and are excluded from history, exports, diagnostics, and network requests.",
+      "揀一個私密本機 JSON 檔案，喺呢部裝置替換核准嘅畫面文字。檔名同路徑唔會儲存；內容只留喺本機，唔會入歷史、匯出、診斷或者網絡請求。"
+    ),
+    personalVocabularyChoose: text("Choose personal vocabulary JSON", "揀個人詞彙 JSON"),
+    personalVocabularyReplace: text("Replace personal vocabulary JSON", "更換個人詞彙 JSON"),
+    personalVocabularyClear: text("Clear personal vocabulary", "清除個人詞彙"),
+    personalVocabularyNoFile: text("No private vocabulary file is loaded. Shipped wording is in use.", "未有載入私密詞彙檔案，依家用緊原有文字。"),
+    personalVocabularyLoaded: (count) => text(
+      `Loaded ${count} private wording replacement${count === 1 ? "" : "s"}; the selected file name and path were not retained.`,
+      `已載入 ${count} 個私密文字替換；已選檔案嘅名稱同路徑冇保留。`
+    ),
+    personalVocabularyInvalid: text(
+      "The selected JSON was not accepted. No partial change was applied; the previous valid local wording remains active when available.",
+      "所選 JSON 未被接受，冇套用任何部分改動；如果之前有有效本機文字，會繼續使用。"
+    ),
+    personalVocabularyBusy: text("Reading private local JSON…", "讀取私密本機 JSON 中…"),
     funnyPreview: funny(
       ["Preview: Settings are ready.", "Preview: Settings are ready; the knobs are behaving.", "Preview: Settings are ready — the knobs have stopped plotting.", "Preview: Settings are ready — even the fussy knobs signed off.", "Preview: Settings are ready — the settings cupboard has achieved inner peace."],
       ["預覽：設定準備好喇。", "預覽：設定準備好喇，啲掣都幾乖。", "預覽：設定準備好喇，啲掣終於唔再搞事。", "預覽：設定準備好喇，連最麻煩嗰粒掣都話得。", "預覽：設定準備好喇，成個設定櫃終於悟道。"]

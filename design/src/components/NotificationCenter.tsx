@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { getUiCopy } from "../i18n/ui";
+import { useUiCopy } from "../i18n/useUiCopy";
 import { useAppStore } from "../store/useAppStore";
 import { CloseIcon, InfoIcon, RefreshIcon } from "./icons";
 import DestructiveActionGate from "./DestructiveActionGate";
@@ -84,7 +85,7 @@ function downloadBlob(filename: string, content: string, type: string): void {
 
 export default function NotificationCenter() {
   const settings = useAppStore((state) => state.settings);
-  const copy = getUiCopy(settings);
+  const copy = useUiCopy(settings);
   const [records, setRecords] = useState<NotificationRecord[]>([]);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [historyOpen, setHistoryOpen] = useState(false);

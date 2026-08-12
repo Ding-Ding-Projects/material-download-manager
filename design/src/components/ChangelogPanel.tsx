@@ -4,6 +4,7 @@ import { createDefaultRegexBuilderState, type RegexBuilderState } from "@shared/
 import { isSchoolModeSuppressedText } from "@shared/settings";
 import type { ChangelogView, ChangelogViewRequest } from "../../electron/history/ChangelogStore";
 import { getUiCopy } from "../i18n/ui";
+import { useUiCopy } from "../i18n/useUiCopy";
 import { localizedPrefixedRegexEvaluationError } from "../hooks/useIsolatedRegex";
 import { useAppStore } from "../store/useAppStore";
 import RegexBuilder from "./RegexBuilder";
@@ -52,10 +53,7 @@ function changelogActionError(
 
 export default function ChangelogPanel() {
   const settings = useAppStore((state) => state.settings);
-  const copy = useMemo(
-    () => getUiCopy(settings),
-    [settings?.funnyLevelCantonese, settings?.funnyLevelEnglish, settings?.languageMode, settings?.schoolModeEnabled, settings?.schoolModeName, settings?.showEmojis]
-  );
+  const copy = useUiCopy(settings);
   const [builder, setBuilder] = useState<RegexBuilderState>(() => createDefaultRegexBuilderState());
   const [regexOpen, setRegexOpen] = useState(false);
   const regexButtonRef = useRef<HTMLButtonElement>(null);

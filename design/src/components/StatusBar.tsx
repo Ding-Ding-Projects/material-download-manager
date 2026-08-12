@@ -2,7 +2,7 @@ import { useMemo } from "react";
 import { useAppStore } from "../store/useAppStore";
 import { formatSpeed } from "../utils/format";
 import { GridIcon } from "./icons";
-import { getUiCopy } from "../i18n/ui";
+import { useUiCopy } from "../i18n/useUiCopy";
 
 function CloudDownloadIcon({ size = 14 }: { size?: number }) {
   return (
@@ -25,7 +25,7 @@ function CloudDownloadIcon({ size = 14 }: { size?: number }) {
 export default function StatusBar({ filteredCount, regexPending }: { filteredCount: number; regexPending: boolean }) {
   const items = useAppStore((s) => s.items);
   const settings = useAppStore((s) => s.settings);
-  const copy = getUiCopy(settings);
+  const copy = useUiCopy(settings);
 
   const totalSpeed = useMemo(
     () => items.filter((i) => i.status === "downloading").reduce((sum, i) => sum + i.speed, 0),
