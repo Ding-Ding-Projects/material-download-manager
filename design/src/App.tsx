@@ -32,9 +32,6 @@ import { setActiveTab } from "@shared/tabModel";
 import { useFilteredItems } from "./hooks/useFilteredItems";
 import { clearLegacyDisplayName, readLegacyDisplayName } from "./store/displayPreferences";
 
-const DESTRUCTIVE_REQUEST_EVENT = "mdm:request-destructive-action";
-const CLOSE_CONTEXT_MENU_EVENT = "mdm:close-context-menus";
-
 function itemName(item: DownloadItem): string {
   return item.fileName || item.url;
 }
@@ -353,16 +350,6 @@ export default function App() {
   }, [settings?.schoolModeEnabled]);
 
   useEffect(() => {
-    function handleDestructiveRequest(event: Event) {
-      const detail = (event as CustomEvent<DestructiveActionRequest>).detail;
-      if (!detail?.itemIds?.length) return;
-      setDestructiveRequest({ itemIds: [...detail.itemIds], deleteFile: Boolean(detail.deleteFile) });
-    }
-    window.addEventListener(DESTRUCTIVE_REQUEST_EVENT, handleDestructiveRequest);
-    return () => window.removeEventListener(DESTRUCTIVE_REQUEST_EVENT, handleDestructiveRequest);
-  }, []);
-
-  useEffect(() => {
     if (!ready) return;
     const current = new Map(
       items.map((item) => [item.id, { status: item.status, error: item.error, fileName: item.fileName, url: item.url }])
@@ -427,8 +414,17 @@ export default function App() {
   }, [copy, items, ready]);
 
   function cancelDestructiveAction() {
-    window.dispatchEvent(new Event(CLOSE_CONTEXT_MENU_EVENT));
     setDestructiveRequest(null);
+  }
+
+  function requestDestructiveAction(request: DestructiveActionRequest) {
+    if (!request.itemIds.length) return;
+    setDestructiveRequest({
+      itemIds: [...request.itemIds],
+      deleteFile: Boolean(request.deleteFile),
+      ...(request.returnFocusTarget instanceof HTMLElement ? { returnFocusTarget: request.returnFocusTarget } : {}),
+      ...(request.returnFocusFallback instanceof HTMLElement ? { returnFocusFallback: request.returnFocusFallback } : {}),
+    });
   }
 
   function confirmDestructiveAction(request: DestructiveActionRequest) {
@@ -479,7 +475,7 @@ export default function App() {
       <NarratorController />
       <CommandPalette commands={paletteCommands} />
       <TitleBar />
-      <TabStrip state={tabState} onChange={setTabState} onActivate={activateTab} />
+      <TabStrip state={tabState} onChange={setTabState} onActivate={activateTab} onAddDownload={openAddDownload} />
       <UpdaterBanner hasUnsavedWork={hasUnsavedWork} unsavedWorkReason={unsavedWorkReason} copy={copy} />
       <div className="app-body">
         <Sidebar />
@@ -500,6 +496,7 @@ export default function App() {
                 filteredItems={filteredItems.items}
                 regexError={filteredItems.regexError}
                 regexPending={filteredItems.regexPending}
+                onRequestDestructiveAction={requestDestructiveAction}
               />
               <StatusBar filteredCount={filteredItems.items.length} regexPending={filteredItems.regexPending} />
             </>

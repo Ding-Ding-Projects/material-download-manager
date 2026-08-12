@@ -1,7 +1,5 @@
 import { useEffect } from "react";
-import { useAppStore } from "../store/useAppStore";
 
-const DESTRUCTIVE_REQUEST_EVENT = "mdm:request-destructive-action";
 const CLOSE_CONTEXT_MENU_EVENT = "mdm:close-context-menus";
 const SCREEN_READER_SIGNAL_EVENT = "mdm:screen-reader-active";
 
@@ -117,6 +115,15 @@ export default function RendererAccessibilityBridge() {
     }
 
     function decorateMenu(menu: HTMLElement) {
+      // A contextual action surface with a search field is a dialog-like popover,
+      // not an ARIA menu. Its component owns focus and Escape semantics so a
+      // nonempty filter can clear before a subsequent Escape dismisses it.
+      if (menu.getAttribute("role") === "dialog") {
+        menu.setAttribute("aria-label", menu.getAttribute("aria-label") || "Context actions");
+        menu.tabIndex = -1;
+        return;
+      }
+
       if (!trackedMenus.has(menu)) {
         const restore = document.activeElement instanceof HTMLElement ? document.activeElement : null;
         trackedMenus.set(menu, restore);
@@ -151,8 +158,10 @@ export default function RendererAccessibilityBridge() {
         menu.dataset.mdmInitialFocus = "true";
         window.requestAnimationFrame(() => {
           if (!menu.isConnected || !isVisible(menu)) return;
-          const first = menuItems(menu)[0];
-          (first ?? menu).focus();
+          // Row menus own an input-first interaction contract.  Do not replace
+          // their local filter focus with the first action button.
+          const search = menu.querySelector<HTMLInputElement>('input[type="search"]');
+          (search ?? menuItems(menu)[0] ?? menu).focus();
         });
       }
     }
@@ -217,32 +226,6 @@ export default function RendererAccessibilityBridge() {
       document.body.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }));
     }
 
-    function requestDestructiveAction(event: MouseEvent) {
-      const target = event.target instanceof HTMLElement ? event.target : null;
-      const item = target?.closest<HTMLButtonElement>(".context-menu-item");
-      if (!item) return;
-
-      const label = Array.from(item.childNodes)
-        .filter((node) => !(node instanceof HTMLElement && node.classList.contains("context-menu-shortcut")))
-        .map((node) => node.textContent ?? "")
-        .join(" ")
-        .replace(/\s+/g, " ")
-        .trim();
-      if (label !== "Remove from list" && label !== "Remove and delete file") return;
-
-      const itemIds = [...useAppStore.getState().selectedIds];
-      if (itemIds.length === 0) return;
-
-      event.preventDefault();
-      event.stopPropagation();
-      event.stopImmediatePropagation();
-      window.dispatchEvent(
-        new CustomEvent(DESTRUCTIVE_REQUEST_EVENT, {
-          detail: { itemIds, deleteFile: label === "Remove and delete file" },
-        })
-      );
-    }
-
     function handleKeyDown(event: KeyboardEvent) {
       const target = event.target instanceof HTMLElement ? event.target : null;
       const menu = target?.closest<HTMLElement>(".context-menu") ?? activeMenu();
@@ -270,6 +253,8 @@ export default function RendererAccessibilityBridge() {
       }
 
       if (menu && isVisible(menu) && (target === menu || menu.contains(target))) {
+        if (menu.getAttribute("role") === "dialog") return;
+        if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement || target instanceof HTMLSelectElement) return;
         const items = menuItems(menu);
         const currentIndex = Math.max(0, items.indexOf(document.activeElement as HTMLButtonElement));
 
@@ -337,7 +322,6 @@ export default function RendererAccessibilityBridge() {
 
     const observer = new MutationObserver(scan);
     observer.observe(document.body, { childList: true, subtree: true });
-    document.addEventListener("click", requestDestructiveAction, true);
     document.addEventListener("keydown", handleKeyDown, true);
     document.addEventListener("focusin", containModalFocus, true);
     window.addEventListener(CLOSE_CONTEXT_MENU_EVENT, closeContextMenus);
@@ -345,7 +329,6 @@ export default function RendererAccessibilityBridge() {
 
     return () => {
       observer.disconnect();
-      document.removeEventListener("click", requestDestructiveAction, true);
       document.removeEventListener("keydown", handleKeyDown, true);
       document.removeEventListener("focusin", containModalFocus, true);
       window.removeEventListener(CLOSE_CONTEXT_MENU_EVENT, closeContextMenus);

@@ -29,6 +29,63 @@ test("tab group search results are actionable and preserve persisted collapse st
   assert.doesNotMatch(tabs, /candidate\.id === groupId \? \{ \.\.\.candidate, collapsed: false \}/u);
 });
 
+test("tab-strip add action opens the real download form instead of creating a duplicate fallback view", async () => {
+  const tabs = await source("TabStrip.tsx");
+  const addDialog = await source("AddDownloadDialog.tsx");
+  const app = await readFile(path.resolve(__dirname, "../../../src/App.tsx"), "utf8");
+  assert.match(tabs, /onAddDownload: \(\) => void/u);
+  assert.match(tabs, /onClick=\{onAddDownload\}/u);
+  assert.match(tabs, /aria-label=\{copy\.text\("Add download", "新增下載"\)\}/u);
+  assert.doesNotMatch(tabs, /createTab\(/u);
+  assert.match(app, /<TabStrip state=\{tabState\} onChange=\{setTabState\} onActivate=\{activateTab\} onAddDownload=\{openAddDownload\}/u);
+  assert.match(addDialog, /typeof prefillUrl === "string" \? prefillUrl : ""/u);
+});
+
+test("download rows own keyboard actions and direct destructive wiring without capture-phase interception", async () => {
+  const table = await source("DownloadTable.tsx");
+  const bridge = await source("RendererAccessibilityBridge.tsx");
+  const gate = await source("DestructiveActionGate.tsx");
+  const app = await readFile(path.resolve(__dirname, "../../../src/App.tsx"), "utf8");
+  assert.match(table, /data-download-row/u);
+  assert.match(table, /data-download-id=\{item\.id\}/u);
+  assert.match(table, /key !== "ContextMenu" && !\(event\.shiftKey && key === "F10"\)/u);
+  assert.match(table, /className="row-actions-button"/u);
+  assert.match(table, /ContextActionList/u);
+  assert.match(table, /RegexBuilder/u);
+  assert.match(table, /onRequestDestructiveAction: \(request: DestructiveActionRequest\) => void/u);
+  assert.match(table, /onRequestDestructiveAction\(\{/u);
+  assert.match(table, /returnFocusTarget: menu\.origin/u);
+  assert.match(table, /returnFocusFallback: menu\.fallback/u);
+  assert.match(table, /event\.target !== event\.currentTarget/u);
+  assert.match(table, /closest\("\.table-scroll"\)\?\.querySelectorAll/u);
+  assert.match(table, /closeMenu\(\{ restoreFocus: false \}\)/u);
+  assert.match(table, /role="dialog"/u);
+  assert.match(table, /menuItem=\{false\}/u);
+  assert.doesNotMatch(table, /removeDownload\(/u);
+  assert.doesNotMatch(bridge, /requestDestructiveAction\(/u);
+  assert.doesNotMatch(bridge, /Remove from list/u);
+  assert.doesNotMatch(bridge, /selectedIds/u);
+  assert.match(bridge, /menu\.getAttribute\("role"\) === "dialog"/u);
+  assert.match(bridge, /if \(menu\.getAttribute\("role"\) === "dialog"\) return/u);
+  assert.match(app, /onRequestDestructiveAction=\{requestDestructiveAction\}/u);
+  assert.match(app, /function requestDestructiveAction\(request: DestructiveActionRequest\)/u);
+  assert.doesNotMatch(app, /DESTRUCTIVE_REQUEST_EVENT/u);
+  assert.doesNotMatch(gate, /new CustomEvent\(/u);
+  assert.match(gate, /returnFocusTarget\?: HTMLElement \| null/u);
+  assert.match(gate, /returnFocusFallback\?: HTMLElement \| null/u);
+  assert.match(gate, /authorizedRef\.current = true/u);
+  assert.match(gate, /authorizedRef\.current \? fallback \?\? trigger : trigger \?\? fallback/u);
+});
+
+test("contextual dialog menus allow the local filter to consume Escape before they dismiss", async () => {
+  const menu = await source("ContextMenu.tsx");
+  assert.match(menu, /role\?: "menu" \| "dialog"/u);
+  assert.match(menu, /if \(e\.key === "Escape" && !e\.defaultPrevented\) onClose\(\);/u);
+  assert.match(menu, /window\.addEventListener\("keydown", handleKeyDown\);/u);
+  assert.doesNotMatch(menu, /window\.addEventListener\("keydown", handleKeyDown, true\);/u);
+  assert.match(menu, /new ResizeObserver\(reposition\)/u);
+});
+
 test("updater exposes honest available and downloading states", async () => {
   const updater = await source("UpdaterBanner.tsx");
   assert.match(updater, /state\.status === "available"/u);

@@ -132,10 +132,23 @@
 }
 
 .tab-new-button {
-  min-width: 34px;
-  padding: 0 9px;
-  font-size: 18px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 124px;
+  padding: 0 10px;
+  font-size: 13px;
   line-height: 1;
+}
+
+.tab-new-button > span:first-child {
+  font-size: 18px;
+}
+
+.tab-new-button-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .app-tab-dirty {
