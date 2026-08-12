@@ -121,6 +121,7 @@ const expectedFiles = [
   "data/universal-feature-manifest.js",
   "data/settings-contract.js",
   "data/notification-contract.js",
+  "data/release-manifest-contract.js",
   "assets/dim-sum.svg"
 ];
 for (const relativePath of expectedFiles) {
@@ -138,11 +139,13 @@ const manifestJsSource = await read("data/release-manifest.js");
 const universalFeatureManifestSource = await read("data/universal-feature-manifest.js");
 const settingsContractSource = await read("data/settings-contract.js");
 const notificationContractSource = await read("data/notification-contract.js");
+const releaseManifestContractSource = await read("data/release-manifest-contract.js");
 const content = loadScript(contentSource, "content.js", "MDM_SITE_CONTENT");
 const manifestFromJs = loadScript(manifestJsSource, "release-manifest.js", "MDM_RELEASE_MANIFEST");
 const universalFeatureManifest = loadScript(universalFeatureManifestSource, "universal-feature-manifest.js", "MDM_UNIVERSAL_FEATURE_MANIFEST");
 const settingsContract = loadScript(settingsContractSource, "settings-contract.js", "MDM_SITE_SETTINGS_CONTRACT");
 const notificationContract = loadScript(notificationContractSource, "notification-contract.js", "MDM_SITE_NOTIFICATION_CONTRACT");
+const releaseManifestContract = loadScript(releaseManifestContractSource, "release-manifest-contract.js", "MDM_RELEASE_MANIFEST_CONTRACT");
 const manifestFromJson = JSON.parse(manifestJsonSource);
 
 run("site builder never recursively removes a caller-selected output path", () => {
@@ -157,6 +160,7 @@ run("site build preserves every local runtime script", () => {
     "./data/universal-feature-manifest.js",
     "./data/settings-contract.js",
     "./data/notification-contract.js",
+    "./data/release-manifest-contract.js",
     "./data/release-manifest.js",
     "./app.js"
   ];
@@ -202,6 +206,103 @@ run("release manifest JSON and browser form agree", () => {
   assert.deepEqual(JSON.parse(JSON.stringify(manifestFromJs)), manifestFromJson);
   assert.equal(manifestFromJson.schemaVersion, 1);
   assert.equal(manifestFromJson.stable, null);
+});
+
+run("extension release metadata is fail-closed and never enables an unpaired or signed payload", () => {
+  assert.equal(typeof releaseManifestContract.isVerifiedExtensionArtifact, "function");
+  const record = {
+    version: "1.2.3",
+    channel: "stable",
+    isDraft: false,
+    isPrerelease: false,
+    verified: true,
+    unsigned: true,
+    installerUrl: "https://github.com/Ding-Ding-Projects/material-download-manager/releases/download/v1.2.3/Setup.exe",
+    releaseUrl: "https://github.com/Ding-Ding-Projects/material-download-manager/releases/tag/v1.2.3",
+    sourceCommit: "a".repeat(40),
+    assets: ["Setup.exe", "RELEASES", "material-download-manager-1.2.3-full.nupkg", "material-download-manager-extension-1.2.3.zip"],
+    extensionAsset: "material-download-manager-extension-1.2.3.zip",
+    extensionArtifact: {
+      kind: "chromium-extension-load-unpacked",
+      format: "zip",
+      name: "material-download-manager-extension-1.2.3.zip",
+      version: "1.2.3",
+      sizeBytes: 1234,
+      sha256: "b".repeat(64),
+      manifestVersion: 3,
+      installMethod: "load-unpacked",
+      signed: false,
+      downloadUrl: "https://github.com/Ding-Ding-Projects/material-download-manager/releases/download/v1.2.3/material-download-manager-extension-1.2.3.zip"
+    }
+  };
+  assert.equal(releaseManifestContract.isVerifiedStableRecord(record), true);
+  assert.equal(releaseManifestContract.isVerifiedExtensionArtifact(record), true);
+  const descriptor = releaseManifestContract.getVerifiedExtensionDescriptor(record);
+  assert.equal(descriptor.href, record.extensionArtifact.downloadUrl);
+  assert.equal(descriptor.fileName, record.extensionArtifact.name);
+  assert.equal(descriptor.version, record.version);
+  assert.match(descriptor.ariaLabel, /Download extension source ZIP · v1\.2\.3/);
+  assert.equal(descriptor.steps.length, 3);
+  const invalid = [
+    (value) => { value.channel = "test prerelease"; },
+    (value) => { delete value.isDraft; },
+    (value) => { delete value.isPrerelease; },
+    (value) => { value.isDraft = true; },
+    (value) => { value.unsigned = false; },
+    (value) => { delete value.extensionArtifact; },
+    (value) => { value.extensionArtifact.signed = true; },
+    (value) => { value.extensionArtifact.installMethod = "click-to-install"; },
+    (value) => { value.extensionArtifact.manifestVersion = 2; },
+    (value) => { value.extensionArtifact.version = "1.2.2"; },
+    (value) => { value.extensionAsset = "material-download-manager-extension-1.2.2.zip"; },
+    (value) => { value.extensionArtifact.downloadUrl = "https://example.invalid/extension.zip"; },
+    (value) => { value.extensionArtifact.downloadUrl = "https://github.com/Ding-Ding-Projects/material-download-manager/releases/download/v9.9.9/material-download-manager-extension-1.2.3.zip"; },
+    (value) => { value.releaseUrl = "https://github.com/other/repo/releases/tag/v1.2.3"; },
+    (value) => { value.installerUrl = "https://evil.example/setup.exe"; },
+    (value) => { value.extensionArtifact.downloadUrl = "https://github.com/Ding-Ding-Projects/material-download-manager/releases/download/v1.2.3/evil.crx"; },
+    (value) => { value.extensionArtifact.sha256 = "not-a-digest"; },
+    (value) => { value.extensionArtifact.sizeBytes = 0; },
+    (value) => { value.assets = value.assets.filter((name) => name !== value.extensionAsset); },
+    (value) => { value.assets.push("unexpected.crx"); }
+  ];
+  invalid.forEach((mutate, index) => {
+    const candidate = JSON.parse(JSON.stringify(record));
+    mutate(candidate);
+    assert.equal(releaseManifestContract.isVerifiedExtensionArtifact(candidate), false, `invalid extension fixture ${index + 1} must stay hidden`);
+  });
+  assert.equal(releaseManifestContract.isVerifiedExtensionArtifact(null), false);
+});
+
+run("Pages injection keeps explicit stable publication booleans for the browser contract", () => {
+  assert.match(pagesManifestPreparer, /channel = 'stable'/);
+  assert.match(pagesManifestPreparer, /isDraft = \$false/);
+  assert.match(pagesManifestPreparer, /isPrerelease = \$false/);
+  assert.match(pagesManifestPreparer, /extensionArtifact =/);
+});
+
+run("verified extension action has a positive accessible rendering contract", () => {
+  assert.match(html, /id="extension-download-slot"[^>]*aria-live="polite"/);
+  assert.match(app, /create\("a", "button button-tonal verified-extension-download"/);
+  assert.match(app, /download\.href = descriptor\.href/);
+  assert.match(app, /download\.download = descriptor\.fileName/);
+  assert.match(app, /download\.target = "_blank"/);
+  assert.match(app, /download\.rel = "noopener noreferrer"/);
+  assert.match(app, /setAttribute\("data-extension-install", "true"\)/);
+  assert.match(app, /extension-install-warning/);
+  assert.match(app, /extensionStepOne/);
+  assert.match(app, /extensionStepTwo/);
+  assert.match(app, /extensionStepThree/);
+  assert.match(app, /action\.download-extension/);
+  const descriptor = releaseManifestContract.getVerifiedExtensionDescriptor({
+    version: "1.2.3", channel: "stable", isDraft: false, isPrerelease: false, verified: true, unsigned: true,
+    installerUrl: "https://github.com/Ding-Ding-Projects/material-download-manager/releases/download/v1.2.3/Setup.exe",
+    releaseUrl: "https://github.com/Ding-Ding-Projects/material-download-manager/releases/tag/v1.2.3", sourceCommit: "a".repeat(40),
+    assets: ["Setup.exe", "RELEASES", "material-download-manager-1.2.3-full.nupkg", "material-download-manager-extension-1.2.3.zip"],
+    extensionAsset: "material-download-manager-extension-1.2.3.zip",
+    extensionArtifact: { kind: "chromium-extension-load-unpacked", format: "zip", name: "material-download-manager-extension-1.2.3.zip", version: "1.2.3", sizeBytes: 1234, sha256: "b".repeat(64), manifestVersion: 3, installMethod: "load-unpacked", signed: false, downloadUrl: "https://github.com/Ding-Ding-Projects/material-download-manager/releases/download/v1.2.3/material-download-manager-extension-1.2.3.zip" }
+  });
+  assert.equal(descriptor.ariaLabel, "Download extension source ZIP · v1.2.3");
+  assert.equal(descriptor.steps.length, 3);
 });
 
 const universalSourceCorpus = `${html}\n${css}\n${app}\n${contentSource}\n${notificationContractSource}`;
@@ -352,11 +453,21 @@ run("notification hardening negative fixtures catch removed cleanup and regex gu
 
 run("stable installer is absent until verified metadata exists", () => {
   assert.doesNotMatch(html, /data-stable-installer/);
+  assert.doesNotMatch(html, /data-extension-install/);
+  assert.match(html, /id="extension-download-slot"/);
   assert.match(app, /releaseIsStableVerified/);
-  assert.match(app, /record\.verified === true/);
-  assert.match(app, /\["Setup\.exe", "RELEASES"\]\.every/);
-  assert.match(app, /record\.assets\.includes\(name\)/);
+  assert.match(app, /isVerifiedStableRecord/);
+  assert.match(releaseManifestContractSource, /record\.isDraft !== false/);
+  assert.match(releaseManifestContractSource, /record\.isPrerelease !== false/);
+  assert.match(releaseManifestContractSource, /isExactReleaseTagUrl/);
+  assert.match(releaseManifestContractSource, /isExactReleaseAssetUrl/);
   assert.match(app, /slot\.replaceChildren\(\)/);
+  assert.match(app, /isVerifiedExtensionArtifact/);
+  assert.match(app, /data-extension-install/);
+  assert.match(app, /extensionUnpairedWarning/);
+  assert.match(app, /action\.download-extension/);
+  assert.match(app, /querySelector\('\[data-extension-install="true"\]'\)/);
+  assert.match(css, /\.extension-install-card\s*\{/);
 });
 
 run("site has no remote asset loading or external font imports", () => {

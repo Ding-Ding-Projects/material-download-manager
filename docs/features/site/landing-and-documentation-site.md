@@ -16,6 +16,14 @@ labels that generic ZIP as versioned source/reference with an empty pairing
 module and directs users to the desktop app for the private paired folder that
 can authenticate protocol-2 handoff.
 
+When the injected record passes the browser-side contract, the release card
+also renders a real **Download extension source ZIP** link with the exact version,
+size, SHA-256, and three-step pairing instructions. The link is a native
+keyboard-accessible anchor to the verified GitHub release asset. The card
+warns that the public ZIP is unpaired and must not be loaded for automatic
+capture until the desktop app's **Install browser extension** action creates
+and opens the private paired folder.
+
 The Pages source also carries a hand-written universal feature inventory in
 `site/data/universal-feature-manifest.js`. Its required surfaces, article
 paths, status, and exact verification probes are checked independently from
@@ -55,6 +63,14 @@ only its explicitly requested staging directory before copying the checked
 local files. An unavailable stable release leaves the installer button absent;
 it never points at a guessed or prerelease asset.
 
+The browser-side extension predicate independently rejects missing or malformed
+stable metadata, prerelease/draft records, non-GitHub URLs, mismatched version
+or filename, bad size or digest, a signed artifact, an unsupported install
+method, and any CRX asset. It leaves the extension action absent on every such
+route rather than offering a disabled-looking control that cannot work. The
+extension action is independently fail-closed; an installer that passes its own
+stable contract may remain visible when extension metadata is missing.
+
 The browser settings schema now includes a persisted emoji-decoration switch
 and a user-renamable School mode. School mode forces English presentation,
 removes the playful controls and dim sum surprise, and restores the prior
@@ -67,10 +83,12 @@ The site has no analytics, CDN, third-party script, remote image, or external
 font dependency. The release manifest is treated as untrusted data and the
 browser checks its schema, stable verification flag, exact release URL, and
 required asset names before creating a download link. Extension ZIP metadata is
-kept separate from installer metadata and is never inferred from a filename
-alone. The site never presents the generic ZIP as a paired client: capability
-creation, operating-system credential-vault storage, private staging, and
-automatic folder reveal remain desktop-app responsibilities. The site builder stages
+kept separate from installer metadata and is validated for an exact
+version-stamped filename, GitHub release URL, size, SHA-256, Manifest V3,
+`signed: false`, and `load-unpacked` method. The site never presents the generic
+ZIP as a paired client: capability creation, operating-system credential-vault
+storage, private staging, and automatic folder reveal remain desktop-app
+responsibilities. The site builder stages
 only a bounded list of known files and rejects output paths inside the source
 site.
 
@@ -79,7 +97,8 @@ site.
 The `check` and `build` commands are local verification tools; GitHub Actions
 does not run tests or lint. `npm run check` validates the required files, article inventory, local assets,
 language and settings controls, tab semantics, regex-builder anchors, release
-manifest distinction, and absence of remote assets. `npm run build` reruns the
+manifest distinction, extension-action positive and negative metadata fixtures,
+and absence of remote assets. `npm run build` reruns the
 check and verifies the staged HTML includes the local runtime and manifest.
 The Pages workflow uses the pinned GitHub-hosted Windows image, builds the site
 to isolated staging, injects release metadata with

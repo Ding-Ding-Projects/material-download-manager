@@ -40,6 +40,7 @@ const runtimeScripts = [
   "./data/universal-feature-manifest.js",
   "./data/settings-contract.js",
   "./data/notification-contract.js",
+  "./data/release-manifest-contract.js",
   "./data/release-manifest.js",
   "./app.js"
 ];

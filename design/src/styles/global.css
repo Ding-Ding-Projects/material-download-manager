@@ -296,14 +296,125 @@ textarea {
   gap: 18px;
 }
 
+.toolbar-menu {
+  position: relative;
+}
+
 .menu-item {
   font-size: 13px;
   color: var(--text-secondary);
-  cursor: default;
+  cursor: pointer;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  padding: 3px 6px;
+  font: inherit;
+  text-align: left;
+}
+.menu-item:hover,
+.menu-item:focus-visible,
+.menu-item[aria-expanded="true"] {
+  color: var(--text-primary);
+  background: var(--bg-row-hover);
 }
 .menu-item u {
   text-decoration: underline;
   text-decoration-color: var(--text-disabled);
+}
+
+.toolbar-menu-panel {
+  position: absolute;
+  left: 0;
+  top: calc(100% + 4px);
+  min-width: 180px;
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  z-index: 1000;
+  max-width: min(360px, calc(100vw - 16px));
+  max-height: min(70vh, 520px);
+  overflow: auto;
+  background: var(--bg-dialog);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-menu);
+}
+
+.toolbar-menu-search {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--border-color);
+  margin-bottom: 4px;
+}
+
+.toolbar-menu-search-input {
+  min-width: 0;
+  flex: 1;
+  padding: 6px 8px;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  background: var(--bg-input);
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 12px;
+}
+
+.toolbar-menu-regex-toggle {
+  flex: 0 0 auto;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  padding: 5px 7px;
+  background: var(--bg-input);
+  color: var(--text-secondary);
+  cursor: pointer;
+  font: inherit;
+  font-size: 11px;
+}
+
+.toolbar-menu-regex-toggle:hover,
+.toolbar-menu-regex-toggle:focus-visible {
+  color: var(--text-primary);
+  border-color: var(--border-color-strong);
+}
+
+.toolbar-menu-regex {
+  margin-bottom: 6px;
+  padding: 8px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+}
+
+.toolbar-menu-empty {
+  margin: 8px 4px;
+  color: var(--text-tertiary);
+  font-size: 12px;
+}
+
+.toolbar-menu-action {
+  width: 100%;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-primary);
+  cursor: pointer;
+  font: inherit;
+  font-size: 12.5px;
+  padding: 7px 10px;
+  text-align: left;
+}
+
+.toolbar-menu-action:hover:not(:disabled),
+.toolbar-menu-action:focus-visible {
+  background: var(--bg-row-hover);
+}
+
+.toolbar-menu-action:disabled {
+  color: var(--text-disabled);
+  cursor: not-allowed;
 }
 
 .search-box {

@@ -153,49 +153,61 @@ export default function UpdaterBanner({ hasUnsavedWork, unsavedWorkReason, copy 
     );
   }
 
-  if (state.status === "available" || state.status === "downloading") {
-    const percent = state.status === "downloading" ? state.percent : 0;
+  if (state.status === "available") {
     return (
-      <section className="updater-banner updater-banner-progress" aria-live="polite" aria-label="Software update in progress">
+      <section className="updater-banner updater-banner-progress" aria-label={copy.text("Software update available", "有軟件更新可用")}>
         <div className="updater-copy">
-          <strong>Update {updateLabel(state)} is downloading</strong>
-          <span>The download runs in the background; installation waits for your explicit restart.</span>
+          <strong>{copy.text(`Update ${updateLabel(state)} is available`, `更新${updateLabel(state)}可用`)}</strong>
+          <span>{copy.text("The update is preparing in the background; installation waits for your explicit restart.", "更新會喺背景準備，安裝要等你明確重新啟動。")}</span>
+        </div>
+        <span className="updater-progress-status setting-helper" role="status" aria-live="polite">
+          {copy.text("Preparing update…", "準備緊更新…")}
+        </span>
+      </section>
+    );
+  }
+
+  if (state.status === "downloading") {
+    const percent = Number.isFinite(state.percent) ? Math.max(0, Math.min(100, state.percent)) : 0;
+    return (
+      <section className="updater-banner updater-banner-progress" aria-label={copy.text("Software update download in progress", "更新下載進行中")}>
+        <div className="updater-copy">
+          <strong>{copy.text(`Update ${updateLabel(state)} is downloading`, `更新${updateLabel(state)}下載緊`)}</strong>
+          <span>{copy.text("The download runs in the background; installation waits for your explicit restart.", "下載會喺背景進行，安裝要等你明確重新啟動。")}</span>
         </div>
         <div className="updater-progress-wrap">
-          <div className="updater-progress" role="progressbar" aria-label="Update download progress" aria-valuemin={0} aria-valuemax={100} aria-valuenow={percent}>
+          <div className="updater-progress" role="progressbar" aria-label={copy.text("Update download progress", "更新下載進度")} aria-valuemin={0} aria-valuemax={100} aria-valuenow={percent} aria-valuetext={copy.text(`${Math.round(percent)}% downloaded`, `已下載${Math.round(percent)}%`)}>
             <span style={{ width: `${percent}%` }} />
           </div>
           <span className="updater-progress-value">{Math.round(percent)}%</span>
         </div>
-        <button type="button" className="btn btn-ghost btn-sm" onClick={() => void checkForUpdates()} disabled>
-          Checking…
-        </button>
+        <span className="updater-progress-status setting-helper" role="status">{copy.text("Downloading update…", "下載緊更新…")}</span>
       </section>
     );
   }
 
   if (state.status === "failed" || state.status === "offline") {
     return (
-      <section className="updater-banner updater-banner-failed" aria-live="polite" aria-label="Software update status">
+      <section className="updater-banner updater-banner-failed" aria-live="polite" aria-label={copy.text("Software update status", "軟件更新狀態")}>
         <div className="updater-copy">
-          <strong>Updates unavailable</strong>
+          <strong>{copy.text("Updates unavailable", "更新暫時不可用")}</strong>
           <span>{state.message}</span>
         </div>
         <button type="button" className="btn btn-secondary btn-sm" onClick={() => void checkForUpdates()} disabled={busy}>
-          {busy ? "Checking…" : "Check for updates"}
+          {busy ? copy.text("Checking…", "檢查緊…") : copy.text("Check for updates", "檢查更新")}
         </button>
       </section>
     );
   }
 
   return (
-    <section className="updater-banner updater-banner-current" aria-live="polite" aria-label="Software update status">
-      <div className="updater-copy">
-        <strong>Updates</strong>
-        <span>Current version {state.version}. Check the unsigned HTTPS feed for a newer release.</span>
-      </div>
-      <button type="button" className="btn btn-secondary btn-sm" onClick={() => void checkForUpdates()} disabled={busy}>
-        {busy ? "Checking…" : "Check for updates"}
+      <section className="updater-banner updater-banner-current" aria-live="polite" aria-label={copy.text("Software update status", "軟件更新狀態")}>
+        <div className="updater-copy">
+          <strong>{copy.text("Updates", "更新")}</strong>
+          <span>{copy.text(`Current version ${state.version}. Check the unsigned HTTPS feed for a newer release.`, `目前版本${state.version}。請檢查未簽名 HTTPS 更新來源有冇較新版本。`)}</span>
+        </div>
+        <button type="button" className="btn btn-secondary btn-sm" onClick={() => void checkForUpdates()} disabled={busy}>
+        {busy ? copy.text("Checking…", "檢查緊…") : copy.text("Check for updates", "檢查更新")}
       </button>
     </section>
   );

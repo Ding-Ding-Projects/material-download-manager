@@ -217,6 +217,8 @@ if ($stableCandidates.Count -gt 0) {
     stable = [pscustomobject]@{
       version = $version
       channel = 'stable'
+      isDraft = $false
+      isPrerelease = $false
       verified = $true
       unsigned = $true
       installerUrl = $installerUrl
