@@ -125,6 +125,17 @@ export function createDefaultTabState(): TabState {
       pinned: false,
       dirty: false,
     },
+    {
+      id: "converter",
+      label: "File converter",
+      title: "Local file conversion queue",
+      windowId: "main",
+      workspaceId: "default",
+      stripId: "main",
+      groupId,
+      pinned: false,
+      dirty: false,
+    },
   ];
   return {
     tabs,
@@ -235,6 +246,20 @@ export function normalizeTabState(value: unknown): TabState {
       dirty: false,
     });
     firstGroup.tabIds.push("documentation");
+  }
+  if (firstGroup && !normalizedTabs.some((tab) => tab.id === "converter")) {
+    normalizedTabs.push({
+      id: "converter",
+      label: "File converter",
+      title: "Local file conversion queue",
+      windowId: "main",
+      workspaceId: "default",
+      stripId: "main",
+      groupId: firstGroup.id,
+      pinned: false,
+      dirty: false,
+    });
+    firstGroup.tabIds.push("converter");
   }
   const activeTabId = typeof value.activeTabId === "string" && normalizedTabs.some((tab) => tab.id === value.activeTabId)
     ? value.activeTabId

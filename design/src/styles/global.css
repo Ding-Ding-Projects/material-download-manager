@@ -3234,6 +3234,287 @@ textarea {
   }
 }
 
+/* ---------------------------------------------------------------------- */
+/* Local file converter                                                    */
+/* ---------------------------------------------------------------------- */
+
+.converter-panel {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 20px;
+  background: var(--bg-app);
+}
+
+.converter-panel-header,
+.converter-panel-title,
+.converter-panel-actions,
+.converter-guided-card,
+.converter-guided-actions,
+.converter-staged > header,
+.converter-catalog-heading,
+.converter-category-heading,
+.converter-search-row,
+.converter-adapter-card-heading,
+.converter-history > header,
+.converter-job,
+.converter-job-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.converter-panel-header,
+.converter-guided-card,
+.converter-staged,
+.converter-catalog,
+.converter-history {
+  max-width: 1180px;
+  margin: 0 auto 16px;
+}
+
+.converter-panel-header,
+.converter-guided-card,
+.converter-staged > header,
+.converter-catalog-heading,
+.converter-history > header {
+  justify-content: space-between;
+}
+
+.converter-panel-title,
+.converter-category-heading {
+  align-items: flex-start;
+}
+
+.converter-panel-title > svg,
+.converter-category-heading > svg {
+  flex: 0 0 auto;
+  margin-top: 3px;
+  color: var(--accent-solid);
+}
+
+.converter-panel h1,
+.converter-panel h2,
+.converter-panel h3,
+.converter-panel p {
+  margin-top: 0;
+}
+
+.converter-panel h1,
+.converter-panel h2,
+.converter-panel h3 {
+  color: var(--text-primary);
+}
+
+.converter-panel h1 {
+  margin-bottom: 4px;
+  font-size: 20px;
+}
+
+.converter-panel h2 {
+  margin-bottom: 4px;
+  font-size: 15px;
+}
+
+.converter-panel h3 {
+  margin-bottom: 2px;
+  font-size: 14px;
+}
+
+.converter-panel p {
+  color: var(--text-secondary);
+  line-height: 1.45;
+}
+
+.converter-panel-actions,
+.converter-guided-actions,
+.converter-job-actions {
+  flex-wrap: wrap;
+}
+
+.converter-guided-card,
+.converter-staged,
+.converter-history,
+.converter-category {
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  background: var(--bg-panel);
+}
+
+.converter-guided-card {
+  padding: 16px;
+}
+
+.converter-guided-card > div:first-child {
+  min-width: 0;
+}
+
+.converter-staged,
+.converter-history {
+  padding: 16px;
+}
+
+.converter-search-row {
+  align-items: stretch;
+  margin: 12px 0;
+}
+
+.converter-search-row .input {
+  flex: 1;
+  min-width: 180px;
+}
+
+.converter-regex-builder {
+  position: relative;
+  z-index: 2;
+  margin: 0 0 12px;
+  padding: 12px;
+  border: 1px solid var(--border-color-strong);
+  border-radius: var(--radius-sm);
+  background: var(--bg-panel);
+  box-shadow: var(--shadow-md);
+}
+
+.converter-staged-list,
+.converter-job-list {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.converter-staged-list li,
+.converter-job {
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  background: var(--bg-input);
+}
+
+.converter-staged-list strong,
+.converter-job-summary strong {
+  display: block;
+  overflow-wrap: anywhere;
+  color: var(--text-primary);
+}
+
+.converter-staged-list span,
+.converter-staged-list small,
+.converter-job-summary span {
+  display: block;
+  margin-top: 3px;
+  color: var(--text-secondary);
+  overflow-wrap: anywhere;
+}
+
+.converter-source-preview {
+  display: block;
+  max-height: 9rem;
+  margin: 8px 0 0;
+  padding: 8px;
+  overflow: auto;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-xs);
+  background: var(--bg-row-hover);
+  color: var(--text-secondary);
+  font-family: var(--font-mono, ui-monospace, SFMono-Regular, Consolas, monospace);
+  font-size: 0.78rem;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.converter-source-preview-bytes {
+  font-family: inherit;
+}
+
+.converter-catalog {
+  display: grid;
+  gap: 14px;
+}
+
+.converter-category {
+  padding: 16px;
+}
+
+.converter-category-heading p,
+.converter-catalog-heading p {
+  margin-bottom: 0;
+}
+
+.converter-adapter-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 10px;
+}
+
+.converter-adapter-card {
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  background: var(--bg-input);
+}
+
+.converter-adapter-card.selected {
+  border-color: var(--accent-solid);
+  box-shadow: 0 0 0 1px var(--accent-solid);
+}
+
+.converter-adapter-card.unavailable {
+  opacity: 0.86;
+}
+
+.converter-adapter-card .setting-helper {
+  margin-bottom: 8px;
+  overflow-wrap: anywhere;
+}
+
+.converter-availability {
+  flex: 0 0 auto;
+  padding: 2px 7px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.converter-availability.enabled {
+  color: var(--accent-solid);
+  background: var(--bg-row-hover);
+}
+
+.converter-availability.unavailable {
+  color: var(--text-secondary);
+  background: var(--bg-row-hover);
+}
+
+.converter-job {
+  justify-content: space-between;
+  align-items: flex-start;
+}
+
+.converter-job-summary {
+  flex: 1;
+  min-width: 0;
+}
+
+.converter-job progress {
+  width: min(100%, 280px);
+  margin-top: 7px;
+}
+
+.converter-job-actions {
+  justify-content: flex-end;
+}
+
+.converter-action-error,
+.converter-action-status {
+  max-width: 1180px;
+  margin: 0 auto 16px;
+}
+
 @media (max-width: 520px) {
   .field-pair,
   .settings-level-grid,
@@ -3342,6 +3623,33 @@ textarea {
   }
   .documentation-article {
     padding: 14px;
+  }
+  .converter-panel {
+    padding: 10px;
+  }
+  .converter-panel-header,
+  .converter-guided-card,
+  .converter-staged > header,
+  .converter-catalog-heading,
+  .converter-category-heading,
+  .converter-history > header,
+  .converter-job {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .converter-panel-actions,
+  .converter-guided-actions,
+  .converter-job-actions {
+    justify-content: flex-start;
+  }
+  .converter-search-row {
+    flex-wrap: wrap;
+  }
+  .converter-search-row .input {
+    min-width: 0;
+  }
+  .converter-adapter-grid {
+    grid-template-columns: 1fr;
   }
 }
 

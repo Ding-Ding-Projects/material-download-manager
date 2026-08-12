@@ -1,4 +1,4 @@
-import { app, autoUpdater, BrowserWindow, ipcMain, shell, dialog, Notification } from "electron";
+import { app, autoUpdater, BrowserWindow, ipcMain, shell, dialog, Notification, type OpenDialogOptions } from "electron";
 import fsp from "node:fs/promises";
 import path from "node:path";
 import {
@@ -89,6 +89,8 @@ import {
   UpdateService,
 } from "./updater/UpdateService";
 import { OllamaSuiteStore } from "./ollama/OllamaSuiteStore";
+import { ConverterService } from "./converter/ConverterService";
+import { isConverterAdapterId, type ConverterState } from "../shared/converter";
 
 const isDev = isDevelopmentLaunch(app.isPackaged);
 const UPDATE_WORK_STATE_MAX_AGE_MS = 10_000;
@@ -128,6 +130,7 @@ let schoolModeCredentialService: SchoolModeCredentialService;
 let authenticatorService: TotpRegistrationService;
 let externalEditorService: ExternalEditorService;
 let ollamaSuiteStore: OllamaSuiteStore;
+let converterService: ConverterService;
 const historyAccessSession = new HistoryAccessSession();
 let updater: UpdateService | null = null;
 let handoffServer: HandoffServer | null = null;
@@ -335,6 +338,10 @@ function broadcastScheduleRules(records: ScheduledSettingsRecord[]) {
   if (progressWindow && !progressWindow.isDestroyed()) progressWindow.webContents.send(IPC.SCHEDULE_CHANGED, records);
 }
 
+function broadcastConverterState(state: ConverterState) {
+  if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send(IPC.CONVERTER_STATE_CHANGED, state);
+}
+
 async function processBrowserHandoffs(commandLine: readonly string[]) {
   if (!manager) return;
   const settings = manager.getSettings();
@@ -540,6 +547,80 @@ function registerIpcHandlers() {
   ipcMain.handle(IPC.OLLAMA_RESET_STATE, async (event) => {
     assertTrustedSender(event);
     return ollamaSuiteStore.reset();
+  });
+
+  ipcMain.handle(IPC.CONVERTER_GET_STATE, async (event) => {
+    assertTrustedSender(event);
+    return converterService.getState();
+  });
+  ipcMain.handle(IPC.CONVERTER_PICK_SOURCES, async (event) => {
+    assertTrustedSender(event);
+    const sourceDialogOptions: OpenDialogOptions = {
+      title: "Choose local files to convert",
+      properties: ["openFile", "multiSelections"],
+    };
+    const selected = mainWindow
+      ? await dialog.showOpenDialog(mainWindow, sourceDialogOptions)
+      : await dialog.showOpenDialog(sourceDialogOptions);
+    if (selected.canceled || selected.filePaths.length === 0) return converterService.getState();
+    return converterService.stageSources(selected.filePaths);
+  });
+  ipcMain.handle(IPC.CONVERTER_CLEAR_STAGED, async (event) => {
+    assertTrustedSender(event);
+    return converterService.clearStagedSources();
+  });
+  ipcMain.handle(IPC.CONVERTER_QUEUE_STAGED, async (event, adapterId: unknown) => {
+    assertTrustedSender(event);
+    if (!isConverterAdapterId(adapterId)) throw new Error("Unknown converter adapter.");
+    const destinationDialogOptions: OpenDialogOptions = {
+      title: "Choose a local output folder",
+      properties: ["openDirectory", "createDirectory"],
+    };
+    const destination = mainWindow
+      ? await dialog.showOpenDialog(mainWindow, destinationDialogOptions)
+      : await dialog.showOpenDialog(destinationDialogOptions);
+    if (destination.canceled || destination.filePaths.length === 0) return converterService.getState();
+    return converterService.queueStagedSources(adapterId, destination.filePaths[0]!);
+  });
+  ipcMain.handle(IPC.CONVERTER_PAUSE_QUEUE, async (event) => {
+    assertTrustedSender(event);
+    return converterService.pauseQueue();
+  });
+  ipcMain.handle(IPC.CONVERTER_RESUME_QUEUE, async (event) => {
+    assertTrustedSender(event);
+    return converterService.resumeQueue();
+  });
+  ipcMain.handle(IPC.CONVERTER_CANCEL_JOB, async (event, id: unknown) => {
+    assertTrustedSender(event);
+    assertId(id);
+    return converterService.cancelJob(id);
+  });
+  ipcMain.handle(IPC.CONVERTER_RETRY_JOB, async (event, id: unknown) => {
+    assertTrustedSender(event);
+    assertId(id);
+    return converterService.retryJob(id);
+  });
+  ipcMain.handle(IPC.CONVERTER_OPEN_RESULT, async (event, id: unknown) => {
+    assertTrustedSender(event);
+    assertId(id);
+    const outputPath = await converterService.outputPathForJob(id);
+    if (!outputPath) throw new Error("No validated converter output is available for this job.");
+    const failure = await openPathWithTimeout(outputPath);
+    if (failure) throw new Error("The validated converter output could not be opened.");
+    return true;
+  });
+  ipcMain.handle(IPC.CONVERTER_OPEN_RESULT_IN_EDITOR, async (event, id: unknown) => {
+    assertTrustedSender(event);
+    assertId(id);
+    const outputPath = await converterService.outputPathForJob(id);
+    if (!outputPath) throw new Error("No validated converter output is available for this job.");
+    const result = await externalEditorService.openWorkspace(path.dirname(outputPath), manager.getSettings().externalEditorPath);
+    return result.opened;
+  });
+  ipcMain.handle(IPC.CONVERTER_EXPORT_HISTORY, async (event, format: unknown) => {
+    assertTrustedSender(event);
+    if (!isExportFormat(format)) throw new Error("Unsupported converter history export format.");
+    return converterService.exportHistory(format);
   });
 
   ipcMain.handle(IPC.SETTINGS_GET, (event) => {
@@ -1088,9 +1169,11 @@ app.whenReady().then(async () => {
   manager = new DownloadManager(app.getPath("userData"), undefined, { credentialVault: sshVault });
   externalEditorService = new ExternalEditorService(app.getPath("userData"));
   ollamaSuiteStore = new OllamaSuiteStore(app.getPath("userData"));
+  converterService = new ConverterService(app.getPath("userData"), { onStateChanged: broadcastConverterState });
   const hadStateFile = await fsp.stat(path.join(app.getPath("userData"), "state.json")).then(() => true, () => false);
   await manager.init();
   await ollamaSuiteStore.init();
+  await converterService.init();
   schoolModeCredentialService = new SchoolModeCredentialService(schoolModeResetVault, manager);
   await schoolModeCredentialService.synchronize(hadStateFile).catch((error: unknown) => {
     console.warn(`School mode reset credential metadata could not be reconciled: ${error instanceof Error ? error.message : "unknown failure"}`);
@@ -1119,6 +1202,7 @@ app.whenReady().then(async () => {
 
 app.on("window-all-closed", async () => {
   await handoffServer?.stop();
+  await converterService?.shutdown();
   if (progressWindow && !progressWindow.isDestroyed()) progressWindow.close();
   await manager?.shutdown();
   if (process.platform !== "darwin") app.quit();
@@ -1129,6 +1213,7 @@ app.on("before-quit", async (e) => {
   if (manager && !manager.isShutDown) {
     e.preventDefault();
     await handoffServer?.stop();
+    await converterService?.shutdown();
     if (progressWindow && !progressWindow.isDestroyed()) progressWindow.close();
     await manager.shutdown();
     app.quit();
