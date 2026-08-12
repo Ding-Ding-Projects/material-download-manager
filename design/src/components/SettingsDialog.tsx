@@ -35,6 +35,7 @@ import { notify } from "./NotificationCenter";
 import AuthenticatorPanel from "./AuthenticatorPanel";
 import OllamaSuitePanel from "./OllamaSuitePanel";
 import ScheduledSettingsPanel from "./ScheduledSettingsPanel";
+import AppLogoSettingsPanel from "./AppLogoSettingsPanel";
 import { requestNarration, speechSynthesisReadiness } from "../narration/NarratorController";
 
 type SettingsTab = "language" | "appearance" | "downloads" | "authenticator" | "ollama" | "advanced";
@@ -104,6 +105,7 @@ function settingValuesEqual(
   left: AppSettings[SettingKey],
   right: AppSettings[SettingKey]
 ): boolean {
+  if (key === "appLogo") return JSON.stringify(left) === JSON.stringify(right);
   if (key !== "autoOrganizeRules") return Object.is(left, right);
   const leftRules = left as AutoOrganizeRule[];
   const rightRules = right as AutoOrganizeRule[];
@@ -148,6 +150,12 @@ const SETTINGS_SEARCH_INDEX = [
     targetId: "settings-theme",
     tab: "appearance" as const,
     labels: ["Appearance theme density accent seed color font family font size weight", "外觀 主題 密度 主色 種子色 字型 大小 粗幼"],
+  },
+  {
+    id: "settings-app-logo",
+    targetId: "settings-app-logo",
+    tab: "appearance" as const,
+    labels: ["App logo preset custom local image crop fit cover contain fill focal point background color replace reset conversion private cache", "程式標誌 預設 自訂 本機圖片 裁剪 適應 Cover Contain Fill 焦點 背景顏色 替換 重設 轉換 私人快取"],
   },
   {
     id: "settings-display-name",
@@ -289,6 +297,7 @@ export default function SettingsDialog() {
   const [accentError, setAccentError] = useState<string | null>(null);
   const [activeSettingsTab, setActiveSettingsTab] = useState<SettingsTab>(() => {
     if (settingsFocus === "language" || settingsFocus === "school-mode" || settingsFocus === "show-emojis" || settingsFocus === "narrator") return "language";
+    if (settingsFocus === "app-logo") return "appearance";
     if (settingsFocus === "appearance" || settingsFocus === "downloads" || settingsFocus === "authenticator" || settingsFocus === "ollama" || settingsFocus === "advanced") return settingsFocus;
     if (settingsFocus === "auto-organize" || settingsFocus === "auto-organize-rules") return "downloads";
     return readSettingsTab();
@@ -520,7 +529,7 @@ export default function SettingsDialog() {
       searchable: `${AUTO_ORGANIZE_TARGET_LABELS[category].join(" ")} destination path 目的路徑 ${displayAutoOrganizePath(form.defaultSaveFolder, AUTO_ORGANIZE_FOLDERS[category])}`,
     }));
     const visibleBaseEntries = form.schoolModeEnabled
-      ? baseEntries.filter((entry) => entry.id !== "settings-language-heading" && entry.id !== "settings-show-emojis" && entry.id !== "settings-narrator")
+      ? baseEntries.filter((entry) => entry.id !== "settings-language-heading" && entry.id !== "settings-show-emojis" && entry.id !== "settings-narrator" && entry.id !== "settings-app-logo")
       : baseEntries;
     return [...visibleBaseEntries, ...pathEntries, ...ruleEntries];
   }, [form.autoOrganizeEnabled, form.autoOrganizeRules, form.defaultSaveFolder, form.displayName, form.schoolModeEnabled]);
@@ -589,8 +598,9 @@ export default function SettingsDialog() {
       ...current,
       schoolModeEnabled: currentSettings.schoolModeEnabled,
       schoolModeCredential: currentSettings.schoolModeCredential,
+      appLogo: currentSettings.appLogo,
     }));
-  }, [currentSettings?.schoolModeCredential.state, currentSettings?.schoolModeEnabled]);
+  }, [currentSettings?.appLogo, currentSettings?.schoolModeCredential.state, currentSettings?.schoolModeEnabled]);
 
   function updateSettingsSearch(value: RegexBuilderState) {
     setSettingsSearches((current) => ({ ...current, [activeSettingsTab]: value }));
@@ -620,7 +630,9 @@ export default function SettingsDialog() {
     if (!settingsFocus) return;
     if (appliedSettingsFocus.current === settingsFocus) return;
     appliedSettingsFocus.current = settingsFocus;
-    const targetTab: SettingsTab = settingsFocus === "auto-organize" || settingsFocus === "auto-organize-rules"
+    const targetTab: SettingsTab = settingsFocus === "app-logo"
+      ? "appearance"
+      : settingsFocus === "auto-organize" || settingsFocus === "auto-organize-rules"
       ? "downloads"
       : settingsFocus === "school-mode" || settingsFocus === "show-emojis" || settingsFocus === "narrator"
         ? "language"
@@ -636,6 +648,8 @@ export default function SettingsDialog() {
       ? "settings-language-mode"
       : settingsFocus === "appearance"
         ? "settings-theme"
+        : settingsFocus === "app-logo"
+          ? "settings-app-logo"
         : settingsFocus === "auto-organize"
           ? "settings-auto-organize-toggle"
           : settingsFocus === "auto-organize-rules"
@@ -1141,8 +1155,15 @@ export default function SettingsDialog() {
       const presentationPatch: PresentationPatch = {};
       const regularResetKeys: SettingKey[] = [];
       const presentationResetKeys: PresentationSettingKey[] = [];
+      let appLogoMutation: AppSettings["appLogo"] | null = null;
+      let appLogoReset = false;
       for (const key of SETTING_KEYS) {
         if (key === "sshHosts") continue;
+        if (key === "appLogo") {
+          if (resetSettingKeys.has(key)) appLogoReset = true;
+          else if (!settingValuesEqual(key, desiredSettings[key], persistedSettings[key])) appLogoMutation = desiredSettings.appLogo;
+          continue;
+        }
         if (resetSettingKeys.has(key)) {
           if ((PRESENTATION_SETTING_KEYS as readonly string[]).includes(key)) {
             presentationResetKeys.push(key as PresentationSettingKey);
@@ -1164,6 +1185,13 @@ export default function SettingsDialog() {
       }
       if (Object.keys(settingsPatch).length > 0 || regularResetKeys.length > 0) {
         await setSettings(settingsPatch, regularResetKeys);
+      }
+      if (appLogoReset) {
+        const snapshot = await window.api.clearAppLogo();
+        setForm((current) => ({ ...current, appLogo: snapshot.settings }));
+      } else if (appLogoMutation) {
+        const snapshot = await window.api.setAppLogo(appLogoMutation);
+        setForm((current) => ({ ...current, appLogo: snapshot.settings }));
       }
       clearLegacyDisplayName();
       closeSettings();
@@ -1621,6 +1649,8 @@ export default function SettingsDialog() {
           <span className="setting-helper" id="settings-display-name-helper">{ui.displayNameHelper}</span>
           {displayNameError && <span className="field-error" role="alert">{displayNameError}</span>}
         </div>
+
+        {!form.schoolModeEnabled && <AppLogoSettingsPanel value={form.appLogo} onChange={(next) => update("appLogo", next)} />}
 
         <div className="field">
           <span className="field-label" id="settings-theme-label">Theme</span>

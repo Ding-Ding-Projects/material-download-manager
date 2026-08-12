@@ -4,7 +4,8 @@ import type { DownloadItem, DownloadStatus } from "@shared/types";
 import { useAppStore } from "../store/useAppStore";
 import { getUiCopy } from "../i18n/ui";
 import { formatBytes, formatEta, formatSpeed } from "../utils/format";
-import { CloseIcon, LogoIcon, MinimizeIcon, PauseIcon, ResumeIcon, StopIcon } from "./icons";
+import { CloseIcon, MinimizeIcon, PauseIcon, ResumeIcon, StopIcon } from "./icons";
+import AppLogo from "./AppLogo";
 import "../styles/progress.css";
 
 function progressValue(item: DownloadItem | null): number {
@@ -68,7 +69,7 @@ export default function ProgressWindow() {
     <div className="progress-window" data-surface="progress-window">
       <header className="progress-titlebar">
         <div className="progress-titlebar-brand">
-          <LogoIcon size={20} />
+          <AppLogo size={20} />
           <span title={`${displayName} · ${copy.text("Download progress", "下載進度")}`}>
             {displayName} · {copy.text("Download progress", "下載進度")}
           </span>

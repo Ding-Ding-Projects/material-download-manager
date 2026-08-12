@@ -16,6 +16,7 @@ import {
   isUIFontFamily,
   isUIFontWeight,
 } from "../../shared/settings";
+import { cloneAppLogoSettings, isAppLogoSettings } from "../../shared/appLogo";
 
 export const SCHEDULE_SOURCE_SCHEMA_VERSION = 1 as const;
 export const MAX_SCHEDULE_RESPONSE_BYTES = 256 * 1024;
@@ -116,6 +117,7 @@ function cloneSettings(settings: ScheduledSettings): ScheduledSettings {
       category: rule.category,
     }));
   }
+  if (settings.appLogo) cloned.appLogo = cloneAppLogoSettings(settings.appLogo);
   return cloned;
 }
 
@@ -350,6 +352,11 @@ function validateScheduledSetting(key: string, value: unknown): void {
     case "uiFontWeight":
       if (!isUIFontWeight(value)) throw new Error("Invalid scheduled uiFontWeight");
       return;
+    case "appLogo":
+      if (!isAppLogoSettings(value) || value.source !== "preset") {
+        throw new Error("Scheduled appLogo values must select a shipped preset and cannot carry a custom image.");
+      }
+      return;
     default:
       throw new Error(`Unknown scheduled setting: ${key}`);
   }
@@ -360,8 +367,8 @@ export function validateScheduledSettings(value: unknown): ScheduledSettings {
   const result: ScheduledSettings = {};
   for (const [key, setting] of Object.entries(value)) {
     validateScheduledSetting(key, setting);
-    if (key === "autoOrganizeRules") {
-      (result as Record<string, unknown>)[key] = cloneSettings({ autoOrganizeRules: setting as AppSettings["autoOrganizeRules"] }).autoOrganizeRules;
+    if (key === "autoOrganizeRules" || key === "appLogo") {
+      Object.assign(result, cloneSettings({ [key]: setting } as ScheduledSettings));
     } else {
       (result as Record<string, unknown>)[key] = setting;
     }

@@ -11,6 +11,7 @@ import {
 import { getUiCopy } from "../i18n/ui";
 import { useAppStore } from "../store/useAppStore";
 import { notify } from "./NotificationCenter";
+import { DEFAULT_APP_LOGO_SETTINGS, type AppLogoPreset } from "@shared/appLogo";
 
 const WEEKDAY_LABELS: Record<ScheduleWeekday, readonly [string, string]> = {
   monday: ["Monday", "星期一"],
@@ -51,6 +52,17 @@ function randomRuleId(): string {
 function withSourceSettings(source: PersistedScheduleSource, key: "theme" | "density", value: string): PersistedScheduleSource {
   if (source.kind === "api") return source;
   return { ...source, settings: { ...source.settings, [key]: value } };
+}
+
+function withSourceLogoPreset(source: PersistedScheduleSource, preset: AppLogoPreset): PersistedScheduleSource {
+  if (source.kind === "api") return source;
+  return {
+    ...source,
+    settings: {
+      ...source.settings,
+      appLogo: { ...DEFAULT_APP_LOGO_SETTINGS, source: "preset", preset },
+    },
+  };
 }
 
 export default function ScheduledSettingsPanel() {
@@ -100,6 +112,11 @@ export default function ScheduledSettingsPanel() {
   function updateSourceSetting(key: "theme" | "density", value: string) {
     if (!editing) return;
     updateEditing({ source: withSourceSettings(editing.source, key, value) });
+  }
+
+  function updateSourceLogoPreset(preset: AppLogoPreset) {
+    if (!editing) return;
+    updateEditing({ source: withSourceLogoPreset(editing.source, preset) });
   }
 
   function toggleWeekday(day: ScheduleWeekday) {
@@ -272,6 +289,7 @@ export default function ScheduledSettingsPanel() {
             <div className="field-pair">
               <label className="field"><span className="field-label">{ui.text("Scheduled theme", "排程主題")}</span><select className="input select" value={String(sourceSettings.theme ?? "dark")} onChange={(event) => updateSourceSetting("theme", event.target.value)}><option value="dark">{ui.text("Dark", "深色")}</option><option value="light">{ui.text("Light", "淺色")}</option><option value="system">{ui.text("System", "系統")}</option></select></label>
               <label className="field"><span className="field-label">{ui.text("Scheduled density", "排程密度")}</span><select className="input select" value={String(sourceSettings.density ?? "comfortable")} onChange={(event) => updateSourceSetting("density", event.target.value)}><option value="compact">{ui.text("Compact", "緊湊")}</option><option value="comfortable">{ui.text("Comfortable", "舒適")}</option><option value="spacious">{ui.text("Spacious", "寬鬆")}</option></select></label>
+              {!settings?.schoolModeEnabled && <label className="field"><span className="field-label">{ui.text("Scheduled app-logo preset", "排程 app 標誌預設")}</span><select className="input select" value={String((sourceSettings.appLogo as { preset?: string } | undefined)?.preset ?? DEFAULT_APP_LOGO_SETTINGS.preset)} onChange={(event) => updateSourceLogoPreset(event.target.value as AppLogoPreset)}><option value="material">{ui.text("Material download mark", "Material 下載標誌")}</option><option value="orbit">{ui.text("Orbit transfer mark", "軌道傳輸標誌")}</option><option value="stack">{ui.text("Stacked archive mark", "疊放檔案標誌")}</option></select><span className="setting-helper">{ui.text("Schedules may select shipped presets only; a custom local image remains private to this device and is never copied into a schedule record.", "排程只可以揀內置預設；自訂本機圖片會留喺呢部機，絕不會複製入排程紀錄。")}</span></label>}
             </div>
           )}
         </div>

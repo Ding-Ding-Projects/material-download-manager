@@ -28,8 +28,13 @@ import {
 import { normalizeRegexFlags, validateRegexPattern } from "./regex";
 import { cloneSshHostConfigs, isSshHostConfigs } from "./ssh";
 import { isSafeEditorExecutable } from "./externalEditor";
+import {
+  cloneAppLogoSettings,
+  DEFAULT_APP_LOGO_SETTINGS,
+  isAppLogoSettings,
+} from "./appLogo";
 
-export const SETTINGS_SCHEMA_VERSION = 8;
+export const SETTINGS_SCHEMA_VERSION = 9;
 export const APP_DISPLAY_NAME_MAX_LENGTH = 64;
 export const DEFAULT_APP_DISPLAY_NAME = "Material Download Manager";
 export const SCHOOL_MODE_NAME_MAX_LENGTH = 80;
@@ -72,6 +77,7 @@ export const COMPILED_IN_DEFAULTS = {
   autoOrganizeEnabled: true,
   sshDefaultWorkerCount: 2,
   externalEditorPath: null as string | null,
+  appLogo: cloneAppLogoSettings(DEFAULT_APP_LOGO_SETTINGS),
 };
 
 export function compiledInProvenance(): SettingsProvenance {
@@ -91,6 +97,7 @@ export function createDefaultSettings(defaultSaveFolder: string): AppSettings {
     sshHosts: [],
     settingProvenance: compiledInProvenance(),
     schoolModeCredential: { ...DEFAULT_SCHOOL_MODE_CREDENTIAL },
+    appLogo: cloneAppLogoSettings(DEFAULT_APP_LOGO_SETTINGS),
   };
 }
 
@@ -320,6 +327,8 @@ export function validateSettingsPatch(
           return isBoundedNumber(settingValue, 1, 16) && Number.isInteger(settingValue);
         case "externalEditorPath":
           return settingValue === null || isSafeEditorExecutable(settingValue);
+        case "appLogo":
+          return isAppLogoSettings(settingValue);
       }
     })();
     if (!valid) throw new Error(`Invalid value for setting: ${key}`);
@@ -333,6 +342,8 @@ export function validateSettingsPatch(
         }))
       : key === "sshHosts"
         ? cloneSshHostConfigs(settingValue as SshHostConfig[])
+        : key === "appLogo"
+          ? cloneAppLogoSettings(settingValue as AppSettings["appLogo"])
       : settingValue;
   }
   return normalizedPatch as SettingsPatch;

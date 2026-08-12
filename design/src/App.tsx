@@ -223,6 +223,14 @@ export default function App() {
         section: "Settings",
         onSelect: () => openSettings("appearance"),
       }] : []),
+      ...(!settings?.schoolModeEnabled ? [{
+        id: "settings.app-logo",
+        label: copy.text("Settings · App logo", "設定 · 程式標誌"),
+        description: copy.text("Choose a shipped mark or a private local image with crop, fit, focal-point, and background controls", "揀內置標誌或者私人本機圖片，並設定裁剪、適應、焦點同背景"),
+        keywords: ["logo", "icon", "brand", "preset", "custom image", "crop", "fit", "focal point", "background", "appearance"],
+        section: "Settings",
+        onSelect: () => openSettings("app-logo"),
+      }] : []),
       {
         id: "settings.auto-organize",
         label: copy.text("Settings · Auto-organize folders", "設定 · 自動分類資料夾"),
