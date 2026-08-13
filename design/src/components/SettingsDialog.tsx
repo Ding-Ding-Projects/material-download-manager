@@ -215,7 +215,7 @@ const SETTINGS_SEARCH_INDEX = [
     id: "settings-startup",
     targetId: "settings-startup-toggle",
     tab: "downloads" as const,
-    labels: ["Start on system startup", "系統啟動時開啟"],
+    labels: ["Start on system startup notification area tray", "系統啟動時開啟 通知區 系統匣"],
   },
   {
     id: "settings-completion",
@@ -2439,9 +2439,9 @@ export default function SettingsDialog() {
           role="checkbox"
           aria-checked={form.startOnSystemStartup}
           onClick={() => update("startOnSystemStartup", !form.startOnSystemStartup)}
-          aria-label="Start on system startup"
+          aria-label={ui.text("Start on system startup; opens in the notification area", "系統啟動時開啟；會喺通知區啟動")}
         />
-        <span>Start on system startup</span>
+        <span>{ui.text("Start on system startup (opens in the notification area)", "系統啟動時開啟（會喺通知區啟動）")}</span>
         <span className="setting-source">{source("startOnSystemStartup", "false")}</span>
         <button type="button" className="btn btn-ghost btn-sm setting-reset" onClick={() => resetSetting("startOnSystemStartup")}>
           {copy.reset}

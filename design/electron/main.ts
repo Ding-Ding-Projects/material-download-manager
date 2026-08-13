@@ -51,6 +51,7 @@ import {
   validateSettingResetKeys,
   validateSettingsPatch,
   isValidDefaultSaveFolder,
+  DEFAULT_APP_DISPLAY_NAME,
 } from "../shared/settings";
 import {
   isSshHostDraft,
@@ -184,12 +185,17 @@ function showMainWindow() {
   mainWindow.focus();
 }
 
-function createTray() {
-  if (tray) return;
-  tray = new Tray(appIconPath);
-  tray.setToolTip("Material Download Manager");
+function trayDisplayName(): string {
+  const displayName = manager?.getSettings().displayName?.trim();
+  return displayName || DEFAULT_APP_DISPLAY_NAME;
+}
+
+function refreshTrayPresentation() {
+  if (!tray) return;
+  const displayName = trayDisplayName();
+  tray.setToolTip(displayName);
   tray.setContextMenu(Menu.buildFromTemplate([
-    { label: "Open Material Download Manager", click: showMainWindow },
+    { label: `Show ${displayName}`, click: showMainWindow },
     { type: "separator" },
     {
       label: "Quit",
@@ -199,6 +205,12 @@ function createTray() {
       },
     },
   ]));
+}
+
+function createTray() {
+  if (tray) return;
+  tray = new Tray(appIconPath);
+  refreshTrayPresentation();
   tray.on("click", showMainWindow);
 }
 
@@ -587,6 +599,7 @@ function broadcastState() {
 }
 
 function broadcastPresentation(presentation: PresentationSettings) {
+  refreshTrayPresentation();
   if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send(IPC.PRESENTATION_CHANGED, presentation);
   if (progressWindow && !progressWindow.isDestroyed()) progressWindow.webContents.send(IPC.PRESENTATION_CHANGED, presentation);
   void getRendererPersonalVocabularyRuntime(presentation.schoolModeEnabled).then(broadcastPersonalVocabulary).catch(() => {
@@ -1601,7 +1614,10 @@ app.whenReady().then(async () => {
     ? path.join(process.resourcesPath, "ssh-worker")
     : path.resolve(__dirname, "../../../worker");
   sshProvisioning = new SshProvisioningService({ bundlePath: workerBundlePath, vault: sshVault, client: sshWorkerClient });
-  manager = new DownloadManager(app.getPath("userData"), undefined, { credentialVault: sshVault });
+  manager = new DownloadManager(app.getPath("userData"), undefined, {
+    credentialVault: sshVault,
+    defaultSaveFolder: app.getPath("downloads"),
+  });
   logoCustomizationStore = new LogoCustomizationStore(app.getPath("userData"));
   externalEditorService = new ExternalEditorService(app.getPath("userData"));
   ollamaSuiteStore = new OllamaSuiteStore(app.getPath("userData"));

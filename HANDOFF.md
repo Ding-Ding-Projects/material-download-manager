@@ -42,8 +42,9 @@ than creating two simultaneous copies of the same download.
 
 The desktop now starts hidden in the notification area. The tray icon opens the
 main window, and closing the main window returns it to the tray rather than
-stopping active downloads. New categorized destinations are placed directly
-under the user's Downloads folder, such as `Downloads\Videos` and
+stopping active downloads. New categorized destinations are derived from the
+platform-known user Downloads folder (including a redirected Downloads
+location) and placed directly beneath it, such as `Downloads\Videos` and
 `Downloads\Documents`; the former `Downloads\MaterialDownloadManager` default
 is migrated for future downloads while existing files are not moved.
 

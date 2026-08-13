@@ -122,6 +122,12 @@ export interface DownloadManagerDistributedDependencies {
   sourceProbe?: StrictSourceProbe;
   rangeFetcher?: DistributedRangeFetcher;
   identityVerifier?: DistributedIdentityVerifier;
+  /**
+   * The platform-known Downloads directory, supplied by the Electron boundary
+   * after the application is ready. Keeping this injectable preserves the
+   * engine's non-Electron runtime and its caller-owned storage boundary.
+   */
+  defaultSaveFolder?: string;
 }
 
 function writeElectronLoginItemSettings(openAtLogin: boolean): void {
@@ -223,6 +229,7 @@ export class DownloadManager extends EventEmitter {
   private readonly distributedSourceProbe: StrictSourceProbe;
   private readonly distributedRangeFetcher: DistributedRangeFetcher;
   private readonly distributedIdentityVerifier: DistributedIdentityVerifier;
+  private readonly platformDownloadsFolder: string;
   private globalSpeedLimiter!: SpeedLimiter;
   private notifyScheduled = false;
   private shutDown = false;
@@ -243,6 +250,10 @@ export class DownloadManager extends EventEmitter {
     this.distributedSourceProbe = distributedDependencies.sourceProbe ?? new StrictSourceProbe();
     this.distributedRangeFetcher = distributedDependencies.rangeFetcher ?? new SshWorkerClient({ vault: this.credentialVault });
     this.distributedIdentityVerifier = distributedDependencies.identityVerifier ?? this.distributedSourceProbe;
+    const fallbackDownloadsFolder = path.join(process.env.USERPROFILE || process.env.HOME || userDataPath, "Downloads");
+    this.platformDownloadsFolder = typeof distributedDependencies.defaultSaveFolder === "string" && path.isAbsolute(distributedDependencies.defaultSaveFolder)
+      ? path.resolve(distributedDependencies.defaultSaveFolder)
+      : fallbackDownloadsFolder;
   }
 
   get isShutDown() {
@@ -278,10 +289,9 @@ export class DownloadManager extends EventEmitter {
   }
 
   async init() {
-    const userHome = process.env.USERPROFILE || process.env.HOME || this.userDataPath;
     // Category folders belong directly under Downloads (Downloads\Videos,
     // Downloads\Documents, and so on), never below an app-name container.
-    const defaultSaveFolder = path.join(userHome, "Downloads");
+    const defaultSaveFolder = this.platformDownloadsFolder;
     const legacyManagedFolder = path.join(defaultSaveFolder, "MaterialDownloadManager");
     this.compiledSettings = createDefaultSettings(defaultSaveFolder);
     const state = await this.store.load(defaultSaveFolder);
@@ -1328,7 +1338,7 @@ export class DownloadManager extends EventEmitter {
         endAt: typeof candidate.endAt === "string" && candidate.endAt.length <= 16 ? candidate.endAt : null,
       });
     }
-    const defaultSaveFolder = this.settings?.defaultSaveFolder ?? path.join(process.env.USERPROFILE || process.env.HOME || this.userDataPath, "Downloads");
+    const defaultSaveFolder = this.settings?.defaultSaveFolder ?? this.platformDownloadsFolder;
     const migratedSettings = migrateSettings(parsed.settings, defaultSaveFolder);
     // History access is not a substitute for the shared School-mode
     // credential. Preserve the live mode/name/verifier metadata across a
