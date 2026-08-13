@@ -8,7 +8,7 @@ only, with no analytics, CDN, remote images, or tracking.
 
 ## Local bridge state
 
-The Electron app exposes the bounded protocol-2 loopback adapter in
+The Electron app exposes the bounded protocol-3 loopback adapter in
 `design/electron/extension/HandoffServer.ts`. It binds `127.0.0.1:43771`, serves
 `/v1/status` and `/v2/challenge`, and accepts authenticated `/v1/downloads`
 requests. The extension defaults to
@@ -71,7 +71,10 @@ and cannot hand off URLs.
 
 The service worker listens for new Chrome downloads. It handles only eligible
 in-progress, non-incognito HTTP(S) downloads that are not already paused and
-were not created by an extension. For each eligible download it:
+were not created by an extension. It first checks for the app-prepared pairing
+capability; an ordinary release ZIP or source checkout with no pairing leaves
+Chrome's item untouched and reports the preparation route. For a paired
+eligible download it:
 
 1. pauses the exact browser download and records a bounded ownership claim in
    `chrome.storage.local`;
@@ -79,15 +82,21 @@ were not created by an extension. For each eligible download it:
    HMAC-SHA-256 proof of the app-prepared capability before the download URL is
    sent;
 3. posts the credential-free URL and an optional safe basename derived from the
-   URL path with a one-use authenticated protocol-2 proof;
-4. waits while the app proves the source through a credential-free ranged GET,
-   durably creates and starts the manager record, and returns an authenticated
-   final `202` acceptance;
-5. cancels the original browser transfer only after that final response, then
-   erases the cancelled history row; or
-6. resumes that exact browser download after unpaired state, rejection,
-   overload, source-read failure, disconnect rollback, timeout, an offline app,
-   or any other handoff failure.
+   URL path with a one-use authenticated protocol-3 proof;
+4. receives an authenticated pending `202` only after the desktop-owned Start
+   download window reaches `ready-to-show`, then waits for the person to choose
+   **Start download** or **Keep in Chrome** in the desktop-owned decision
+   window;
+5. starts the app's segmented transfer only after **Start download**, then
+   cancels the paused original browser transfer and erases its cancelled history
+   row; or
+6. resumes that exact browser download after rejection, expiry, overload,
+   source-read failure, timeout, an offline app, or any other handoff failure.
+
+If Chrome refuses that final cancellation, the extension asks the app to roll
+back the new transfer and its partial file before Chrome can resume. A failed
+rollback leaves the original browser item paused instead of knowingly creating
+two copies.
 
 Accepted claims and extension-owned pauses are recovered after service-worker
 restart. The recovery code never resumes or cancels an unrelated download. A
@@ -138,13 +147,14 @@ a credential in browser storage. See
 [`docs/settings-foundation.md`](docs/settings-foundation.md) for the exact
 boundary and remaining protected-history work.
 
-Protocol 2 has no provisional response. An authenticated `202` means the app
-finished its credential-free source proof, durable manager-state write, and
-queue start; it is still not a completed-download signal. If the client
-disconnects before that response is delivered, the app rolls the new record
-back and the browser fallback remains available. Funny levels change voice
-only. Warnings, errors, URLs, affected data, and recovery choices remain
-explicit at every level.
+Protocol 3 returns an authenticated pending `202` only after the desktop Start
+download decision has rendered. It means neither queue acceptance nor completed
+transfer. A later authenticated accepted decision starts the normal segmented
+transfer; only then does the extension cancel its paused browser copy. If the
+window cannot render or the client disconnects before the pending response is
+delivered, the pending request is rejected and the browser fallback remains
+available. Funny levels change voice only. Warnings, errors, URLs, affected
+data, and recovery choices remain explicit at every level.
 
 The spoken narrator is off by default. New worker result events are narrated
 through Chrome's local `tts` API only after the user opts in; its queue
@@ -216,7 +226,8 @@ npm test
 
 The verifier checks the MV3 manifest and bounded permissions, app-prepared
 pairing and generic-package empty state, challenge/request/response
-authentication, final-only acceptance, automatic pause/accept/cancel/erase and
+authentication, pending Start-download delivery followed by accepted decision,
+automatic pause/accept/cancel/erase and
 pause/reject/resume behavior, ownership recovery, privacy-safe payload
 construction, entrypoint wiring for the service worker, popup, and options
 surfaces, the runtime message boundary, URL and endpoint validation, settings
@@ -236,7 +247,7 @@ privacy exclusion, and the hand-written Options/popup/worker/docs inventory.
 - `src/options.*` — connection, preferences, help, settings search, regex
   builder, School mode and emoji settings, redacted display-name journal
   wiring, spoken narrator controls, and settings export/import.
-- `src/shared/` — pure validation, protocol-2 proofs, handoff envelope, pairing
+- `src/shared/` — pure validation, protocol-3 proofs, handoff envelope, pairing
   module, regex, settings, localization, the capability-free credential
   abstraction, redacted display-name/authenticator journal, serialized narrator,
   Chrome TTS adapter, bounded local personal-vocabulary validator/cache,

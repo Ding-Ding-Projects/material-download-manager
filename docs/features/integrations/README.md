@@ -1,9 +1,10 @@
 # Browser integrations
 
 - [Chromium extension handoff](./browser-extension.md) — catch eligible browser
-  downloads through an app-prepared protocol-2 pairing, prove the app before a
-  URL is sent, require final durable acceptance, resume the browser fallback on
-  every failed takeover, retain manual page/link capture, and automatically
+  downloads through an app-prepared protocol-3 pairing, prove the app before a
+  URL is sent, require a rendered Start-download decision before the pending
+  acknowledgement, resume the browser fallback on every failed takeover,
+  retain manual page/link capture, and automatically
   reveal the exact private staged folder. The Settings card rechecks that
   folder after remount/restart and can request the fixed Chrome extensions
   manager URL while retaining a manual `chrome://extensions/` fallback.

@@ -493,21 +493,24 @@ expression—including Add download category preview and final routing—runs
 through bounded IPC in a terminable main-process worker; timeouts fail safely
 instead of blocking the renderer or Electron event loop. Settings schema v3
 validates exact bounded rule records and preserves truthful per-key provenance.
-The Chromium extension sends validated page or link URLs through a protocol-2
+The Chromium extension sends validated page or link URLs through a protocol-3
 loopback pairing and automatically catches eligible browser downloads by
-default. It pauses before handoff, requires the app to prove its capability
-before any download URL is sent, and cancels/erases the browser copy only after
-an authenticated final durable acceptance. Every unpaired, rejected, offline,
-overloaded, invalid, source-unreadable, disconnected, or timed-out route resumes
-and retains its own paused browser item. The automatic payload is limited to a
-credential-free URL plus an optional URL-derived safe basename. Protected
-query URLs persist only in the operating-system credential vault and are
-removed on terminal cleanup. The desktop app prepares a paired extension,
-automatically opens the exact staged folder, and retains a manual reveal
-action. The generic release ZIP contains no pairing capability and remains a
-validated versioned source/reference artifact. A live accepted handoff joins
-the same queue the progress window displays. The prototype is never presented
-as the download path. The app also
+default. It verifies the app-prepared pairing before touching a Chrome item, so
+the generic unpaired ZIP leaves ordinary Chrome downloads alone. A paired copy
+pauses its exact item only after it has a durable ownership claim, requires the
+app to prove its capability before any download URL is sent, and receives its
+pending acknowledgement only after the always-on-top Start-download window has
+rendered. The normal segmented transfer starts only after the user's explicit
+decision; the extension then cancels/erases the browser copy after an
+authenticated accepted decision. Every rejected, offline, overloaded, invalid,
+source-unreadable, disconnected, timed-out, or window-render-failed route
+resumes and retains its own paused browser item. The automatic payload is
+limited to a credential-free URL plus an optional URL-derived safe basename.
+Protected query URLs persist only in the operating-system credential vault and
+are removed on terminal cleanup. The desktop app prepares a paired extension,
+automatically opens the exact staged folder, and retains a manual reveal action.
+A live accepted handoff joins the same queue the progress window displays. The
+prototype is never presented as the download path. The app also
 ships an offline Documentation tab that bundles every
 categorized feature article, renders Markdown safely, keeps relative article
 links inside the app, and provides its own anchored regex search. Remaining

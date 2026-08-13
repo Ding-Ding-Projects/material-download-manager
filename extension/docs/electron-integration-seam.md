@@ -1,7 +1,7 @@
 # Electron integration seam
 
 The implementation is split across the app's private extension-preparation
-path, its loopback protocol-2 server, and the existing download manager. This
+path, its loopback protocol-3 server, and the existing download manager. This
 document records that exact seam and the failure semantics the Chromium
 extension targets.
 
@@ -45,7 +45,7 @@ and a bounded error instead of changing a completed copy into a failed one. The
 renderer keeps **Open extension folder**, backed by the trusted-sender
 `extension:reveal` IPC channel, as the manual recovery path.
 
-## Protocol-2 loopback adapter
+## Protocol-3 loopback adapter
 
 `design/electron/extension/HandoffServer.ts` implements these responsibilities:
 
@@ -57,7 +57,7 @@ renderer keeps **Open extension folder**, backed by the trusted-sender
    routing. Originless loopback diagnostics receive no cross-origin grant.
 3. Implement `OPTIONS` for the documented `GET`/`POST` CORS boundary, without
    credentials or a wildcard origin.
-4. Implement `GET /v1/status` with `{ "protocol": 2, "acceptingUrls": true }`
+4. Implement `GET /v1/status` with `{ "protocol": 3, "acceptingUrls": true }`
    only while the initialized server is accepting requests.
 5. Implement `GET /v2/challenge?nonce=...`. Load the capability from the
    operating-system credential vault, return an HMAC-SHA-256 proof covering the
@@ -65,7 +65,7 @@ renderer keeps **Open extension folder**, backed by the trusted-sender
    prepared by the app. This request contains no download URL.
 6. Keep challenges one-use and finite: 30-second expiry, at most 64 outstanding,
    and removal on the first POST authentication attempt.
-7. Implement authenticated `POST /v1/downloads`; require protocol `2`, the
+7. Implement authenticated `POST /v1/downloads`; require protocol `3`, the
    exact source marker, a valid one-use nonce, and an HMAC proof covering every
    request field. Reject an invalid proof before calling `DownloadManager`.
 8. Enforce a 16 KiB body cap, at most 8 active POST handoffs, at most 60
@@ -77,34 +77,34 @@ The extension endpoint remains
 provide an explicit visible configuration route; the extension never scans
 ports.
 
-## Final durable acceptance seam
+## Pending-decision and durable acceptance seam
 
-After protocol authentication, the server maps the envelope to an
-`AddDownloadRequest` using the configured default folder, optional validated
-URL-derived basename, and default queue. A supplied invalid filename rejects
-the request; only an absent filename uses the server's safe URL-path fallback.
+After protocol authentication, the server validates the optional URL-derived
+basename and creates a bounded pending handoff using the configured default
+folder and default queue. It opens the desktop-owned always-on-top **Start
+download** window and waits for `ready-to-show` before returning the
+authenticated pending `202`. A renderer failure, load failure, destroyed
+window, or readiness timeout rejects the pending handoff before the browser is
+told to wait, allowing its original download to resume.
 
-The server calls `manager.addBrowserHandoff(...)`, not an unacknowledged
-background `addDownload(...)`. That method:
+The window's **Start download** decision calls
+`manager.addBrowserHandoff(...)`, not an unacknowledged background
+`addDownload(...)`. That method:
 
 1. proves the app can read the source without browser credentials by issuing a
    ranged `GET` with `Range: bytes=0-0` and `Accept-Encoding: identity`;
 2. rejects anything other than `200` or `206`, including a source that works
    only with browser cookies or authorization headers;
-3. creates the manager record without starting it;
-4. persists the real queue state; and
-5. starts it through the normal resume/queue path.
+3. creates and persists the real manager record; and
+4. starts it through the normal segmented resume/queue path.
 
-Only after all five steps finish does the loopback server return authenticated
-`202` with `protocol: 2`, `accepted: true`, the opaque download id, and an HMAC
-response proof. Protocol 2 has no provisional acknowledgement. `202` means
-durable manager acceptance, not download completion.
-
-If the browser client disconnects before the authenticated response is
-successfully delivered, the server calls `rollbackBrowserHandoff(downloadId)`.
-That removes the newly created record and any protected source entry. The
-extension then follows its normal failure route and resumes or retains the
-browser download, preventing a silent duplicate takeover.
+The extension polls an authenticated decision result. Only the later accepted
+result includes the opaque download id and authorizes cancellation of the
+paused browser item; it is still not a completed-download signal. If browser
+cancellation fails, an authenticated rollback invokes
+`rollbackBrowserHandoff(downloadId)` before Chrome resumes. That removes the
+new manager record and protected source entry; a failed rollback deliberately
+keeps the browser item paused rather than risking a duplicate takeover.
 
 ## Protected URL boundary
 
@@ -126,7 +126,7 @@ query-bearing URLs are handled as protected sources:
 - The listener is loopback-only; public bind addresses are rejected.
 - Website and malformed browser origins receive `403`; a valid Chromium origin
   is echoed exactly, and originless diagnostics receive no CORS grant.
-- Status advertises protocol 2; the authenticated challenge must also pass.
+- Status advertises protocol 3; the authenticated challenge must also pass.
 - An unprepared app or generic ZIP cannot authenticate and receives no handoff
   URL.
 - Expired, reused, malformed, or mismatched proofs fail before
@@ -134,14 +134,18 @@ query-bearing URLs are handled as protected sources:
 - Invalid JSON, oversized bodies, unsupported protocols, credential-bearing
   URLs, unsafe filename hints, overload, and malformed metadata do not create a
   download.
-- A credential-free ranged GET and durable manager start complete before the
-  final authenticated `202`.
-- Client disconnect or response-delivery failure rolls the new manager record
-  back.
+- A rendered Start-download decision completes before the authenticated pending
+  `202`; a failed window delivery rejects the handoff before Chrome waits.
+- A credential-free ranged GET and durable manager start complete only after
+  the user's Start-download decision.
+- Client disconnect or pending-response-delivery failure rejects the pending
+  decision; post-acceptance rollback removes the new manager record before
+  Chrome resumes.
 - Protected query URLs persist only in the operating-system credential vault
   and are removed on terminal cleanup.
-- Automatic browser capture pauses before handoff, cancels/erases only after
-  final authenticated acceptance, and resumes the same extension-owned item
+- Automatic browser capture verifies compiled app pairing before it pauses,
+  leaves a generic ZIP/source download untouched, cancels/erases only after an
+  authenticated accepted decision, and resumes the same extension-owned item
   after every failure route.
 - Preparation opens the exact staged folder; **Open extension folder** remains
   available when automatic reveal fails or needs to be repeated.

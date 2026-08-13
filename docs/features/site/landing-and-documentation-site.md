@@ -14,7 +14,7 @@ version-matched Chromium extension ZIP with its HTTPS URL, size, SHA-256,
 Manifest V3 version, unsigned state, and load-unpacked install method. The site
 labels that generic ZIP as versioned source/reference with an empty pairing
 module and directs users to the desktop app for the private paired folder that
-can authenticate protocol-2 handoff.
+can authenticate protocol-3 handoff.
 
 When the injected record passes the browser-side contract, the release card
 also renders a real **Download extension source ZIP** link with the exact version,

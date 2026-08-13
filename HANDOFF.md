@@ -1,18 +1,28 @@
 # Handoff: Material Download Manager
 
-## Browser-captured downloads, tray startup, and completion flow (implementation in progress, 2026-08-12)
+## Browser-captured downloads, tray startup, and completion flow (released source follow-up, 2026-08-12)
 
 The active desktop/extension implementation changes automatic browser capture
 from immediate takeover to an authenticated pending decision. When a browser
-download begins, the prepared extension pauses it and asks the local desktop
-endpoint to create a bounded pending request. The desktop opens a dedicated,
-always-on-top **Start download** window that shows the captured URL, file name,
-destination folder, and the configured maximum connection count. Choosing
+download begins, the prepared extension uses its live settings cache, reserves
+a bounded ownership claim, and pauses it. The local desktop endpoint creates a
+bounded pending request, opens a dedicated always-on-top **Start download**
+window, and waits for that window to reach `ready-to-show` before returning its
+authenticated pending response. A desktop renderer/load failure rejects the
+handoff so Chrome resumes instead of remaining paused without a decision. The
+window shows the captured URL, file name, destination folder, and the
+configured maximum connection count. Choosing
 **Start download** creates the normal main-process transfer; the extension then
 cancels its paused browser copy only after it receives an authenticated
 accepted decision. Choosing **Keep in Chrome**, closing the start window, an
 expiry, or an unavailable desktop request resumes the original browser
 download rather than dropping it.
+
+An ordinary release ZIP or source checkout is intentionally unpaired. Automatic
+capture now verifies that private app-prepared pairing before it pauses a Chrome
+item. Without it, Chrome's download is left untouched and the extension reports
+the app preparation and Chrome reload route instead of producing a misleading
+pause/resume blink with no Start download window.
 
 The actual transfer remains the existing segmented downloader. It uses multiple
 range parts when the source advertises support, otherwise it falls back to the
@@ -50,15 +60,14 @@ execution. Protocol version 3 requires the desktop-prepared browser extension
 to be reloaded or reinstalled; an older staged extension cannot interpret the
 pending-decision response and safely leaves its browser download under Chrome
 rather than claiming a completed handoff. GitHub Release
-[`v0.1.175`](https://github.com/Ding-Ding-Projects/material-download-manager/releases/tag/v0.1.175)
+[`v0.1.176`](https://github.com/Ding-Ding-Projects/material-download-manager/releases/tag/v0.1.176)
 is a non-draft, non-prerelease release targeting
-`a8c01787481db5c941a11d463b89b7c25d421086` with `Setup.exe`, `RELEASES`, the
+`ce674404884986b0b47293deae62ecae9fd781c6` with `Setup.exe`, `RELEASES`, the
 full `.nupkg`, and the unsigned extension ZIP. The simultaneous `main` release
-run `31655714758` nevertheless turned red when it checked newly created draft
-metadata before GitHub had converged; `scripts/publish-stable-release.ps1` now
-waits for the exact draft record before deciding publication failed. The
-earlier release `v0.1.173` predates this specific gate, rollback, and
-completion-window repair.
+run `31656241768` completed successfully after the release helper waited for
+the exact draft record before deciding publication failed. The current
+ready-to-show and pre-pause pairing source work is newer than that release and
+has no local verification claim under the source-only direction.
 
 ## Local Ollama suite manager foundation (task branch, 2026-08-12)
 

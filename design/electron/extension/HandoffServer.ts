@@ -666,6 +666,24 @@ export class HandoffServer {
           this.rejectBrowserHandoff(pendingStart.id);
           return;
         }
+        // The browser is about to pause its original item. Do not acknowledge
+        // that state until the desktop Start download window has actually
+        // rendered; a renderer/load failure must make the extension resume
+        // Chrome rather than leave a pending handoff with no visible decision.
+        const presented = await this.options.presentPendingHandoff?.(pendingStart) ?? false;
+        if (!presented) {
+          this.rejectBrowserHandoff(pendingStart.id);
+          writeJson(response, 503, {
+            protocol: HANDOFF_PROTOCOL_VERSION,
+            accepted: false,
+            error: "The Start download decision window could not be shown.",
+          });
+          return;
+        }
+        if (clientDisconnected || response.destroyed) {
+          this.rejectBrowserHandoff(pendingStart.id);
+          return;
+        }
         const delivered = writeJson(response, 202, {
           protocol: HANDOFF_PROTOCOL_VERSION,
           accepted: true,
@@ -678,11 +696,9 @@ export class HandoffServer {
           this.rejectBrowserHandoff(pendingStart.id);
           return;
         }
-        // Do not hold the browser request open while a person reads the
-        // decision. The extension can poll the pending id immediately; a
-        // window-open failure simply becomes an authenticated rejection.
-        const presented = await this.options.presentPendingHandoff?.(pendingStart) ?? false;
-        if (!presented) this.rejectBrowserHandoff(pendingStart.id);
+        // The extension can now poll the pending id while the person reads the
+        // decision. The response proves a rendered Start download window, not
+        // queue acceptance or completed transfer.
       } catch (error) {
         if (start) this.rejectBrowserHandoff(start.id);
         this.options.logger?.(`Extension handoff could not open a start decision: ${error instanceof Error ? error.message : "unknown failure"}`);

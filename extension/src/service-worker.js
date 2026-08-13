@@ -100,6 +100,10 @@ const RESULT_NARRATION_CATEGORIES = Object.freeze({
 let contextMenuRefresh = Promise.resolve();
 let downloadClaimMutation = Promise.resolve();
 let initializationPromise = null;
+// A warm worker can make a capture decision without a second storage round
+// trip. The cache is deliberately empty on cold start, so a disabled setting
+// is never guessed as enabled before its persisted value is read.
+let cachedSettings = null;
 const automaticDownloadsInFlight = new Set();
 const automaticDecisionTimers = new Map();
 const chromeTts = createChromeTtsAdapter(chrome.tts);
@@ -117,7 +121,9 @@ function result(code, detail = null) {
 
 async function readSettings() {
   const stored = await chrome.storage.local.get(SETTINGS_KEY);
-  return sanitizeSettings(stored[SETTINGS_KEY]);
+  const settings = sanitizeSettings(stored[SETTINGS_KEY]);
+  cachedSettings = settings;
+  return settings;
 }
 
 async function readLastResult() {
@@ -186,6 +192,7 @@ async function saveSettings(patch) {
     });
   }
   await chrome.storage.local.set({ [SETTINGS_KEY]: settings });
+  cachedSettings = settings;
   await refreshContextMenu(settings);
   return settings;
 }
@@ -194,13 +201,23 @@ function isHandoffCapability(value) {
   return typeof value === "string" && /^[A-Za-z0-9_-]{43}$/u.test(value);
 }
 
+/**
+ * Automatic interception accepts only an app-prepared source tree.  The
+ * published ZIP intentionally has an empty pairing module, so it must never
+ * pause a Chrome download and then discover that it cannot hand it off.
+ */
+function preparedHandoffCapability() {
+  return isHandoffCapability(HANDOFF_CAPABILITY) ? HANDOFF_CAPABILITY : null;
+}
+
 async function readHandoffCapability() {
   const stored = await chrome.storage.local.get(HANDOFF_CAPABILITY_KEY);
-  if (isHandoffCapability(HANDOFF_CAPABILITY)) {
+  const preparedCapability = preparedHandoffCapability();
+  if (preparedCapability) {
     if (stored[HANDOFF_CAPABILITY_KEY] !== HANDOFF_CAPABILITY) {
       await chrome.storage.local.set({ [HANDOFF_CAPABILITY_KEY]: HANDOFF_CAPABILITY });
     }
-    return HANDOFF_CAPABILITY;
+    return preparedCapability;
   }
   return isHandoffCapability(stored[HANDOFF_CAPABILITY_KEY]) ? stored[HANDOFF_CAPABILITY_KEY] : null;
 }
@@ -565,10 +582,26 @@ async function captureAutomaticDownload(item) {
   let claimReserved = false;
   let pauseCompleted = false;
   try {
-    const settings = await readSettings();
+    const cachedCaptureSettings = cachedSettings;
+    if (cachedCaptureSettings && !isEligibleAutomaticDownload(item, cachedCaptureSettings)) return;
+    // Do this before any storage or cryptographic work. The public ZIP has no
+    // compiled pairing value, so its ordinary Chrome downloads remain entirely
+    // untouched instead of producing a pause/resume blink with no Start window.
+    const capability = preparedHandoffCapability();
+    if (!capability) {
+      const settings = cachedCaptureSettings ?? await readSettings();
+      if (!isEligibleAutomaticDownload(item, settings)) return;
+      await recordResult(result("handoff-unpaired"));
+      return;
+    }
+    const fingerprintPromise = fingerprintDownload(item).catch(() => null);
+    // Prefer the live cache after initialization. A cold worker still reads
+    // persisted settings before it reserves or pauses anything, so turning
+    // automatic capture off remains authoritative.
+    const settings = cachedCaptureSettings ?? await readSettings();
     if (!isEligibleAutomaticDownload(item, settings)) return;
     const url = automaticDownloadUrl(item);
-    fingerprint = await fingerprintDownload(item);
+    fingerprint = await fingerprintPromise;
     if (!fingerprint) return;
     claimReserved = await reserveDownloadClaim(item.id, fingerprint);
     if (!claimReserved) {
@@ -582,7 +615,7 @@ async function captureAutomaticDownload(item) {
     const handoffResult = await handoffUrl({
       url,
       fileName: deriveDownloadFileName(url),
-    }, settings);
+    }, settings, capability);
     if (
       handoffResult.code === "handoff-pending" &&
       handoffResult.detail &&
@@ -719,9 +752,9 @@ async function checkConnection(settings) {
   }
 }
 
-async function handoffUrl(message, settings) {
+async function handoffUrl(message, settings, preparedCapability = null) {
   if (!settings.handoffEndpoint) return result("handoff-disabled");
-  const capability = await readHandoffCapability();
+  const capability = preparedCapability ?? await readHandoffCapability();
   if (!capability) return result("handoff-unpaired");
   let body;
   try {
@@ -847,6 +880,7 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
   }
   if (!changes[SETTINGS_KEY]) return;
   const settings = sanitizeSettings(changes[SETTINGS_KEY].newValue);
+  cachedSettings = settings;
   // Revalidate every narrator-affecting setting change, including School mode,
   // language, funny levels, sound, and reduced-motion state. This prevents an
   // in-flight event from speaking with stale language or tone after a change.

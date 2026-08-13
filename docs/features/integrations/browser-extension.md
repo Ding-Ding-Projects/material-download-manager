@@ -4,18 +4,24 @@
 
 The `extension/` directory contains a Manifest V3 Chromium extension. Automatic
 download capture is enabled by default. When Chrome creates an eligible
-in-progress HTTP(S) download, the extension pauses the exact download, records
-that it owns the pause, and authenticates the desktop app before it sends the
-download URL. A nonce-only `GET /v2/challenge` requires an HMAC-SHA-256 proof of
-the app-prepared capability; only then does the extension submit a one-use
+in-progress HTTP(S) download, the extension first verifies that it has the
+app-prepared pairing capability. An ordinary release ZIP or source checkout
+with no private pairing leaves the Chrome item untouched and reports the
+pairing route; it does not briefly pause and resume the browser download. A
+paired extension pauses the exact download, records that it owns the pause,
+and authenticates the desktop app before it sends the download URL. A
+nonce-only `GET /v2/challenge` requires an HMAC-SHA-256 proof of the
+app-prepared capability; only then does the extension submit a one-use
 authenticated protocol-3 envelope to
 `http://127.0.0.1:43771/v1/downloads`.
 
-The app performs a credential-free ranged GET and returns an authenticated
-protocol-3 **pending** `202`. It then opens its own always-on-top **Start
-download** window, where the user can keep the original browser transfer or
-start the segmented desktop transfer. Only an authenticated accepted decision
-allows the extension to cancel its paused original. If cancellation fails, the
+The app creates its bounded pending decision and opens its own always-on-top
+**Start download** window first. It returns an authenticated protocol-3
+**pending** `202` only after that window reaches `ready-to-show`; a renderer or
+load failure rejects the handoff so Chrome resumes its own transfer. The user
+can keep the original browser transfer or start the segmented desktop transfer.
+Only an authenticated accepted decision allows the extension to cancel its
+paused original. If cancellation fails, the
 extension first proves a rollback request for the matching desktop transfer;
 only after the desktop removes that transfer and its partial file does Chrome
 resume its original item. A failed rollback leaves Chrome paused instead of
@@ -84,6 +90,9 @@ profile reports an unpaired state; use the app-prepared folder for handoff.
 Automatic capture ignores an item when any of these facts are true:
 
 - automatic capture is disabled or the loopback endpoint is empty;
+- the extension is not the private app-prepared paired copy (the browser
+  download is left untouched and the Options/toolbar status explains how to
+  prepare and reload it);
 - the item has no non-negative numeric download id;
 - the download is incognito, missing, already paused, complete, or interrupted;
 - the download was created by an extension; or
@@ -95,9 +104,11 @@ can finish. Requests reject redirects and browser credentials, bound response
 bodies, record the last result, and show a recovery action instead of claiming
 success when the app is unavailable. A cancelled browser history row that
 cannot be erased produces a cleanup warning without changing the fact that the
-manager accepted the URL. If cancellation fails after final acceptance, the
-extension attempts to resume the browser transfer and warns that a duplicate
-may result.
+manager accepted the URL. If Chrome cannot cancel a paused original after final
+acceptance, the extension first requires an authenticated desktop rollback that
+removes the new transfer and its partial file. Only then does it resume Chrome;
+a failed rollback keeps Chrome paused rather than knowingly creating a
+duplicate.
 
 A request with a website origin, malformed extension origin, or multiple
 origin values receives `403` before queueing. The server echoes only an exact
@@ -149,9 +160,18 @@ prepared folder is the honest installation route.
 
 ## Verification
 
+### Current source-only boundary
+
+The protocol-3 delivery refresh in the current source verifies app pairing
+before automatic pause and waits for the Start download window's
+`ready-to-show` event before returning pending `202`. Local test, build, smoke,
+and capture execution were deliberately not run for that refresh at the user's
+request. The commands below describe the normal verification routes for a
+future focused run; they are not a current verdict.
+
 Run `npm test` from `extension/` for the extension contract tests. The suite
-covers app-prepared pairing and the generic empty module, protocol-2 challenge,
-request, and response proofs, final-only acceptance, default and persisted
+covers app-prepared pairing and the generic empty module, protocol-3 challenge,
+request, pending-decision response proofs, default and persisted
 automatic-capture settings, eligibility, accepted pause/cancel/erase behavior,
 rejection and offline pause/resume behavior, failure to pause, duplicate events,
 restart ownership recovery, privacy-safe payloads, page/link/selection capture,
@@ -159,9 +179,10 @@ endpoint validation, and the settings search's anchored regex-builder markers.
 
 Run `npm run typecheck`, `npm run build`, and `npm run test:electron` from
 `design/`; the compiled Electron suite covers the real loopback server's
-protocol-2 status, pairing vault, authenticated challenge/POST/response,
+protocol-3 status, pairing vault, authenticated challenge/POST/response,
 one-use and expired challenges, rate/concurrency bounds, credential-free ranged
-GET proof, durable acceptance, client-disconnect rollback, protected-query URL
+GET proof, durable acceptance after the user's decision, client-disconnect
+rollback, protected-query URL
 storage and cleanup, optional safe basename validation, website-origin
 rejection, bounded bodies, extension preparation, automatic folder opening,
 the separate folder-open failure result, validated remount state, malformed

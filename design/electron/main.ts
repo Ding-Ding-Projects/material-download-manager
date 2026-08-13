@@ -110,6 +110,7 @@ const isDev = isDevelopmentLaunch(app.isPackaged);
 const UPDATE_WORK_STATE_MAX_AGE_MS = 10_000;
 const FILE_MANAGER_OPEN_TIMEOUT_MS = 3_000;
 const COMPLETION_WINDOW_DISMISS_MS = 10_000;
+const BROWSER_HANDOFF_START_READY_TIMEOUT_MS = 8_000;
 
 async function openPathWithTimeout(folderPath: string): Promise<string> {
   let timeoutHandle: NodeJS.Timeout | undefined;
@@ -339,7 +340,7 @@ function browserHandoffIdForSender(event: { sender: Electron.WebContents; sender
   throw new Error("Browser handoff decision required");
 }
 
-function createBrowserHandoffStartWindow(handoff: BrowserHandoffStart): boolean {
+async function createBrowserHandoffStartWindow(handoff: BrowserHandoffStart): Promise<boolean> {
   const existing = browserHandoffWindows.get(handoff.id);
   if (existing && !existing.isDestroyed()) {
     existing.show();
@@ -370,16 +371,6 @@ function createBrowserHandoffStartWindow(handoff: BrowserHandoffStart): boolean 
     const decision = handoffServer?.getBrowserHandoffDecision(handoff.id);
     if (decision?.state === "expired") closeBrowserHandoffWindow(handoff.id);
   }, Math.max(0, handoff.expiresAt - Date.now() + 25)));
-  handoffWindow.once("ready-to-show", () => {
-    handoffWindow.show();
-    handoffWindow.focus();
-  });
-  if (isDev) {
-    const query = new URLSearchParams({ view: "browser-handoff", handoffId: handoff.id });
-    handoffWindow.loadURL(`http://localhost:5173/?${query.toString()}`);
-  } else {
-    handoffWindow.loadFile(resolveRendererPath(__dirname), { query: { view: "browser-handoff", handoffId: handoff.id } });
-  }
   handoffWindow.on("close", () => {
     const expiryTimer = browserHandoffExpiryTimers.get(handoff.id);
     if (expiryTimer) clearTimeout(expiryTimer);
@@ -388,7 +379,53 @@ function createBrowserHandoffStartWindow(handoff: BrowserHandoffStart): boolean 
     const wasSettled = settledBrowserHandoffWindows.delete(handoff.id);
     if (!wasSettled) handoffServer?.rejectBrowserHandoff(handoff.id);
   });
-  return true;
+
+  // A pending protocol response is only useful if the decision the browser is
+  // waiting for is actually visible. Treat a renderer failure, a destroyed
+  // window, or an unready window as delivery failure so the extension resumes
+  // the original Chrome download instead of leaving it paused without UI.
+  let failDelivery = () => {};
+  const delivered = await new Promise<boolean>((resolve) => {
+    let settled = false;
+    let readyTimeout: NodeJS.Timeout | null = null;
+    const finish = (value: boolean) => {
+      if (settled) return;
+      settled = true;
+      if (readyTimeout) clearTimeout(readyTimeout);
+      handoffWindow.removeListener("ready-to-show", showWhenReady);
+      handoffWindow.removeListener("closed", failWhenClosed);
+      handoffWindow.webContents.removeListener("did-fail-load", failWhenUnready);
+      handoffWindow.webContents.removeListener("render-process-gone", failWhenUnready);
+      resolve(value);
+    };
+    const closeAfterFailure = () => {
+      finish(false);
+      if (!handoffWindow.isDestroyed()) handoffWindow.close();
+    };
+    const showWhenReady = () => {
+      if (handoffWindow.isDestroyed()) {
+        closeAfterFailure();
+        return;
+      }
+      handoffWindow.show();
+      handoffWindow.focus();
+      finish(true);
+    };
+    const failWhenUnready = () => closeAfterFailure();
+    const failWhenClosed = () => finish(false);
+    failDelivery = closeAfterFailure;
+    handoffWindow.once("ready-to-show", showWhenReady);
+    handoffWindow.once("closed", failWhenClosed);
+    handoffWindow.webContents.once("did-fail-load", failWhenUnready);
+    handoffWindow.webContents.once("render-process-gone", failWhenUnready);
+    readyTimeout = setTimeout(closeAfterFailure, BROWSER_HANDOFF_START_READY_TIMEOUT_MS);
+    const query = new URLSearchParams({ view: "browser-handoff", handoffId: handoff.id });
+    const load = isDev
+      ? handoffWindow.loadURL(`http://localhost:5173/?${query.toString()}`)
+      : handoffWindow.loadFile(resolveRendererPath(__dirname), { query: { view: "browser-handoff", handoffId: handoff.id } });
+    void load.catch(failDelivery);
+  });
+  return delivered;
 }
 
 function createProgressWindow(itemId: string): boolean {

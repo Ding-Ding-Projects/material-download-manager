@@ -2,7 +2,7 @@
 
 ## Why this contract exists
 
-The Material Download Manager Electron application implements the protocol-2
+The Material Download Manager Electron application implements the protocol-3
 adapter in `design/electron/extension/HandoffServer.ts`. It binds
 `127.0.0.1:43771`, provides `GET /v1/status` and `GET /v2/challenge`, and accepts
 authenticated `POST /v1/downloads` requests. Chrome uses this HTTP boundary; it
@@ -10,9 +10,10 @@ cannot and must not reach the context-isolated preload IPC surface.
 
 The extension defaults to `http://127.0.0.1:43771/v1/downloads`. Native
 messaging is not used. If the app is absent, closed, unprepared, busy, or
-unreachable, the extension reports the failure. Automatic capture resumes and
-retains the browser download instead of guessing that a takeover succeeded;
-manual popup, context-menu, and desktop paste recovery remain available.
+unreachable, the extension reports the failure. A generic unpaired source ZIP
+leaves the browser item untouched; a paired capture resumes and retains its
+owned paused item instead of guessing that a takeover succeeded. Manual popup,
+context-menu, and desktop paste recovery remain available.
 
 ## App-prepared pairing
 
@@ -28,7 +29,9 @@ The generic source tree and
 contain an empty `src/shared/pairing.js` capability module. They are auditable,
 version-stamped source/reference packages, not freshly paired clients. Loading
 one directly into a new browser profile produces an unpaired state and cannot
-authenticate a handoff. Do not add a capability to the public ZIP or source
+authenticate a handoff. Automatic capture leaves its Chrome download untouched
+in that state; it does not briefly pause and resume an item before reporting
+the preparation route. Do not add a capability to the public ZIP or source
 tree; prepare the private load-unpacked copy from the app.
 
 ## Endpoint allowlist
@@ -59,7 +62,7 @@ Non-loopback hosts, `file:`, `ftp:`, embedded endpoint credentials, redirects,
 and arbitrary paths are rejected. The extension declares only
 `http://127.0.0.1/*` and `http://localhost/*` host permissions.
 
-## Protocol-2 authenticated sequence
+## Protocol-3 authenticated sequence
 
 ### 1. Optional status probe
 
@@ -70,7 +73,7 @@ within the extension's 1,500 ms status timeout with a JSON body no larger than
 
 ```json
 {
-  "protocol": 2,
+  "protocol": 3,
   "acceptingUrls": true
 }
 ```
@@ -95,13 +98,13 @@ vault and responds:
 
 ```json
 {
-  "protocol": 2,
+  "protocol": 3,
   "nonce": "<fresh-client-nonce>",
   "proof": "<HMAC-SHA-256 proof>"
 }
 ```
 
-The proof covers `challenge`, protocol version `2`, and the exact nonce. The
+The proof covers `challenge`, protocol version `3`, and the exact nonce. The
 extension verifies it with the capability in its app-prepared private copy. A
 generic ZIP, an unprepared app, or an unrelated process listening on the port
 cannot produce the required proof, so the query-bearing URL remains in the
@@ -123,7 +126,7 @@ Accept: application/json
 
 ```json
 {
-  "protocol": 2,
+  "protocol": 3,
   "source": "material-download-manager-extension",
   "url": "https://example.test/archive.zip?download=example",
   "fileName": "archive.zip",
@@ -158,44 +161,50 @@ cannot be produced. The server validates it independently. `title` is optional
 and limited to 512 characters; `selectionText` is optional and limited to
 2,048 characters.
 
-### 4. Prove the app can retrieve and durably accept the source
+### 4. Render the Start download decision before acknowledging the handoff
 
-Before taking ownership, the app makes a credential-free ranged `GET` with
-`Range: bytes=0-0` and `Accept-Encoding: identity`. It forwards no browser
-cookies, authorization headers, referrer, or request headers. Only an HTTP
-`200` or `206` response passes. A source that works only with browser-held
-credentials is rejected, so the extension resumes and retains the browser
-download.
+The adapter creates a bounded pending decision and opens the desktop-owned,
+always-on-top **Start download** window. It waits for that window to reach
+`ready-to-show` before it returns the protocol response. A load failure, lost
+renderer, destroyed window, or bounded readiness timeout rejects the pending
+request with a non-success response, so the extension resumes the browser item
+instead of leaving it paused without a visible decision.
 
-The adapter then creates the download without starting it, persists the real
-manager record, and starts the queue through the normal manager path. It sends
-no success response until those operations finish. There is no provisional or
-background-queue acknowledgement in protocol 2.
-
-### 5. Authenticate final acceptance
-
-Only a final durable acceptance returns `202`:
+Only a rendered decision returns the authenticated pending `202`:
 
 ```json
 {
-  "protocol": 2,
+  "protocol": 3,
   "accepted": true,
-  "downloadId": "local-id",
+  "state": "pending",
+  "handoffId": "<opaque-hand-off-id>",
+  "expiresAt": 0,
   "proof": "<HMAC-SHA-256 proof>"
 }
 ```
 
-The response proof covers `response`, protocol version `2`, the one-use nonce,
-and the returned download id. The extension verifies that proof before it
-reports success or cancels the browser copy. `202` means the app durably
-accepted and started the manager-side record; it is not a completed-download
-signal.
+The response proof covers `response`, protocol version `3`, the one-use nonce,
+and the opaque handoff id. `202` means a visible Start download decision exists;
+it is neither queue acceptance nor a completed-download signal.
 
-If the client disconnects after the manager record is created but before the
-authenticated response is delivered, the server removes that record and its
-protected vault source. A manager/probe/persistence/start failure returns a
-generic non-success response. In either case the extension treats the handoff
-as failed and resumes or retains the browser download.
+### 5. Start or keep the browser download
+
+The extension polls the authenticated decision endpoint while its exact
+browser item is paused. **Keep in Chrome**, expiry, a closed Start window, or a
+failed decision returns a rejected/expired state and resumes only that owned
+browser item.
+
+On **Start download**, the app first proves the source can be read with a
+credential-free ranged `GET` using `Range: bytes=0-0` and
+`Accept-Encoding: identity`. It forwards no browser cookies, authorization
+headers, referrer, or request headers. Only HTTP `200` or `206` passes. The
+normal manager then creates and durably starts the segmented transfer. The
+authenticated accepted decision binds the exact `downloadId` to the opaque
+handoff id; only then may the extension cancel and erase its paused browser
+copy. If cancellation fails, the extension proves a rollback request first.
+The app removes the new manager record and partial file before the browser item
+is resumed; a failed rollback leaves Chrome paused rather than knowingly
+creating duplicate transfers.
 
 ## Origin and CORS boundary
 
@@ -216,7 +225,7 @@ the `[a-p]` alphabet. It echoes that origin and adds `Vary: Origin`. Website
 origins, malformed extension origins, multiple origins, and other schemes
 receive `403` with no cross-origin grant and never reach status, challenge, or
 download routing. Originless loopback clients remain available for local
-process-boundary diagnostics, but protocol-2 authentication still applies to
+process-boundary diagnostics, but protocol-3 authentication still applies to
 handoff requests. The adapter never enables credentials for this contract.
 
 ## Automatic browser-download lifecycle
@@ -228,15 +237,23 @@ does not use Chrome's absolute `filename` field for handoff.
 
 The ownership sequence is deliberate:
 
-1. Reserve a bounded ownership claim for the exact download identity, then call
-   `chrome.downloads.pause(id)` before any handoff.
-2. Record the extension-owned paused state only after Chrome confirms the
+1. Verify the app-prepared capability before touching the browser item. A
+   generic ZIP or source checkout has no compiled pairing value and leaves its
+   Chrome download untouched.
+2. Reserve a bounded ownership claim for the exact download identity, then call
+   `chrome.downloads.pause(id)` before any handoff. A warm settings cache avoids
+   a second storage round trip on the hot capture path; a cold worker still
+   reads persisted settings before it reserves or pauses anything.
+3. Record the extension-owned paused state only after Chrome confirms the
    pause.
-3. Complete the authenticated challenge and final protocol-2 POST using the
+4. Complete the authenticated challenge and protocol-3 POST using the
    credential-free browser context plus an optional URL-derived safe basename.
-4. Only after the final authenticated `202` response, record acceptance,
-   cancel the original browser download, and erase its cancelled history row.
-5. After unpaired state, rejection, timeout, overload, offline app, invalid
+5. A pending `202` proves the Start download decision window rendered. Poll its
+   authenticated decision until the user starts the manager transfer or keeps
+   the item in Chrome.
+6. Only after an authenticated accepted decision, cancel the original browser
+   download and erase its cancelled history row.
+7. After rejection, expiry, timeout, overload, offline app, invalid
    proof/response, source-read failure, disconnect rollback, or any other
    failure, resume only that extension-owned paused download and clear the
    claim. If the initial pause failed, do not submit a handoff.
