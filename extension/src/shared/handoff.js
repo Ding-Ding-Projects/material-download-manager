@@ -155,6 +155,19 @@ export function handoffDecisionResponseProofInput(handoffId, state, downloadId) 
   return `decision-response\n${HANDOFF_PROTOCOL_VERSION}\n${handoffId}\n${state}\n${downloadId ?? ""}`;
 }
 
+export function handoffRollbackProofInput(handoffId, downloadId) {
+  if (
+    typeof handoffId !== "string" ||
+    !/^[a-f0-9]{64}$/u.test(handoffId) ||
+    typeof downloadId !== "string" ||
+    downloadId.length === 0 ||
+    downloadId.length > 128
+  ) {
+    throw new Error("Invalid browser handoff rollback");
+  }
+  return `rollback\n${HANDOFF_PROTOCOL_VERSION}\n${handoffId}\n${downloadId}`;
+}
+
 export function decisionEndpoint(handoffEndpoint, handoffId) {
   try {
     if (typeof handoffId !== "string" || !/^[a-f0-9]{64}$/u.test(handoffId)) return null;
@@ -166,6 +179,13 @@ export function decisionEndpoint(handoffEndpoint, handoffId) {
   } catch {
     return null;
   }
+}
+
+export function rollbackEndpoint(handoffEndpoint, handoffId) {
+  const endpoint = decisionEndpoint(handoffEndpoint, handoffId);
+  if (!endpoint) return null;
+  endpoint.pathname = `${HANDOFF_DECISION_PATH}/${handoffId}/rollback`;
+  return endpoint;
 }
 
 export function validateIncomingMessage(value) {

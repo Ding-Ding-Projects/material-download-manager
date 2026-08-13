@@ -1,4 +1,4 @@
-import { app, autoUpdater, BrowserWindow, ipcMain, shell, dialog, Menu, Notification, Tray, type OpenDialogOptions } from "electron";
+import { app, autoUpdater, BrowserWindow, ipcMain, shell, dialog, Menu, Tray, type OpenDialogOptions } from "electron";
 import fsp from "node:fs/promises";
 import path from "node:path";
 import {
@@ -25,6 +25,7 @@ import type {
   AppSettings,
   BrowserHandoffDecision,
   BrowserHandoffStart,
+  DownloadCompletionNotice,
   DownloadItem,
   DownloadQueue,
   SettingKey,
@@ -64,7 +65,6 @@ import { isDistributedDownloadSelection, isDistributedRequestHeaders } from "../
 import {
   normalizeRegexEvaluationRequest,
 } from "../shared/regex";
-import { notifyDownloadComplete as showCompletionNotification, type CompletionNotificationPort } from "./completionNotification";
 import { extractBrowserHandoffRequests } from "./download/browserHandoff";
 import { assertQueueCreatePayload, DownloadManager } from "./download/DownloadManager";
 import { HandoffServer } from "./extension/HandoffServer";
@@ -109,6 +109,7 @@ import { createPersonalVocabularyRuntime, type PersonalVocabularyRuntime } from 
 const isDev = isDevelopmentLaunch(app.isPackaged);
 const UPDATE_WORK_STATE_MAX_AGE_MS = 10_000;
 const FILE_MANAGER_OPEN_TIMEOUT_MS = 3_000;
+const COMPLETION_WINDOW_DISMISS_MS = 10_000;
 
 async function openPathWithTimeout(folderPath: string): Promise<string> {
   let timeoutHandle: NodeJS.Timeout | undefined;
@@ -134,6 +135,9 @@ if (!gotSingleInstanceLock) {
 
 let mainWindow: BrowserWindow | null = null;
 let progressWindow: BrowserWindow | null = null;
+let completionWindow: BrowserWindow | null = null;
+let completionNotice: DownloadCompletionNotice | null = null;
+let completionWindowDismissTimer: NodeJS.Timeout | null = null;
 let tray: Tray | null = null;
 const browserHandoffWindows = new Map<string, BrowserWindow>();
 const settledBrowserHandoffWindows = new Set<string>();
@@ -254,6 +258,77 @@ function closeBrowserHandoffWindow(handoffId: string) {
   if (!window || window.isDestroyed()) return;
   settledBrowserHandoffWindows.add(handoffId);
   window.close();
+}
+
+function closeCompletionWindow() {
+  if (completionWindowDismissTimer) {
+    clearTimeout(completionWindowDismissTimer);
+    completionWindowDismissTimer = null;
+  }
+  const window = completionWindow;
+  completionWindow = null;
+  completionNotice = null;
+  if (window && !window.isDestroyed()) window.close();
+}
+
+function completionNoticeForSender(event: { sender: Electron.WebContents; senderFrame?: Electron.WebFrameMain | null }): DownloadCompletionNotice {
+  assertTrustedSender(event);
+  if (!completionWindow || completionWindow.isDestroyed() || completionWindow.webContents !== event.sender || !completionNotice) {
+    throw new Error("Download completion notice is no longer available.");
+  }
+  return completionNotice;
+}
+
+function createCompletionWindow(item: Pick<DownloadItem, "fileName">): void {
+  if (!manager.getSettings().showCompleteDialog) return;
+  closeCompletionWindow();
+
+  const createdCompletionWindow = new BrowserWindow({
+    width: 420,
+    height: 180,
+    minWidth: 360,
+    minHeight: 156,
+    show: false,
+    skipTaskbar: true,
+    frame: false,
+    alwaysOnTop: true,
+    backgroundColor: "#16171d",
+    icon: appIconPath,
+    webPreferences: {
+      preload: path.join(__dirname, "preload.js"),
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: false,
+    },
+  });
+  completionWindow = createdCompletionWindow;
+  completionNotice = { fileName: item.fileName };
+  createdCompletionWindow.setAlwaysOnTop(true, "floating");
+  createdCompletionWindow.once("ready-to-show", () => {
+    if (completionWindow === createdCompletionWindow && !createdCompletionWindow.isDestroyed()) {
+      // Completion is visible above other windows without taking focus from
+      // active work or turning the ordinary progress monitor into a topmost surface.
+      createdCompletionWindow.showInactive();
+    }
+  });
+  if (isDev) {
+    const query = new URLSearchParams({ view: "completion" });
+    createdCompletionWindow.loadURL(`http://localhost:5173/?${query.toString()}`);
+  } else {
+    createdCompletionWindow.loadFile(resolveRendererPath(__dirname), { query: { view: "completion" } });
+  }
+  createdCompletionWindow.on("closed", () => {
+    if (completionWindow !== createdCompletionWindow) return;
+    completionWindow = null;
+    completionNotice = null;
+    if (completionWindowDismissTimer) {
+      clearTimeout(completionWindowDismissTimer);
+      completionWindowDismissTimer = null;
+    }
+  });
+  completionWindowDismissTimer = setTimeout(() => {
+    if (completionWindow === createdCompletionWindow) closeCompletionWindow();
+  }, COMPLETION_WINDOW_DISMISS_MS);
 }
 
 function browserHandoffIdForSender(event: { sender: Electron.WebContents; senderFrame?: Electron.WebFrameMain | null }): string {
@@ -381,7 +456,7 @@ function createProgressWindow(itemId: string): boolean {
 }
 
 function assertTrustedSender(event: { sender: Electron.WebContents; senderFrame?: Electron.WebFrameMain | null }) {
-  const trustedWindows = [mainWindow, progressWindow, ...browserHandoffWindows.values()]
+  const trustedWindows = [mainWindow, progressWindow, completionWindow, ...browserHandoffWindows.values()]
     .filter((window): window is BrowserWindow => Boolean(window && !window.isDestroyed()));
   const trustedWindow = trustedWindows.find((window) => window.webContents === event.sender);
   if (!trustedWindow) {
@@ -1379,6 +1454,13 @@ function registerIpcHandlers() {
     closeBrowserHandoffWindow(handoffId);
     return decision;
   });
+  ipcMain.handle(IPC.COMPLETION_GET_NOTICE, (event): DownloadCompletionNotice => {
+    return { ...completionNoticeForSender(event) };
+  });
+  ipcMain.on(IPC.COMPLETION_CLOSE, (event) => {
+    completionNoticeForSender(event);
+    closeCompletionWindow();
+  });
 
   ipcMain.on(IPC.WINDOW_MINIMIZE, (event) => {
     assertTrustedSender(event);
@@ -1445,16 +1527,11 @@ function registerIpcHandlers() {
   });
 }
 
-const nativeCompletionNotifications: CompletionNotificationPort = {
-  isSupported: () => Notification.isSupported(),
-  show: (options) => new Notification(options).show(),
-};
-
 function notifyDownloadComplete(item: DownloadItem) {
-  // Completion is intentionally owned by the operating system, so it remains
-  // visible above either app window without turning the ordinary progress
-  // monitor into an always-on-top window.
-  showCompletionNotification(item, manager.getSettings(), nativeCompletionNotifications, appIconPath);
+  // Use an app-owned, always-on-top completion window. Native notifications
+  // are not a dependable dialog surface and cannot satisfy the requested
+  // close affordance or visible layering contract.
+  createCompletionWindow(item);
 }
 
 function startUpdater() {
@@ -1533,6 +1610,7 @@ app.on("window-all-closed", async () => {
   await handoffServer?.stop();
   await converterService?.shutdown();
   if (progressWindow && !progressWindow.isDestroyed()) progressWindow.close();
+  closeCompletionWindow();
   await manager?.shutdown();
   if (process.platform !== "darwin") app.quit();
 });
@@ -1547,6 +1625,7 @@ app.on("before-quit", async (e) => {
     await handoffServer?.stop();
     await converterService?.shutdown();
     if (progressWindow && !progressWindow.isDestroyed()) progressWindow.close();
+    closeCompletionWindow();
     await manager.shutdown();
     app.quit();
   }

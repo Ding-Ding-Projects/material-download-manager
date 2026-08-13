@@ -17,17 +17,19 @@ unverified surface has shipped.
   524×558, SHA-256
   `CFA365286EFF01ED73E07DCCFF0B2DC2DFB7B44F4C17DD1AD20A48B1F9A91024`.
 
-- Browser-extension installation and download-surface follow-up is integrated
-  into `main` at [`1e58988`](https://github.com/Ding-Ding-Projects/material-download-manager/commit/1e5898853c7e82e59bd9a94d2f0944f366747846). The Add download start form
-  uses z-index 1300, the separate progress window visibly reports
-  `Downloading`, and visible completion uses one renderer toast at z-index
-  1400 with native fallback only for hidden or unavailable main windows. Real
-  built captures and exact hashes are documented in
-  [`docs/features/download-engine/progress-window.md`](docs/features/download-engine/progress-window.md).
-  Local verification is Electron **149/149**, extension **33/33**, docs **2/2**,
-  typecheck/build, and UI smoke **55/55**. Release-only workflow
-  [31628649158](https://github.com/Ding-Ding-Projects/material-download-manager/actions/runs/31628649158)
-  remains in progress.
+- Browser-capture hardening is current source work on
+  `codex/browser-handoff-hardening`, based on released baseline
+  [`06bb011`](https://github.com/Ding-Ding-Projects/material-download-manager/commit/06bb01130884452154a68e1ed07b0c72b8fa3946).
+  It changes the user path to an authenticated pending decision with an
+  always-on-top Start download window, a segmented background transfer, an
+  ordinary non-topmost and reopenable Downloading window, and an app-owned
+  always-on-top Download complete window. The source also rolls back the app
+  transfer before Chrome may resume after a cancellation failure, preventing
+  duplicate copies, and repairs the destructive-confirmation callback that can
+  otherwise remain on Authorized. No local verification, capture, or release result is
+  claimed for this follow-up; earlier toast captures are historical evidence
+  only. See [`HANDOFF.md`](HANDOFF.md) and the
+  [browser-extension article](docs/features/integrations/browser-extension.md).
 
 - Desktop spoken narrator is implemented at source commit
   [`a7adc431`](https://github.com/Ding-Ding-Projects/material-download-manager/commit/a7adc4313c341bd350a95409adca8b7d651fe2ea). The opt-in Settings
@@ -182,6 +184,10 @@ unverified surface has shipped.
   is unchanged.
 
 ## Authenticated automatic browser capture implemented
+
+> Historical protocol-2 notes follow. The current protocol-3 pending-decision
+> design is documented in `HANDOFF.md` and
+> [`docs/features/integrations/browser-extension.md`](docs/features/integrations/browser-extension.md).
 
 - Automatic extension capture defaults on for eligible HTTP(S) browser
   downloads. The extension pauses first, records bounded ownership, cancels and

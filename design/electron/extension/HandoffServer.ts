@@ -187,6 +187,11 @@ export function handoffDecisionResponseProofInput(
   return `decision-response\n${HANDOFF_PROTOCOL_VERSION}\n${handoffId}\n${state}\n${downloadId ?? ""}`;
 }
 
+/** Authenticate a browser-requested rollback when Chrome cannot cancel its paused copy. */
+export function handoffRollbackProofInput(handoffId: string, downloadId: string): string {
+  return `rollback\n${HANDOFF_PROTOCOL_VERSION}\n${handoffId}\n${downloadId}`;
+}
+
 function capabilityProof(capability: string, input: string): string {
   return createHmac("sha256", capability).update(input, "utf8").digest("hex");
 }
@@ -389,6 +394,29 @@ export class HandoffServer {
     return this.decisionFor(record);
   }
 
+  /**
+   * Undo a just-created desktop transfer before Chrome resumes its own paused
+   * item. The record remains accepted if removal cannot complete, so the
+   * extension keeps the browser copy paused rather than allowing duplicates.
+   */
+  async rollbackBrowserHandoff(handoffId: string, downloadId: string): Promise<BrowserHandoffDecision> {
+    this.prunePendingHandoffs();
+    const record = this.pendingHandoffs.get(handoffId);
+    if (!record || record.state !== "accepted" || record.resolving || record.downloadId !== downloadId) {
+      throw Object.assign(new Error("This accepted browser handoff is no longer available for rollback."), { statusCode: 409 });
+    }
+    record.resolving = true;
+    try {
+      await this.options.manager.rollbackBrowserHandoff(downloadId);
+      record.state = "rejected";
+      record.downloadId = null;
+      record.terminalAt = Date.now();
+      return this.decisionFor(record);
+    } finally {
+      record.resolving = false;
+    }
+  }
+
   async start(): Promise<boolean> {
     if (this.server) return this.listening;
     const port = this.options.port ?? HANDOFF_PORT;
@@ -476,6 +504,67 @@ export class HandoffServer {
     const requestUrl = new URL(request.url ?? "/", `http://${HANDOFF_HOST}`);
     if (request.method === "GET" && requestUrl.pathname === STATUS_PATH) {
       writeJson(response, 200, { protocol: HANDOFF_PROTOCOL_VERSION, acceptingUrls: this.listening });
+      return;
+    }
+    if (
+      request.method === "POST" &&
+      requestUrl.pathname.startsWith(`${HANDOFF_DECISION_PATH}/`) &&
+      requestUrl.pathname.endsWith("/rollback")
+    ) {
+      const prefix = `${HANDOFF_DECISION_PATH}/`;
+      const encodedHandoffId = requestUrl.pathname.slice(prefix.length, -"/rollback".length);
+      let handoffId = "";
+      try {
+        handoffId = decodeURIComponent(encodedHandoffId);
+      } catch {
+        writeJson(response, 400, { protocol: HANDOFF_PROTOCOL_VERSION, error: "Invalid browser handoff id" });
+        return;
+      }
+      const contentType = String(request.headers["content-type"] ?? "").split(";", 1)[0].trim().toLowerCase();
+      if (!isHandoffId(handoffId) || encodedHandoffId.includes("/") || contentType !== "application/json") {
+        writeJson(response, 400, { protocol: HANDOFF_PROTOCOL_VERSION, error: "Invalid browser handoff rollback request" });
+        return;
+      }
+      try {
+        const body = JSON.parse((await readBody(request)).toString("utf8"));
+        if (
+          !isRecord(body) ||
+          Object.keys(body).some((key) => key !== "downloadId" && key !== "proof") ||
+          typeof body.downloadId !== "string" ||
+          body.downloadId.length === 0 ||
+          body.downloadId.length > 128 ||
+          typeof body.proof !== "string" ||
+          !AUTH_PROOF_PATTERN.test(body.proof)
+        ) {
+          writeJson(response, 400, { protocol: HANDOFF_PROTOCOL_VERSION, error: "Invalid browser handoff rollback request" });
+          return;
+        }
+        const capability = await this.options.loadCapability().catch(() => null);
+        if (!capability || !proofMatches(capabilityProof(capability, handoffRollbackProofInput(handoffId, body.downloadId)), body.proof)) {
+          writeJson(response, 403, { protocol: HANDOFF_PROTOCOL_VERSION, error: "Handoff authentication failed" });
+          return;
+        }
+        const decision = await this.rollbackBrowserHandoff(handoffId, body.downloadId);
+        writeJson(response, 200, {
+          protocol: HANDOFF_PROTOCOL_VERSION,
+          handoffId: decision.id,
+          state: decision.state,
+          downloadId: decision.downloadId,
+          expiresAt: decision.expiresAt,
+          proof: capabilityProof(
+            capability,
+            handoffDecisionResponseProofInput(decision.id, decision.state, decision.downloadId),
+          ),
+        });
+      } catch (error) {
+        const statusCode = typeof error === "object" && error !== null && "statusCode" in error && typeof error.statusCode === "number"
+          ? error.statusCode
+          : 400;
+        writeJson(response, statusCode, {
+          protocol: HANDOFF_PROTOCOL_VERSION,
+          error: error instanceof Error ? error.message : "Browser handoff rollback failed",
+        });
+      }
       return;
     }
     if (request.method === "GET" && requestUrl.pathname.startsWith(`${HANDOFF_DECISION_PATH}/`)) {

@@ -305,6 +305,11 @@ export interface BrowserHandoffDecision {
   expiresAt: number;
 }
 
+/** Renderer-safe payload for the dedicated, non-blocking completion window. */
+export interface DownloadCompletionNotice {
+  fileName: string;
+}
+
 /**
  * Result of staging the bundled Chromium extension onto disk from the app UI.
  * `path` is the stable installed folder the user selects with Load unpacked.
@@ -602,6 +607,10 @@ export function isBrowserHandoffDecision(value: unknown): value is BrowserHandof
     && ((value.state === "accepted") === (typeof value.downloadId === "string"));
 }
 
+export function isDownloadCompletionNotice(value: unknown): value is DownloadCompletionNotice {
+  return isRecord(value) && typeof value.fileName === "string" && value.fileName.length > 0 && value.fileName.length <= 512;
+}
+
 // IPC channel names, centralized so main/preload/renderer never typo a string.
 export const IPC = {
   ADD_DOWNLOAD: "download:add",
@@ -623,6 +632,8 @@ export const IPC = {
   BROWSER_HANDOFF_GET_START: "browserHandoff:getStart",
   BROWSER_HANDOFF_APPROVE: "browserHandoff:approve",
   BROWSER_HANDOFF_REJECT: "browserHandoff:reject",
+  COMPLETION_GET_NOTICE: "completion:getNotice",
+  COMPLETION_CLOSE: "completion:close",
   GET_STATE: "state:get",
   STATE_CHANGED: "state:changed",
   SETTINGS_GET: "settings:get",

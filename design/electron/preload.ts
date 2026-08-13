@@ -1,11 +1,12 @@
 import { contextBridge, ipcRenderer } from "electron";
-import { IPC, isBrowserHandoffDecision, isBrowserHandoffStart } from "../shared/types";
+import { IPC, isBrowserHandoffDecision, isBrowserHandoffStart, isDownloadCompletionNotice } from "../shared/types";
 import type {
   AddDownloadRequest,
   AppSettings,
   BrowserHandoffDecision,
   BrowserHandoffRequest,
   BrowserHandoffStart,
+  DownloadCompletionNotice,
   DownloadQueue,
   StateSnapshot,
   NewDownloadInfo,
@@ -247,6 +248,14 @@ const api = {
     if (!isBrowserHandoffDecision(value)) throw new Error("Invalid browser handoff decision from main process");
     return value;
   },
+
+  getCompletionNotice: async (): Promise<DownloadCompletionNotice> => {
+    const value: unknown = await ipcRenderer.invoke(IPC.COMPLETION_GET_NOTICE);
+    if (!isDownloadCompletionNotice(value)) throw new Error("Invalid completion notice from main process");
+    return value;
+  },
+
+  closeCompletionWindow: () => ipcRenderer.send(IPC.COMPLETION_CLOSE),
 
   pauseDownload: (id: string): Promise<void> => ipcRenderer.invoke(IPC.PAUSE, id),
   resumeDownload: (id: string): Promise<void> => ipcRenderer.invoke(IPC.RESUME, id),

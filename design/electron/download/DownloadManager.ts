@@ -669,7 +669,9 @@ export class DownloadManager extends EventEmitter {
   }
 
   async rollbackBrowserHandoff(id: string): Promise<void> {
-    await this.remove(id, false);
+    // A browser cancellation failure must never leave a second partial app
+    // transfer behind before the original Chrome item is resumed.
+    await this.remove(id, true);
   }
 
   private async resolveNameCollision(folder: string, fileName: string): Promise<string> {

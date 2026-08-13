@@ -8,13 +8,11 @@ auto-dismiss; warnings and errors remain until dismissed. Dismissed records
 remain reviewable in the session notification history.
 
 Download status changes, errors, and rejected renderer operations use the same
-event path. When the main window is visible, a completed download also emits a
-localized **Download complete** success toast through this renderer surface;
-the toast is non-blocking and remains above the Add download form. If the main
-window is hidden, minimized, or unavailable, the main process uses the native
-completion notification instead, so one completion produces one visible
-notification rather than duplicate claims. The history surface is intentionally
-separate from blocking confirmation dialogs.
+event path. A completed desktop download instead opens one app-controlled
+**Download complete** window. It is always on top, does not steal focus, has a
+real close action, and dismisses itself after a short interval; it is separate
+from the ordinary non-topmost progress monitor. The history surface remains
+separate from confirmation dialogs.
 
 The Pages surface now provides the same bounded local foundation in the
 browser: the top-bar **Notification centre** opens a painted, viewport-bounded
@@ -47,15 +45,12 @@ dismissed selections. A permanent-delete prompt freezes its selection revision,
 traps keyboard focus, marks the surrounding centre content inert, and returns
 focus to the initiating control after cancellation or completion.
 
-The Settings option named `showCompleteDialog` is retained as a compatibility
-key, but its user-facing meaning is accurately shown as “Show a non-blocking
-notification when a download completes”; it does not open a blocking dialog.
-The main-process OS notification is the hidden-window fallback and fails closed
-when native notifications are unsupported. Turning the setting off suppresses
-both completion paths without changing download completion itself. The Add
-download start surface is a dedicated top layer (`z-index: 1300`); the
-notification center is above it (`z-index: 1400`) while remaining a corner
-toast rather than a modal decision.
+The `showCompleteDialog` setting controls whether the app-owned non-blocking
+completion window is shown; turning it off never changes download completion
+itself. The completion window is always on top only while visible and never
+makes the ordinary progress monitor topmost. The Add download start surface is
+also a dedicated top layer, while NotificationCenter continues to use its
+corner toast layer for non-completion events.
 
 ## Configuration
 
@@ -84,10 +79,10 @@ contract entry outside this slice.
 
 ## Verification
 
-The desktop project verifies notification wiring through the renderer build and
-cheap headless smoke. The smoke captures the valid Add download form before
-submit and the completed-download toast after a real loopback transfer, and
-asserts their top-layer ordering. The Pages checks cover the pure record contract (schema,
+The earlier desktop verification captured the valid Add download form before
+submit and a completed-download renderer toast after a real loopback transfer.
+The current app-controlled completion-window follow-up has no local verification or
+new capture claim yet. The Pages checks cover the pure record contract (schema,
 tone allowlist, text bounds, regex safety rejection, filters, and export
 redaction plus pattern and flag metadata) plus source, HTML, and CSS wiring
 markers for School/emoji suppression, independent search state, storage-event
@@ -113,15 +108,15 @@ localized active-count badge. The checked file is
 `docs/screenshots/site/notification-centre-hardening.png` with SHA-256
 `a4213067c25b0ef639957dc264d30c6eb78d86db88cdee98de5ef6f73471757c`.
 
-The desktop completion path has its own built-artifact capture. It is a
-non-blocking renderer toast, not a modal decision, and its smoke assertion
-checks that the notification layer (`z-index: 1400`) remains above the Add
-download surface (`z-index: 1300`). The checked file is
+The checked desktop completion capture below belongs to the earlier renderer
+toast path. It does not represent the current app-controlled always-on-top
+completion window, which has no capture claim in this source-only follow-up.
+The historical checked file is
 `docs/screenshots/notifications/download-complete-toast.png`, a 420 by 108
 pixel PNG with SHA-256
 `c80c9e0befc81f748178979d1fa48d5677fb94f1db2f9c08b77fe3167c1133c7`.
 
-![Download complete non-blocking toast](../../screenshots/notifications/download-complete-toast.png)
+![Historical Download complete renderer toast](../../screenshots/notifications/download-complete-toast.png)
 
 ## Suggested articles
 

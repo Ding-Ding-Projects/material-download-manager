@@ -4,6 +4,7 @@ import type {
   BrowserHandoffDecision,
   BrowserHandoffRequest,
   BrowserHandoffStart,
+  DownloadCompletionNotice,
   DownloadCategory,
   DownloadQueue,
   NewDownloadInfo,
@@ -62,6 +63,8 @@ export interface MaterialDownloadManagerAPI {
   getBrowserHandoffStart(): Promise<BrowserHandoffStart>;
   approveBrowserHandoff(input: { fileName: string; folder: string }): Promise<BrowserHandoffDecision>;
   rejectBrowserHandoff(): Promise<BrowserHandoffDecision>;
+  getCompletionNotice(): Promise<DownloadCompletionNotice>;
+  closeCompletionWindow(): void;
   pauseDownload(id: string): Promise<void>;
   resumeDownload(id: string): Promise<void>;
   cancelDownload(id: string): Promise<void>;

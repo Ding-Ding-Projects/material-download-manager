@@ -68,14 +68,18 @@ export default function DestructiveActionGate({ request, actionName: actionNameO
     if (progress !== 100 || !bothKeysReady || authorized) return;
     setAuthorized(true);
     authorizedRef.current = true;
+  }, [authorized, bothKeysReady, progress]);
+
+  useEffect(() => {
+    if (!authorized) return;
     const timeoutId = window.setTimeout(() => {
-      // Download-state updates can re-render the parent several times while
-      // the completion animation is visible.  Keep this one authorization
-      // timer stable so those updates cannot perpetually cancel the action.
+      // This runs only after the authorization render commits. Keeping the
+      // timer in its own effect prevents that render from cleaning up the
+      // callback before it can apply the requested action.
       onConfirmRef.current(requestRef.current);
     }, 300);
     return () => window.clearTimeout(timeoutId);
-  }, [authorized, bothKeysReady, progress]);
+  }, [authorized]);
 
   useEffect(() => {
     onConfirmRef.current = onConfirm;

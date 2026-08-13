@@ -19,9 +19,16 @@ range parts when the source advertises support, otherwise it falls back to the
 single safe transfer path. The separate **Downloading** progress window is an
 ordinary non-topmost window: closing it never cancels the background transfer,
 and any download row can reopen it through **Open Downloading window** in its
-right-click menu. Completion is delivered through the operating system's native
-notification path so it can appear above app windows without making the
-progress monitor topmost.
+right-click menu. Completion is an app-controlled **Download complete** window
+that is always on top, does not take focus from active work, can be closed by
+the user, and dismisses itself after a short interval. The ordinary progress
+monitor remains non-topmost.
+
+If Chrome refuses to cancel its paused original after the desktop accepts a
+handoff, the extension sends a capability-authenticated rollback request. The
+desktop removes the newly created transfer and its partial file before Chrome
+is resumed. If that rollback cannot be confirmed, Chrome stays paused rather
+than creating two simultaneous copies of the same download.
 
 The desktop now starts hidden in the notification area. The tray icon opens the
 main window, and closing the main window returns it to the tray rather than
@@ -30,19 +37,20 @@ under the user's Downloads folder, such as `Downloads\Videos` and
 `Downloads\Documents`; the former `Downloads\MaterialDownloadManager` default
 is migrated for future downloads while existing files are not moved.
 
-The destructive confirmation gate also keeps its completion timer independent
-of parent refresh callbacks. Once both keys and the full slider authorize an
-action, background download-state renders can no longer repeatedly cancel the
-300 ms completion handoff and leave the gate indefinitely on “Authorized”.
+The destructive confirmation gate now commits authorization before scheduling
+its 300 ms completion callback. The callback therefore survives the
+authorization render itself instead of being cleaned up immediately and
+leaving the gate indefinitely on “Authorized”.
 
 ### Current verification boundary
 
-This implementation is intentionally not presented as locally verified yet:
-the current direction is source work without test, build, smoke, capture, or
+This hardening is intentionally not presented as locally verified yet: the
+current direction is source work without test, build, smoke, capture, or
 release execution. Protocol version 3 requires the desktop-prepared browser
 extension to be reloaded or reinstalled; an older staged extension cannot
 interpret the pending-decision response and safely leaves its browser download
-under Chrome rather than claiming a completed handoff.
+under Chrome rather than claiming a completed handoff. The earlier release
+`v0.1.173` predates this specific gate, rollback, and completion-window repair.
 
 ## Local Ollama suite manager foundation (task jer, 2026-08-12)
 

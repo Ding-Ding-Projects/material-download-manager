@@ -65,12 +65,14 @@ The real built Settings capture is
 </details>
 
 <details>
-<summary>Browser-extension download surfaces (verified locally)</summary>
+<summary>Browser-extension download surfaces (historical evidence and current source follow-up)</summary>
 
-The real built artifact now keeps the Add download form above ordinary dialog
-layers, shows the separate `Downloading` progress window, and places the single
-visible completion toast above the start form. The native completion notice is
-only the fallback for a hidden, minimized, or unavailable main window.
+The desktop source now opens a separate non-topmost `Downloading` window while
+the transfer continues in the background, plus app-controlled always-on-top
+windows for the browser **Start download** decision and **Download complete**
+notice. Closing the progress window does not cancel its transfer; its row can
+reopen it through the context menu. The existing completion-toast capture below
+predates this source-only completion-window follow-up.
 
 <p>
 <img src="docs/screenshots/download-engine/add-download-pre-submit.png" alt="Add download dialog before submit with enabled Download action" width="568">
@@ -300,14 +302,16 @@ automatic capture by default. When Chrome creates an eligible HTTP(S)
 download, the service worker pauses that browser download and records that it
 owns the pause. It first sends only a nonce to `GET /v2/challenge`; the app must
 prove the app-prepared pairing with HMAC-SHA-256 before the extension sends any
-download URL. The authenticated one-use POST is successful only after the app
-proves the source with a credential-free ranged GET, durably persists and
-starts the manager record, and returns an authenticated final `202`. Only then
-does the extension cancel the original browser download and erase its cancelled
-history row. An unpaired copy, rejection, overload, invalid proof, source-read
-failure, client-disconnect rollback, timeout, offline app, or local processing
-failure resumes and retains the exact download the extension paused. Manual
-popup and context-menu handoffs remain available.
+download URL. The authenticated one-use POST creates a bounded pending decision
+only after the app proves the source with a credential-free ranged GET. The app
+opens its own always-on-top **Start download** window; an accepted decision
+starts the segmented manager transfer, then authorizes Chrome cancellation. If
+Chrome cannot cancel its paused original, the extension requires an
+authenticated desktop rollback before it resumes Chrome, preventing duplicate
+transfers. An unpaired copy, rejection, overload, invalid proof, source-read
+failure, timeout, offline app, or local processing failure resumes and retains
+the exact download the extension paused. Manual popup and context-menu handoffs
+remain available.
 
 Automatic handoff sends the credential-free URL and, when one can be derived
 safely, a basename from the URL path. It never forwards cookies,

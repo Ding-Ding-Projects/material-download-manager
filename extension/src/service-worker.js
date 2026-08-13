@@ -16,9 +16,11 @@ import {
   deriveDownloadFileName,
   handoffDecisionProofInput,
   handoffDecisionResponseProofInput,
+  handoffRollbackProofInput,
   handoffRequestProofInput,
   handoffResponseProofInput,
   normalizeDownloadUrl,
+  rollbackEndpoint,
   validateIncomingMessage,
 } from "./shared/handoff.js";
 import { localize, setActivePersonalVocabulary } from "./shared/localization.js";
@@ -389,7 +391,8 @@ async function readPendingHandoffDecision(settings, claim) {
     body?.protocol !== HANDOFF_PROTOCOL_VERSION ||
     body?.handoffId !== claim.handoffId ||
     !["pending", "accepted", "rejected", "expired"].includes(body?.state) ||
-    (body?.downloadId !== null && typeof body?.downloadId !== "string") ||
+    (body?.downloadId !== null && (typeof body?.downloadId !== "string" || body.downloadId.length === 0 || body.downloadId.length > 128)) ||
+    (body?.state === "accepted" && typeof body?.downloadId !== "string") ||
     !Number.isSafeInteger(body?.expiresAt) ||
     typeof body?.proof !== "string" ||
     !AUTH_PROOF_PATTERN.test(body.proof)
@@ -402,6 +405,43 @@ async function readPendingHandoffDecision(settings, claim) {
   );
   if (body.proof !== expectedProof) throw new Error("The Start download decision response could not prove the app-installed capability.");
   return body;
+}
+
+async function rollbackAcceptedBrowserHandoff(settings, claim, downloadId) {
+  try {
+    const capability = await readHandoffCapability();
+    if (!capability) return false;
+    const endpoint = rollbackEndpoint(settings.handoffEndpoint, claim.handoffId);
+    if (!endpoint) return false;
+    const proof = await hmacHex(capability, handoffRollbackProofInput(claim.handoffId, downloadId));
+    const response = await fetchWithTimeout(endpoint.toString(), {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Accept: "application/json" },
+      body: JSON.stringify({ downloadId, proof }),
+    });
+    if (!response.ok) return false;
+    const text = await readLimitedText(response);
+    if (!text) return false;
+    const body = JSON.parse(text);
+    if (
+      body?.protocol !== HANDOFF_PROTOCOL_VERSION ||
+      body?.handoffId !== claim.handoffId ||
+      body?.state !== "rejected" ||
+      body?.downloadId !== null ||
+      !Number.isSafeInteger(body?.expiresAt) ||
+      typeof body?.proof !== "string" ||
+      !AUTH_PROOF_PATTERN.test(body.proof)
+    ) {
+      return false;
+    }
+    const expectedProof = await hmacHex(
+      capability,
+      handoffDecisionResponseProofInput(claim.handoffId, body.state, body.downloadId),
+    );
+    return body.proof === expectedProof;
+  } catch {
+    return false;
+  }
 }
 
 async function pollPendingBrowserHandoff(id) {
@@ -433,13 +473,20 @@ async function pollPendingBrowserHandoff(id) {
       return;
     }
 
-    const decision = await readPendingHandoffDecision(await readSettings(), claim);
+    const settings = await readSettings();
+    const decision = await readPendingHandoffDecision(settings, claim);
     if (decision.state === "pending") {
       schedulePendingDecisionPoll(id, Math.min(PENDING_HANDOFF_POLL_DELAY_MS, Math.max(0, claim.expiresAt - Date.now())));
       return;
     }
     if (decision.state === "accepted") {
-      await recordResult(await finishAcceptedDownload(id, result("handoff-success"), claim.fingerprint));
+      const handoffResult = await finishAcceptedDownload(id, result("handoff-success"), claim.fingerprint, {
+        settings,
+        claim,
+        downloadId: decision.downloadId,
+      });
+      await recordResult(handoffResult);
+      if (handoffResult.code === "automatic-cancel-recovery-failed") schedulePendingDecisionPoll(id);
       return;
     }
     const recovery = await resumeOwnedDownload(id, claim.fingerprint);
@@ -457,7 +504,7 @@ async function pollPendingBrowserHandoff(id) {
   }
 }
 
-async function finishAcceptedDownload(id, acceptedResult, fingerprint) {
+async function finishAcceptedDownload(id, acceptedResult, fingerprint, rollback = null) {
   const item = await findDownload(id);
   if (!item || item.state !== "in_progress" || item.paused !== true || !(await matchesOwnedDownload(item, fingerprint))) {
     await clearDownloadClaim(id);
@@ -466,10 +513,15 @@ async function finishAcceptedDownload(id, acceptedResult, fingerprint) {
   try {
     await chrome.downloads.cancel(id);
   } catch {
+    if (!rollback || !(await rollbackAcceptedBrowserHandoff(rollback.settings, rollback.claim, rollback.downloadId))) {
+      // Keep Chrome paused if the desktop transfer cannot be removed. Resuming
+      // it before a verified rollback would create two simultaneous copies.
+      return result("automatic-cancel-recovery-failed");
+    }
     const recovery = await resumeOwnedDownload(id, fingerprint);
-    if (recovery === "resumed") return result("automatic-cancel-failed-resumed");
+    if (recovery === "resumed") return result("automatic-kept-in-browser");
     if (recovery === "gone") return result("automatic-cancel-failed-original-gone");
-    if (recovery === "already-running") return result("automatic-cancel-failed-already-running");
+    if (recovery === "already-running") return result("automatic-kept-in-browser");
     if (recovery === "mismatch") return result("automatic-ownership-mismatch");
     return result("automatic-cancel-recovery-failed");
   }

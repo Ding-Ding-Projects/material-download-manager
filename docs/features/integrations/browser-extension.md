@@ -8,20 +8,29 @@ in-progress HTTP(S) download, the extension pauses the exact download, records
 that it owns the pause, and authenticates the desktop app before it sends the
 download URL. A nonce-only `GET /v2/challenge` requires an HMAC-SHA-256 proof of
 the app-prepared capability; only then does the extension submit a one-use
-authenticated protocol-2 envelope to
+authenticated protocol-3 envelope to
 `http://127.0.0.1:43771/v1/downloads`.
 
-The app performs a credential-free ranged GET, durably creates and starts the
-manager record, and returns an authenticated final `202` before the extension
-cancels the original browser transfer and erases its cancelled history row.
-Protocol 2 has no provisional acceptance. If the copy is unpaired, the app
-rejects or is offline, capacity is exhausted, a proof/response is invalid, the
-source cannot be read without browser credentials, the client disconnects, a
-timeout expires, or another handoff step fails, the app rolls back any
-unacknowledged manager record and the extension resumes and retains the exact
-browser download it paused. If Chrome refuses the initial pause, no handoff is
-sent. Accepted and paused ownership claims are recovered after a service-worker
-restart; the extension never resumes or cancels an unrelated browser download.
+The app performs a credential-free ranged GET and returns an authenticated
+protocol-3 **pending** `202`. It then opens its own always-on-top **Start
+download** window, where the user can keep the original browser transfer or
+start the segmented desktop transfer. Only an authenticated accepted decision
+allows the extension to cancel its paused original. If cancellation fails, the
+extension first proves a rollback request for the matching desktop transfer;
+only after the desktop removes that transfer and its partial file does Chrome
+resume its original item. A failed rollback leaves Chrome paused instead of
+creating duplicate copies. Rejection, expiry, an unavailable app, invalid
+proof, unreadable source, overload, or a failed pending request resumes and
+retains the exact browser download the extension paused. If Chrome refuses the
+initial pause, no handoff is sent. Pending ownership claims are recovered after
+a service-worker restart; the extension never resumes or cancels an unrelated
+browser download.
+
+The **Downloading** window is deliberately separate and non-topmost. Closing it
+does not stop the main-process transfer; the user can right-click that download
+row and choose **Open Downloading window** at any time. Completion uses an
+app-owned always-on-top **Download complete** window that does not take focus
+from active work and can be closed or allowed to dismiss itself.
 
 The toolbar popup and context-menu actions remain available for manual page,
 link, and selected-text capture. For a link context-menu event, the link target

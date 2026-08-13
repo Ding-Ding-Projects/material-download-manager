@@ -16,15 +16,18 @@ The renderer route is selected by `?view=progress&progressItem=<id>`. The
 preload bridge exposes item-targeted `openProgressWindow`, progress retargeting,
 minimize, and close operations. The toolbar and command palette select the
 first active item, then fall back to the first stored item. The app refuses to
-open a target that is not present in the manager state.
+open a target that is not present in the manager state. The progress window is
+explicitly non-topmost; the browser Start download decision and Download
+complete notice are their own app-owned always-on-top windows.
 
 ## Failure modes
 
 The main process validates the requesting window/frame and item id before
 opening or retargeting the window. A missing target returns `false` and does
 not create an orphan surface. State broadcasts update both windows; closing
-the progress window does not stop or remove the download. App shutdown closes
-the secondary window before the local manager shuts down.
+the progress window does not stop or remove the download. A download row's
+right-click **Open Downloading window** action restores the same monitor later.
+App shutdown closes the secondary window before the local manager shuts down.
 
 ## Security considerations
 
@@ -36,27 +39,22 @@ accept a browser-provided target without main-process validation.
 
 ## Verification
 
-Run `npm run typecheck`, `npm run build`, `npm run test:electron`, and
-`node ui-tests/smoke.mjs` from `design/`. The smoke harness starts a local
-fixture, creates a real queued item through the preload bridge, opens the
-separate window through the main-process IPC handler, resolves its CDP page
-target dynamically, waits for the built page to finish mounting, and rejects
-any result without a named `role="progressbar"`. A cheap hidden-desktop capture
-must show the primary window and the separately resolved progress window from a
-real active download before release verification is complete. The downloading
-surface is treated as a top-level layer: the capture requires a visible
-`Downloading` status, a named progressbar, and the separate window target. The
-same smoke run also captures the pre-submit Add download form and the
-completion success toast, so start, active transfer, and completion remain
-inspectable as three distinct built-artifact states.
+The earlier built-artifact verification recorded the separate progress window
+with a named `role="progressbar"` and an active transfer. This source follow-up
+changes the completion presentation to a dedicated app-controlled window and
+adds browser-cancellation rollback; it has no new capture or local verification result
+yet. The existing captures below remain historical evidence for the earlier
+start, active-transfer, and toast surfaces rather than evidence for the current
+completion window.
 
 ## Capture evidence
 
-These three PNGs were captured from the built desktop artifact by the same
-cheap hidden-desktop smoke run. The Add download image is a populated,
-submit-ready form before the `Download` action; the progress image is the
-separate top-level window while its status reads `Downloading`; the completion
-image is the non-blocking success toast after the loopback transfer completes.
+These three PNGs were captured from an earlier built desktop artifact. The Add
+download image is a populated, submit-ready form before the `Download` action;
+the progress image is the separate top-level window while its status reads
+`Downloading`; the completion image is the earlier renderer toast, retained as
+historical evidence only. A current app-controlled completion-window capture is
+not claimed in this source-only follow-up.
 
 | State | Capture | Dimensions | SHA-256 |
 | --- | --- | --- | --- |
