@@ -91,6 +91,30 @@ function Find-ReleaseByTag([string]$Repository, [string]$Tag, [string]$Label) {
   return $null
 }
 
+function Wait-ForExpectedDraftRelease(
+  [string]$Repository,
+  [string]$Tag,
+  [string]$SourceCommit,
+  [int]$Attempts = 20
+) {
+  $observed = $null
+  for ($attempt = 1; $attempt -le $Attempts; $attempt += 1) {
+    $observed = Find-ReleaseByTag $Repository $Tag "Draft release inventory attempt $attempt"
+    $matches = $null -ne $observed -and
+      [string]$observed.tag_name -eq $Tag -and
+      [bool]$observed.draft -and
+      -not [bool]$observed.prerelease -and
+      [string]$observed.target_commitish -eq $SourceCommit
+    if ($matches) {
+      return $observed
+    }
+    if ($attempt -lt $Attempts) {
+      Start-Sleep -Seconds 1
+    }
+  }
+  Stop-WithMessage "The created draft did not converge to a stable exact-source record within $Attempts seconds."
+}
+
 if ([string]::IsNullOrWhiteSpace($env:GITHUB_REPOSITORY) -or [string]::IsNullOrWhiteSpace($env:GITHUB_SHA) -or [string]::IsNullOrWhiteSpace($env:GITHUB_RUN_ID)) {
   Stop-WithMessage 'GITHUB_REPOSITORY, GITHUB_SHA, and GITHUB_RUN_ID are required.'
 }
@@ -268,7 +292,7 @@ try {
   ) + $assetPaths
   Write-GhFile $createArguments 'Draft release creation'
 
-  $draft = Find-ReleaseByTag $repository $releaseTag 'Draft release inventory'
+  $draft = Wait-ForExpectedDraftRelease $repository $releaseTag $env:GITHUB_SHA
   if ($null -eq $draft -or -not [bool]$draft.draft -or [bool]$draft.prerelease -or [string]$draft.target_commitish -ne $env:GITHUB_SHA) {
     Stop-WithMessage 'The created release was not a stable draft targeting the exact source commit.'
   }

@@ -44,17 +44,25 @@ leaving the gate indefinitely on “Authorized”.
 
 ### Current verification boundary
 
-This hardening is intentionally not presented as locally verified yet: the
-current direction is source work without test, build, smoke, capture, or
-release execution. Protocol version 3 requires the desktop-prepared browser
-extension to be reloaded or reinstalled; an older staged extension cannot
-interpret the pending-decision response and safely leaves its browser download
-under Chrome rather than claiming a completed handoff. The earlier release
-`v0.1.173` predates this specific gate, rollback, and completion-window repair.
+This hardening is intentionally not presented as locally verified: the current
+direction is source work without local test, build, smoke, or capture
+execution. Protocol version 3 requires the desktop-prepared browser extension
+to be reloaded or reinstalled; an older staged extension cannot interpret the
+pending-decision response and safely leaves its browser download under Chrome
+rather than claiming a completed handoff. GitHub Release
+[`v0.1.175`](https://github.com/Ding-Ding-Projects/material-download-manager/releases/tag/v0.1.175)
+is a non-draft, non-prerelease release targeting
+`a8c01787481db5c941a11d463b89b7c25d421086` with `Setup.exe`, `RELEASES`, the
+full `.nupkg`, and the unsigned extension ZIP. The simultaneous `main` release
+run `31655714758` nevertheless turned red when it checked newly created draft
+metadata before GitHub had converged; `scripts/publish-stable-release.ps1` now
+waits for the exact draft record before deciding publication failed. The
+earlier release `v0.1.173` predates this specific gate, rollback, and
+completion-window repair.
 
-## Local Ollama suite manager foundation (task jer, 2026-08-12)
+## Local Ollama suite manager foundation (task branch, 2026-08-12)
 
-This task jer adds a bounded desktop foundation for the universal local Ollama
+This task branch adds a bounded desktop foundation for the universal local Ollama
 contract. The Settings dialog and `Ctrl+Shift+F` command palette expose the
 destination. Users can add and remove credential-free loopback providers,
 refresh installed-model metadata through a bounded main-process `GET /api/tags`
@@ -80,7 +88,7 @@ fake controls.
 - Full Electron suite: **147/149**. The two failures are unrelated baseline
   failures: the narrator sync-throw assertion and a scheduled-settings child
   test that could not load Electron in its process. No remote CI/release result
-  is claimed for this task jer before integration.
+  is claimed for this task branch before integration.
 
 ## Browser-extension download surfaces (integrated on `main`, 2026-08-12)
 
