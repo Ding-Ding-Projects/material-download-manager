@@ -1,4 +1,4 @@
-import { app, autoUpdater, BrowserWindow, ipcMain, shell, dialog, Notification, type OpenDialogOptions } from "electron";
+import { app, autoUpdater, BrowserWindow, ipcMain, shell, dialog, Menu, Notification, Tray, type OpenDialogOptions } from "electron";
 import fsp from "node:fs/promises";
 import path from "node:path";
 import {
@@ -20,7 +20,16 @@ import {
   resolveBundledExtensionRoot,
 } from "./extension/installExtension";
 import { createExtensionCapability } from "./extension/ExtensionCapabilityVault";
-import type { AddDownloadRequest, AppSettings, DownloadItem, DownloadQueue, SettingKey, SettingsPatch } from "../shared/types";
+import type {
+  AddDownloadRequest,
+  AppSettings,
+  BrowserHandoffDecision,
+  BrowserHandoffStart,
+  DownloadItem,
+  DownloadQueue,
+  SettingKey,
+  SettingsPatch,
+} from "../shared/types";
 import { isScheduledSettingsRecords, type ScheduledSettingsRecord } from "../shared/scheduledSettings";
 import { isExportFormat } from "../shared/export";
 import {
@@ -40,6 +49,7 @@ import {
   validatePresentationResetKeys,
   validateSettingResetKeys,
   validateSettingsPatch,
+  isValidDefaultSaveFolder,
 } from "../shared/settings";
 import {
   isSshHostDraft,
@@ -124,6 +134,12 @@ if (!gotSingleInstanceLock) {
 
 let mainWindow: BrowserWindow | null = null;
 let progressWindow: BrowserWindow | null = null;
+let tray: Tray | null = null;
+const browserHandoffWindows = new Map<string, BrowserWindow>();
+const settledBrowserHandoffWindows = new Set<string>();
+const browserHandoffExpiryTimers = new Map<string, NodeJS.Timeout>();
+let showMainWhenReady = false;
+let quitting = false;
 let manager: DownloadManager;
 let sshVault: CredentialVault;
 let sshWorkerClient: SshWorkerClient;
@@ -151,6 +167,36 @@ const appIconPath = app.isPackaged
   ? path.join(process.resourcesPath, "app-icon.ico")
   : path.join(__dirname, "../../build/icon.ico");
 
+function showMainWindow() {
+  showMainWhenReady = true;
+  if (!mainWindow || mainWindow.isDestroyed()) {
+    createWindow();
+    return;
+  }
+  if (mainWindow.isMinimized()) mainWindow.restore();
+  mainWindow.setSkipTaskbar(false);
+  mainWindow.show();
+  mainWindow.focus();
+}
+
+function createTray() {
+  if (tray) return;
+  tray = new Tray(appIconPath);
+  tray.setToolTip("Material Download Manager");
+  tray.setContextMenu(Menu.buildFromTemplate([
+    { label: "Open Material Download Manager", click: showMainWindow },
+    { type: "separator" },
+    {
+      label: "Quit",
+      click: () => {
+        quitting = true;
+        app.quit();
+      },
+    },
+  ]));
+  tray.on("click", showMainWindow);
+}
+
 function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1150,
@@ -158,6 +204,7 @@ function createWindow() {
     minWidth: 860,
     minHeight: 520,
     show: false,
+    skipTaskbar: true,
     frame: false,
     backgroundColor: "#16171d",
     icon: appIconPath,
@@ -169,7 +216,9 @@ function createWindow() {
     },
   });
 
-  mainWindow.once("ready-to-show", () => mainWindow?.show());
+  mainWindow.once("ready-to-show", () => {
+    if (showMainWhenReady) showMainWindow();
+  });
   mainWindow.webContents.once("did-finish-load", () => {
     if (mainWindow && !mainWindow.isDestroyed()) {
       mainWindow.webContents.send(IPC.PRESENTATION_CHANGED, manager.getPresentationSettings());
@@ -192,6 +241,79 @@ function createWindow() {
     rendererWorkState = null;
     mainWindow = null;
   });
+  mainWindow.on("close", (event) => {
+    if (quitting) return;
+    event.preventDefault();
+    mainWindow?.hide();
+    mainWindow?.setSkipTaskbar(true);
+  });
+}
+
+function closeBrowserHandoffWindow(handoffId: string) {
+  const window = browserHandoffWindows.get(handoffId);
+  if (!window || window.isDestroyed()) return;
+  settledBrowserHandoffWindows.add(handoffId);
+  window.close();
+}
+
+function browserHandoffIdForSender(event: { sender: Electron.WebContents; senderFrame?: Electron.WebFrameMain | null }): string {
+  assertTrustedSender(event);
+  for (const [handoffId, window] of browserHandoffWindows) {
+    if (!window.isDestroyed() && window.webContents === event.sender) return handoffId;
+  }
+  throw new Error("Browser handoff decision required");
+}
+
+function createBrowserHandoffStartWindow(handoff: BrowserHandoffStart): boolean {
+  const existing = browserHandoffWindows.get(handoff.id);
+  if (existing && !existing.isDestroyed()) {
+    existing.show();
+    existing.focus();
+    return true;
+  }
+
+  const handoffWindow = new BrowserWindow({
+    width: 568,
+    height: 431,
+    minWidth: 460,
+    minHeight: 360,
+    show: false,
+    frame: false,
+    alwaysOnTop: true,
+    backgroundColor: "#16171d",
+    icon: appIconPath,
+    webPreferences: {
+      preload: path.join(__dirname, "preload.js"),
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: false,
+    },
+  });
+  handoffWindow.setAlwaysOnTop(true, "floating");
+  browserHandoffWindows.set(handoff.id, handoffWindow);
+  browserHandoffExpiryTimers.set(handoff.id, setTimeout(() => {
+    const decision = handoffServer?.getBrowserHandoffDecision(handoff.id);
+    if (decision?.state === "expired") closeBrowserHandoffWindow(handoff.id);
+  }, Math.max(0, handoff.expiresAt - Date.now() + 25)));
+  handoffWindow.once("ready-to-show", () => {
+    handoffWindow.show();
+    handoffWindow.focus();
+  });
+  if (isDev) {
+    const query = new URLSearchParams({ view: "browser-handoff", handoffId: handoff.id });
+    handoffWindow.loadURL(`http://localhost:5173/?${query.toString()}`);
+  } else {
+    handoffWindow.loadFile(resolveRendererPath(__dirname), { query: { view: "browser-handoff", handoffId: handoff.id } });
+  }
+  handoffWindow.on("close", () => {
+    const expiryTimer = browserHandoffExpiryTimers.get(handoff.id);
+    if (expiryTimer) clearTimeout(expiryTimer);
+    browserHandoffExpiryTimers.delete(handoff.id);
+    browserHandoffWindows.delete(handoff.id);
+    const wasSettled = settledBrowserHandoffWindows.delete(handoff.id);
+    if (!wasSettled) handoffServer?.rejectBrowserHandoff(handoff.id);
+  });
+  return true;
 }
 
 function createProgressWindow(itemId: string): boolean {
@@ -212,12 +334,15 @@ function createProgressWindow(itemId: string): boolean {
     return true;
   }
 
-  progressWindow = new BrowserWindow({
+  const createdProgressWindow = new BrowserWindow({
     width: 980,
     height: 640,
     minWidth: 720,
     minHeight: 460,
     show: false,
+    // This is an ordinary, reopenable monitor. Closing it never cancels the
+    // background transfer and it must not cover unrelated application work.
+    alwaysOnTop: false,
     frame: false,
     backgroundColor: "#16171d",
     icon: appIconPath,
@@ -229,33 +354,35 @@ function createProgressWindow(itemId: string): boolean {
     },
   });
 
-  progressWindow.once("ready-to-show", () => {
-    progressWindow?.show();
-    if (progressWindow && !progressWindow.isDestroyed()) {
-      progressWindow.webContents.send(IPC.PROGRESS_TARGET_CHANGED, itemId);
-      progressWindow.webContents.send(IPC.STATE_CHANGED, manager.getState());
-      progressWindow.webContents.send(IPC.PRESENTATION_CHANGED, manager.getPresentationSettings());
-      progressWindow.webContents.send(IPC.SCHEDULE_CHANGED, manager.getScheduleRules());
+  progressWindow = createdProgressWindow;
+  createdProgressWindow.once("ready-to-show", () => {
+    createdProgressWindow.show();
+    if (!createdProgressWindow.isDestroyed()) {
+      createdProgressWindow.webContents.send(IPC.PROGRESS_TARGET_CHANGED, itemId);
+      createdProgressWindow.webContents.send(IPC.STATE_CHANGED, manager.getState());
+      createdProgressWindow.webContents.send(IPC.PRESENTATION_CHANGED, manager.getPresentationSettings());
+      createdProgressWindow.webContents.send(IPC.SCHEDULE_CHANGED, manager.getScheduleRules());
       void getRendererPersonalVocabularyRuntime().then((runtime) => {
-        if (progressWindow && !progressWindow.isDestroyed()) progressWindow.webContents.send(IPC.PERSONAL_VOCABULARY_CHANGED, runtime);
+        if (!createdProgressWindow.isDestroyed()) createdProgressWindow.webContents.send(IPC.PERSONAL_VOCABULARY_CHANGED, runtime);
       });
     }
   });
   if (isDev) {
     const query = new URLSearchParams({ view: "progress", progressItem: itemId });
-    progressWindow.loadURL(`http://localhost:5173/?${query.toString()}`);
+    createdProgressWindow.loadURL(`http://localhost:5173/?${query.toString()}`);
   } else {
-    progressWindow.loadFile(resolveRendererPath(__dirname), { query: { view: "progress", progressItem: itemId } });
+    createdProgressWindow.loadFile(resolveRendererPath(__dirname), { query: { view: "progress", progressItem: itemId } });
   }
-  progressWindow.on("closed", () => {
-    if (progressWindow) historyAccessSession.remove(progressWindow.webContents.id);
-    progressWindow = null;
+  createdProgressWindow.on("closed", () => {
+    historyAccessSession.remove(createdProgressWindow.webContents.id);
+    if (progressWindow === createdProgressWindow) progressWindow = null;
   });
   return true;
 }
 
 function assertTrustedSender(event: { sender: Electron.WebContents; senderFrame?: Electron.WebFrameMain | null }) {
-  const trustedWindows = [mainWindow, progressWindow].filter((window): window is BrowserWindow => Boolean(window && !window.isDestroyed()));
+  const trustedWindows = [mainWindow, progressWindow, ...browserHandoffWindows.values()]
+    .filter((window): window is BrowserWindow => Boolean(window && !window.isDestroyed()));
   const trustedWindow = trustedWindows.find((window) => window.webContents === event.sender);
   if (!trustedWindow) {
     throw new Error("Untrusted renderer IPC sender");
@@ -1216,12 +1343,41 @@ function registerIpcHandlers() {
 
   ipcMain.handle(IPC.PICK_FOLDER, async (event) => {
     assertTrustedSender(event);
-    if (!mainWindow) return null;
-    const result = await dialog.showOpenDialog(mainWindow, {
+    const parent = BrowserWindow.fromWebContents(event.sender) ?? mainWindow;
+    if (!parent || parent.isDestroyed()) return null;
+    const result = await dialog.showOpenDialog(parent, {
       properties: ["openDirectory", "createDirectory"],
     });
     if (result.canceled || result.filePaths.length === 0) return null;
     return result.filePaths[0];
+  });
+
+  ipcMain.handle(IPC.BROWSER_HANDOFF_GET_START, (event): BrowserHandoffStart => {
+    const handoffId = browserHandoffIdForSender(event);
+    const start = handoffServer?.getBrowserHandoffStart(handoffId);
+    if (!start) throw new Error("This browser download is no longer waiting for a start decision.");
+    return start;
+  });
+  ipcMain.handle(IPC.BROWSER_HANDOFF_APPROVE, async (event, input: unknown): Promise<BrowserHandoffDecision> => {
+    const handoffId = browserHandoffIdForSender(event);
+    assertRecord(input, "browser handoff approval");
+    assertString(input.fileName, "browser handoff file name", 512);
+    assertString(input.folder, "browser handoff folder", 32_768);
+    if (!isValidDefaultSaveFolder(input.folder)) throw new Error("Choose an absolute save folder before starting the download.");
+    const decision = await handoffServer?.approveBrowserHandoff(handoffId, { fileName: input.fileName, folder: input.folder });
+    if (!decision) throw new Error("The browser handoff service is unavailable.");
+    if (decision.state === "accepted") {
+      closeBrowserHandoffWindow(handoffId);
+      if (decision.downloadId) createProgressWindow(decision.downloadId);
+    }
+    return decision;
+  });
+  ipcMain.handle(IPC.BROWSER_HANDOFF_REJECT, (event): BrowserHandoffDecision => {
+    const handoffId = browserHandoffIdForSender(event);
+    const decision = handoffServer?.rejectBrowserHandoff(handoffId);
+    if (!decision) throw new Error("The browser handoff service is unavailable.");
+    closeBrowserHandoffWindow(handoffId);
+    return decision;
   });
 
   ipcMain.on(IPC.WINDOW_MINIMIZE, (event) => {
@@ -1295,10 +1451,9 @@ const nativeCompletionNotifications: CompletionNotificationPort = {
 };
 
 function notifyDownloadComplete(item: DownloadItem) {
-  // A visible main window receives the localized renderer toast. Keep the
-  // native notification as the fallback for hidden, minimized, or unavailable
-  // windows so one completion never produces duplicate user-facing claims.
-  if (mainWindow && !mainWindow.isDestroyed() && mainWindow.isVisible() && !mainWindow.isMinimized()) return;
+  // Completion is intentionally owned by the operating system, so it remains
+  // visible above either app window without turning the ordinary progress
+  // monitor into an always-on-top window.
   showCompletionNotification(item, manager.getSettings(), nativeCompletionNotifications, appIconPath);
 }
 
@@ -1318,9 +1473,7 @@ function startUpdater() {
 
 app.on("second-instance", (_event, commandLine) => {
   void processBrowserHandoffs(commandLine);
-  if (!mainWindow) return;
-  if (mainWindow.isMinimized()) mainWindow.restore();
-  mainWindow.focus();
+  showMainWindow();
 });
 
 app.whenReady().then(async () => {
@@ -1358,17 +1511,21 @@ app.whenReady().then(async () => {
   handoffServer = new HandoffServer({
     manager,
     loadCapability: () => extensionCapabilityVault.load(),
+    presentPendingHandoff: createBrowserHandoffStartWindow,
     logger: (message) => console.warn(message),
   });
+  // Register the renderer handlers before opening the loopback listener: a
+  // browser capture can arrive immediately after the port starts accepting.
+  registerIpcHandlers();
   await handoffServer.start();
   app.setLoginItemSettings({ openAtLogin: manager.getSettings().startOnSystemStartup });
 
-  registerIpcHandlers();
   createWindow();
+  createTray();
   startUpdater();
 
   app.on("activate", () => {
-    if (BrowserWindow.getAllWindows().length === 0) createWindow();
+    showMainWindow();
   });
 });
 
@@ -1381,6 +1538,9 @@ app.on("window-all-closed", async () => {
 });
 
 app.on("before-quit", async (e) => {
+  quitting = true;
+  tray?.destroy();
+  tray = null;
   updater?.stop();
   if (manager && !manager.isShutDown) {
     e.preventDefault();

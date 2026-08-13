@@ -33,6 +33,8 @@ export default function DestructiveActionGate({ request, actionName: actionNameO
   const triggerAtOpenRef = useRef<HTMLElement | null>(request.returnFocusTarget ?? returnFocusRef?.current ?? null);
   const fallbackAtOpenRef = useRef<HTMLElement | null>(request.returnFocusFallback ?? null);
   const authorizedRef = useRef(false);
+  const onConfirmRef = useRef(onConfirm);
+  const requestRef = useRef(request);
 
   const actionName = actionNameOverride ?? (request.deleteFile
     ? copy.text("remove the downloads and delete their files", "移除下載項目並刪除檔案")
@@ -67,10 +69,21 @@ export default function DestructiveActionGate({ request, actionName: actionNameO
     setAuthorized(true);
     authorizedRef.current = true;
     const timeoutId = window.setTimeout(() => {
-      onConfirm(request);
+      // Download-state updates can re-render the parent several times while
+      // the completion animation is visible.  Keep this one authorization
+      // timer stable so those updates cannot perpetually cancel the action.
+      onConfirmRef.current(requestRef.current);
     }, 300);
     return () => window.clearTimeout(timeoutId);
-  }, [authorized, bothKeysReady, onConfirm, progress, request]);
+  }, [authorized, bothKeysReady, progress]);
+
+  useEffect(() => {
+    onConfirmRef.current = onConfirm;
+  }, [onConfirm]);
+
+  useEffect(() => {
+    requestRef.current = request;
+  }, [request]);
 
   function toggleKey(index: 0 | 1) {
     if (authorized) return;

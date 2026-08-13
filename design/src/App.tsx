@@ -447,13 +447,6 @@ export default function App() {
 
       const name = itemName(item);
       if (item.status === "completed") {
-        if (settings?.showCompleteDialog) {
-          notify({
-            title: copy.text("Download complete", "下載完成"),
-            message: name,
-            tone: "success",
-          });
-        }
         requestNarration({
           english: `${name} completed.`,
           cantonese: `${name}：完成。`,

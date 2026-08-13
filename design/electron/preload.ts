@@ -1,9 +1,11 @@
 import { contextBridge, ipcRenderer } from "electron";
-import { IPC } from "../shared/types";
+import { IPC, isBrowserHandoffDecision, isBrowserHandoffStart } from "../shared/types";
 import type {
   AddDownloadRequest,
   AppSettings,
+  BrowserHandoffDecision,
   BrowserHandoffRequest,
+  BrowserHandoffStart,
   DownloadQueue,
   StateSnapshot,
   NewDownloadInfo,
@@ -227,6 +229,24 @@ const api = {
 
   enqueueCapturedDownload: (req: BrowserHandoffRequest): Promise<string> =>
     ipcRenderer.invoke(IPC.HANDOFF_ADD_DOWNLOAD, req),
+
+  getBrowserHandoffStart: async (): Promise<BrowserHandoffStart> => {
+    const value: unknown = await ipcRenderer.invoke(IPC.BROWSER_HANDOFF_GET_START);
+    if (!isBrowserHandoffStart(value)) throw new Error("Invalid browser handoff start from main process");
+    return value;
+  },
+
+  approveBrowserHandoff: async (input: { fileName: string; folder: string }): Promise<BrowserHandoffDecision> => {
+    const value: unknown = await ipcRenderer.invoke(IPC.BROWSER_HANDOFF_APPROVE, input);
+    if (!isBrowserHandoffDecision(value)) throw new Error("Invalid browser handoff decision from main process");
+    return value;
+  },
+
+  rejectBrowserHandoff: async (): Promise<BrowserHandoffDecision> => {
+    const value: unknown = await ipcRenderer.invoke(IPC.BROWSER_HANDOFF_REJECT);
+    if (!isBrowserHandoffDecision(value)) throw new Error("Invalid browser handoff decision from main process");
+    return value;
+  },
 
   pauseDownload: (id: string): Promise<void> => ipcRenderer.invoke(IPC.PAUSE, id),
   resumeDownload: (id: string): Promise<void> => ipcRenderer.invoke(IPC.RESUME, id),

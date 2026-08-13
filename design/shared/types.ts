@@ -279,6 +279,33 @@ export interface AddDownloadRequest {
 export type BrowserHandoffRequest = Omit<AddDownloadRequest, "ssh"> & { ssh?: never };
 
 /**
+ * A browser-originated transfer that is paused in Chrome while the desktop
+ * application asks the user whether it should take ownership.  This is a
+ * deliberately small renderer-safe projection: browser credentials, the
+ * extension capability, and Chrome's download identifier never cross into
+ * the desktop renderer.
+ */
+export interface BrowserHandoffStart {
+  id: string;
+  url: string;
+  fileName: string;
+  folder: string;
+  connections: number;
+  createdAt: number;
+  expiresAt: number;
+}
+
+export type BrowserHandoffDecisionState = "pending" | "accepted" | "rejected" | "expired";
+
+/** The terminal or pending decision visible to the dedicated start window. */
+export interface BrowserHandoffDecision {
+  id: string;
+  state: BrowserHandoffDecisionState;
+  downloadId: string | null;
+  expiresAt: number;
+}
+
+/**
  * Result of staging the bundled Chromium extension onto disk from the app UI.
  * `path` is the stable installed folder the user selects with Load unpacked.
  */
@@ -538,6 +565,43 @@ export function isUpdateInstallResult(value: unknown): value is UpdateInstallRes
   return isRecord(value) && typeof value.started === "boolean" && isOptionalString(value.reason, 512);
 }
 
+function isBrowserHandoffId(value: unknown): value is string {
+  return typeof value === "string" && /^[a-f0-9]{64}$/u.test(value);
+}
+
+export function isBrowserHandoffStart(value: unknown): value is BrowserHandoffStart {
+  return isRecord(value)
+    && isBrowserHandoffId(value.id)
+    && typeof value.url === "string"
+    && value.url.length > 0
+    && value.url.length <= 8_192
+    && typeof value.fileName === "string"
+    && value.fileName.length > 0
+    && value.fileName.length <= 512
+    && typeof value.folder === "string"
+    && value.folder.length > 0
+    && value.folder.length <= 32_768
+    && typeof value.connections === "number"
+    && Number.isSafeInteger(value.connections)
+    && value.connections >= 1
+    && value.connections <= 32
+    && typeof value.createdAt === "number"
+    && Number.isFinite(value.createdAt)
+    && typeof value.expiresAt === "number"
+    && Number.isFinite(value.expiresAt)
+    && value.expiresAt > value.createdAt;
+}
+
+export function isBrowserHandoffDecision(value: unknown): value is BrowserHandoffDecision {
+  return isRecord(value)
+    && isBrowserHandoffId(value.id)
+    && (value.state === "pending" || value.state === "accepted" || value.state === "rejected" || value.state === "expired")
+    && isOptionalString(value.downloadId, 128)
+    && typeof value.expiresAt === "number"
+    && Number.isFinite(value.expiresAt)
+    && ((value.state === "accepted") === (typeof value.downloadId === "string"));
+}
+
 // IPC channel names, centralized so main/preload/renderer never typo a string.
 export const IPC = {
   ADD_DOWNLOAD: "download:add",
@@ -556,6 +620,9 @@ export const IPC = {
   EXTENSION_STATE: "extension:state",
   EXTENSION_OPEN_CHROME: "extension:openChrome",
   HANDOFF_ADD_DOWNLOAD: "download:handoffAdd",
+  BROWSER_HANDOFF_GET_START: "browserHandoff:getStart",
+  BROWSER_HANDOFF_APPROVE: "browserHandoff:approve",
+  BROWSER_HANDOFF_REJECT: "browserHandoff:reject",
   GET_STATE: "state:get",
   STATE_CHANGED: "state:changed",
   SETTINGS_GET: "settings:get",

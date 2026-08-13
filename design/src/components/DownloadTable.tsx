@@ -351,6 +351,17 @@ export default function DownloadTable({ filteredItems, regexError, regexPending,
         },
       },
       {
+        id: "open-progress",
+        icon: <InfoIcon size={14} />,
+        label: copy.text("Open Downloading window", "開啟下載中視窗"),
+        onSelect: () => {
+          // This only opens the monitor. The main-process download task keeps
+          // running even if the user closes that window again.
+          void window.api.openProgressWindow(primary.id);
+          closeMenu();
+        },
+      },
+      {
         id: "remove",
         icon: <TrashIcon size={14} />,
         label: copy.text("Remove", "移除"),

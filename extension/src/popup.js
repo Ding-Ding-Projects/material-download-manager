@@ -45,9 +45,12 @@ function applyLanguage() {
 
 function resultMessage(value) {
   if (!value?.code) return localize("statusReady", settings);
-  const known = ["handoffSuccess", "handoffCleanupWarning", "automaticPauseFailed", "automaticCapacityFull", "automaticResumedFailed", "automaticResumeFailed", "automaticCancelFailedResumed", "automaticCancelFailedOriginalGone", "automaticCancelFailedAlreadyRunning", "automaticCancelRecoveryFailed", "automaticOriginalGone", "automaticOriginalAlreadyRunning", "automaticOwnershipMismatch", "automaticRestartResumeFailed", "handoffDisabled", "handoffUnpaired", "handoffFailed", "connectionSuccess", "connectionDisabled", "connectionUnpaired", "connectionFailed", "settingsSaved", "settingsImported", "settingsExported", "schoolModeCredentialUnavailable", "displayNameHistoryUnavailable", "settingsSaveFailed"];
+  const known = ["handoffSuccess", "handoffPending", "automaticAwaitingDecision", "automaticKeptInBrowser", "handoffCleanupWarning", "automaticPauseFailed", "automaticCapacityFull", "automaticResumedFailed", "automaticResumeFailed", "automaticCancelFailedResumed", "automaticCancelFailedOriginalGone", "automaticCancelFailedAlreadyRunning", "automaticCancelRecoveryFailed", "automaticOriginalGone", "automaticOriginalAlreadyRunning", "automaticOwnershipMismatch", "automaticRestartResumeFailed", "handoffDisabled", "handoffUnpaired", "handoffFailed", "connectionSuccess", "connectionDisabled", "connectionUnpaired", "connectionFailed", "settingsSaved", "settingsImported", "settingsExported", "schoolModeCredentialUnavailable", "displayNameHistoryUnavailable", "settingsSaveFailed"];
   const key = {
     "handoff-success": "handoffSuccess",
+    "handoff-pending": "handoffPending",
+    "automatic-awaiting-decision": "automaticAwaitingDecision",
+    "automatic-kept-in-browser": "automaticKeptInBrowser",
     "handoff-cleanup-warning": "handoffCleanupWarning",
     "automatic-pause-failed": "automaticPauseFailed",
     "automatic-capacity-full": "automaticCapacityFull",

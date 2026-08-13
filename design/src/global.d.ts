@@ -1,7 +1,9 @@
 import type {
   AddDownloadRequest,
   AppSettings,
+  BrowserHandoffDecision,
   BrowserHandoffRequest,
+  BrowserHandoffStart,
   DownloadCategory,
   DownloadQueue,
   NewDownloadInfo,
@@ -57,6 +59,9 @@ export interface MaterialDownloadManagerAPI {
   evaluateRegexBatch(pattern: string, flags: string, samples: string[], includeMatches?: boolean): Promise<RegexEvaluation[]>;
   addDownload(req: AddDownloadRequest): Promise<string>;
   enqueueCapturedDownload(req: BrowserHandoffRequest): Promise<string>;
+  getBrowserHandoffStart(): Promise<BrowserHandoffStart>;
+  approveBrowserHandoff(input: { fileName: string; folder: string }): Promise<BrowserHandoffDecision>;
+  rejectBrowserHandoff(): Promise<BrowserHandoffDecision>;
   pauseDownload(id: string): Promise<void>;
   resumeDownload(id: string): Promise<void>;
   cancelDownload(id: string): Promise<void>;

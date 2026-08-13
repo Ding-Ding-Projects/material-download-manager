@@ -700,6 +700,9 @@ function clearToast() {
 function resultMessage(value) {
   const key = {
     "handoff-success": "handoffSuccess",
+    "handoff-pending": "handoffPending",
+    "automatic-awaiting-decision": "automaticAwaitingDecision",
+    "automatic-kept-in-browser": "automaticKeptInBrowser",
     "handoff-cleanup-warning": "handoffCleanupWarning",
     "automatic-pause-failed": "automaticPauseFailed",
     "automatic-capacity-full": "automaticCapacityFull",

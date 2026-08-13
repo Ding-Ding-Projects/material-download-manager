@@ -1,4 +1,4 @@
-import { HANDOFF_PROTOCOL_VERSION } from "./settings.js";
+import { HANDOFF_DECISION_PATH, HANDOFF_PROTOCOL_VERSION } from "./settings.js";
 import { normalizeTotpRegistration, parseTotpUri } from "./totp.js";
 import { MAX_PERSONAL_VOCABULARY_BYTES } from "./personal-vocabulary.js";
 
@@ -134,6 +134,38 @@ export function handoffResponseProofInput(nonce, downloadId) {
     throw new Error("Invalid authenticated handoff response");
   }
   return `response\n${HANDOFF_PROTOCOL_VERSION}\n${nonce}\n${downloadId}`;
+}
+
+export function handoffDecisionProofInput(handoffId) {
+  if (typeof handoffId !== "string" || !/^[a-f0-9]{64}$/u.test(handoffId)) {
+    throw new Error("Invalid browser handoff identifier");
+  }
+  return `decision\n${HANDOFF_PROTOCOL_VERSION}\n${handoffId}`;
+}
+
+export function handoffDecisionResponseProofInput(handoffId, state, downloadId) {
+  if (
+    typeof handoffId !== "string" ||
+    !/^[a-f0-9]{64}$/u.test(handoffId) ||
+    !["pending", "accepted", "rejected", "expired"].includes(state) ||
+    (downloadId !== null && (typeof downloadId !== "string" || downloadId.length === 0 || downloadId.length > 128))
+  ) {
+    throw new Error("Invalid browser handoff decision");
+  }
+  return `decision-response\n${HANDOFF_PROTOCOL_VERSION}\n${handoffId}\n${state}\n${downloadId ?? ""}`;
+}
+
+export function decisionEndpoint(handoffEndpoint, handoffId) {
+  try {
+    if (typeof handoffId !== "string" || !/^[a-f0-9]{64}$/u.test(handoffId)) return null;
+    const endpoint = new URL(handoffEndpoint);
+    endpoint.pathname = `${HANDOFF_DECISION_PATH}/${handoffId}`;
+    endpoint.search = "";
+    endpoint.hash = "";
+    return endpoint;
+  } catch {
+    return null;
+  }
 }
 
 export function validateIncomingMessage(value) {

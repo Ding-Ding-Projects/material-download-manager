@@ -278,13 +278,19 @@ export class DownloadManager extends EventEmitter {
   }
 
   async init() {
-    const defaultSaveFolder = path.join(
-      process.env.USERPROFILE || process.env.HOME || this.userDataPath,
-      "Downloads",
-      "MaterialDownloadManager"
-    );
+    const userHome = process.env.USERPROFILE || process.env.HOME || this.userDataPath;
+    // Category folders belong directly under Downloads (Downloads\Videos,
+    // Downloads\Documents, and so on), never below an app-name container.
+    const defaultSaveFolder = path.join(userHome, "Downloads");
+    const legacyManagedFolder = path.join(defaultSaveFolder, "MaterialDownloadManager");
     this.compiledSettings = createDefaultSettings(defaultSaveFolder);
     const state = await this.store.load(defaultSaveFolder);
+    let stateNeedsDefaultFolderMigration = false;
+    if (path.resolve(state.settings.defaultSaveFolder) === path.resolve(legacyManagedFolder)) {
+      state.settings.defaultSaveFolder = defaultSaveFolder;
+      state.settings.settingProvenance.defaultSaveFolder = "compiled-in";
+      stateNeedsDefaultFolderMigration = true;
+    }
     this.settings = state.settings;
     try {
       this.scheduleRules = validateManagedScheduleRules(state.scheduleRules ?? []);
@@ -364,7 +370,7 @@ export class DownloadManager extends EventEmitter {
       this.itemOrder.push(item.id);
     }
     await fsp.mkdir(this.settings.defaultSaveFolder, { recursive: true }).catch(() => {});
-    if (stateNeedsUrlMigration) await this.persist();
+    if (stateNeedsUrlMigration || stateNeedsDefaultFolderMigration) await this.persist();
     await this.recordHistory("created", "Created the initial application state");
     this.scheduleClock.start();
     this.processAllQueues();
@@ -1320,7 +1326,7 @@ export class DownloadManager extends EventEmitter {
         endAt: typeof candidate.endAt === "string" && candidate.endAt.length <= 16 ? candidate.endAt : null,
       });
     }
-    const defaultSaveFolder = this.settings?.defaultSaveFolder ?? path.join(this.userDataPath, "Downloads");
+    const defaultSaveFolder = this.settings?.defaultSaveFolder ?? path.join(process.env.USERPROFILE || process.env.HOME || this.userDataPath, "Downloads");
     const migratedSettings = migrateSettings(parsed.settings, defaultSaveFolder);
     // History access is not a substitute for the shared School-mode
     // credential. Preserve the live mode/name/verifier metadata across a

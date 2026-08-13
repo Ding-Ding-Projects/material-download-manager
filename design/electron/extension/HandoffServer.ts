@@ -1,14 +1,22 @@
 import http from "node:http";
 import path from "node:path";
-import { createHmac, timingSafeEqual } from "node:crypto";
-import type { AddDownloadRequest, AppSettings } from "../../shared/types";
+import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
+import { isValidDefaultSaveFolder } from "../../shared/settings";
+import type {
+  AddDownloadRequest,
+  AppSettings,
+  BrowserHandoffDecision,
+  BrowserHandoffDecisionState,
+  BrowserHandoffStart,
+} from "../../shared/types";
 
-export const HANDOFF_PROTOCOL_VERSION = 2;
+export const HANDOFF_PROTOCOL_VERSION = 3;
 export const HANDOFF_HOST = "127.0.0.1";
 export const HANDOFF_PORT = 43771;
 export const HANDOFF_PATH = "/v1/downloads";
 export const STATUS_PATH = "/v1/status";
 export const CHALLENGE_PATH = "/v2/challenge";
+export const HANDOFF_DECISION_PATH = "/v2/handoffs";
 export const HANDOFF_SOURCE = "material-download-manager-extension";
 export const MAX_HANDOFF_BODY_BYTES = 16 * 1024;
 export const MAX_URL_LENGTH = 8_192;
@@ -19,8 +27,11 @@ export const MAX_ACTIVE_HANDOFFS = 8;
 export const MAX_HANDOFF_REQUESTS_PER_MINUTE = 60;
 const CHALLENGE_TTL_MS = 30_000;
 const MAX_OUTSTANDING_CHALLENGES = 64;
+const HANDOFF_DECISION_TTL_MS = 10 * 60_000;
+const HANDOFF_DECISION_TOMBSTONE_TTL_MS = 10 * 60_000;
 const AUTH_NONCE_PATTERN = /^[a-f0-9]{64}$/u;
 const AUTH_PROOF_PATTERN = /^[a-f0-9]{64}$/u;
+const HANDOFF_ID_PATTERN = /^[a-f0-9]{64}$/u;
 const CHROMIUM_EXTENSION_ORIGIN = /^chrome-extension:\/\/[a-p]{32}$/u;
 
 export interface HandoffManager {
@@ -44,8 +55,18 @@ interface HandoffEnvelope {
 interface HandoffServerOptions {
   manager: HandoffManager;
   loadCapability: () => Promise<string | null>;
+  /** Opens the desktop-owned Start download decision window. */
+  presentPendingHandoff?: (handoff: BrowserHandoffStart) => Promise<boolean> | boolean;
   port?: number;
   logger?: (message: string) => void;
+}
+
+interface PendingHandoff {
+  start: BrowserHandoffStart;
+  state: BrowserHandoffDecisionState;
+  downloadId: string | null;
+  resolving: boolean;
+  terminalAt: number | null;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -152,6 +173,20 @@ export function handoffResponseProofInput(nonce: string, downloadId: string): st
   return `response\n${HANDOFF_PROTOCOL_VERSION}\n${nonce}\n${downloadId}`;
 }
 
+/** Authenticate an extension poll for a pending desktop decision. */
+export function handoffDecisionProofInput(handoffId: string): string {
+  return `decision\n${HANDOFF_PROTOCOL_VERSION}\n${handoffId}`;
+}
+
+/** Bind a decision response to both its opaque handoff id and exact outcome. */
+export function handoffDecisionResponseProofInput(
+  handoffId: string,
+  state: BrowserHandoffDecisionState,
+  downloadId: string | null,
+): string {
+  return `decision-response\n${HANDOFF_PROTOCOL_VERSION}\n${handoffId}\n${state}\n${downloadId ?? ""}`;
+}
+
 function capabilityProof(capability: string, input: string): string {
   return createHmac("sha256", capability).update(input, "utf8").digest("hex");
 }
@@ -166,6 +201,10 @@ function proofMatches(expected: string, actual: string): boolean {
 function isLoopbackAddress(address: string | undefined): boolean {
   const normalized = address?.replace(/^::ffff:/, "");
   return normalized === "127.0.0.1" || normalized === "::1";
+}
+
+function isHandoffId(value: unknown): value is string {
+  return typeof value === "string" && HANDOFF_ID_PATTERN.test(value);
 }
 
 function suggestedFileName(urlValue: string): string {
@@ -230,6 +269,7 @@ export class HandoffServer {
   private server: http.Server | null = null;
   private listening = false;
   private readonly challenges = new Map<string, number>();
+  private readonly pendingHandoffs = new Map<string, PendingHandoff>();
   private readonly recentRequestTimes: number[] = [];
   private activeHandoffs = 0;
 
@@ -237,6 +277,116 @@ export class HandoffServer {
 
   get isListening() {
     return this.listening;
+  }
+
+  private decisionFor(record: PendingHandoff): BrowserHandoffDecision {
+    return {
+      id: record.start.id,
+      state: record.state,
+      downloadId: record.downloadId,
+      expiresAt: record.start.expiresAt,
+    };
+  }
+
+  private prunePendingHandoffs(now = Date.now()): void {
+    for (const [id, record] of this.pendingHandoffs) {
+      if (record.state === "pending" && !record.resolving && record.start.expiresAt <= now) {
+        record.state = "expired";
+        record.terminalAt = now;
+      }
+      if (record.terminalAt !== null && record.terminalAt <= now - HANDOFF_DECISION_TOMBSTONE_TTL_MS) {
+        this.pendingHandoffs.delete(id);
+      }
+    }
+  }
+
+  private activePendingCount(): number {
+    let count = 0;
+    for (const record of this.pendingHandoffs.values()) {
+      if (record.state === "pending") count += 1;
+    }
+    return count;
+  }
+
+  private createPendingHandoff(request: AddDownloadRequest): BrowserHandoffStart {
+    this.prunePendingHandoffs();
+    if (this.activePendingCount() >= MAX_ACTIVE_HANDOFFS) {
+      throw Object.assign(new Error("Too many browser downloads are awaiting a desktop decision."), { statusCode: 429 });
+    }
+    const now = Date.now();
+    const start: BrowserHandoffStart = {
+      id: randomBytes(32).toString("hex"),
+      url: request.url,
+      fileName: request.fileName,
+      folder: request.folder,
+      connections: this.options.manager.getSettings().maxConnectionsPerDownload,
+      createdAt: now,
+      expiresAt: now + HANDOFF_DECISION_TTL_MS,
+    };
+    this.pendingHandoffs.set(start.id, {
+      start,
+      state: "pending",
+      downloadId: null,
+      resolving: false,
+      terminalAt: null,
+    });
+    return start;
+  }
+
+  getBrowserHandoffStart(handoffId: string): BrowserHandoffStart | null {
+    this.prunePendingHandoffs();
+    const record = this.pendingHandoffs.get(handoffId);
+    return record?.state === "pending" ? { ...record.start } : null;
+  }
+
+  getBrowserHandoffDecision(handoffId: string): BrowserHandoffDecision | null {
+    this.prunePendingHandoffs();
+    const record = this.pendingHandoffs.get(handoffId);
+    return record ? this.decisionFor(record) : null;
+  }
+
+  async approveBrowserHandoff(
+    handoffId: string,
+    input: { fileName: string; folder: string },
+  ): Promise<BrowserHandoffDecision> {
+    this.prunePendingHandoffs();
+    const record = this.pendingHandoffs.get(handoffId);
+    if (!record || record.state !== "pending" || record.resolving) {
+      throw new Error("This browser download is no longer waiting for a start decision.");
+    }
+    const fileName = normalizeOptionalHandoffFileName(input.fileName);
+    if (!fileName || !isValidDefaultSaveFolder(input.folder)) {
+      throw new Error("Choose a valid file name and an absolute save folder before starting the download.");
+    }
+    record.resolving = true;
+    try {
+      const downloadId = await this.options.manager.addBrowserHandoff({
+        url: record.start.url,
+        folder: input.folder,
+        fileName,
+        queueId: null,
+        startImmediately: true,
+      });
+      record.state = "accepted";
+      record.downloadId = downloadId;
+      record.terminalAt = Date.now();
+      return this.decisionFor(record);
+    } finally {
+      record.resolving = false;
+    }
+  }
+
+  rejectBrowserHandoff(handoffId: string): BrowserHandoffDecision {
+    this.prunePendingHandoffs();
+    const record = this.pendingHandoffs.get(handoffId);
+    if (!record) throw new Error("This browser download is no longer available.");
+    if (record.state === "pending" && !record.resolving) {
+      record.state = "rejected";
+      record.downloadId = null;
+      record.resolving = false;
+      record.terminalAt = Date.now();
+    }
+    return this.decisionFor(record);
   }
 
   async start(): Promise<boolean> {
@@ -328,6 +478,38 @@ export class HandoffServer {
       writeJson(response, 200, { protocol: HANDOFF_PROTOCOL_VERSION, acceptingUrls: this.listening });
       return;
     }
+    if (request.method === "GET" && requestUrl.pathname.startsWith(`${HANDOFF_DECISION_PATH}/`)) {
+      let handoffId = "";
+      try {
+        handoffId = decodeURIComponent(requestUrl.pathname.slice(HANDOFF_DECISION_PATH.length + 1));
+      } catch {
+        writeJson(response, 400, { protocol: HANDOFF_PROTOCOL_VERSION, error: "Invalid browser handoff id" });
+        return;
+      }
+      const suppliedProof = requestUrl.searchParams.get("proof") ?? "";
+      const capability = await this.options.loadCapability().catch(() => null);
+      if (!isHandoffId(handoffId) || !capability || !proofMatches(capabilityProof(capability, handoffDecisionProofInput(handoffId)), suppliedProof)) {
+        writeJson(response, 403, { protocol: HANDOFF_PROTOCOL_VERSION, accepted: false, error: "Handoff authentication failed" });
+        return;
+      }
+      const decision = this.getBrowserHandoffDecision(handoffId);
+      if (!decision) {
+        writeJson(response, 404, { protocol: HANDOFF_PROTOCOL_VERSION, accepted: false, error: "Browser handoff not found" });
+        return;
+      }
+      writeJson(response, 200, {
+        protocol: HANDOFF_PROTOCOL_VERSION,
+        handoffId: decision.id,
+        state: decision.state,
+        downloadId: decision.downloadId,
+        expiresAt: decision.expiresAt,
+        proof: capabilityProof(
+          capability,
+          handoffDecisionResponseProofInput(decision.id, decision.state, decision.downloadId),
+        ),
+      });
+      return;
+    }
     if (request.method === "GET" && requestUrl.pathname === CHALLENGE_PATH) {
       if (!this.admitRequest(response, false)) return;
       const nonce = requestUrl.searchParams.get("nonce") ?? "";
@@ -374,42 +556,52 @@ export class HandoffServer {
         writeJson(response, 403, { protocol: HANDOFF_PROTOCOL_VERSION, accepted: false, error: "Handoff authentication failed" });
         return;
       }
-      const requestToAdd: AddDownloadRequest = {
+      const requestToStart: AddDownloadRequest = {
         url: envelope.url,
         folder: this.options.manager.getSettings().defaultSaveFolder,
         fileName: envelope.fileName ?? suggestedFileName(envelope.url),
         queueId: null,
-        startImmediately: true,
+        // The browser remains paused until the user chooses Start download in
+        // the desktop-owned, always-on-top decision window.
+        startImmediately: false,
       };
+      let start: BrowserHandoffStart | null = null;
+      let clientDisconnected = response.destroyed;
+      response.once("close", () => {
+        if (!response.writableFinished) clientDisconnected = true;
+      });
       try {
-        let clientDisconnected = response.destroyed;
-        response.once("close", () => {
-          if (!response.writableFinished) clientDisconnected = true;
-        });
-        const downloadId = await this.options.manager.addBrowserHandoff(requestToAdd);
+        const pendingStart = this.createPendingHandoff(requestToStart);
+        start = pendingStart;
         if (clientDisconnected || response.destroyed) {
-          await this.options.manager.rollbackBrowserHandoff(downloadId).catch((error) => {
-            this.options.logger?.(`Extension handoff rollback failed after client disconnect: ${error instanceof Error ? error.message : "unknown failure"}`);
-          });
+          this.rejectBrowserHandoff(pendingStart.id);
           return;
         }
         const delivered = writeJson(response, 202, {
           protocol: HANDOFF_PROTOCOL_VERSION,
           accepted: true,
-          downloadId,
-          proof: capabilityProof(capability, handoffResponseProofInput(envelope.authNonce, downloadId)),
+          state: "pending",
+          handoffId: pendingStart.id,
+          expiresAt: pendingStart.expiresAt,
+          proof: capabilityProof(capability, handoffResponseProofInput(envelope.authNonce, pendingStart.id)),
         });
         if (!delivered) {
-          await this.options.manager.rollbackBrowserHandoff(downloadId).catch((error) => {
-            this.options.logger?.(`Extension handoff rollback failed after response delivery failure: ${error instanceof Error ? error.message : "unknown failure"}`);
-          });
+          this.rejectBrowserHandoff(pendingStart.id);
+          return;
         }
+        // Do not hold the browser request open while a person reads the
+        // decision. The extension can poll the pending id immediately; a
+        // window-open failure simply becomes an authenticated rejection.
+        const presented = await this.options.presentPendingHandoff?.(pendingStart) ?? false;
+        if (!presented) this.rejectBrowserHandoff(pendingStart.id);
       } catch (error) {
-        this.options.logger?.(`Extension handoff could not be queued: ${error instanceof Error ? error.message : "unknown failure"}`);
-        writeJson(response, 500, {
+        if (start) this.rejectBrowserHandoff(start.id);
+        this.options.logger?.(`Extension handoff could not open a start decision: ${error instanceof Error ? error.message : "unknown failure"}`);
+        const statusCode = typeof error === "object" && error !== null && "statusCode" in error && typeof error.statusCode === "number" ? error.statusCode : 500;
+        writeJson(response, statusCode, {
           protocol: HANDOFF_PROTOCOL_VERSION,
           accepted: false,
-          error: "The download could not be queued.",
+          error: "The Start download decision could not be created.",
         });
       }
     } catch (error) {
