@@ -25,8 +25,9 @@ unverified surface has shipped.
   ordinary non-topmost and reopenable Downloading window, and an app-owned
   always-on-top Download complete window. The source also rolls back the app
   transfer before Chrome may resume after a cancellation failure, preventing
-  duplicate copies, and repairs the destructive-confirmation callback that can
-  otherwise remain on Authorized. No local verification, capture, or release result is
+  duplicate copies, and hands the destructive-confirmation callback directly to
+  the real removal action after authorization so the gate cannot remain on an
+  apparent Applying state. No local verification, capture, or release result is
   claimed for this follow-up; earlier toast captures are historical evidence
   only. See [`HANDOFF.md`](HANDOFF.md) and the
   [browser-extension article](docs/features/integrations/browser-extension.md).

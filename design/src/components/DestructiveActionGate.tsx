@@ -65,21 +65,16 @@ export default function DestructiveActionGate({ request, actionName: actionNameO
   }, [onCancel, returnFocusRef]);
 
   useEffect(() => {
-    if (progress !== 100 || !bothKeysReady || authorized) return;
-    setAuthorized(true);
+    if (progress !== 100 || !bothKeysReady || authorizedRef.current) return;
+    // The full-range action must not depend on a later timer tick. A delayed
+    // callback can leave a completed gate visibly stranded if the renderer is
+    // throttled or a parent update races the dwell. The two independent keys
+    // and the full slider remain the authorization boundary; this effect only
+    // hands the authorized request to the real action exactly once.
     authorizedRef.current = true;
-  }, [authorized, bothKeysReady, progress]);
-
-  useEffect(() => {
-    if (!authorized) return;
-    const timeoutId = window.setTimeout(() => {
-      // This runs only after the authorization render commits. Keeping the
-      // timer in its own effect prevents that render from cleaning up the
-      // callback before it can apply the requested action.
-      onConfirmRef.current(requestRef.current);
-    }, 300);
-    return () => window.clearTimeout(timeoutId);
-  }, [authorized]);
+    setAuthorized(true);
+    onConfirmRef.current(requestRef.current);
+  }, [bothKeysReady, progress]);
 
   useEffect(() => {
     onConfirmRef.current = onConfirm;

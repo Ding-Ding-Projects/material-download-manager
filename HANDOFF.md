@@ -48,10 +48,12 @@ location) and placed directly beneath it, such as `Downloads\Videos` and
 `Downloads\Documents`; the former `Downloads\MaterialDownloadManager` default
 is migrated for future downloads while existing files are not moved.
 
-The destructive confirmation gate now commits authorization before scheduling
-its 300 ms completion callback. The callback therefore survives the
-authorization render itself instead of being cleaned up immediately and
-leaving the gate indefinitely on “Authorized”.
+The destructive confirmation gate now hands a completed two-key/full-slider
+authorization directly to the real removal callback exactly once. It no longer
+waits for a renderer timer after the slider reaches 100%, so an authorized gate
+cannot remain visually stranded on “Applying” while the action has not begun.
+The host closes the gate before it starts the possibly slow removal work and
+reports success or a partial failure through the notification centre.
 
 ### Current verification boundary
 

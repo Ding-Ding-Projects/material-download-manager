@@ -74,6 +74,12 @@ notice. Closing the progress window does not cancel its transfer; its row can
 reopen it through the context menu. The existing completion-toast capture below
 predates this source-only completion-window follow-up.
 
+Download removal remains a deliberate two-key/full-slider action. Once that
+authorization completes, the dialog immediately hands off to the real removal
+operation and closes; success or partial failure is reported through the normal
+notification centre rather than leaving a completed confirmation dialog on
+screen.
+
 <p>
 <img src="docs/screenshots/download-engine/add-download-pre-submit.png" alt="Add download dialog before submit with enabled Download action" width="568">
 <img src="docs/screenshots/download-engine/downloading-progress-window.png" alt="Separate Downloading progress window with pause and cancel controls" width="980">
