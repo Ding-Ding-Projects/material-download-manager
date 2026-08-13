@@ -54,20 +54,20 @@ leaving the gate indefinitely on “Authorized”.
 
 ### Current verification boundary
 
-This hardening is intentionally not presented as locally verified: the current
-direction is source work without local test, build, smoke, or capture
-execution. Protocol version 3 requires the desktop-prepared browser extension
-to be reloaded or reinstalled; an older staged extension cannot interpret the
+Protocol version 3 requires the desktop-prepared browser extension to be
+reloaded or reinstalled; an older staged extension cannot interpret the
 pending-decision response and safely leaves its browser download under Chrome
 rather than claiming a completed handoff. GitHub Release
-[`v0.1.176`](https://github.com/Ding-Ding-Projects/material-download-manager/releases/tag/v0.1.176)
+[`v0.1.177`](https://github.com/Ding-Ding-Projects/material-download-manager/releases/tag/v0.1.177)
 is a non-draft, non-prerelease release targeting
-`ce674404884986b0b47293deae62ecae9fd781c6` with `Setup.exe`, `RELEASES`, the
-full `.nupkg`, and the unsigned extension ZIP. The simultaneous `main` release
-run `31656241768` completed successfully after the release helper waited for
-the exact draft record before deciding publication failed. The current
-ready-to-show and pre-pause pairing source work is newer than that release and
-has no local verification claim under the source-only direction.
+`594002bcbe9022632e4399ce294507311a2f1586` with `Setup.exe`, `RELEASES`, the
+full `.nupkg`, and the unsigned extension ZIP. Release workflow
+[`31658099460`](https://github.com/Ding-Ding-Projects/material-download-manager/actions/runs/31658099460)
+succeeded on its retry from `2026-08-13T01:37:08Z` through
+`2026-08-13T01:41:51.633Z` (`00:04:43`). The source hardening was intentionally
+not rechecked with local tests, builds, smoke runs, or captures under the
+current source-only direction; the published workflow is packaging/release
+evidence, not a substitute for those local checks.
 
 ## Local Ollama suite manager foundation (task branch, 2026-08-12)
 
