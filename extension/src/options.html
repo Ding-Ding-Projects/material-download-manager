@@ -67,6 +67,7 @@
       <button id="tab-connection" class="tab" type="button" role="tab" aria-selected="true" aria-controls="panel-connection" tabindex="0" data-tab="connection" data-l10n="connectionTab">Connection</button>
       <button id="tab-preferences" class="tab" type="button" role="tab" aria-selected="false" aria-controls="panel-preferences" tabindex="-1" data-tab="preferences" data-l10n="preferencesTab">Preferences</button>
       <button id="tab-authenticator" class="tab" type="button" role="tab" aria-selected="false" aria-controls="panel-authenticator" tabindex="-1" data-tab="authenticator" data-l10n="authenticatorTab">Authenticator</button>
+      <button id="tab-ollama" class="tab" type="button" role="tab" aria-selected="false" aria-controls="panel-ollama" tabindex="-1" data-tab="ollama" data-l10n="ollamaTab">Local Ollama</button>
       <button id="tab-help" class="tab" type="button" role="tab" aria-selected="false" aria-controls="panel-help" tabindex="-1" data-tab="help" data-l10n="helpTab">Help</button>
     </nav>
 
@@ -294,6 +295,170 @@
             <button id="authenticator-remove-confirm" class="button button-danger" type="button" disabled data-l10n="authenticatorRemoveConfirm">Remove selected authenticator</button>
             <button id="authenticator-remove-cancel" class="button button-secondary" type="button" data-l10n="authenticatorRemoveCancel">Cancel</button>
           </div>
+        </div>
+      </section>
+
+      <section id="panel-ollama" class="tab-panel" role="tabpanel" aria-labelledby="tab-ollama" data-panel="ollama" data-school-hidden hidden>
+        <div class="setting-card ollama-card" data-search="ollama local loopback runtime version health endpoint refresh recovery">
+          <div class="ollama-heading-row"><h2 data-l10n="ollamaHeading">Local Ollama suite</h2><span id="ollama-runtime-pill" class="ollama-pill" aria-live="polite">Unknown</span></div>
+          <p class="field-help" data-l10n="ollamaIntro">This extension talks only to Ollama’s documented local API through its service worker. It never sends model traffic to a cloud service.</p>
+          <label for="ollama-endpoint" data-l10n="ollamaEndpointLabel">Local Ollama endpoint</label>
+          <input id="ollama-endpoint" type="url" inputmode="url" autocomplete="off" maxlength="256" aria-describedby="ollama-endpoint-help ollama-runtime-status">
+          <p id="ollama-endpoint-help" class="field-help" data-l10n="ollamaEndpointHelp">Only http://127.0.0.1:11434 or http://localhost:11434 is accepted. Paths, credentials, query strings, and remote hosts are refused.</p>
+          <label for="ollama-pull-parallelism" data-l10n="ollamaPullParallelismLabel">Local pull concurrency</label>
+          <div class="ollama-picker-row">
+            <select id="ollama-pull-parallelism" aria-describedby="ollama-pull-parallelism-help">
+              <option value="1">1</option><option value="2">2</option><option value="3">3</option>
+            </select>
+            <button id="ollama-pull-parallelism-search-toggle" class="button button-secondary" type="button" aria-expanded="false" aria-controls="ollama-pull-parallelism-picker" data-l10n="ollamaPickerFilter">Filter</button>
+          </div>
+          <div id="ollama-pull-parallelism-picker" class="ollama-picker-popover" hidden>
+            <label for="ollama-pull-parallelism-search" data-l10n="ollamaPickerSearchLabel">Filter choices</label>
+            <div class="ollama-picker-row"><input id="ollama-pull-parallelism-search" type="search" maxlength="64" autocomplete="off" spellcheck="false"><button id="ollama-pull-parallelism-regex-toggle" class="button button-secondary" type="button" aria-expanded="false" aria-controls="ollama-pull-parallelism-regex" data-l10n="regexBuilder">Regex builder</button></div>
+            <section id="ollama-pull-parallelism-regex" class="regex-popover ollama-picker-regex" hidden><label for="ollama-pull-parallelism-regex-pattern" data-l10n="pattern">Pattern</label><input id="ollama-pull-parallelism-regex-pattern" maxlength="64"><label for="ollama-pull-parallelism-regex-flags" data-l10n="flags">Flags</label><input id="ollama-pull-parallelism-regex-flags" maxlength="12" value="gi"><button id="ollama-pull-parallelism-regex-apply" class="button button-secondary" type="button" data-l10n="applyPattern">Use pattern for search</button></section>
+            <div id="ollama-pull-parallelism-picker-results" class="inline-actions" role="listbox" aria-label="Local pull concurrency choices"></div>
+          </div>
+          <p id="ollama-pull-parallelism-help" class="field-help" data-l10n="ollamaPullParallelismHelp">The extension processes durable pull records conservatively and reconciles them after a worker restart.</p>
+          <div class="inline-actions">
+            <button id="ollama-save-config" class="button button-secondary" type="button" data-l10n="ollamaSaveConfig">Save local API settings</button>
+            <button id="ollama-refresh" class="button button-primary" type="button" data-l10n="ollamaRefresh">Refresh local runtime</button>
+          </div>
+          <p id="ollama-runtime-status" class="inline-status" role="status" aria-live="polite"></p>
+        </div>
+
+        <div class="setting-card ollama-card" data-search="ollama model store installed tags running catalog stale offline hardware fit model capabilities inspect copy delete">
+          <div class="ollama-heading-row"><h2 data-l10n="ollamaStoreHeading">Model Store</h2><span id="ollama-catalog-state" class="ollama-pill" aria-live="polite">Local tags only</span></div>
+          <p class="field-help" data-l10n="ollamaCatalogBoundary">Ollama’s loopback API exposes installed tags, not the official remote catalog. This browser-only extension never pretends those tags are an exhaustive public catalog; it shows the exact boundary and the last verified local state instead.</p>
+          <div class="ollama-list-search-row">
+            <label class="sr-only" for="ollama-model-search" data-l10n="ollamaModelSearchLabel">Search local models</label>
+            <input id="ollama-model-search" type="search" autocomplete="off" spellcheck="false" aria-describedby="ollama-model-summary">
+            <button id="ollama-model-regex-toggle" class="button button-secondary" type="button" aria-expanded="false" aria-controls="ollama-model-regex" data-l10n="regexBuilder">Regex builder</button>
+          </div>
+          <section id="ollama-model-regex" class="regex-popover ollama-list-regex" role="region" aria-labelledby="ollama-model-regex-title" hidden>
+            <h3 id="ollama-model-regex-title" data-l10n="ollamaModelRegexHeading">Local model search regex builder</h3>
+            <label for="ollama-model-regex-pattern" data-l10n="pattern">Pattern</label>
+            <input id="ollama-model-regex-pattern" type="text" maxlength="256" autocomplete="off" spellcheck="false">
+            <label for="ollama-model-regex-flags" data-l10n="flags">Flags</label>
+            <input id="ollama-model-regex-flags" type="text" maxlength="12" value="gi" autocomplete="off" spellcheck="false">
+            <label for="ollama-model-regex-sample" data-l10n="sampleText">Sample text</label>
+            <textarea id="ollama-model-regex-sample" rows="2" maxlength="2048"></textarea>
+            <fieldset class="fragment-fieldset">
+              <legend data-l10n="guidedFragments">Guided fragments</legend>
+              <div class="fragment-list">
+                <button type="button" class="chip" data-ollama-fragment="literal" data-l10n="literal">Literal</button>
+                <button type="button" class="chip" data-ollama-fragment="characterClass" data-l10n="characterClass">Character class</button>
+                <button type="button" class="chip" data-ollama-fragment="anchorStart" data-l10n="startAnchor">Start anchor</button>
+                <button type="button" class="chip" data-ollama-fragment="group" data-l10n="group">Group</button>
+                <button type="button" class="chip" data-ollama-fragment="alternation" data-l10n="alternation">Alternation</button>
+                <button type="button" class="chip" data-ollama-fragment="quantifier" data-l10n="quantifier">Quantifier</button>
+              </div>
+            </fieldset>
+            <p id="ollama-model-regex-feedback" class="inline-status" role="status" aria-live="polite"></p>
+            <ol id="ollama-model-regex-matches" class="match-list"></ol>
+            <div class="regex-actions">
+              <button id="ollama-model-regex-apply" class="button button-primary" type="button" data-l10n="applyPattern">Use pattern for search</button>
+              <button id="ollama-model-regex-copy" class="button button-secondary" type="button" data-l10n="copyPattern">Copy pattern</button>
+              <button id="ollama-model-regex-export" class="button button-secondary" type="button" data-l10n="exportPattern">Export pattern</button>
+            </div>
+            <label class="check-row" for="ollama-model-regex-mode"><input id="ollama-model-regex-mode" type="checkbox"><span data-l10n="applyPattern">Use pattern for search</span></label>
+          </section>
+          <p id="ollama-model-summary" class="inline-status" role="status" aria-live="polite"></p>
+          <ul id="ollama-model-list" class="ollama-list" aria-label="Installed local Ollama models"></ul>
+        </div>
+
+        <div class="setting-card ollama-card" data-search="ollama pull cart batch queue model tag download disk progress cancel retry partial results">
+          <h2 data-l10n="ollamaCartHeading">Local pull cart</h2>
+          <p class="field-help" data-l10n="ollamaCartHelp">The cart schedules only a local Ollama pull. It has no prices, accounts, checkout, payment, subscription, or entitlement.</p>
+          <label for="ollama-pull-tag" data-l10n="ollamaPullTagLabel">Exact model tag</label>
+          <input id="ollama-pull-tag" list="ollama-known-model-tags" type="text" maxlength="255" autocomplete="off" spellcheck="false" aria-describedby="ollama-pull-tag-help">
+          <datalist id="ollama-known-model-tags"></datalist>
+          <p id="ollama-pull-tag-help" class="field-help" data-l10n="ollamaPullTagHelp">Suggestions are only installed local tags. The browser boundary cannot claim a remote global catalog, so a typed tag is an explicit local request and is validated before it is queued.</p>
+          <div class="inline-actions">
+            <button id="ollama-add-pull" class="button button-primary" type="button" data-l10n="ollamaAddPull">Queue local pull</button>
+            <button id="ollama-run-pulls" class="button button-secondary" type="button" data-l10n="ollamaRunPulls">Run queued pulls</button>
+          </div>
+          <div class="ollama-bulk-row">
+            <label class="check-row" for="ollama-pull-select-all"><input id="ollama-pull-select-all" type="checkbox"><span data-l10n="ollamaSelectAllPulls">Select visible pulls</span></label>
+            <button id="ollama-bulk-cancel" class="button button-secondary" type="button" data-l10n="ollamaCancelSelected">Cancel selected</button>
+            <button id="ollama-bulk-retry" class="button button-secondary" type="button" data-l10n="ollamaRetrySelected">Retry selected</button>
+          </div>
+          <p id="ollama-cart-summary" class="inline-status" role="status" aria-live="polite"></p>
+          <ul id="ollama-cart-list" class="ollama-list" aria-label="Local Ollama pull cart"></ul>
+        </div>
+
+        <div class="setting-card ollama-card" data-search="ollama chat local history streaming system prompt temperature context attachments export rename delete retry stop">
+          <h2 data-l10n="ollamaChatHeading">Local chat</h2>
+          <p class="field-help" data-l10n="ollamaChatHelp">Chats stream directly from the selected local model. History stays in this extension profile; attachments are never stored in chat history or ordinary exports.</p>
+          <div class="ollama-two-column">
+            <div>
+              <label for="ollama-chat-model" data-l10n="ollamaChatModelLabel">Installed model</label>
+              <div class="ollama-picker-row"><select id="ollama-chat-model" aria-describedby="ollama-chat-model-help"></select><button id="ollama-chat-model-search-toggle" class="button button-secondary" type="button" aria-expanded="false" aria-controls="ollama-chat-model-picker" data-l10n="ollamaPickerFilter">Filter</button></div>
+              <div id="ollama-chat-model-picker" class="ollama-picker-popover" hidden>
+                <label for="ollama-chat-model-search" data-l10n="ollamaPickerSearchLabel">Filter choices</label>
+                <div class="ollama-picker-row"><input id="ollama-chat-model-search" type="search" maxlength="256" autocomplete="off" spellcheck="false"><button id="ollama-chat-model-regex-toggle" class="button button-secondary" type="button" aria-expanded="false" aria-controls="ollama-chat-model-regex" data-l10n="regexBuilder">Regex builder</button></div>
+                <section id="ollama-chat-model-regex" class="regex-popover ollama-picker-regex" hidden><label for="ollama-chat-model-regex-pattern" data-l10n="pattern">Pattern</label><input id="ollama-chat-model-regex-pattern" maxlength="256"><label for="ollama-chat-model-regex-flags" data-l10n="flags">Flags</label><input id="ollama-chat-model-regex-flags" maxlength="12" value="gi"><button id="ollama-chat-model-regex-apply" class="button button-secondary" type="button" data-l10n="applyPattern">Use pattern for search</button></section>
+                <div id="ollama-chat-model-picker-results" class="inline-actions" role="listbox" aria-label="Installed local model choices"></div>
+              </div>
+              <p id="ollama-chat-model-help" class="field-help" data-l10n="ollamaChatModelHelp">Choose an installed tag verified by the local API. Inspect it first to verify capabilities.</p>
+            </div>
+            <div>
+              <label for="ollama-system-prompt" data-l10n="ollamaSystemPromptLabel">System prompt</label>
+              <textarea id="ollama-system-prompt" rows="3" maxlength="8192" aria-describedby="ollama-system-prompt-help"></textarea>
+              <p id="ollama-system-prompt-help" class="field-help" data-l10n="ollamaSystemPromptHelp">The recommended default is an empty system prompt, so the model’s own published defaults remain in effect.</p>
+            </div>
+          </div>
+          <div class="inline-actions"><button id="ollama-create-chat" class="button button-secondary" type="button" data-l10n="ollamaCreateChat">Create local chat</button></div>
+          <div class="ollama-chat-layout">
+            <aside><h3 data-l10n="ollamaChatHistoryHeading">Local chat history</h3><ul id="ollama-session-list" class="ollama-list ollama-session-list" aria-label="Local Ollama chat history"></ul></aside>
+            <div class="ollama-conversation">
+              <div id="ollama-chat-title" class="ollama-heading-row"><h3 data-l10n="ollamaNoChatSelected">No local chat selected</h3></div>
+              <ol id="ollama-message-list" class="ollama-message-list" aria-live="polite"></ol>
+              <label for="ollama-chat-prompt" data-l10n="ollamaChatPromptLabel">Message</label>
+              <textarea id="ollama-chat-prompt" rows="4" maxlength="16384" aria-describedby="ollama-chat-prompt-help"></textarea>
+              <p id="ollama-chat-prompt-help" class="field-help" data-l10n="ollamaChatPromptHelp">Messages are bounded locally. Do not paste credentials, private paths, or environment values into a model prompt.</p>
+              <div class="ollama-two-column">
+                <div><label for="ollama-temperature" data-l10n="ollamaTemperatureLabel">Temperature</label><input id="ollama-temperature" type="number" min="0" max="2" step="0.1" value="0.7"></div>
+                <div><label for="ollama-num-context" data-l10n="ollamaContextLabel">Context tokens</label><input id="ollama-num-context" type="number" min="256" max="65536" step="256" value="4096"></div>
+              </div>
+              <label for="ollama-attachment" data-l10n="ollamaAttachmentLabel">Image attachment</label>
+              <input id="ollama-attachment" type="file" accept="image/png,image/jpeg,image/webp" disabled aria-describedby="ollama-attachment-help">
+              <p id="ollama-attachment-help" class="field-help" data-l10n="ollamaAttachmentDisabled">Image attachments stay disabled until the selected installed model has a verified local vision capability.</p>
+              <div class="inline-actions">
+                <button id="ollama-send-chat" class="button button-primary" type="button" data-l10n="ollamaSendChat">Send local message</button>
+                <button id="ollama-stop-chat" class="button button-secondary" type="button" data-l10n="ollamaStopChat">Stop</button>
+                <button id="ollama-retry-chat" class="button button-secondary" type="button" data-l10n="ollamaRetryChat">Retry last message</button>
+                <button id="ollama-export-chat" class="button button-secondary" type="button" data-l10n="ollamaExportChat">Export redacted chat</button>
+                <button id="ollama-rename-chat" class="button button-secondary" type="button" data-l10n="ollamaRenameChat">Rename</button>
+                <button id="ollama-delete-chat" class="button button-danger" type="button" data-l10n="ollamaDeleteChat">Delete chat</button>
+              </div>
+              <p id="ollama-chat-status" class="inline-status" role="status" aria-live="polite"></p>
+            </div>
+          </div>
+        </div>
+
+        <div class="setting-card ollama-card" data-search="ollama harness profile preflight snapshot rollback browser extension boundary executable shell">
+          <h2 data-l10n="ollamaHarnessHeading">Browser harness boundary</h2>
+          <p id="ollama-harness-boundary" class="field-help" data-l10n="ollamaHarnessBody">The safe browser-equivalent profile is a local API diagnostic. This extension cannot execute a local program, shell command, script text, executable path, or environment profile; it makes no harness mutation, so there is no snapshot or rollback to fake.</p>
+          <div class="inline-actions"><button id="ollama-run-preflight" class="button button-secondary" type="button" data-l10n="ollamaRunPreflight">Run local API preflight</button></div>
+        </div>
+
+        <div class="setting-card ollama-card" data-search="ollama troubleshoot missing stopped unhealthy offline storage disk gpu driver recovery">
+          <h2 data-l10n="ollamaTroubleshooterHeading">Local troubleshooter</h2>
+          <p id="ollama-troubleshooter" class="field-help" role="status" aria-live="polite" data-l10n="ollamaTroubleshooterIdle">Refresh the local API to distinguish an unavailable runtime, an unhealthy response, an offline state, or an empty installed-model list.</p>
+        </div>
+
+        <div id="ollama-delete-card" class="setting-card ollama-card danger-card" hidden role="group" aria-labelledby="ollama-delete-heading">
+          <h2 id="ollama-delete-heading" data-l10n="ollamaDeleteHeading">Confirm local removal</h2>
+          <p id="ollama-delete-help" class="field-help" data-l10n="ollamaDeleteHelp">This action is destructive. Type the action word and the exact visible target, then move the slider fully across. Escape or Cancel is an emergency exit.</p>
+          <p id="ollama-delete-target" class="field-help"></p>
+          <label for="ollama-delete-key-one" data-l10n="ollamaDeleteKeyOne">Key 1: type REMOVE</label>
+          <input id="ollama-delete-key-one" type="text" autocomplete="off" spellcheck="false">
+          <label for="ollama-delete-key-two" data-l10n="ollamaDeleteKeyTwo">Key 2: type the exact visible target</label>
+          <input id="ollama-delete-key-two" type="text" autocomplete="off" spellcheck="false">
+          <label for="ollama-delete-slider" data-l10n="ollamaDeleteSlider">Confirmation progress</label>
+          <input id="ollama-delete-slider" type="range" min="0" max="100" value="0" step="1" aria-describedby="ollama-delete-status">
+          <p id="ollama-delete-status" class="inline-status" role="status" aria-live="polite"></p>
+          <div class="inline-actions"><button id="ollama-delete-confirm" class="button button-danger" type="button" disabled data-l10n="ollamaDeleteConfirm">Remove selected local item</button><button id="ollama-delete-cancel" class="button button-secondary" type="button" data-l10n="ollamaDeleteCancel">Cancel</button></div>
         </div>
       </section>
 

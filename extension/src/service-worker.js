@@ -25,6 +25,7 @@ import { appendDisplayNameMutation } from "./shared/mutation-journal.js";
 import { createNarrator } from "./shared/narrator.js";
 import { createChromeTtsAdapter } from "./shared/chrome-tts.js";
 import { createAuthenticatorStore } from "./shared/authenticator-store.js";
+import { createOllamaSuite, OllamaError, validateOllamaMessage } from "./shared/ollama.js";
 
 const MENU_ID = "send-to-material-download-manager";
 const STATUS_TIMEOUT_MS = 1_500;
@@ -83,6 +84,7 @@ const narrator = createNarrator({
   isScreenReaderActive: () => false,
 });
 const authenticatorStore = createAuthenticatorStore({ local: chrome.storage.local });
+const ollamaSuite = createOllamaSuite({ local: chrome.storage.local });
 let narratorSettingsGeneration = 0;
 
 function result(code, detail = null) {
@@ -577,6 +579,8 @@ function initialize() {
       await chrome.storage.local.set({ [SETTINGS_KEY]: settings });
       await refreshContextMenu(settings);
       await recoverAutomaticDownloads();
+      await ollamaSuite.reconcilePulls();
+      void ollamaSuite.runPullQueue().catch(() => {});
     })();
   }
   return initializationPromise;
@@ -641,13 +645,86 @@ chrome.runtime.onMessage.addListener((rawMessage, sender, sendResponse) => {
     sendResponse({ ok: false, error: "Untrusted extension sender." });
     return false;
   }
-  const message = validateIncomingMessage(rawMessage);
+  const message = validateIncomingMessage(rawMessage) ?? validateOllamaMessage(rawMessage);
   if (!message) {
     sendResponse({ ok: false, error: "Invalid extension message." });
     return false;
   }
 
   void (async () => {
+    if (message.type === "GET_OLLAMA_STATE") {
+      sendResponse(await ollamaSuite.state());
+      return;
+    }
+    if (message.type === "REFRESH_OLLAMA") {
+      sendResponse(await ollamaSuite.refresh());
+      return;
+    }
+    if (message.type === "SAVE_OLLAMA_CONFIG") {
+      sendResponse(await ollamaSuite.configure(message.config));
+      return;
+    }
+    if (message.type === "INSPECT_OLLAMA_MODEL") {
+      sendResponse(await ollamaSuite.inspect(message.model));
+      return;
+    }
+    if (message.type === "ADD_OLLAMA_PULL") {
+      sendResponse(await ollamaSuite.enqueuePull(message.model));
+      return;
+    }
+    if (message.type === "RUN_OLLAMA_PULL_QUEUE") {
+      void ollamaSuite.runPullQueue().catch(() => {});
+      sendResponse({ ok: true, code: "ollama-pull-run-requested" });
+      return;
+    }
+    if (message.type === "CANCEL_OLLAMA_PULL") {
+      sendResponse(await ollamaSuite.cancelPull(message.id));
+      return;
+    }
+    if (message.type === "RETRY_OLLAMA_PULL") {
+      sendResponse(await ollamaSuite.retryPull(message.id));
+      return;
+    }
+    if (message.type === "DELETE_OLLAMA_MODEL") {
+      sendResponse(await ollamaSuite.deleteModel(message.model));
+      return;
+    }
+    if (message.type === "COPY_OLLAMA_MODEL") {
+      sendResponse(await ollamaSuite.copyModel(message.source, message.destination));
+      return;
+    }
+    if (message.type === "CREATE_OLLAMA_CHAT") {
+      sendResponse(await ollamaSuite.createChat(message.model, message.systemPrompt));
+      return;
+    }
+    if (message.type === "SEND_OLLAMA_CHAT") {
+      sendResponse(await ollamaSuite.sendChat(message.id, message.prompt, message.options, message.attachments));
+      return;
+    }
+    if (message.type === "STOP_OLLAMA_CHAT") {
+      sendResponse(await ollamaSuite.stopChat(message.id));
+      return;
+    }
+    if (message.type === "RETRY_OLLAMA_CHAT") {
+      sendResponse(await ollamaSuite.retryChat(message.id));
+      return;
+    }
+    if (message.type === "RENAME_OLLAMA_CHAT") {
+      sendResponse(await ollamaSuite.renameChat(message.id, message.title));
+      return;
+    }
+    if (message.type === "DELETE_OLLAMA_CHAT") {
+      sendResponse(await ollamaSuite.deleteChat(message.id));
+      return;
+    }
+    if (message.type === "EXPORT_OLLAMA_CHAT") {
+      sendResponse(await ollamaSuite.exportChat(message.id));
+      return;
+    }
+    if (message.type === "GET_OLLAMA_HARNESS_BOUNDARY") {
+      sendResponse(ollamaSuite.harnessBoundary());
+      return;
+    }
     if (message.type === "GET_STATE") {
       sendResponse({ ok: true, settings: await readSettings(), lastResult: await readLastResult() });
       return;
@@ -755,8 +832,10 @@ chrome.runtime.onMessage.addListener((rawMessage, sender, sendResponse) => {
     const nextResult = message.type === "TEST_HANDOFF" ? await checkConnection(settings) : await handoffUrl(message, settings);
     await recordResult(nextResult);
     sendResponse({ ok: true, result: nextResult, settings });
-  })().catch(() => {
-    sendResponse({ ok: false, error: "The extension worker could not complete the request." });
+  })().catch((error) => {
+    const code = error instanceof OllamaError ? error.code : "extension-request-failed";
+    const detail = error instanceof OllamaError ? error.message : "The extension worker could not complete the request.";
+    sendResponse({ ok: false, code, detail });
   });
   return true;
 });
