@@ -24,6 +24,8 @@ body {
 
 .surface { padding: 20px; }
 .hero { margin-bottom: 18px; }
+.popup-brand-row { display: flex; gap: 10px; align-items: center; }
+.popup-logo { display: block; flex: 0 0 auto; width: 48px; height: 48px; padding: 4px; border: 1px solid var(--md-outline); border-radius: 14px; background: transparent; object-fit: contain; }
 .eyebrow { margin: 0 0 6px; color: var(--md-primary); font-size: 12px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; overflow-wrap: anywhere; }
 h1 { margin: 0; font-size: 23px; line-height: 1.2; }
 h2 { margin: 0 0 8px; font-size: 14px; }

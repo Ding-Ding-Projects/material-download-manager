@@ -1,4 +1,5 @@
 import { DEFAULT_SETTINGS, SETTINGS_KEY, sanitizeSettings } from "./shared/settings.js";
+import { LOGO_STORAGE_KEY, logoDisplayDescriptor } from "./shared/logo.js";
 import { normalizeDownloadUrl } from "./shared/handoff.js";
 import { decorateMessage, localize } from "./shared/localization.js";
 
@@ -6,6 +7,7 @@ let settings = sanitizeSettings(DEFAULT_SETTINGS);
 
 const elements = {
   managerName: document.querySelector("#manager-name"),
+  logo: document.querySelector("#popup-logo"),
   popupTitle: document.querySelector("#popup-title"),
   statusMessage: document.querySelector("#status-message"),
   recoveryMessage: document.querySelector("#recovery-message"),
@@ -30,6 +32,13 @@ function applyLanguage() {
   elements.recoveryMessage.textContent = settings.handoffEndpoint
     ? localize("readyBody", settings)
     : localize("optionsRecovery", settings);
+}
+
+function applyLogo(descriptor) {
+  const logo = descriptor && typeof descriptor === "object" ? descriptor : logoDisplayDescriptor(null, 48);
+  elements.logo.src = logo.previewDataUrl;
+  elements.logo.alt = localize("logoPreviewAlt", settings, { name: settings.managerName, preset: localize(`logoPreset${logo.presetId === "download-orbit" ? "DownloadOrbit" : logo.presetId === "handoff-ribbon" ? "HandoffRibbon" : "MaterialStack"}`, settings) });
+  elements.logo.style.backgroundColor = logo.background === "transparent" ? "transparent" : logo.background;
 }
 
 function resultMessage(value) {
@@ -70,6 +79,7 @@ function resultMessage(value) {
 function renderState(state) {
   settings = sanitizeSettings(state?.settings ?? DEFAULT_SETTINGS);
   applyLanguage();
+  applyLogo(state?.logo);
   elements.statusMessage.textContent = decorateMessage(resultMessage(state?.lastResult), settings, state?.lastResult?.ok === false ? "⚠️" : "✅");
   elements.statusMessage.classList.toggle("is-error", state?.lastResult?.ok === false);
   elements.sendButton.disabled = !settings.handoffEndpoint || !normalizeDownloadUrl(elements.url.value);
@@ -129,10 +139,11 @@ elements.optionsButton.addEventListener("click", () => {
 });
 
 chrome.storage.onChanged.addListener((changes, areaName) => {
-  if (areaName !== "local" || !changes[SETTINGS_KEY]) return;
-  settings = sanitizeSettings(changes[SETTINGS_KEY].newValue);
-  applyLanguage();
-  elements.sendButton.disabled = !settings.handoffEndpoint || !normalizeDownloadUrl(elements.url.value);
+  if (areaName !== "local" || (!changes[SETTINGS_KEY] && !changes[LOGO_STORAGE_KEY])) return;
+  void getState().then((state) => {
+    if (state) renderState(state);
+    else applyLanguage();
+  });
 });
 
 const state = await getState();

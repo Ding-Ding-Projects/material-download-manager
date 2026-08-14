@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Shipped extension mark source. The generated PNGs alongside this file are
+  intentionally static startup/listing icons; a user-selected logo is applied
+  dynamically only after the extension service worker is ready.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-label="Material Download Manager logo">
+  <defs>
+    <linearGradient id="surface" x1="16" y1="12" x2="112" y2="116" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#6750a4"/>
+      <stop offset="1" stop-color="#155fa0"/>
+    </linearGradient>
+  </defs>
+  <rect x="8" y="8" width="112" height="112" rx="28" fill="url(#surface)"/>
+  <path d="M57 27h14v40l13-13 10 10-30 30-30-30 10-10 13 13V27Z" fill="#fff"/>
+  <path d="M39 96h50" stroke="#ffb74d" stroke-width="10" stroke-linecap="round"/>
+</svg>

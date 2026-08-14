@@ -66,6 +66,7 @@
     <nav class="tabs" role="tablist" data-l10n-aria="optionsSections" aria-label="Extension options sections">
       <button id="tab-connection" class="tab" type="button" role="tab" aria-selected="true" aria-controls="panel-connection" tabindex="0" data-tab="connection" data-l10n="connectionTab">Connection</button>
       <button id="tab-preferences" class="tab" type="button" role="tab" aria-selected="false" aria-controls="panel-preferences" tabindex="-1" data-tab="preferences" data-l10n="preferencesTab">Preferences</button>
+      <button id="tab-appearance" class="tab" type="button" role="tab" aria-selected="false" aria-controls="panel-appearance" tabindex="-1" data-tab="appearance" data-l10n="appearanceTab">Appearance</button>
       <button id="tab-authenticator" class="tab" type="button" role="tab" aria-selected="false" aria-controls="panel-authenticator" tabindex="-1" data-tab="authenticator" data-l10n="authenticatorTab">Authenticator</button>
       <button id="tab-help" class="tab" type="button" role="tab" aria-selected="false" aria-controls="panel-help" tabindex="-1" data-tab="help" data-l10n="helpTab">Help</button>
     </nav>
@@ -168,6 +169,199 @@
           <div class="range-row"><input id="funny-level-yue" name="funnyLevelYue" type="range" min="1" max="5" step="1"><output id="funny-level-yue-output" for="funny-level-yue">2</output></div>
           <p class="field-help" data-l10n="funnyHelp">1 is fully serious; 5 is maximum playfulness. Facts, affected data, and choices stay explicit.</p>
         </div>
+      </section>
+
+      <section id="panel-appearance" class="tab-panel" role="tabpanel" aria-labelledby="tab-appearance" data-panel="appearance" hidden>
+        <section id="logo-customization-card" class="setting-card logo-customization-card" data-school-hidden data-search="app logo icon mark preset custom local image upload crop zoom fit fill contain focal point background preview reset palette appearance">
+          <div class="logo-heading-row">
+            <div>
+              <h2 data-l10n="logoHeading">Extension logo</h2>
+              <p class="field-help" data-l10n="logoHelp">Choose a shipped mark or convert a local PNG, JPEG, or WebP image only in this browser profile.</p>
+            </div>
+            <button id="logo-focus-search" class="button button-secondary" type="button" data-l10n="logoFocusSearch">Find in settings</button>
+          </div>
+          <p id="logo-provenance" class="field-help" data-l10n="logoProvenance">Current logo values come from this extension's local logo record. A shipped Material stack preset is active until you choose another mark.</p>
+
+          <section class="logo-preview-section" aria-labelledby="logo-preview-heading">
+            <h3 id="logo-preview-heading" data-l10n="logoPreviewHeading">Live display previews</h3>
+            <p class="field-help" data-l10n="logoPreviewHelp">The same locally validated PNG variants are shown at the action-icon sizes the extension consumes.</p>
+            <div class="logo-preview-grid">
+              <figure><img id="logo-preview-16" width="16" height="16" alt=""><figcaption>16 px</figcaption></figure>
+              <figure><img id="logo-preview-32" width="32" height="32" alt=""><figcaption>32 px</figcaption></figure>
+              <figure><img id="logo-preview-48" width="48" height="48" alt=""><figcaption>48 px</figcaption></figure>
+              <figure><img id="logo-preview-128" width="128" height="128" alt=""><figcaption>128 px</figcaption></figure>
+            </div>
+            <p id="logo-status" class="inline-status" role="status" aria-live="polite"></p>
+          </section>
+
+          <section class="logo-preset-section" aria-labelledby="logo-presets-heading">
+            <h3 id="logo-presets-heading" data-l10n="logoPresetHeading">Shipped presets</h3>
+            <div class="logo-preset-search-row">
+              <label class="sr-only" for="logo-preset-search" data-l10n="logoPresetSearchLabel">Search logo presets</label>
+              <input id="logo-preset-search" type="search" autocomplete="off" spellcheck="false" aria-describedby="logo-preset-summary">
+              <button id="logo-preset-regex-toggle" class="button button-secondary" type="button" aria-expanded="false" aria-controls="logo-preset-regex" data-l10n="regexBuilder">Regex builder</button>
+            </div>
+            <section id="logo-preset-regex" class="regex-popover logo-preset-regex" role="region" aria-labelledby="logo-preset-regex-title" hidden>
+              <h4 id="logo-preset-regex-title" data-l10n="logoPresetRegexHeading">Logo preset regex builder</h4>
+              <p class="field-help" data-l10n="regexBuilderDescription">Build a JavaScript regular expression locally. Plain-text search stays the default.</p>
+              <div class="regex-grid">
+                <div><label for="logo-preset-regex-pattern" data-l10n="pattern">Pattern</label><input id="logo-preset-regex-pattern" type="text" maxlength="256" autocomplete="off" spellcheck="false"></div>
+                <div><label for="logo-preset-regex-flags" data-l10n="flags">Flags</label><input id="logo-preset-regex-flags" type="text" maxlength="12" value="gi" autocomplete="off" spellcheck="false"></div>
+              </div>
+              <label for="logo-preset-regex-sample" data-l10n="sampleText">Sample text</label>
+              <textarea id="logo-preset-regex-sample" rows="2" maxlength="2048"></textarea>
+              <fieldset class="fragment-fieldset">
+                <legend data-l10n="guidedFragments">Guided fragments</legend>
+                <div class="fragment-list">
+                  <button type="button" class="chip" data-logo-fragment="literal" data-l10n="literal">Literal</button>
+                  <button type="button" class="chip" data-logo-fragment="characterClass" data-l10n="characterClass">Character class</button>
+                  <button type="button" class="chip" data-logo-fragment="anchorStart" data-l10n="startAnchor">Start anchor</button>
+                  <button type="button" class="chip" data-logo-fragment="group" data-l10n="group">Group</button>
+                  <button type="button" class="chip" data-logo-fragment="alternation" data-l10n="alternation">Alternation</button>
+                  <button type="button" class="chip" data-logo-fragment="quantifier" data-l10n="quantifier">Quantifier</button>
+                </div>
+              </fieldset>
+              <p id="logo-preset-regex-feedback" class="inline-status" role="status" aria-live="polite"></p>
+              <ol id="logo-preset-regex-matches" class="match-list"></ol>
+              <div class="regex-actions">
+                <button id="logo-preset-regex-apply" class="button button-primary" type="button" data-l10n="applyPattern">Use pattern for search</button>
+                <button id="logo-preset-regex-copy" class="button button-secondary" type="button" data-l10n="copyPattern">Copy pattern</button>
+                <button id="logo-preset-regex-export" class="button button-secondary" type="button" data-l10n="exportPattern">Export pattern</button>
+              </div>
+              <label class="check-row" for="logo-preset-regex-mode"><input id="logo-preset-regex-mode" type="checkbox"><span data-l10n="applyPattern">Use pattern for search</span></label>
+            </section>
+            <p id="logo-preset-summary" class="inline-status" role="status" aria-live="polite"></p>
+            <div id="logo-preset-list" class="logo-preset-list" role="group" data-l10n-aria="logoPresetHeading" aria-label="Shipped logo presets">
+              <button class="logo-preset-button" type="button" data-logo-preset="material-stack" aria-pressed="false"><img alt=""><span data-l10n="logoPresetMaterialStack">Material stack</span></button>
+              <button class="logo-preset-button" type="button" data-logo-preset="download-orbit" aria-pressed="false"><img alt=""><span data-l10n="logoPresetDownloadOrbit">Download orbit</span></button>
+              <button class="logo-preset-button" type="button" data-logo-preset="handoff-ribbon" aria-pressed="false"><img alt=""><span data-l10n="logoPresetHandoffRibbon">Handoff ribbon</span></button>
+            </div>
+            <button id="logo-apply-preset" class="button button-primary" type="button" data-l10n="logoApplyPreset">Apply selected preset</button>
+          </section>
+
+          <section class="logo-custom-section" aria-labelledby="logo-custom-heading">
+            <h3 id="logo-custom-heading" data-l10n="logoCustomHeading">Custom local image</h3>
+            <div class="logo-picker-filter" aria-labelledby="logo-upload-filter-heading">
+              <h4 id="logo-upload-filter-heading" data-l10n="logoUploadFilterHeading">Local image type filter</h4>
+              <div class="logo-preset-search-row">
+                <label class="sr-only" for="logo-upload-filter-search" data-l10n="logoUploadFilterLabel">Filter local image types</label>
+                <input id="logo-upload-filter-search" type="search" autocomplete="off" spellcheck="false" aria-describedby="logo-upload-filter-summary">
+                <button id="logo-upload-filter-regex-toggle" class="button button-secondary" type="button" aria-expanded="false" aria-controls="logo-upload-filter-regex" data-l10n="regexBuilder">Regex builder</button>
+              </div>
+              <section id="logo-upload-filter-regex" class="regex-popover logo-preset-regex" role="region" aria-labelledby="logo-upload-filter-regex-title" hidden>
+                <h5 id="logo-upload-filter-regex-title" data-l10n="logoUploadFilterRegexHeading">Local image type regex builder</h5>
+                <p class="field-help" data-l10n="regexBuilderDescription">Build a JavaScript regular expression locally. Plain-text search stays the default.</p>
+                <div class="regex-grid">
+                  <div><label for="logo-upload-filter-regex-pattern" data-l10n="pattern">Pattern</label><input id="logo-upload-filter-regex-pattern" type="text" maxlength="256" autocomplete="off" spellcheck="false"></div>
+                  <div><label for="logo-upload-filter-regex-flags" data-l10n="flags">Flags</label><input id="logo-upload-filter-regex-flags" type="text" maxlength="12" value="gi" autocomplete="off" spellcheck="false"></div>
+                </div>
+                <label for="logo-upload-filter-regex-sample" data-l10n="sampleText">Sample text</label>
+                <textarea id="logo-upload-filter-regex-sample" rows="2" maxlength="2048"></textarea>
+                <fieldset class="fragment-fieldset"><legend data-l10n="guidedFragments">Guided fragments</legend><div class="fragment-list">
+                  <button type="button" class="chip" data-logo-upload-filter-fragment="literal" data-l10n="literal">Literal</button>
+                  <button type="button" class="chip" data-logo-upload-filter-fragment="characterClass" data-l10n="characterClass">Character class</button>
+                  <button type="button" class="chip" data-logo-upload-filter-fragment="anchorStart" data-l10n="startAnchor">Start anchor</button>
+                  <button type="button" class="chip" data-logo-upload-filter-fragment="group" data-l10n="group">Group</button>
+                  <button type="button" class="chip" data-logo-upload-filter-fragment="alternation" data-l10n="alternation">Alternation</button>
+                  <button type="button" class="chip" data-logo-upload-filter-fragment="quantifier" data-l10n="quantifier">Quantifier</button>
+                </div></fieldset>
+                <p id="logo-upload-filter-regex-feedback" class="inline-status" role="status" aria-live="polite"></p>
+                <ol id="logo-upload-filter-regex-matches" class="match-list"></ol>
+                <div class="regex-actions">
+                  <button id="logo-upload-filter-regex-apply" class="button button-primary" type="button" data-l10n="applyPattern">Use pattern for search</button>
+                  <button id="logo-upload-filter-regex-copy" class="button button-secondary" type="button" data-l10n="copyPattern">Copy pattern</button>
+                  <button id="logo-upload-filter-regex-export" class="button button-secondary" type="button" data-l10n="exportPattern">Export pattern</button>
+                </div>
+                <label class="check-row" for="logo-upload-filter-regex-mode"><input id="logo-upload-filter-regex-mode" type="checkbox"><span data-l10n="applyPattern">Use pattern for search</span></label>
+              </section>
+              <p id="logo-upload-filter-summary" class="inline-status" role="status" aria-live="polite"></p>
+              <div id="logo-upload-format-list" class="logo-upload-format-list" role="group" data-l10n-aria="logoUploadFilterHeading" aria-label="Local image type filter">
+                <button class="chip logo-upload-format" type="button" data-logo-upload-format="image/png" aria-pressed="true" data-l10n="logoUploadFormatPng">PNG image</button>
+                <button class="chip logo-upload-format" type="button" data-logo-upload-format="image/jpeg" aria-pressed="true" data-l10n="logoUploadFormatJpeg">JPEG image</button>
+                <button class="chip logo-upload-format" type="button" data-logo-upload-format="image/webp" aria-pressed="true" data-l10n="logoUploadFormatWebp">WebP image</button>
+              </div>
+            </div>
+            <label for="logo-upload" data-l10n="logoUploadLabel">Choose a local image</label>
+            <input id="logo-upload" type="file" accept="image/png,image/jpeg,image/webp,.png,.jpg,.jpeg,.webp" aria-describedby="logo-upload-help logo-upload-status">
+            <p id="logo-upload-help" class="field-help" data-l10n="logoUploadHelp">The extension checks the actual bytes, dimensions, animation state, and local output before any image becomes active. The file name and path are never saved.</p>
+            <p id="logo-upload-status" class="inline-status" role="status" aria-live="polite"></p>
+            <div class="logo-control-grid">
+              <div>
+                <fieldset id="logo-fit" class="logo-fit-fieldset" aria-describedby="logo-fit-help">
+                  <legend data-l10n="logoFitLabel">Fit behavior</legend>
+                  <label class="check-row"><input type="radio" name="logo-fit" value="contain" checked><span data-l10n="logoFitContain">Contain</span></label>
+                  <label class="check-row"><input type="radio" name="logo-fit" value="cover"><span data-l10n="logoFitCover">Cover and crop</span></label>
+                  <label class="check-row"><input type="radio" name="logo-fit" value="fill"><span data-l10n="logoFitFill">Fill</span></label>
+                </fieldset>
+                <p id="logo-fit-help" class="field-help" data-l10n="logoFitHelp">Choose the rendering behavior directly; the radio group avoids a hidden picker list.</p>
+              </div>
+              <div>
+                <label for="logo-crop-zoom" data-l10n="logoCropZoomLabel">Crop zoom</label>
+                <div class="range-row"><input id="logo-crop-zoom" type="range" min="1" max="4" step="0.05" value="1"><output id="logo-crop-zoom-output" for="logo-crop-zoom">1.00×</output></div>
+              </div>
+              <div>
+                <label for="logo-focal-x" data-l10n="logoFocalXLabel">Focal point horizontal</label>
+                <div class="range-row"><input id="logo-focal-x" type="range" min="0" max="1" step="0.01" value="0.5"><output id="logo-focal-x-output" for="logo-focal-x">50%</output></div>
+              </div>
+              <div>
+                <label for="logo-focal-y" data-l10n="logoFocalYLabel">Focal point vertical</label>
+                <div class="range-row"><input id="logo-focal-y" type="range" min="0" max="1" step="0.01" value="0.5"><output id="logo-focal-y-output" for="logo-focal-y">50%</output></div>
+              </div>
+              <div>
+                <label class="check-row" for="logo-transparent-background"><input id="logo-transparent-background" type="checkbox" checked><span data-l10n="logoTransparentBackground">Keep transparent background</span></label>
+                <label for="logo-background" data-l10n="logoBackgroundLabel">Background color</label>
+                <input id="logo-background" type="color" value="#ffffff" aria-describedby="logo-background-help">
+                <p id="logo-background-help" class="field-help" data-l10n="logoBackgroundHelp">A background is applied locally to each generated PNG variant.</p>
+                <label for="logo-background-alpha" data-l10n="logoBackgroundAlphaLabel">Background opacity</label>
+                <div class="range-row"><input id="logo-background-alpha" type="range" min="0" max="1" step="0.01" value="1"><output id="logo-background-alpha-output" for="logo-background-alpha">100%</output></div>
+                <label for="logo-color-value" data-l10n="logoColorValueLabel">Color value</label>
+                <input id="logo-color-value" type="text" inputmode="text" maxlength="64" autocomplete="off" spellcheck="false" value="#FFFFFF" aria-describedby="logo-color-value-help logo-color-status">
+                <p id="logo-color-value-help" class="field-help" data-l10n="logoColorValueHelp">Enter HEX/HEX8, rgb()/rgba(), or hsl()/hsla(). The continuous native color picker, opacity, and text value stay synchronized.</p>
+                <p id="logo-color-status" class="inline-status" role="status" aria-live="polite"></p>
+                <div class="logo-preset-search-row">
+                  <label class="sr-only" for="logo-color-search" data-l10n="logoColorSearchLabel">Filter color translations</label>
+                  <input id="logo-color-search" type="search" autocomplete="off" spellcheck="false" aria-describedby="logo-color-search-summary">
+                  <button id="logo-color-regex-toggle" class="button button-secondary" type="button" aria-expanded="false" aria-controls="logo-color-regex" data-l10n="regexBuilder">Regex builder</button>
+                </div>
+                <section id="logo-color-regex" class="regex-popover logo-preset-regex" role="region" aria-labelledby="logo-color-regex-title" hidden>
+                  <h5 id="logo-color-regex-title" data-l10n="logoColorRegexHeading">Color translation regex builder</h5>
+                  <p class="field-help" data-l10n="regexBuilderDescription">Build a JavaScript regular expression locally. Plain-text search stays the default.</p>
+                  <div class="regex-grid">
+                    <div><label for="logo-color-regex-pattern" data-l10n="pattern">Pattern</label><input id="logo-color-regex-pattern" type="text" maxlength="256" autocomplete="off" spellcheck="false"></div>
+                    <div><label for="logo-color-regex-flags" data-l10n="flags">Flags</label><input id="logo-color-regex-flags" type="text" maxlength="12" value="gi" autocomplete="off" spellcheck="false"></div>
+                  </div>
+                  <label for="logo-color-regex-sample" data-l10n="sampleText">Sample text</label>
+                  <textarea id="logo-color-regex-sample" rows="2" maxlength="2048"></textarea>
+                  <fieldset class="fragment-fieldset"><legend data-l10n="guidedFragments">Guided fragments</legend><div class="fragment-list">
+                    <button type="button" class="chip" data-logo-color-fragment="literal" data-l10n="literal">Literal</button>
+                    <button type="button" class="chip" data-logo-color-fragment="characterClass" data-l10n="characterClass">Character class</button>
+                    <button type="button" class="chip" data-logo-color-fragment="anchorStart" data-l10n="startAnchor">Start anchor</button>
+                    <button type="button" class="chip" data-logo-color-fragment="group" data-l10n="group">Group</button>
+                    <button type="button" class="chip" data-logo-color-fragment="alternation" data-l10n="alternation">Alternation</button>
+                    <button type="button" class="chip" data-logo-color-fragment="quantifier" data-l10n="quantifier">Quantifier</button>
+                  </div></fieldset>
+                  <p id="logo-color-regex-feedback" class="inline-status" role="status" aria-live="polite"></p>
+                  <ol id="logo-color-regex-matches" class="match-list"></ol>
+                  <div class="regex-actions">
+                    <button id="logo-color-regex-apply" class="button button-primary" type="button" data-l10n="applyPattern">Use pattern for search</button>
+                    <button id="logo-color-regex-copy" class="button button-secondary" type="button" data-l10n="copyPattern">Copy pattern</button>
+                    <button id="logo-color-regex-export" class="button button-secondary" type="button" data-l10n="exportPattern">Export pattern</button>
+                  </div>
+                  <label class="check-row" for="logo-color-regex-mode"><input id="logo-color-regex-mode" type="checkbox"><span data-l10n="applyPattern">Use pattern for search</span></label>
+                </section>
+                <p id="logo-color-search-summary" class="inline-status" role="status" aria-live="polite"></p>
+                <div id="logo-color-translations" class="logo-color-translations" aria-live="polite"></div>
+              </div>
+            </div>
+            <p class="field-help" data-l10n="logoConversionDisclosure">Applying a custom image rasterizes it into local 16, 32, 48, and 128 pixel PNG variants. Crop, color-profile, transparency, and animation information can change; the previous valid logo stays active if conversion fails.</p>
+            <div class="inline-actions">
+              <button id="logo-apply-custom" class="button button-primary" type="button" disabled aria-describedby="logo-apply-custom-help" data-l10n="logoApplyCustom">Convert and apply local image</button>
+              <button id="logo-reset" class="button button-secondary" type="button" data-l10n="logoReset">Reset to shipped logo</button>
+            </div>
+            <p id="logo-apply-custom-help" class="field-help" data-l10n="logoApplyCustomHelp">Choose a valid local image before conversion can run.</p>
+            <p class="field-help" data-l10n="logoPrivacyHelp">Logo bytes remain in this extension's local storage only. Settings exports, handoff requests, history, telemetry, and diagnostics omit the image and file metadata.</p>
+          </section>
+        </section>
       </section>
 
       <section id="panel-authenticator" class="tab-panel" role="tabpanel" aria-labelledby="tab-authenticator" data-panel="authenticator" hidden>

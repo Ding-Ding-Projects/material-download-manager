@@ -14,6 +14,59 @@ function Stop-WithMessage([string]$Message) {
   throw "Pages release-manifest preparation failed: $Message"
 }
 
+$staticExtensionIcons = [ordered]@{
+  '16' = 'assets/icons/icon16.png'
+  '32' = 'assets/icons/icon32.png'
+  '48' = 'assets/icons/icon48.png'
+  '128' = 'assets/icons/icon128.png'
+}
+
+function Assert-StaticExtensionIcons($Manifest, $Archive, $EntryNames) {
+  if ($null -eq $Manifest.icons -or $Manifest.icons -isnot [psobject] -or
+      $null -eq $Manifest.action -or $Manifest.action -isnot [psobject] -or
+      $null -eq $Manifest.action.default_icon -or $Manifest.action.default_icon -isnot [psobject]) {
+    Stop-WithMessage 'The browser-extension ZIP has no declared static action icons.'
+  }
+  foreach ($sizeText in $staticExtensionIcons.Keys) {
+    $expectedPath = [string]$staticExtensionIcons[$sizeText]
+    foreach ($iconSetName in @('icons', 'action.default_icon')) {
+      $iconSet = if ($iconSetName -eq 'icons') { $Manifest.icons } else { $Manifest.action.default_icon }
+      $property = $iconSet.PSObject.Properties[$sizeText]
+      if ($null -eq $property -or [string]$property.Value -ne $expectedPath) {
+        Stop-WithMessage "The browser-extension ZIP ${iconSetName}[$sizeText] must be $expectedPath."
+      }
+    }
+    if (-not $EntryNames.Contains($expectedPath)) {
+      Stop-WithMessage "The browser-extension ZIP is missing its static icon: $expectedPath"
+    }
+    $entry = $Archive.GetEntry($expectedPath)
+    if ($null -eq $entry -or $entry.Length -lt 33 -or $entry.Length -gt 512KB) {
+      Stop-WithMessage "The browser-extension ZIP static icon has an invalid byte size: $expectedPath"
+    }
+    $stream = $entry.Open()
+    try {
+      $bytes = [byte[]]::new($entry.Length)
+      $offset = 0
+      while ($offset -lt $bytes.Length) {
+        $read = $stream.Read($bytes, $offset, $bytes.Length - $offset)
+        if ($read -le 0) { break }
+        $offset += $read
+      }
+      if ($offset -ne $bytes.Length -or $bytes[0] -ne 137 -or $bytes[1] -ne 80 -or $bytes[2] -ne 78 -or $bytes[3] -ne 71 -or
+          [System.Text.Encoding]::ASCII.GetString($bytes, 12, 4) -ne 'IHDR') {
+        Stop-WithMessage "The browser-extension ZIP static icon is not a valid PNG header: $expectedPath"
+      }
+      $expectedSize = [byte][int]$sizeText
+      if ($bytes[16] -ne 0 -or $bytes[17] -ne 0 -or $bytes[18] -ne 0 -or $bytes[19] -ne $expectedSize -or
+          $bytes[20] -ne 0 -or $bytes[21] -ne 0 -or $bytes[22] -ne 0 -or $bytes[23] -ne $expectedSize) {
+        Stop-WithMessage "The browser-extension ZIP static icon dimensions are wrong: $expectedPath"
+      }
+    } finally {
+      $stream.Dispose()
+    }
+  }
+}
+
 if ([string]::IsNullOrWhiteSpace($env:GITHUB_REPOSITORY)) {
   Stop-WithMessage 'GITHUB_REPOSITORY is required.'
 }
@@ -169,6 +222,7 @@ if ($stableCandidates.Count -gt 0) {
       if ([int]$embeddedManifest.manifest_version -ne 3 -or [string]$embeddedManifest.version -ne $version -or $embeddedManifest.PSObject.Properties.Name -contains 'key') {
         Stop-WithMessage 'The browser-extension ZIP is not the expected unsigned, version-matched Manifest V3 payload.'
       }
+      Assert-StaticExtensionIcons $embeddedManifest $archive $entryNames
       $pairingEntry = $archive.GetEntry('src/shared/pairing.js')
       if ($null -eq $pairingEntry -or $pairingEntry.Length -le 0 -or $pairingEntry.Length -gt 4096) {
         Stop-WithMessage 'The browser-extension ZIP has no bounded empty pairing capability module.'
