@@ -31,6 +31,17 @@ Download table sort headers are real keyboard targets: Enter and Space apply the
 same sort action as a click, `aria-sort` reports ascending/descending/none, and
 the shared `:focus-visible` outline makes the active header discoverable.
 
+Each download row is also a native keyboard target. Enter opens its normal
+detail/open route, Space selects it, Up/Down move to an adjacent row, and the
+Context Menu key or Shift+F10 opens the same action menu as the visible row
+**Actions** button. Every such menu starts with its own local plain-text filter
+and adjacent anchored regex builder. Removing a download is wired directly from
+the row menu to the two-key/full-slider confirmation: it does not rely on an
+accessibility bridge watching labels or intercepting clicks. Escape keeps the
+row and restores focus to its Actions button; successful removal restores focus
+to the durable Downloads table because the original row control no longer
+exists.
+
 ## Configuration
 
 The bridge observes the real renderer DOM and applies only to visible shared
@@ -41,9 +52,10 @@ equivalent semantic hooks before they are shipped.
 
 Focus is returned only to a still-connected originating control. A reorder or
 removal never attempts to restore focus to a detached node. Escape and
-outside-close paths remain cancellation paths. The bridge does not grant new
-IPC privileges and never copies provider-authored text into an executable
-context.
+outside-close paths remain cancellation paths. A confirmed row removal uses its
+explicit table fallback rather than trying to focus its detached button. The
+bridge does not grant new IPC privileges, intercept destructive button text, or
+copy provider-authored text into an executable context.
 
 ## Verification
 
@@ -55,6 +67,11 @@ and Escape focus return; and combines bilingual mode with a 520 CSS-pixel,
 2× device-scale viewport to check overflow, clipping, contrast, and minimum
 control sizing. The same real-artifact gate forces and recovers from separate
 History and Changelog export errors without poisoning either search field.
+It also drives a real download row through the keyboard menu, filter and regex
+affordance, then proves cancellation, two independent authorization keys,
+full-range slider authorization, table-focus fallback, and persistence after
+reload. The same smoke uses rendered Add and Download form submissions against
+a loopback fixture rather than calling the preload download API directly.
 Final results remain in the project handoff. The current
 renderer does not yet have a dedicated DOM test harness; that gap remains
 explicit rather than being treated as a pass.

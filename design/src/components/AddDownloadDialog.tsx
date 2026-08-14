@@ -27,7 +27,10 @@ export default function AddDownloadDialog() {
   const addDownload = useAppStore((s) => s.addDownload);
   const pickFolder = useAppStore((s) => s.pickFolder);
 
-  const [url, setUrl] = useState(prefillUrl);
+  // A fresh renderer deliberately has no browser-handoff prefill.  Normalize at
+  // the UI boundary so every visible entry point (toolbar, tab strip, palette)
+  // can open the same real form without asking string methods to operate on null.
+  const [url, setUrl] = useState(() => typeof prefillUrl === "string" ? prefillUrl : "");
   const [folder, setFolder] = useState(settings?.defaultSaveFolder ?? "");
   const [fileName, setFileName] = useState("");
   const [fileNameTouched, setFileNameTouched] = useState(false);

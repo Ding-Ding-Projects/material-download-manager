@@ -6,15 +6,10 @@ import { CloseIcon, ErrorIcon, TrashIcon } from "./icons";
 export interface DestructiveActionRequest {
   itemIds: string[];
   deleteFile: boolean;
-}
-
-const DESTRUCTIVE_REQUEST_EVENT = "mdm:request-destructive-action";
-const CLOSE_CONTEXT_MENU_EVENT = "mdm:close-context-menus";
-
-export function requestDestructiveAction(request: DestructiveActionRequest) {
-  if (typeof window !== "undefined") {
-    window.dispatchEvent(new CustomEvent(DESTRUCTIVE_REQUEST_EVENT, { detail: request }));
-  }
+  /** Renderer-only origin for cancellation; never persisted or sent across IPC. */
+  returnFocusTarget?: HTMLElement | null;
+  /** Durable local fallback used when confirmation removes the origin control. */
+  returnFocusFallback?: HTMLElement | null;
 }
 
 interface DestructiveActionGateProps {
@@ -35,7 +30,9 @@ export default function DestructiveActionGate({ request, actionName: actionNameO
   const [authorized, setAuthorized] = useState(false);
   const headingRef = useRef<HTMLHeadingElement>(null);
   const firstKeyRef = useRef<HTMLButtonElement>(null);
-  const triggerAtOpenRef = useRef<HTMLElement | null>(returnFocusRef?.current ?? null);
+  const triggerAtOpenRef = useRef<HTMLElement | null>(request.returnFocusTarget ?? returnFocusRef?.current ?? null);
+  const fallbackAtOpenRef = useRef<HTMLElement | null>(request.returnFocusFallback ?? null);
+  const authorizedRef = useRef(false);
 
   const actionName = actionNameOverride ?? (request.deleteFile
     ? copy.text("remove the downloads and delete their files", "移除下載項目並刪除檔案")
@@ -55,15 +52,21 @@ export default function DestructiveActionGate({ request, actionName: actionNameO
     return () => {
       window.removeEventListener("keydown", handleEscape, true);
       const trigger = triggerAtOpenRef.current ?? returnFocusRef?.current;
-      trigger?.focus({ preventScroll: true });
+      const fallback = fallbackAtOpenRef.current;
+      const target = authorizedRef.current ? fallback ?? trigger : trigger ?? fallback;
+      // Cleanup precedes the DOM removal that can otherwise move focus back to
+      // <body>.  Restore focus after the gate is physically gone.
+      window.requestAnimationFrame(() => {
+        if (target?.isConnected) target.focus({ preventScroll: true });
+      });
     };
   }, [onCancel, returnFocusRef]);
 
   useEffect(() => {
     if (progress !== 100 || !bothKeysReady || authorized) return;
     setAuthorized(true);
+    authorizedRef.current = true;
     const timeoutId = window.setTimeout(() => {
-      window.dispatchEvent(new Event(CLOSE_CONTEXT_MENU_EVENT));
       onConfirm(request);
     }, 300);
     return () => window.clearTimeout(timeoutId);
@@ -163,6 +166,7 @@ export default function DestructiveActionGate({ request, actionName: actionNameO
                 ref={index === 0 ? firstKeyRef : undefined}
                 type="button"
                 className={`destructive-key${keys[index] ? " armed" : ""}`}
+                aria-label={copy.text(`Authorization key ${index + 1}`, `授權匙 ${index + 1}`)}
                 aria-pressed={keys[index]}
                 onClick={() => toggleKey(index as 0 | 1)}
               >

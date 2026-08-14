@@ -74,6 +74,14 @@ the CLI timeout to each compiled test file as a whole, so the suite uses
 `--test-timeout=60000`: that accommodates the deliberately serialized manager
 cases while still failing a blocked file within a bounded interval.
 
+The built Electron smoke starts a bounded loopback fixture and submits both the
+rendered **Add** and **Download** form actions. It opens the separate progress
+window through the visible toolbar action, resumes the added row through its
+keyboard-accessible context menu, and verifies the resulting request, live
+progress state, completion notification, and cleanup. This distinguishes a
+working renderer/main-process handoff from a test that merely calls the preload
+API directly.
+
 ## Suggested articles
 
 - [Local version history](../history/local-version-history.md) — audit local

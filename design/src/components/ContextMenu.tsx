@@ -6,10 +6,11 @@ interface ContextMenuProps {
   y: number;
   onClose: () => void;
   children: ReactNode;
+  label?: string;
 }
 
 /** A small positioned, self-closing popup menu. No external dependency. */
-export default function ContextMenu({ x, y, onClose, children }: ContextMenuProps) {
+export default function ContextMenu({ x, y, onClose, children, label = "Context menu" }: ContextMenuProps) {
   const ref = useRef<HTMLDivElement>(null);
   const [pos, setPos] = useState({ left: x, top: y, visible: false });
 
@@ -43,6 +44,8 @@ export default function ContextMenu({ x, y, onClose, children }: ContextMenuProp
     <div
       ref={ref}
       className="context-menu"
+      role="menu"
+      aria-label={label}
       style={{ left: pos.left, top: pos.top, opacity: pos.visible ? 1 : 0 }}
       onContextMenu={(e) => e.preventDefault()}
     >
@@ -67,7 +70,9 @@ export function ContextMenuItem({
   return (
     <button
       type="button"
+      role="menuitem"
       className={`context-menu-item${danger ? " danger" : ""}`}
+      aria-label={label}
       disabled={disabled}
       onClick={onClick}
     >

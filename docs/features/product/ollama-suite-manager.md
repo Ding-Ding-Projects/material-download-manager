@@ -58,6 +58,11 @@ surrounding copy without changing endpoint, model, count, or failure facts.
 - `npm run typecheck`, `npm run build`, compiled Electron tests, documentation
   bundle checks, and the built UI smoke are the required local checks for this
   slice.
+- The smoke does not stop at mounted controls: it clicks **Add provider**,
+  verifies the persisted local provider card, invokes **Refresh models**, and
+  waits for the visible healthy or unavailable terminal state. This is safe on
+  a machine without Ollama because the unavailable-state error is the expected
+  recovery route; a running local service instead produces its real inventory.
 - A built Settings capture is required before integration when the cheap hidden
   route is available; if the route is unavailable, the handoff records that
   evidence boundary rather than claiming a visual verification.

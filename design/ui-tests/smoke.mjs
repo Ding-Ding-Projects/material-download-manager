@@ -19,6 +19,11 @@ const RUNTIME_CHECK_IDS = [
   "resolve-cdp-page",
   "cdp-connected",
   "renderer-root-mounted",
+  "tab-add-download-action",
+  "add-download-handler-submit",
+  "download-row-keyboard-actions",
+  "toolbar-queues-action",
+  "destructive-download-removal-handler",
   "feature-surface-mounted",
   "sidebar-keyboard-activation",
   "toolbar-menu-actions",
@@ -36,6 +41,7 @@ const RUNTIME_CHECK_IDS = [
   "settings-scheduled-settings",
   "settings-authenticator-surface",
   "settings-ollama-suite",
+  "settings-ollama-visible-handler",
   "settings-authenticator-live-management",
   "settings-dialog-a11y",
   "settings-auto-organize-ui",
@@ -95,6 +101,7 @@ function usage() {
     "  --progress-screenshot <path>  Capture a separate progress page when one exists",
     "  --add-download-screenshot <path>  Capture the Add download start surface before submit",
     "  --completion-screenshot <path>  Capture the in-app Download complete toast",
+    "  --interactive-controls-only  Run only the rendered direct-control acceptance flow",
     "  --gallery-dir <path>    Capture the seven auto-organize documentation states into this directory",
     "  --json <path>          Write the same stable JSON summary to a file",
     "  --keep-user-data-dir   Preserve the temporary Electron profile for debugging",
@@ -125,6 +132,7 @@ function parseArgs(argv) {
     galleryDirectory: null,
     jsonPath: null,
     keepUserDataDirectory: false,
+    interactiveControlsOnly: false,
   };
 
   for (let index = 0; index < argv.length; index += 1) {
@@ -132,6 +140,10 @@ function parseArgs(argv) {
     if (argument === "--help" || argument === "-h") return { help: true, options };
     if (argument === "--keep-user-data-dir") {
       options.keepUserDataDirectory = true;
+      continue;
+    }
+    if (argument === "--interactive-controls-only") {
+      options.interactiveControlsOnly = true;
       continue;
     }
 
@@ -357,10 +369,13 @@ async function allocateLoopbackPort(requestedPort) {
   });
 }
 
-async function startFixtureServer() {
+async function startFixtureServer({ directOnly = false } = {}) {
   // Keep the transfer active long enough for the real ProgressWindow to be
-  // captured in its Downloading state before completion.
-  const body = Buffer.alloc(4 * 1024 * 1024, 0x61);
+  // captured in its Downloading state before completion. The compact
+  // direct-control proof uses a shorter bounded fixture; the full smoke keeps
+  // its established 8 MiB / 40 ms transfer profile.
+  const body = Buffer.alloc((directOnly ? 4 : 8) * 1024 * 1024, 0x61);
+  const chunkDelayMs = directOnly ? 30 : 40;
   const requests = [];
   const timers = new Set();
   const server = createServer((request, response) => {
@@ -393,7 +408,7 @@ async function startFixtureServer() {
       activeTimer = setTimeout(() => {
         if (activeTimer) timers.delete(activeTimer);
         sendChunk();
-      }, 25);
+      }, chunkDelayMs);
       timers.add(activeTimer);
     };
     response.once("close", () => {
@@ -423,6 +438,15 @@ async function startFixtureServer() {
       while (Date.now() < deadline) {
         const request = requests.find((candidate) => candidate.method === "GET" && candidate.path === "/ui-smoke.bin");
         if (request) return request;
+        await sleep(25);
+      }
+      return null;
+    },
+    waitForRequestCount: async (minimum, timeoutMs) => {
+      const deadline = Date.now() + timeoutMs;
+      while (Date.now() < deadline) {
+        const matching = requests.filter((candidate) => candidate.method === "GET" && candidate.path === "/ui-smoke.bin");
+        if (matching.length >= minimum) return matching;
         await sleep(25);
       }
       return null;
@@ -562,7 +586,7 @@ async function inspectProgressWindow(port, mainTargetId, timeoutMs, screenshotPa
   }
   const separatePages = targets.filter(
     (target) => target && target.type === "page" && target.id !== mainTargetId && typeof target.webSocketDebuggerUrl === "string"
-  );
+  ).sort((left, right) => Number(String(right.url).includes(`progressItem=${expectedItemId}`)) - Number(String(left.url).includes(`progressItem=${expectedItemId}`)));
   const inspectedTargets = [];
 
   for (const target of separatePages) {
@@ -601,7 +625,10 @@ async function inspectProgressWindow(port, mainTargetId, timeoutMs, screenshotPa
         "};",
         "})()",
       ].join("\n"));
-      if (surface.progressItem !== expectedItemId) continue;
+      if (surface.progressItem !== expectedItemId) {
+        inspectedTargets.push({ ...candidate, surface });
+        continue;
+      }
       inspectedTargets.push({ ...candidate, surface });
       if (surface.readyState !== "complete" || surface.dataSurface !== "progress-window") {
         return { status: "loading", target: candidate, surface, screenshotPath: null, candidates: inspectedTargets };
@@ -639,6 +666,19 @@ async function inspectProgressWindow(port, mainTargetId, timeoutMs, screenshotPa
     screenshotPath: null,
     candidates: inspectedTargets,
   };
+}
+
+async function waitForProgressWindow(client, port, mainTargetId, timeoutMs, screenshotPath, expectedItemId, expectedFileName, expectedUrl) {
+  const deadline = Date.now() + timeoutMs;
+  let latest = null;
+  while (Date.now() < deadline) {
+    latest = await inspectProgressWindow(port, mainTargetId, timeoutMs, screenshotPath, expectedItemId, expectedFileName, expectedUrl);
+    if (latest.status === "checked") return latest;
+    if (latest.status === "failed") throw new Error(`separate progress window failed: ${JSON.stringify(latest)}`);
+    await sleep(100);
+  }
+  const targets = await listCdpTargets(port).catch(() => []);
+  throw new Error(`separate progress window was not verified: ${JSON.stringify({ latest, targets: targets.map((target) => ({ id: target?.id ?? null, type: target?.type ?? null, url: target?.url ?? null })) })}`);
 }
 
 class CdpClient {
@@ -734,7 +774,6 @@ class CdpClient {
   async evaluate(expression) {
     const response = await this.send("Runtime.evaluate", {
       expression,
-      awaitPromise: true,
       returnByValue: true,
       userGesture: true,
     });
@@ -1155,6 +1194,7 @@ async function main(argv) {
   let userDataDirectory = null;
   let port = null;
   let fixtureServer = null;
+  let interactiveDownload = null;
 
   try {
     const nodeRuntime = await runCheck(result, "node-runtime", async () => {
@@ -1247,58 +1287,164 @@ async function main(argv) {
       `));
     });
 
+    await runCheck(result, "renderer-interaction-ready", async () => {
+      await waitForPage(
+        cdp,
+        `!document.querySelector(".boot-overlay") && Boolean(document.querySelector('[role="tablist"][aria-label="Open tabs"]')) && Boolean(document.querySelector("button.add-url-btn"))`,
+        "the initialized interactive renderer surface",
+        options.timeoutMs,
+      );
+      return cdp.evaluate(pageExpression(`
+        const tabStrip = document.querySelector('[role="tablist"][aria-label="Open tabs"]');
+        const addUrl = findByRole("button", "Add URL");
+        if (!(tabStrip instanceof HTMLElement) || !(addUrl instanceof HTMLButtonElement)) {
+          throw new Error("the initialized renderer lacks its tab strip or Add URL action");
+        }
+        return { bootOverlay: false, tabStrip: true, addUrl: true };
+      `));
+    });
+
+    await runCheck(result, "tab-add-download-action", async () => {
+      const before = await cdp.evaluate(pageExpression(`
+        const strip = document.querySelector('[role="tablist"][aria-label="Open tabs"]');
+        const add = findByRole("button", "Add download", strip ?? document);
+        if (!(strip instanceof HTMLElement) || !(add instanceof HTMLButtonElement)) throw new Error("tab-strip Add download action is unavailable");
+        const tabs = [...strip.querySelectorAll('[role="tab"]')].map((tab) => accessibleName(tab));
+        if (tabs.some((name) => /^View\\s+\\d+$/u.test(name))) throw new Error("a generic View tab is still rendered as a download fallback");
+        return { tabCount: tabs.length, tabs, addId: add.id || null };
+      `));
+      await clickByRole(cdp, "button", "Add download", '[role="tablist"][aria-label="Open tabs"]');
+      await waitForPage(cdp, `Boolean(document.querySelector(".add-download-dialog-overlay [role=dialog]"))`, "Add download action opens the rendered form", options.timeoutMs);
+      const opened = await cdp.evaluate(pageExpression(`
+        const strip = document.querySelector('[role="tablist"][aria-label="Open tabs"]');
+        const tabs = strip ? [...strip.querySelectorAll('[role="tab"]')].map((tab) => accessibleName(tab)) : [];
+        if (tabs.length !== ${before.tabCount} || tabs.some((name) => /^View\\s+\\d+$/u.test(name))) throw new Error("Add download action created a duplicate fallback tab");
+        return { tabCount: tabs.length, tabStateUnchanged: true };
+      `));
+      await dispatchEscape(cdp);
+      await waitForPage(cdp, `!document.querySelector(".add-download-dialog-overlay")`, "Add download action dialog close", options.timeoutMs);
+      const focusReturned = await cdp.evaluate(pageExpression(`
+        const add = findByRole("button", "Add download", document.querySelector('[role="tablist"][aria-label="Open tabs"]') ?? document);
+        if (!(add instanceof HTMLButtonElement) || document.activeElement !== add) throw new Error("Add download dialog did not restore focus to its tab-strip action");
+        return { focusReturned: true };
+      `));
+      return { ...before, ...opened, ...focusReturned };
+    });
+
+    await runCheck(result, "add-download-handler-submit", async () => {
+      fixtureServer = await startFixtureServer({ directOnly: options.interactiveControlsOnly });
+      const folder = path.join(userDataDirectory, "downloads");
+      async function submit(action, fileName) {
+        await clickByRole(cdp, "button", "Add URL");
+        await waitForPage(cdp, `Boolean(document.querySelector(".add-download-dialog-overlay [role=dialog]"))`, `${action} form opens`, options.timeoutMs);
+        await setInputValue(cdp, 'input[aria-label="Download URL"]', fixtureServer.url);
+        await setInputValue(cdp, 'input[aria-label="Save folder"]', folder);
+        await setInputValue(cdp, 'input[aria-label="File name"]', fileName);
+        await clickByRole(cdp, "button", action, ".add-download-dialog-overlay [role=dialog]");
+        await waitForPage(cdp, `!document.querySelector(".add-download-dialog-overlay")`, `${action} form submission closes`, options.timeoutMs);
+        await waitForPage(cdp, `Boolean([...document.querySelectorAll("tr[data-download-row]")].find((row) => /${fileName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}/.test(row.textContent ?? "")))`, `${action} submission renders ${fileName}`, options.timeoutMs);
+        return cdp.evaluate(pageExpression(`
+          const row = [...document.querySelectorAll("tr[data-download-row]")].find((candidate) => /${fileName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}/.test(candidate.textContent ?? ""));
+          if (!(row instanceof HTMLTableRowElement) || !row.dataset.downloadId) throw new Error(${JSON.stringify(`${action} submission did not render a semantic download row`)});
+          return { id: row.dataset.downloadId, fileName: ${JSON.stringify(fileName)}, status: row.querySelector(".status-label")?.textContent?.trim() ?? "" };
+        `));
+      }
+
+      const added = await submit("Add", "ui-smoke.bin");
+      const downloaded = await submit("Download", "ui-smoke-download.bin");
+      const fixtureRequests = await fixtureServer.waitForRequestCount(1, options.timeoutMs);
+      if (!fixtureRequests?.length) throw new Error("Download form submission never reached the loopback fixture");
+      interactiveDownload = { ...added, url: fixtureServer.url, downloadedId: downloaded.id };
+      return { added, downloaded, fixtureRequests: fixtureRequests.length, loopbackOnly: fixtureServer.url };
+    });
+
+    await runCheck(result, "download-row-keyboard-actions", async () => {
+      if (!interactiveDownload || !fixtureServer) throw new Error("row-action proof requires a rendered Add-form submission");
+      await cdp.evaluate(pageExpression(`
+        const row = document.querySelector('[data-download-id=${JSON.stringify(interactiveDownload.id)}]');
+        if (!(row instanceof HTMLTableRowElement)) throw new Error("rendered Add submission has no keyboard-operable row");
+        row.focus();
+        return { focusedId: row.id, tabIndex: row.tabIndex };
+      `));
+      await dispatchKey(cdp, "ContextMenu", "ContextMenu", 93);
+      await waitForPage(cdp, `Boolean(document.querySelector('.context-menu[aria-label="Download actions"]'))`, "row Context Menu key opens download actions", options.timeoutMs);
+      await waitForPage(cdp, `(() => { const search = document.querySelector('input[aria-label="Download actions search"]'); return search instanceof HTMLInputElement && document.activeElement === search; })()`, "row Context Menu focus moves to its local search", options.timeoutMs);
+      const menuEvidence = await cdp.evaluate(pageExpression(`
+        const menu = document.querySelector('.context-menu[aria-label="Download actions"]');
+        const search = menu?.querySelector('input[aria-label="Download actions search"]');
+        const regex = menu?.querySelector('button[aria-label="Open Download actions regex builder"]');
+        if (!(menu instanceof HTMLElement) || !(search instanceof HTMLInputElement) || !(regex instanceof HTMLButtonElement)) throw new Error("keyboard-opened row menu lacks its local search or regex builder");
+        if (document.activeElement !== search) throw new Error("keyboard-opened row menu did not focus its search control");
+        return { menu: menu.getAttribute("aria-label"), searchFocused: true, regexBuilder: true };
+      `));
+      await setInputValue(cdp, 'input[aria-label="Download actions search"]', "Resume");
+      await waitForPage(cdp, `Boolean([...document.querySelectorAll('.context-menu [role="menuitem"]')].find((item) => item.getAttribute("aria-label") === "Resume"))`, "filtered Resume row action", options.timeoutMs);
+      await clickByRole(cdp, "menuitem", "Resume", ".context-menu");
+      const fixtureRequests = await fixtureServer.waitForRequestCount(2, options.timeoutMs);
+      if (!fixtureRequests || fixtureRequests.length < 2) throw new Error("row Resume action did not start its rendered Add-form download through the loopback fixture");
+      await waitForPage(cdp, `document.querySelector('[data-download-id=${JSON.stringify(interactiveDownload.id)}] .status-label')?.classList.contains("status-downloading")`, "row Resume action changes its own visible status", options.timeoutMs);
+      return { ...menuEvidence, fixtureRequests: fixtureRequests.length, resumedDownloadId: interactiveDownload.id };
+    });
+
+    await runCheck(result, "toolbar-queues-action", async () => {
+      await clickByRole(cdp, "button", "Open Queues");
+      await waitForPage(cdp, `Boolean(document.querySelector(".queues-dialog, [role=dialog][aria-label*='Queue']"))`, "toolbar Queues action", options.timeoutMs);
+      const evidence = await cdp.evaluate(pageExpression(`
+        const dialog = document.querySelector(".queues-dialog, [role=dialog][aria-label*='Queue']");
+        if (!(dialog instanceof HTMLElement) || !isVisible(dialog)) throw new Error("Open Queues handler did not render a visible queue dialog");
+        return { role: dialog.getAttribute("role"), visible: true };
+      `));
+      await dispatchEscape(cdp);
+      await waitForPage(cdp, `!document.querySelector(".queues-dialog, [role=dialog][aria-label*='Queue']")`, "toolbar Queues dialog close", options.timeoutMs);
+      return evidence;
+    });
+
     await runCheck(result, "progress-window", async () => {
-      fixtureServer = await startFixtureServer();
-      const seeded = await cdp.evaluate(`(async () => {
-        const settings = await window.api.getSettings();
-        const itemId = await window.api.addDownload({
-           url: ${JSON.stringify(fixtureServer.url)},
-          folder: ${JSON.stringify(path.join(userDataDirectory, "downloads"))},
-          fileName: "ui-smoke.bin",
-          startImmediately: false,
-          headers: {},
-        });
-         const opened = await window.api.openProgressWindow(itemId);
-         if (!opened) throw new Error("main process refused to open the seeded progress window");
-         await window.api.resumeDownload(itemId);
-         return { itemId, fileName: "ui-smoke.bin", url: ${JSON.stringify(fixtureServer.url)}, opened };
-      })()`);
-      const fixtureRequest = await fixtureServer.waitForRequest(options.timeoutMs);
-      if (!fixtureRequest) throw new Error("the seeded download never issued a GET request to the loopback fixture");
-      if (fixtureRequest.path !== "/ui-smoke.bin") throw new Error("the seeded download requested an unexpected fixture path");
-      const deadline = Date.now() + options.timeoutMs;
-      let progressWindow = null;
-      while (Date.now() < deadline) {
-        progressWindow = await inspectProgressWindow(
-          port,
-          targetEvidence.target.id,
-          options.timeoutMs,
-          derivedProgressScreenshotPath(options),
-          seeded.itemId,
-          seeded.fileName,
-          seeded.url
-        );
-        const pageFinishedLoading = progressWindow.status === "failed" && progressWindow.surface?.readyState === "complete";
-        if (progressWindow.status === "checked" || pageFinishedLoading) break;
-        await sleep(100);
-      }
-      if (!progressWindow || progressWindow.status !== "checked") {
-        throw new Error(`separate progress window was not verified: ${JSON.stringify(progressWindow)}`);
-      }
+      if (!interactiveDownload || !fixtureServer) throw new Error("progress-window proof requires a rendered interactive download");
+      // Toolbar deliberately targets its first *currently active* item.  The
+      // Download submission can finish before this action while the row-menu
+      // resumed submission remains active, so derive the expectation from the
+      // rendered order instead of asserting a stale request id.
+      const progressTarget = await cdp.evaluate(pageExpression(`
+        const rows = [...document.querySelectorAll("tr[data-download-row]")];
+        const row = rows.find((candidate) => {
+          const status = candidate.querySelector(".status-label");
+          return status?.classList.contains("status-downloading")
+            || status?.classList.contains("status-queued")
+            || status?.classList.contains("status-paused")
+            || status?.classList.contains("status-added");
+        }) ?? rows[0];
+        const id = row?.getAttribute("data-download-id") ?? "";
+        const fileName = row?.querySelector(".name-text")?.textContent?.trim() ?? "";
+        if (!id || !fileName) throw new Error("Progress Window has no rendered download target");
+        return { id, fileName };
+      `));
+      const progressAction = await clickByRole(cdp, "button", "Progress Window");
+      if (!progressAction) throw new Error("Progress Window action did not dispatch from the rendered toolbar");
+      const progressWindow = await waitForProgressWindow(
+        cdp,
+        port,
+        targetEvidence.target.id,
+        options.timeoutMs,
+        derivedProgressScreenshotPath(options),
+        progressTarget.id,
+        progressTarget.fileName,
+        interactiveDownload.url,
+      );
       await waitForPage(
         cdp,
         `(() => {
-          const row = [...document.querySelectorAll(".dl-row")].find((candidate) => /ui-smoke\\.bin/.test(candidate.textContent ?? ""));
-          const toast = [...document.querySelectorAll(".notification-toast-success")].find((candidate) => /Download complete/.test(candidate.textContent ?? "") && /ui-smoke\\.bin/.test(candidate.textContent ?? ""));
+          const row = document.querySelector('[data-download-id=${JSON.stringify(progressTarget.id)}]');
+          const toast = [...document.querySelectorAll(".notification-toast-success")].find((candidate) => /Download complete/.test(candidate.textContent ?? "") && (candidate.textContent ?? "").includes(${JSON.stringify(progressTarget.fileName)}));
           return Boolean(row && row.querySelector(".status-label.status-completed") && toast);
         })()`,
-        "the completed browser-handoff item and in-app completion toast",
+        "the completed Progress Window target and in-app completion toast",
         options.timeoutMs,
       );
       const completionEvidence = await cdp.evaluate(pageExpression(`
-        const toast = [...document.querySelectorAll(".notification-toast-success")].find((candidate) => /Download complete/.test(candidate.textContent ?? "") && /ui-smoke\\.bin/.test(candidate.textContent ?? ""));
+        const toast = [...document.querySelectorAll(".notification-toast-success")].find((candidate) => /Download complete/.test(candidate.textContent ?? "") && (candidate.textContent ?? "").includes(${JSON.stringify(progressTarget.fileName)}));
         const center = document.querySelector(".notification-center");
-        const row = [...document.querySelectorAll(".dl-row")].find((candidate) => /ui-smoke\\.bin/.test(candidate.textContent ?? ""));
+        const row = document.querySelector('[data-download-id=${JSON.stringify(progressTarget.id)}]');
         if (!(toast instanceof HTMLElement) || !(center instanceof HTMLElement) || !(row instanceof HTMLElement)) throw new Error("completed item or in-app completion toast is missing");
         const centerZIndex = Number.parseInt(window.getComputedStyle(center).zIndex, 10);
         const toastZIndex = Number.parseInt(window.getComputedStyle(toast).zIndex, 10) || centerZIndex;
@@ -1309,7 +1455,7 @@ async function main(argv) {
         const capturedPath = await captureScreenshot(cdp, options.completionScreenshotPath, ".notification-toast-success");
         result.completion = { requested: true, status: "captured", path: capturedPath, surface: "in-app Download complete toast" };
       }
-      result.progressWindow = { ...progressWindow, completion: completionEvidence };
+      result.progressWindow = { ...progressWindow, progressTarget, completion: completionEvidence };
       return result.progressWindow;
     });
 
@@ -1342,6 +1488,62 @@ async function main(argv) {
       }
       return completion;
     });
+
+    await runCheck(result, "destructive-download-removal-handler", async () => {
+      if (!interactiveDownload?.downloadedId) throw new Error("destructive-removal proof requires the Download form submission");
+      const targetId = interactiveDownload.downloadedId;
+      async function openRemovalChoice() {
+        await cdp.evaluate(pageExpression(`
+          const row = document.querySelector('[data-download-id=${JSON.stringify(targetId)}]');
+          const button = row?.querySelector('.row-actions-button');
+          if (!(row instanceof HTMLTableRowElement) || !(button instanceof HTMLButtonElement)) throw new Error("download row action control is missing");
+          button.focus();
+          button.click();
+          return { rowId: row.id, focusedAction: document.activeElement === button };
+        `));
+        await waitForPage(cdp, `Boolean(document.querySelector('.context-menu[aria-label="Download actions"]'))`, "row action opens Download actions menu", options.timeoutMs);
+        await clickByRole(cdp, "menuitem", "Remove", ".context-menu");
+        await waitForPage(cdp, `Boolean(document.querySelector('.context-menu[aria-label="Removal choices"]'))`, "Remove action opens removal choices", options.timeoutMs);
+        await clickByRole(cdp, "menuitem", "Remove from list", ".context-menu");
+        await waitForPage(cdp, `Boolean(document.querySelector(".destructive-gate"))`, "row removal opens the real destructive gate", options.timeoutMs);
+      }
+
+      await openRemovalChoice();
+      const cancelEvidence = await cdp.evaluate(pageExpression(`
+        const gate = document.querySelector(".destructive-gate");
+        const keys = [...(gate?.querySelectorAll(".destructive-key") ?? [])];
+        const slider = gate?.querySelector("#destructive-confirm-slider");
+        if (!(gate instanceof HTMLElement) || keys.length !== 2 || !(slider instanceof HTMLInputElement) || !slider.disabled) throw new Error("real destructive gate did not preserve its two-key locked slider contract");
+        return { keyCount: keys.length, sliderDisabledBeforeKeys: slider.disabled };
+      `));
+      await dispatchEscape(cdp);
+      await waitForPage(cdp, `!document.querySelector(".destructive-gate")`, "Escape cancels row removal", options.timeoutMs);
+      const cancelFocus = await cdp.evaluate(pageExpression(`
+        const row = document.querySelector('[data-download-id=${JSON.stringify(targetId)}]');
+        const action = row?.querySelector(".row-actions-button");
+        if (!(row instanceof HTMLTableRowElement) || !(action instanceof HTMLButtonElement)) throw new Error("Escape removed a download before authorization");
+        if (document.activeElement !== action) throw new Error("Escape did not restore focus to the row action control");
+        return { rowPreserved: true, focusRestored: true };
+      `));
+
+      await openRemovalChoice();
+      await clickByRole(cdp, "button", "Authorization key 1", ".destructive-gate");
+      await clickByRole(cdp, "button", "Authorization key 2", ".destructive-gate");
+      await waitForPage(cdp, `(() => { const slider = document.querySelector("#destructive-confirm-slider"); return slider instanceof HTMLInputElement && !slider.disabled; })()`, "two keys unlock the full-range slider", options.timeoutMs);
+      await setInputValue(cdp, "#destructive-confirm-slider", "100");
+      await waitForPage(cdp, `!document.querySelector('[data-download-id=${JSON.stringify(targetId)}]')`, "authorized row removal updates the rendered table", options.timeoutMs);
+      const durableEvidence = await cdp.evaluate(pageExpression(`
+        const table = document.getElementById("downloads-table");
+        if (!(table instanceof HTMLElement) || document.activeElement !== table) throw new Error("successful removal did not restore focus to the durable table fallback");
+        return { rowRemoved: true, fallbackFocused: true };
+      `));
+      await cdp.evaluate("location.reload()");
+      await waitForPage(cdp, `Boolean(document.querySelector("#root")?.firstElementChild)`, "reload after authorized row removal", options.timeoutMs);
+      await waitForPage(cdp, `!document.querySelector('[data-download-id=${JSON.stringify(targetId)}]')`, "removed row stays absent after reload", options.timeoutMs);
+      return { ...cancelEvidence, ...cancelFocus, ...durableEvidence, persistedAfterReload: true };
+    });
+
+    if (options.interactiveControlsOnly) return;
 
     await runCheck(result, "settings-add-download-top-layer", async () => {
       await clickByRole(cdp, "button", "Add URL");
@@ -1936,12 +2138,43 @@ async function main(argv) {
         if (!(search instanceof HTMLInputElement)) throw new Error("Ollama Settings tab lost its local search field");
         return { panel: panel.id, endpoint: endpoint.value, addDisabled: add.disabled, tabSearch: search.getAttribute("aria-label") };
       `));
-      if (options.ollamaScreenshotPath) {
-        const capturedPath = await captureScreenshot(cdp, options.ollamaScreenshotPath, "#settings-ollama-suite");
-        result.ollama = { requested: true, status: "captured", path: capturedPath };
-        return { ...evidence, screenshotPath: capturedPath };
-      }
       return evidence;
+    });
+
+    await runCheck(result, "settings-ollama-visible-handler", async () => {
+      const panelSelector = "#settings-ollama-suite";
+      await clickByRole(cdp, "button", "Add provider", panelSelector);
+      await waitForPage(cdp, `Boolean(document.querySelector('${panelSelector} .ollama-provider-card'))`, "Ollama Add provider handler renders a saved provider", options.timeoutMs);
+      const created = await cdp.evaluate(pageExpression(`
+        const panel = document.querySelector(${JSON.stringify(panelSelector)});
+        const card = panel?.querySelector(".ollama-provider-card");
+        const refresh = card ? [...card.querySelectorAll("button")].find((button) => accessibleName(button) === "Refresh models") : null;
+        if (!(card instanceof HTMLElement) || !(refresh instanceof HTMLButtonElement)) throw new Error("Add provider handler did not create a refreshable local provider card");
+        if (!/Not checked yet/.test(card.textContent ?? "")) throw new Error("new provider card does not show its truthful initial state");
+        return { provider: card.querySelector("h3")?.textContent?.trim() ?? "", refreshEnabled: !refresh.disabled };
+      `));
+      await clickByRole(cdp, "button", "Refresh models", `${panelSelector} .ollama-provider-card`);
+      await waitForPage(cdp, `(() => {
+        const card = document.querySelector('${panelSelector} .ollama-provider-card');
+        const refreshing = [...(card?.querySelectorAll("button") ?? [])].some((button) => /Checking/.test(button.textContent ?? ""));
+        return Boolean(card && !refreshing && !/Not checked yet/.test(card.textContent ?? ""));
+      })()`, "Ollama Refresh models handler reaches a visible terminal state", options.timeoutMs);
+      const refreshed = await cdp.evaluate(pageExpression(`
+        const panel = document.querySelector(${JSON.stringify(panelSelector)});
+        const card = panel?.querySelector(".ollama-provider-card");
+        const cardText = card?.textContent?.replace(/\\s+/g, " ").trim() ?? "";
+        const error = panel?.querySelector('[role="alert"]')?.textContent?.replace(/\\s+/g, " ").trim() ?? "";
+        const status = [...(panel?.querySelectorAll('[role="status"]') ?? [])].map((node) => node.textContent?.replace(/\\s+/g, " ").trim() ?? "").join(" ");
+        if (!(card instanceof HTMLElement) || (!/Unavailable|Healthy/.test(cardText))) throw new Error("Refresh models did not update the provider’s visible health state");
+        if (!error && !status) throw new Error("Refresh models exposed neither a visible success state nor a visible recovery error");
+        return { cardText, terminal: /Healthy/.test(cardText) ? "healthy" : "unavailable", error: error || null, status: status || null };
+      `));
+      if (options.ollamaScreenshotPath) {
+        const capturedPath = await captureScreenshot(cdp, options.ollamaScreenshotPath, panelSelector);
+        result.ollama = { requested: true, status: "captured", path: capturedPath, surface: "Local Ollama provider add and refresh handler" };
+        return { ...created, ...refreshed, screenshotPath: capturedPath };
+      }
+      return { ...created, ...refreshed };
     });
 
     await runCheck(result, "settings-authenticator-live-management", async () => {

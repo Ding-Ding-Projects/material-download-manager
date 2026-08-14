@@ -32,6 +32,7 @@ export default function QueuesDialog() {
       icon={<GridIcon size={16} />}
       onClose={closeQueues}
       width={520}
+      className="queues-dialog"
       footer={
         <>
           <input
