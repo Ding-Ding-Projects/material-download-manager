@@ -14,10 +14,20 @@ const featureCatalogueCaptureRelative = "docs/screenshots/site/feature-catalogue
 const featureCatalogueCaptureAbsolute = path.resolve(repoRoot, featureCatalogueCaptureRelative);
 const notificationHardeningCaptureRelative = "docs/screenshots/site/notification-centre-hardening.png";
 const notificationHardeningCaptureAbsolute = path.resolve(repoRoot, notificationHardeningCaptureRelative);
+const interactiveControlsCaptureRelatives = Object.freeze([
+  "docs/screenshots/site/interactive-controls-theme-picker.png",
+  "docs/screenshots/site/interactive-controls-appearance-target-picker.png",
+  "docs/screenshots/site/interactive-controls-appearance-spacing-picker.png",
+  "docs/screenshots/site/interactive-controls-notification-filter-picker.png",
+  "docs/screenshots/site/interactive-controls-regex-menu.png"
+]);
+const interactiveControlsCaptureAbsolutes = Object.freeze(interactiveControlsCaptureRelatives.map((relativePath) => path.resolve(repoRoot, relativePath)));
 let featureCatalogueCaptureBytes = null;
 let featureCatalogueCaptureError = null;
 let notificationHardeningCaptureBytes = null;
 let notificationHardeningCaptureError = null;
+const interactiveControlsCaptureBytes = Object.create(null);
+const interactiveControlsCaptureErrors = Object.create(null);
 try {
   featureCatalogueCaptureBytes = await readFile(featureCatalogueCaptureAbsolute);
 } catch (error) {
@@ -27,6 +37,14 @@ try {
   notificationHardeningCaptureBytes = await readFile(notificationHardeningCaptureAbsolute);
 } catch (error) {
   notificationHardeningCaptureError = error;
+}
+for (let index = 0; index < interactiveControlsCaptureRelatives.length; index += 1) {
+  const relativePath = interactiveControlsCaptureRelatives[index];
+  try {
+    interactiveControlsCaptureBytes[`../${relativePath}`] = await readFile(interactiveControlsCaptureAbsolutes[index]);
+  } catch (error) {
+    interactiveControlsCaptureErrors[relativePath] = error;
+  }
 }
 
 async function read(relativePath) {
@@ -69,6 +87,7 @@ async function walk(directory, prefix = "") {
 }
 
 const universalStatuses = new Set(["implemented", "partial", "planned"]);
+const INTERACTIVE_CONTROLS_CHUT_ANCHOR = "site-controls-regex-completeness-v1";
 
 function validateUniversalFeatureManifest(candidate, sourceCorpus) {
   assert.equal(candidate?.schemaVersion, 1, "schemaVersion must be 1");
@@ -121,6 +140,7 @@ const expectedFiles = [
   "data/universal-feature-manifest.js",
   "data/settings-contract.js",
   "data/notification-contract.js",
+  "data/interactive-controls-contract.js",
   "data/release-manifest-contract.js",
   "assets/dim-sum.svg"
 ];
@@ -132,6 +152,7 @@ for (const relativePath of expectedFiles) {
 const html = await read("index.html");
 const css = await read("styles.css");
 const app = await read("app.js");
+const checkSource = await read("check.mjs");
 const buildSource = await read("build.mjs");
 const contentSource = await read("content.js");
 const manifestJsonSource = await read("data/release-manifest.json");
@@ -139,12 +160,15 @@ const manifestJsSource = await read("data/release-manifest.js");
 const universalFeatureManifestSource = await read("data/universal-feature-manifest.js");
 const settingsContractSource = await read("data/settings-contract.js");
 const notificationContractSource = await read("data/notification-contract.js");
+const interactiveControlsContractSource = await read("data/interactive-controls-contract.js");
 const releaseManifestContractSource = await read("data/release-manifest-contract.js");
+const interactiveControlsDocsSource = await readFile(path.join(repoRoot, "docs", "features", "search", "site-control-filters.md"), "utf8");
 const content = loadScript(contentSource, "content.js", "MDM_SITE_CONTENT");
 const manifestFromJs = loadScript(manifestJsSource, "release-manifest.js", "MDM_RELEASE_MANIFEST");
 const universalFeatureManifest = loadScript(universalFeatureManifestSource, "universal-feature-manifest.js", "MDM_UNIVERSAL_FEATURE_MANIFEST");
 const settingsContract = loadScript(settingsContractSource, "settings-contract.js", "MDM_SITE_SETTINGS_CONTRACT");
 const notificationContract = loadScript(notificationContractSource, "notification-contract.js", "MDM_SITE_NOTIFICATION_CONTRACT");
+const interactiveControlsContract = loadScript(interactiveControlsContractSource, "interactive-controls-contract.js", "MDM_SITE_INTERACTIVE_CONTROLS_CONTRACT");
 const releaseManifestContract = loadScript(releaseManifestContractSource, "release-manifest-contract.js", "MDM_RELEASE_MANIFEST_CONTRACT");
 const manifestFromJson = JSON.parse(manifestJsonSource);
 
@@ -161,6 +185,7 @@ run("site build preserves every local runtime script", () => {
     "./data/settings-contract.js",
     "./data/notification-contract.js",
     "./data/release-manifest-contract.js",
+    "./data/interactive-controls-contract.js",
     "./data/release-manifest.js",
     "./app.js"
   ];
@@ -200,6 +225,54 @@ run("site has local search fields with individual regex-builder anchors", () => 
   }
   assert.match(app, /data-builder-pattern/);
   assert.match(app, /JavaScript RegExp/);
+});
+
+run("interactive selectors and tab menu have a complete per-surface control inventory", () => {
+  assert.equal(INTERACTIVE_CONTROLS_CHUT_ANCHOR, "site-controls-regex-completeness-v1");
+  const inventory = interactiveControlsContract.validateControlInventory(interactiveControlsContract, {
+    html,
+    app,
+    css,
+    docs: interactiveControlsDocsSource,
+    check: checkSource,
+    captures: interactiveControlsCaptureBytes
+  });
+  assert.equal(inventory.length, 7, "the hand-written control inventory covers all declared selector, menu, reader, and activation surfaces");
+  assert.equal(interactiveControlsContract.requiredIds.length, 7, "the required control list stays hand-written and complete");
+});
+
+run("interactive selector and menu Chut negative fixtures fail on exact missing evidence", () => {
+  const baseline = {
+    html,
+    app,
+    css,
+    docs: interactiveControlsDocsSource,
+    check: checkSource,
+    captures: interactiveControlsCaptureBytes
+  };
+  for (const entry of interactiveControlsContract.inventory) {
+    for (const [corpus, anchor] of Object.entries(entry.anchors)) {
+      const fixture = { ...baseline, [corpus]: interactiveControlsContract.removeExactLine(baseline[corpus], anchor) };
+      assert.throws(() => interactiveControlsContract.validateControlInventory(interactiveControlsContract, fixture), /missing exact/,
+        `${entry.id} fails closed when its exact ${corpus} proof is removed`);
+    }
+  }
+  for (const [corpus, anchors] of Object.entries(interactiveControlsContract.commonAnchors)) {
+    for (const anchor of anchors) {
+      const fixture = { ...baseline, [corpus]: interactiveControlsContract.removeExactLine(baseline[corpus], anchor) };
+      assert.throws(() => interactiveControlsContract.validateControlInventory(interactiveControlsContract, fixture), /common .* anchor is missing/,
+        `the common ${corpus} proof fails closed when its exact line disappears`);
+    }
+  }
+  const withoutCheckRegistration = { ...baseline, check: interactiveControlsContract.removeExactLine(checkSource, interactiveControlsContract.checkAnchor) };
+  assert.throws(() => interactiveControlsContract.validateControlInventory(interactiveControlsContract, withoutCheckRegistration), /gate registration is missing/,
+    "the checker registration is a required control proof");
+  for (const capturePath of new Set(interactiveControlsContract.controls.map((entry) => entry.capture))) {
+    const capturesWithoutOne = { ...interactiveControlsCaptureBytes };
+    delete capturesWithoutOne[capturePath];
+    assert.throws(() => interactiveControlsContract.validateControlInventory(interactiveControlsContract, { ...baseline, captures: capturesWithoutOne }), /capture is missing/,
+      `${capturePath} is a required built interaction capture`);
+  }
 });
 
 run("release manifest JSON and browser form agree", () => {

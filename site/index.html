@@ -254,7 +254,23 @@
             <article class="settings-card" data-setting-search="theme light dark system appearance">
               <div class="card-heading-row"><div><p class="eyebrow" data-copy="themeEyebrow">THEME</p><h2 data-copy="themeTitle">Choose a surface.</h2></div><span class="state-icon state-icon-accent" aria-hidden="true">◐</span></div>
               <p class="field-explanation" data-copy="themeExplanation">Applies a light, dark, or operating-system theme to the site shell, tabs, overlays, and cards.</p>
-              <label class="field-control"><span data-copy="themeLabel">Theme</span><select id="theme-setting"><option value="system">Use system</option><option value="light">Light</option><option value="dark">Dark</option></select></label>
+              <div class="field-control">
+                <span id="theme-setting-label" data-copy="themeLabel">Theme</span>
+                <select class="native-choice-source" id="theme-setting" tabindex="-1" aria-hidden="true"><option value="system" data-copy="themeSystem">Use system</option><option value="light" data-copy="themeLight">Light</option><option value="dark" data-copy="themeDark">Dark</option></select>
+                <div class="choice-picker" data-select-picker="picker-theme" data-select-id="theme-setting">
+                  <button class="choice-picker-trigger" id="picker-theme-trigger" type="button" aria-haspopup="listbox" aria-expanded="false" aria-controls="picker-theme-panel" aria-labelledby="theme-setting-label picker-theme-value"><span id="picker-theme-value">Use system</span><span aria-hidden="true">▾</span></button>
+                  <div class="choice-picker-panel" id="picker-theme-panel" hidden>
+                    <div class="choice-picker-toolbar" data-search-id="picker-theme">
+                      <label class="search-field" for="picker-theme-search"><span class="sr-only">Filter theme options</span><input id="picker-theme-search" type="search" autocomplete="off" maxlength="128" placeholder="Filter options" data-copy-placeholder="choiceFilterPlaceholder"></label>
+                      <button class="icon-button builder-toggle" type="button" aria-expanded="false" aria-controls="builder-picker-theme" aria-label="Open theme option regex builder">.*</button>
+                      <span class="search-state" id="picker-theme-search-state" role="status">Plain text</span>
+                      <div class="builder-popover" id="builder-picker-theme" role="dialog" aria-label="Theme option regex builder" hidden></div>
+                    </div>
+                    <div class="choice-picker-options" id="picker-theme-options" role="listbox" aria-labelledby="theme-setting-label"></div>
+                    <p class="choice-picker-empty" id="picker-theme-empty" role="status" hidden>No options match this filter.</p>
+                  </div>
+                </div>
+              </div>
               <p class="provenance" data-provenance="theme">Compiled-in value: system</p>
             </article>
             <article class="settings-card" data-setting-search="density spacing comfortable compact appearance">
@@ -300,10 +316,42 @@
             <div class="advanced-panel-body">
               <p class="field-explanation" data-copy="appearanceEditorExplanation">This editor changes the site surfaces it names, persists each choice, and keeps a reset path beside every control.</p>
               <div class="appearance-editor-grid">
-                <label class="field-control"><span data-copy="appearanceTarget">Target surface</span><select id="appearance-target"><option value="cards">Cards</option><option value="tabs">Tabs</option><option value="notifications">Notifications</option><option value="hero">Hero</option></select></label>
+                <div class="field-control">
+                  <span id="appearance-target-label" data-copy="appearanceTarget">Target surface</span>
+                  <select class="native-choice-source" id="appearance-target" tabindex="-1" aria-hidden="true"><option value="cards" data-copy="appearanceTargetCards">Cards</option><option value="tabs" data-copy="appearanceTargetTabs">Tabs</option><option value="notifications" data-copy="appearanceTargetNotifications">Notifications</option><option value="hero" data-copy="appearanceTargetHero">Hero</option></select>
+                  <div class="choice-picker" data-select-picker="picker-appearance-target" data-select-id="appearance-target">
+                    <button class="choice-picker-trigger" id="picker-appearance-target-trigger" type="button" aria-haspopup="listbox" aria-expanded="false" aria-controls="picker-appearance-target-panel" aria-labelledby="appearance-target-label picker-appearance-target-value"><span id="picker-appearance-target-value">Cards</span><span aria-hidden="true">▾</span></button>
+                    <div class="choice-picker-panel" id="picker-appearance-target-panel" hidden>
+                      <div class="choice-picker-toolbar" data-search-id="picker-appearance-target">
+                        <label class="search-field" for="picker-appearance-target-search"><span class="sr-only">Filter appearance target options</span><input id="picker-appearance-target-search" type="search" autocomplete="off" maxlength="128" placeholder="Filter options" data-copy-placeholder="choiceFilterPlaceholder"></label>
+                        <button class="icon-button builder-toggle" type="button" aria-expanded="false" aria-controls="builder-picker-appearance-target" aria-label="Open appearance target regex builder">.*</button>
+                        <span class="search-state" id="picker-appearance-target-search-state" role="status">Plain text</span>
+                        <div class="builder-popover" id="builder-picker-appearance-target" role="dialog" aria-label="Appearance target regex builder" hidden></div>
+                      </div>
+                      <div class="choice-picker-options" id="picker-appearance-target-options" role="listbox" aria-labelledby="appearance-target-label"></div>
+                      <p class="choice-picker-empty" id="picker-appearance-target-empty" role="status" hidden>No options match this filter.</p>
+                    </div>
+                  </div>
+                </div>
                 <label class="color-control"><span data-copy="appearanceSurfaceColor">Surface accent</span><input id="appearance-surface-color" type="color" value="#6750A4"><code id="appearance-surface-value">#6750A4</code></label>
                 <label class="field-control"><span data-copy="appearanceRadius">Corner radius</span><input id="appearance-radius" type="range" min="8" max="32" step="2" value="20"><output id="appearance-radius-output">20px</output></label>
-                <label class="field-control"><span data-copy="appearanceSpacing">Spacing scale</span><select id="appearance-spacing"><option value="comfortable">Comfortable</option><option value="tight">Tight</option><option value="airy">Airy</option></select></label>
+                <div class="field-control">
+                  <span id="appearance-spacing-label" data-copy="appearanceSpacing">Spacing scale</span>
+                  <select class="native-choice-source" id="appearance-spacing" tabindex="-1" aria-hidden="true"><option value="comfortable" data-copy="appearanceSpacingComfortable">Comfortable</option><option value="tight" data-copy="appearanceSpacingTight">Tight</option><option value="airy" data-copy="appearanceSpacingAiry">Airy</option></select>
+                  <div class="choice-picker" data-select-picker="picker-appearance-spacing" data-select-id="appearance-spacing">
+                    <button class="choice-picker-trigger" id="picker-appearance-spacing-trigger" type="button" aria-haspopup="listbox" aria-expanded="false" aria-controls="picker-appearance-spacing-panel" aria-labelledby="appearance-spacing-label picker-appearance-spacing-value"><span id="picker-appearance-spacing-value">Comfortable</span><span aria-hidden="true">▾</span></button>
+                    <div class="choice-picker-panel" id="picker-appearance-spacing-panel" hidden>
+                      <div class="choice-picker-toolbar" data-search-id="picker-appearance-spacing">
+                        <label class="search-field" for="picker-appearance-spacing-search"><span class="sr-only">Filter appearance spacing options</span><input id="picker-appearance-spacing-search" type="search" autocomplete="off" maxlength="128" placeholder="Filter options" data-copy-placeholder="choiceFilterPlaceholder"></label>
+                        <button class="icon-button builder-toggle" type="button" aria-expanded="false" aria-controls="builder-picker-appearance-spacing" aria-label="Open appearance spacing regex builder">.*</button>
+                        <span class="search-state" id="picker-appearance-spacing-search-state" role="status">Plain text</span>
+                        <div class="builder-popover" id="builder-picker-appearance-spacing" role="dialog" aria-label="Appearance spacing regex builder" hidden></div>
+                      </div>
+                      <div class="choice-picker-options" id="picker-appearance-spacing-options" role="listbox" aria-labelledby="appearance-spacing-label"></div>
+                      <p class="choice-picker-empty" id="picker-appearance-spacing-empty" role="status" hidden>No options match this filter.</p>
+                    </div>
+                  </div>
+                </div>
               </div>
               <div class="appearance-preview" id="appearance-preview"><span class="preview-swatch" aria-hidden="true"></span><span data-copy="appearancePreview">Preview follows the selected target.</span></div>
               <button class="text-button" type="button" id="reset-appearance" data-copy="resetAppearance">Reset appearance overrides</button>
@@ -371,8 +419,15 @@
   </div>
 
   <div class="context-menu" id="tab-context-menu" role="menu" aria-label="Tab actions" hidden>
-    <button type="button" role="menuitem" data-context-action="pin">Pin tab</button>
-    <button type="button" role="menuitem" data-context-action="appearance">Edit tab appearance…</button>
+    <div class="context-menu-filter" data-search-id="tab-context-menu">
+      <label class="search-field" for="tab-context-menu-search"><span class="sr-only">Filter tab actions</span><input id="tab-context-menu-search" type="search" autocomplete="off" maxlength="128" placeholder="Filter actions" data-copy-placeholder="contextMenuFilterPlaceholder"></label>
+      <button class="icon-button builder-toggle" type="button" aria-expanded="false" aria-controls="builder-tab-context-menu" aria-label="Open tab action regex builder">.*</button>
+      <span class="search-state" id="tab-context-menu-search-state" role="status">Plain text</span>
+      <div class="builder-popover" id="builder-tab-context-menu" role="dialog" aria-label="Tab action regex builder" hidden></div>
+    </div>
+    <p class="context-menu-empty" id="tab-context-menu-empty" role="status" hidden>No actions match this filter.</p>
+    <button type="button" role="menuitem" data-context-action="pin" data-copy="contextPin">Pin tab</button>
+    <button type="button" role="menuitem" data-context-action="appearance" data-copy="contextAppearance">Edit tab appearance…</button>
   </div>
   <div class="anchored-editor" id="tab-appearance-editor" role="dialog" aria-label="Tab appearance editor" hidden>
     <div class="dialog-heading"><h2 data-copy="tabAppearanceTitle">Edit tab appearance</h2><button class="icon-button" id="tab-appearance-close" type="button" aria-label="Close tab appearance editor">×</button></div>
@@ -400,7 +455,23 @@
       <div class="builder-popover" id="builder-notifications" role="dialog" aria-label="Notification history regex builder" hidden></div>
     </div>
     <div class="filter-row notification-filter-row">
-      <label class="field-control compact-control"><span data-copy="notificationFilter">View</span><select id="notification-filter"><option value="all" data-copy="notificationFilterAll">All messages</option><option value="active" data-copy="notificationFilterActive">Active only</option><option value="dismissed" data-copy="notificationFilterDismissed">Dismissed only</option><option value="errors" data-copy="notificationFilterErrors">Warnings and errors</option></select></label>
+      <div class="field-control compact-control">
+        <span id="notification-filter-label" data-copy="notificationFilter">View</span>
+        <select class="native-choice-source" id="notification-filter" tabindex="-1" aria-hidden="true"><option value="all" data-copy="notificationFilterAll">All messages</option><option value="active" data-copy="notificationFilterActive">Active only</option><option value="dismissed" data-copy="notificationFilterDismissed">Dismissed only</option><option value="errors" data-copy="notificationFilterErrors">Warnings and errors</option></select>
+        <div class="choice-picker" data-select-picker="picker-notification-filter" data-select-id="notification-filter">
+          <button class="choice-picker-trigger" id="picker-notification-filter-trigger" type="button" aria-haspopup="listbox" aria-expanded="false" aria-controls="picker-notification-filter-panel" aria-labelledby="notification-filter-label picker-notification-filter-value"><span id="picker-notification-filter-value">All messages</span><span aria-hidden="true">▾</span></button>
+          <div class="choice-picker-panel" id="picker-notification-filter-panel" hidden>
+            <div class="choice-picker-toolbar" data-search-id="picker-notification-filter">
+              <label class="search-field" for="picker-notification-filter-search"><span class="sr-only">Filter notification view options</span><input id="picker-notification-filter-search" type="search" autocomplete="off" maxlength="128" placeholder="Filter options" data-copy-placeholder="choiceFilterPlaceholder"></label>
+              <button class="icon-button builder-toggle" type="button" aria-expanded="false" aria-controls="builder-picker-notification-filter" aria-label="Open notification view regex builder">.*</button>
+              <span class="search-state" id="picker-notification-filter-search-state" role="status">Plain text</span>
+              <div class="builder-popover" id="builder-picker-notification-filter" role="dialog" aria-label="Notification view regex builder" hidden></div>
+            </div>
+            <div class="choice-picker-options" id="picker-notification-filter-options" role="listbox" aria-labelledby="notification-filter-label"></div>
+            <p class="choice-picker-empty" id="picker-notification-filter-empty" role="status" hidden>No options match this filter.</p>
+          </div>
+        </div>
+      </div>
       <span class="field-help" id="notification-centre-status" role="status" aria-live="polite">0 notifications</span>
     </div>
     <div class="notification-bulk-actions" role="group" aria-label="Notification history bulk actions" data-copy-aria="notificationCentreBulkActions">
@@ -430,6 +501,7 @@
   <script src="./data/settings-contract.js"></script>
   <script src="./data/notification-contract.js"></script>
   <script src="./data/release-manifest-contract.js"></script>
+  <script src="./data/interactive-controls-contract.js"></script>
   <script src="./data/release-manifest.js"></script>
   <script src="./app.js"></script>
 </body>

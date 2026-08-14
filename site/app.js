@@ -4,8 +4,10 @@
   const content = window.MDM_SITE_CONTENT;
   const settingsContract = window.MDM_SITE_SETTINGS_CONTRACT;
   const notificationContract = window.MDM_SITE_NOTIFICATION_CONTRACT;
+  const interactiveControlsContract = window.MDM_SITE_INTERACTIVE_CONTROLS_CONTRACT;
   const releaseManifestContract = window.MDM_RELEASE_MANIFEST_CONTRACT;
   const manifest = window.MDM_RELEASE_MANIFEST || { stable: null, publication: { pages: "unverified" } };
+  if (!interactiveControlsContract || !Array.isArray(interactiveControlsContract.requiredIds)) throw new Error("Interactive control contract is unavailable.");
   const root = document.documentElement;
   const SETTINGS_SCHEMA_VERSION = 2;
   const STORAGE_KEY = "mdm-site-settings-v2";
@@ -27,14 +29,25 @@
     tabPosition: "left",
     displayName: content.product.name,
     appearanceOverrides: {},
-    tabOverrides: {}
+    tabOverrides: {},
+    pinnedTabs: ["overview"]
   };
   const NOTIFICATION_HISTORY_KEY = "mdm-site-notification-history-v1";
   const NOTIFICATION_LIMIT = 100;
   const NOTIFICATION_TONES = notificationContract.tones;
   const NOTIFICATION_FILTERS = notificationContract.filters;
   const NOTIFICATION_DELETE_PHRASE = "DELETE";
-  const SEARCH_IDS = ["features", "changelog", "settings", "palette", "notifications", "tab-strip", "tab-group", "tab-groups", "tab-master"];
+  const TAB_CONTEXT_MENU_SEARCH_ID = "tab-context-menu";
+  const CHOICE_CONTROL_REGISTRY = Object.freeze([
+    { id: "picker-theme", selectId: "theme-setting", labelId: "theme-setting-label" },
+    { id: "picker-appearance-target", selectId: "appearance-target", labelId: "appearance-target-label" },
+    { id: "picker-appearance-spacing", selectId: "appearance-spacing", labelId: "appearance-spacing-label" },
+    { id: "picker-notification-filter", selectId: "notification-filter", labelId: "notification-filter-label" },
+  ]);
+  const CHOICE_CONTROL_BY_ID = new Map(CHOICE_CONTROL_REGISTRY.map((entry) => [entry.id, entry]));
+  const CHOICE_CONTROL_BY_SELECT_ID = new Map(CHOICE_CONTROL_REGISTRY.map((entry) => [entry.selectId, entry]));
+  const APPEARANCE_SPACING_FACTORS = Object.freeze({ tight: 0.82, comfortable: 1, airy: 1.2 });
+  const SEARCH_IDS = ["features", "changelog", "settings", "palette", "notifications", "tab-strip", "tab-group", "tab-groups", "tab-master", ...CHOICE_CONTROL_REGISTRY.map((entry) => entry.id), TAB_CONTEXT_MENU_SEARCH_ID];
   const searchStates = Object.fromEntries(SEARCH_IDS.map((id) => [id, {
     mode: "text",
     pattern: "",
@@ -167,6 +180,15 @@
     themeTitle: ["Choose a surface.", "揀個表面。"],
     themeExplanation: ["Applies a light, dark, or operating-system theme to the site shell, tabs, overlays, and cards.", "將淺色、深色或者跟隨系統套用到網站、分頁、浮層同卡片。"],
     themeLabel: ["Theme", "主題"],
+    themeSystem: ["Use system", "跟系統"],
+    themeLight: ["Light", "淺色"],
+    themeDark: ["Dark", "深色"],
+    choiceFilterPlaceholder: ["Filter options", "篩選選項"],
+    contextMenuFilterPlaceholder: ["Filter actions", "篩選操作"],
+    choiceResultCount: ["{visible} of {total} options", "{visible} / {total} 個選項"],
+    choiceNoMatch: ["No options match this filter.", "冇選項符合呢個篩選。"],
+    contextMenuResultCount: ["{visible} of {total} actions", "{visible} / {total} 個操作"],
+    contextMenuNoMatch: ["No actions match this filter.", "冇操作符合呢個篩選。"],
     densityEyebrow: ["DENSITY", "密度"],
     densityTitle: ["Set the breathing room.", "調校留白位。"],
     densityExplanation: ["Changes card padding, tab height, and grid spacing without changing information or control reachability.", "改卡片內距、分頁高度同網格間距，但唔會刪資料或者縮走控制。"],
@@ -192,9 +214,16 @@
     appearanceEditorSummary: ["Appearance editor · per-surface preview", "外觀編輯器 · 每個表面有預覽"],
     appearanceEditorExplanation: ["This editor changes the site surfaces it names, persists each choice, and keeps a reset path beside every control.", "呢個編輯器會改指定網站表面、保存每個選擇，亦會喺旁邊保留重設方法。"],
     appearanceTarget: ["Target surface", "目標表面"],
+    appearanceTargetCards: ["Cards", "卡片"],
+    appearanceTargetTabs: ["Tabs", "分頁"],
+    appearanceTargetNotifications: ["Notifications", "通知"],
+    appearanceTargetHero: ["Hero", "首頁主視覺"],
     appearanceSurfaceColor: ["Surface accent", "表面強調色"],
     appearanceRadius: ["Corner radius", "角位半徑"],
     appearanceSpacing: ["Spacing scale", "間距比例"],
+    appearanceSpacingComfortable: ["Comfortable", "舒適"],
+    appearanceSpacingTight: ["Tight", "緊湊"],
+    appearanceSpacingAiry: ["Airy", "寬鬆"],
     appearancePreview: ["Preview follows the selected target.", "預覽會跟住你揀嘅目標。"],
     resetAppearance: ["Reset appearance overrides", "重設外觀覆寫"],
     tabDiscoverySummary: ["Tab discovery lab · four independent searches", "分頁搜尋實驗室 · 四個獨立搜尋"],
@@ -220,6 +249,9 @@
     commandPaletteHelp: ["Search features, tabs, settings, and actions. Enter opens the exact destination.", "搜尋功能、分頁、設定同操作；按 Enter 直達正確位置。"],
     tabAppearanceTitle: ["Edit tab appearance", "編輯分頁外觀"],
     tabAppearanceExplanation: ["Customize the selected tab's accent and shape. The editor stays local to this browser.", "自訂所選分頁嘅強調色同形狀；編輯只留喺呢個瀏覽器。"],
+    contextPin: ["Pin tab", "釘選分頁"],
+    contextUnpin: ["Unpin tab", "取消釘選分頁"],
+    contextAppearance: ["Edit tab appearance…", "編輯分頁外觀…"],
     tabAccent: ["Tab accent", "分頁強調色"],
     tabRadius: ["Tab radius", "分頁角位半徑"],
     resetTabAppearance: ["Reset selected tab", "重設所選分頁"],
@@ -387,6 +419,7 @@
     applyTranslations();
     applySchoolModeSurface();
     renderSettingsControls();
+    renderContextMenuOptions();
   }
 
   function setSetting(key, value, announce = true) {
@@ -797,6 +830,7 @@
       searchStates.notifications.pattern = notificationState.view.pattern || notificationState.view.query;
       searchStates.notifications.flags = notificationState.view.flags;
       $("#notification-filter").value = notificationState.view.filter;
+      syncChoicePickerBySelect("notification-filter");
       $("#notifications-search").value = notificationState.view.query;
       updateNotificationCount();
       renderNotificationCentre();
@@ -820,6 +854,8 @@
       else root.style.removeProperty(`--${target}-accent`);
       if (Number.isFinite(Number(value.radius))) root.style.setProperty(`--${target}-radius`, `${clamp(Number(value.radius), 8, 40, 20)}px`);
       else root.style.removeProperty(`--${target}-radius`);
+      if (Object.hasOwn(APPEARANCE_SPACING_FACTORS, value.spacing)) root.style.setProperty(`--${target}-spacing`, String(APPEARANCE_SPACING_FACTORS[value.spacing]));
+      else root.style.removeProperty(`--${target}-spacing`);
     });
     const tabOverrides = settings.tabOverrides || {};
     $$(".tab-button").forEach((button) => {
@@ -828,6 +864,26 @@
       else button.style.removeProperty("--tab-accent");
       if (Number.isFinite(Number(value.radius))) button.style.setProperty("--tab-radius", `${clamp(Number(value.radius), 8, 32, 18)}px`);
       else button.style.removeProperty("--tab-radius");
+    });
+    applyPinnedTabState();
+  }
+
+  function isTabPinned(tabId) {
+    return Array.isArray(settings.pinnedTabs) && settings.pinnedTabs.includes(tabId);
+  }
+
+  function applyPinnedTabState() {
+    $$(".tab-button").forEach((button) => {
+      const pinned = isTabPinned(button.dataset.tab);
+      button.dataset.pinned = String(pinned);
+      button.classList.toggle("is-pinned", pinned);
+      let dot = $(".pin-dot", button);
+      if (pinned && !dot) {
+        dot = create("span", "pin-dot", "•");
+        dot.setAttribute("aria-label", "Pinned");
+        button.append(dot);
+      }
+      if (!pinned && dot) dot.remove();
     });
   }
 
@@ -850,6 +906,7 @@
     renderTonePreview();
     renderAppearanceEditor();
     renderTabAppearanceEditor();
+    renderChoicePickers();
     renderProvenance();
   }
 
@@ -957,6 +1014,8 @@
     $("#appearance-radius-output").textContent = `${radius}px`;
     $("#appearance-spacing").value = value.spacing || "comfortable";
     $("#appearance-preview").style.setProperty("--appearance-preview-color", color);
+    syncChoicePickerBySelect("appearance-target");
+    syncChoicePickerBySelect("appearance-spacing");
   }
 
   function updateAppearanceField(field, value) {
@@ -1020,6 +1079,9 @@
   let paletteIndex = 0;
   let contextTabId = "overview";
   let contextMenuOpen = false;
+  let contextMenuOrigin = null;
+  let tabAppearanceOrigin = null;
+  const choicePickerOrigins = new Map();
 
   function selectTab(tabId, focusPanel = false) {
     const button = $(`#tab-${tabId}`);
@@ -1056,7 +1118,13 @@
           buttons[nextIndex].focus();
         }
       });
-      button.addEventListener("contextmenu", (event) => { event.preventDefault(); openContextMenu(button, event); });
+      button.addEventListener("contextmenu", (event) => {
+        event.preventDefault();
+        contextTabId = button.dataset.tab;
+        contextMenuOrigin = button;
+        if (event.shiftKey) openTabAppearance(event);
+        else openContextMenu(button, event);
+      });
     });
     $$('[data-open-tab]').forEach((button) => button.addEventListener("click", () => selectTab(button.dataset.openTab)));
   }
@@ -1068,24 +1136,234 @@
     element.style.top = `${Math.max(8, Math.min(y, window.innerHeight - rect.height - 8))}px`;
   }
 
+  function formatCopy(key, values) {
+    return Object.entries(values).reduce((text, [token, value]) => text.replaceAll(`{${token}}`, String(value)), localized(key));
+  }
+
+  function choicePickerPanel(id) { return $(`#${id}-panel`); }
+  function choicePickerTrigger(id) { return $(`#${id}-trigger`); }
+  function choicePickerSearch(id) { return $(`#${id}-search`); }
+  function choicePickerOptions(id) { return $(`#${id}-options`); }
+
+  function clearLocalSearch(id) {
+    const state = searchStates[id];
+    if (!state) return;
+    state.mode = "text";
+    state.query = "";
+    state.pattern = "";
+    state.flags = "g";
+    state.error = null;
+    const input = $(`#${id}-search`);
+    if (input) input.value = "";
+    const builder = $(`#builder-${id}`);
+    if (builder) builder.hidden = true;
+    const toggle = builder?.parentElement?.querySelector(".builder-toggle");
+    if (toggle) toggle.setAttribute("aria-expanded", "false");
+  }
+
+  function visibleChoiceOptions(id) {
+    const config = CHOICE_CONTROL_BY_ID.get(id);
+    const select = config ? $(`#${config.selectId}`) : null;
+    if (!select) return [];
+    return [...select.options].filter((option) => !option.disabled && searchMatches(id, option.textContent));
+  }
+
+  function updateChoicePickerStatus(id, visible, total) {
+    const status = $(`#${id}-search-state`);
+    if (!status) return;
+    const state = searchStates[id];
+    const mode = state.mode === "regex" ? `Regex · ${state.flags || "no flags"}` : "Plain text";
+    status.textContent = `${mode} · ${visible ? formatCopy("choiceResultCount", { visible, total }) : localized("choiceNoMatch")}`;
+  }
+
+  function renderChoicePicker(id) {
+    const config = CHOICE_CONTROL_BY_ID.get(id);
+    const select = config ? $(`#${config.selectId}`) : null;
+    const list = choicePickerOptions(id);
+    const triggerValue = $(`#${id}-value`);
+    const empty = $(`#${id}-empty`);
+    if (!select || !list || !triggerValue || !empty) return;
+    const selected = select.selectedOptions[0];
+    triggerValue.textContent = selected?.textContent || "";
+    const visible = visibleChoiceOptions(id);
+    list.replaceChildren();
+    visible.forEach((option) => {
+      const row = create("button", "choice-picker-option", option.textContent);
+      row.type = "button";
+      row.dataset.choiceValue = option.value;
+      row.setAttribute("role", "option");
+      row.setAttribute("aria-selected", String(option.value === select.value));
+      row.addEventListener("click", () => chooseChoiceOption(id, option.value));
+      row.addEventListener("keydown", (event) => handleChoiceOptionKeydown(id, event));
+      list.append(row);
+    });
+    empty.hidden = visible.length > 0;
+    empty.textContent = localized("choiceNoMatch");
+    updateChoicePickerStatus(id, visible.length, select.options.length);
+  }
+
+  function renderChoicePickers() {
+    CHOICE_CONTROL_REGISTRY.forEach((entry) => renderChoicePicker(entry.id));
+  }
+
+  function syncChoicePickerBySelect(selectId) {
+    const config = CHOICE_CONTROL_BY_SELECT_ID.get(selectId);
+    if (config) renderChoicePicker(config.id);
+  }
+
+  function closeChoicePicker(id, restoreFocus = true) {
+    const panel = choicePickerPanel(id);
+    const trigger = choicePickerTrigger(id);
+    if (!panel || !trigger) return;
+    panel.hidden = true;
+    trigger.setAttribute("aria-expanded", "false");
+    clearLocalSearch(id);
+    renderChoicePicker(id);
+    const origin = choicePickerOrigins.get(id);
+    choicePickerOrigins.delete(id);
+    if (restoreFocus && origin?.isConnected) origin.focus();
+  }
+
+  function closeChoicePickers(exceptId, restoreFocus = false) {
+    CHOICE_CONTROL_REGISTRY.forEach((entry) => {
+      if (entry.id !== exceptId && !choicePickerPanel(entry.id)?.hidden) closeChoicePicker(entry.id, restoreFocus);
+    });
+  }
+
+  function openChoicePicker(id, origin) {
+    const panel = choicePickerPanel(id);
+    const trigger = choicePickerTrigger(id);
+    const search = choicePickerSearch(id);
+    if (!panel || !trigger || !search) return;
+    closeChoicePickers(id, false);
+    closeContextMenu(false);
+    choicePickerOrigins.set(id, origin || trigger);
+    panel.hidden = false;
+    trigger.setAttribute("aria-expanded", "true");
+    renderChoicePicker(id);
+    search.focus();
+  }
+
+  function chooseChoiceOption(id, value) {
+    const config = CHOICE_CONTROL_BY_ID.get(id);
+    const select = config ? $(`#${config.selectId}`) : null;
+    if (!select || ![...select.options].some((option) => option.value === value && !option.disabled)) return;
+    select.value = value;
+    select.dispatchEvent(new Event("change", { bubbles: true }));
+    syncChoicePickerBySelect(config.selectId);
+    closeChoicePicker(id, true);
+  }
+
+  function focusChoiceOption(id, direction) {
+    const options = $$('[role="option"]', choicePickerOptions(id));
+    if (!options.length) return;
+    const current = options.indexOf(document.activeElement);
+    const index = current < 0 ? (direction < 0 ? options.length - 1 : 0) : (current + direction + options.length) % options.length;
+    options[index].focus();
+  }
+
+  function handleChoiceOptionKeydown(id, event) {
+    if (event.key === "ArrowDown") { event.preventDefault(); focusChoiceOption(id, 1); }
+    if (event.key === "ArrowUp") { event.preventDefault(); focusChoiceOption(id, -1); }
+    if (event.key === "Home") { event.preventDefault(); const first = $$('[role="option"]', choicePickerOptions(id))[0]; first?.focus(); }
+    if (event.key === "End") { event.preventDefault(); const options = $$('[role="option"]', choicePickerOptions(id)); options.at(-1)?.focus(); }
+    if (event.key === "Escape") handleLocalSearchEscape(id, event);
+  }
+
+  function handleLocalSearchEscape(id, event) {
+    const state = searchStates[id];
+    if (state.query || state.pattern || state.mode === "regex") {
+      event.preventDefault();
+      event.stopPropagation();
+      clearLocalSearch(id);
+      if (CHOICE_CONTROL_BY_ID.has(id)) renderChoicePicker(id);
+      if (id === TAB_CONTEXT_MENU_SEARCH_ID) renderContextMenuOptions();
+      choicePickerSearch(id)?.focus();
+      return;
+    }
+    event.stopPropagation();
+    if (CHOICE_CONTROL_BY_ID.has(id)) closeChoicePicker(id, true);
+    if (id === TAB_CONTEXT_MENU_SEARCH_ID) closeContextMenu(true);
+  }
+
+  function bindChoicePickers() {
+    CHOICE_CONTROL_REGISTRY.forEach((config) => {
+      const trigger = choicePickerTrigger(config.id);
+      const search = choicePickerSearch(config.id);
+      const select = $(`#${config.selectId}`);
+      trigger?.addEventListener("click", () => openChoicePicker(config.id, trigger));
+      trigger?.addEventListener("keydown", (event) => {
+        if (event.key === "ArrowDown" || event.key === "ArrowUp") { event.preventDefault(); openChoicePicker(config.id, trigger); }
+      });
+      search?.addEventListener("keydown", (event) => {
+        if (event.key === "ArrowDown") { event.preventDefault(); focusChoiceOption(config.id, 1); }
+        if (event.key === "ArrowUp") { event.preventDefault(); focusChoiceOption(config.id, -1); }
+        if (event.key === "Enter") { event.preventDefault(); $$('[role="option"]', choicePickerOptions(config.id))[0]?.click(); }
+        if (event.key === "Escape") handleLocalSearchEscape(config.id, event);
+      });
+      select?.addEventListener("change", () => syncChoicePickerBySelect(config.selectId));
+    });
+    document.addEventListener("click", (event) => {
+      const eventPath = typeof event.composedPath === "function" ? event.composedPath() : [];
+      CHOICE_CONTROL_REGISTRY.forEach((config) => {
+        const wrapper = $(`[data-select-picker="${config.id}"]`);
+        const clickStayedInside = eventPath.length ? eventPath.includes(wrapper) : wrapper?.contains(event.target);
+        if (wrapper && !clickStayedInside && !choicePickerPanel(config.id)?.hidden) closeChoicePicker(config.id, false);
+      });
+    });
+  }
+
+  function renderContextMenuOptions() {
+    const menu = $("#tab-context-menu");
+    const actions = $$('[data-context-action]', menu);
+    const visible = actions.filter((action) => searchMatches(TAB_CONTEXT_MENU_SEARCH_ID, action.textContent));
+    actions.forEach((action) => { action.hidden = !visible.includes(action); });
+    const empty = $("#tab-context-menu-empty");
+    empty.hidden = visible.length > 0;
+    empty.textContent = localized("contextMenuNoMatch");
+    const status = $(`#${TAB_CONTEXT_MENU_SEARCH_ID}-search-state`);
+    const state = searchStates[TAB_CONTEXT_MENU_SEARCH_ID];
+    if (status) {
+      const mode = state.mode === "regex" ? `Regex · ${state.flags || "no flags"}` : "Plain text";
+      status.textContent = `${mode} · ${visible.length ? formatCopy("contextMenuResultCount", { visible: visible.length, total: actions.length }) : localized("contextMenuNoMatch")}`;
+    }
+    const pin = $('[data-context-action="pin"]', menu);
+    if (pin) pin.textContent = isTabPinned(contextTabId) ? localized("contextUnpin") : localized("contextPin");
+  }
+
+  function focusContextMenuAction(direction) {
+    const actions = $$('[data-context-action]:not([hidden])', $("#tab-context-menu"));
+    if (!actions.length) return;
+    const current = actions.indexOf(document.activeElement);
+    const index = current < 0 ? (direction < 0 ? actions.length - 1 : 0) : (current + direction + actions.length) % actions.length;
+    actions[index].focus();
+  }
+
   function openContextMenu(button, event) {
     contextTabId = button.dataset.tab;
     contextMenuOpen = true;
-    const pinAction = $('[data-context-action="pin"]');
-    const pinned = button.dataset.pinned === "true" || button.classList.contains("is-pinned");
-    pinAction.textContent = pinned ? "Unpin tab" : "Pin tab";
+    contextMenuOrigin = button;
+    clearLocalSearch(TAB_CONTEXT_MENU_SEARCH_ID);
+    renderContextMenuOptions();
     positionFixed($("#tab-context-menu"), event.clientX || button.getBoundingClientRect().left, event.clientY || button.getBoundingClientRect().bottom);
+    $("#tab-context-menu-search")?.focus();
   }
 
-  function closeContextMenu() {
+  function closeContextMenu(restoreFocus = true) {
     contextMenuOpen = false;
     $("#tab-context-menu").hidden = true;
+    clearLocalSearch(TAB_CONTEXT_MENU_SEARCH_ID);
+    renderContextMenuOptions();
+    const origin = contextMenuOrigin;
+    contextMenuOrigin = null;
+    if (restoreFocus && origin?.isConnected) origin.focus();
   }
 
   function openTabAppearance(event) {
-    closeContextMenu();
-    const editor = $("#tab-appearance-editor");
     const anchor = $(`#tab-${contextTabId}`);
+    tabAppearanceOrigin = contextMenuOrigin || anchor;
+    closeContextMenu(false);
+    const editor = $("#tab-appearance-editor");
     renderTabAppearanceEditor();
     editor.hidden = false;
     const rect = anchor.getBoundingClientRect();
@@ -1094,27 +1372,54 @@
     if (event) event.stopPropagation();
   }
 
+  function closeTabAppearanceEditor(restoreFocus = true) {
+    $("#tab-appearance-editor").hidden = true;
+    const origin = tabAppearanceOrigin;
+    tabAppearanceOrigin = null;
+    if (restoreFocus && origin?.isConnected) origin.focus();
+  }
+
   function bindContextMenu() {
     document.addEventListener("click", (event) => {
-      if (contextMenuOpen && !event.target.closest("#tab-context-menu")) closeContextMenu();
-      if (!event.target.closest("#tab-appearance-editor") && !event.target.closest(".tab-button")) $("#tab-appearance-editor").hidden = true;
+      const eventPath = typeof event.composedPath === "function" ? event.composedPath() : [];
+      const clickStayedInMenu = eventPath.length ? eventPath.includes($("#tab-context-menu")) : Boolean(event.target.closest("#tab-context-menu"));
+      const clickStayedInEditor = eventPath.length ? eventPath.includes($("#tab-appearance-editor")) : Boolean(event.target.closest("#tab-appearance-editor"));
+      const clickStayedOnTab = eventPath.length ? eventPath.some((node) => node instanceof Element && node.matches?.(".tab-button")) : Boolean(event.target.closest(".tab-button"));
+      if (contextMenuOpen && !clickStayedInMenu) closeContextMenu();
+      if (!clickStayedInEditor && !clickStayedOnTab) closeTabAppearanceEditor(false);
     });
     $$('[data-context-action]').forEach((button) => button.addEventListener("click", () => {
       if (button.dataset.contextAction === "appearance") openTabAppearance();
       if (button.dataset.contextAction === "pin") {
         const tab = $(`#tab-${contextTabId}`);
-        const pinned = tab.dataset.pinned === "true" || tab.classList.contains("is-pinned");
-        tab.dataset.pinned = String(!pinned);
-        tab.classList.toggle("is-pinned", !pinned);
-        const dot = $(".pin-dot", tab);
-        if (!pinned && !dot) { const pin = create("span", "pin-dot", "•"); pin.setAttribute("aria-label", "Pinned"); tab.append(pin); }
-        if (pinned && dot) dot.remove();
+        if (!tab) return;
+        const pinnedTabs = new Set(settings.pinnedTabs || []);
+        const pinned = pinnedTabs.has(contextTabId);
+        if (pinned) pinnedTabs.delete(contextTabId);
+        else pinnedTabs.add(contextTabId);
+        settings = { ...settings, pinnedTabs: [...pinnedTabs] };
+        saveSettings();
+        applyPinnedTabState();
+        renderTabDiscovery();
         closeContextMenu();
         notify("success", pinned ? "Tab unpinned" : "Tab pinned", `${tab.querySelector(".tab-label").textContent} updated.`);
       }
     }));
-    $("#tab-appearance-close").addEventListener("click", () => { $("#tab-appearance-editor").hidden = true; });
+    $("#tab-appearance-close").addEventListener("click", () => closeTabAppearanceEditor());
     $("#reset-tab-appearance").addEventListener("click", resetTabAppearance);
+    $("#tab-context-menu-search").addEventListener("keydown", (event) => {
+      if (event.key === "ArrowDown") { event.preventDefault(); focusContextMenuAction(1); }
+      if (event.key === "ArrowUp") { event.preventDefault(); focusContextMenuAction(-1); }
+      if (event.key === "Enter") { event.preventDefault(); $$('[data-context-action]:not([hidden])', $("#tab-context-menu"))[0]?.click(); }
+      if (event.key === "Escape") handleLocalSearchEscape(TAB_CONTEXT_MENU_SEARCH_ID, event);
+    });
+    $("#tab-context-menu").addEventListener("keydown", (event) => {
+      if (event.key === "ArrowDown") { event.preventDefault(); focusContextMenuAction(1); }
+      if (event.key === "ArrowUp") { event.preventDefault(); focusContextMenuAction(-1); }
+      if (event.key === "Home") { event.preventDefault(); $$('[data-context-action]:not([hidden])', $("#tab-context-menu"))[0]?.focus(); }
+      if (event.key === "End") { event.preventDefault(); $$('[data-context-action]:not([hidden])', $("#tab-context-menu")).at(-1)?.focus(); }
+      if (event.key === "Escape") handleLocalSearchEscape(TAB_CONTEXT_MENU_SEARCH_ID, event);
+    });
   }
 
   function getRegexError(pattern, flags) {
@@ -1245,7 +1550,7 @@
   }
 
   function bindSearches() {
-    $$(".search-row[data-search-id]").forEach((row) => {
+    $$('[data-search-id]').forEach((row) => {
       const id = row.dataset.searchId;
       const input = $("input[type='search']", row);
       const toggle = $(".builder-toggle", row);
@@ -1559,21 +1864,26 @@
   }
 
   const tabRecords = [
-    { label: "Overview", title: "Landing page", strip: "Main window / Documentation", group: "Core", pinned: true },
-    { label: "Features", title: "Feature index", strip: "Main window / Documentation", group: "Core", pinned: false },
-    { label: "Changelog", title: "Release evidence", strip: "Main window / Documentation", group: "Release evidence", pinned: false },
-    { label: "Settings", title: "Site preferences", strip: "Main window / Documentation", group: "Preferences", pinned: false },
-    { label: "About", title: "Publication status", strip: "Main window / Documentation", group: "Preferences", pinned: false }
+    { id: "overview", label: "Overview", title: "Landing page", strip: "Main window / Documentation", group: "Core" },
+    { id: "features", label: "Features", title: "Feature index", strip: "Main window / Documentation", group: "Core" },
+    { id: "changelog", label: "Changelog", title: "Release evidence", strip: "Main window / Documentation", group: "Release evidence" },
+    { id: "settings", label: "Settings", title: "Site preferences", strip: "Main window / Documentation", group: "Preferences" },
+    { id: "about", label: "About", title: "Publication status", strip: "Main window / Documentation", group: "Preferences" }
   ];
+
+  function currentTabRecords() {
+    return tabRecords.map((record) => ({ ...record, pinned: isTabPinned(record.id) }));
+  }
 
   function renderTabDiscovery() {
     const container = $("#tab-results");
     container.replaceChildren();
+    const currentRecords = currentTabRecords();
     const scopes = [
-      ["tab-strip", "Current strip", tabRecords],
-      ["tab-group", "Inside groups", tabRecords.filter((record) => record.group === "Core")],
-      ["tab-groups", "Group names", [...new Map(tabRecords.map((record) => [record.group, { ...record, label: record.group, title: `${record.group} group`, pinned: false }])).values()]],
-      ["tab-master", "Master tab search", tabRecords]
+      ["tab-strip", "Current strip", currentRecords],
+      ["tab-group", "Inside groups", currentRecords.filter((record) => record.group === "Core")],
+      ["tab-groups", "Group names", [...new Map(currentRecords.map((record) => [record.group, { ...record, label: record.group, title: `${record.group} group`, pinned: false }])).values()]],
+      ["tab-master", "Master tab search", currentRecords]
     ];
     let visible = 0;
     scopes.forEach(([id, scope, records]) => {
@@ -1581,14 +1891,16 @@
       if (!state.query && state.mode === "text") return;
       records.filter((record) => searchMatches(id, `${record.label} ${record.title} ${record.strip} ${record.group}`)).forEach((record) => {
         visible += 1;
-        const row = create("div", "tab-result");
+        const row = create("button", "tab-result");
+        row.type = "button";
+        row.setAttribute("aria-label", `${record.label}, ${scope}, ${record.group}, ${record.pinned ? "pinned" : "open"}`);
         row.append(create("span", "state-icon state-icon-accent", record.pinned ? "•" : "→"));
         const text = create("div");
         text.append(create("strong", null, schoolSafeText(record.label)));
         text.append(create("small", null, schoolSafeText(`${scope} · ${record.group} · ${record.strip}`)));
         row.append(text);
         row.append(create("small", null, record.pinned ? "Pinned" : "Open"));
-        row.addEventListener("click", () => selectTab(record.label.toLocaleLowerCase()));
+        row.addEventListener("click", () => selectTab(record.id || record.label.toLocaleLowerCase(), true));
         container.append(row);
       });
     });
@@ -1713,7 +2025,9 @@
       saveNotificationState();
       renderNotificationCentre();
     }
-    if (id.startsWith("tab-")) renderTabDiscovery();
+    if (["tab-strip", "tab-group", "tab-groups", "tab-master"].includes(id)) renderTabDiscovery();
+    if (CHOICE_CONTROL_BY_ID.has(id)) renderChoicePicker(id);
+    if (id === TAB_CONTEXT_MENU_SEARCH_ID && contextMenuOpen) renderContextMenuOptions();
   }
 
   function bindSettings() {
@@ -1769,6 +2083,7 @@
     $("#notification-delete-cancel").addEventListener("click", () => closeNotificationDeleteConfirm());
     $("#notification-delete-confirm-button").addEventListener("click", confirmNotificationDelete);
     $("#notification-filter").value = notificationState.view.filter;
+    syncChoicePickerBySelect("notification-filter");
     searchStates.notifications.mode = notificationState.view.mode;
     searchStates.notifications.query = notificationState.view.query;
     searchStates.notifications.pattern = notificationState.view.pattern || notificationState.view.query;
@@ -1853,7 +2168,7 @@
         if (!$("#command-palette-layer").hidden) { closePalette(); return; }
         if (notificationCentreOpen) { closeNotificationCentre(); return; }
         closeContextMenu();
-        $("#tab-appearance-editor").hidden = true;
+        closeTabAppearanceEditor();
       }
     });
   }
@@ -1882,9 +2197,11 @@
     bindPalette();
     bindSettings();
     bindNotificationCentre();
+    bindChoicePickers();
     bindSettingsSync();
     bindChangelogActions();
     bindGlobalKeys();
+    renderContextMenuOptions();
     setTimeout(maybeShowSurprise, 40);
   }
 

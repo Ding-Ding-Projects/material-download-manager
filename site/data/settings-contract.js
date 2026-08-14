@@ -37,7 +37,10 @@
       tabPosition: ["left", "top"].includes(source.tabPosition) ? source.tabPosition : defaults.tabPosition,
       displayName: normalizeLabel(source.displayName, productName, 80),
       appearanceOverrides: source.appearanceOverrides && typeof source.appearanceOverrides === "object" ? source.appearanceOverrides : {},
-      tabOverrides: source.tabOverrides && typeof source.tabOverrides === "object" ? source.tabOverrides : {}
+      tabOverrides: source.tabOverrides && typeof source.tabOverrides === "object" ? source.tabOverrides : {},
+      pinnedTabs: Array.isArray(source.pinnedTabs)
+        ? [...new Set(source.pinnedTabs.filter((value) => typeof value === "string" && /^[a-z0-9-]{1,64}$/.test(value)))].slice(0, 32)
+        : Array.isArray(defaults.pinnedTabs) ? defaults.pinnedTabs : []
     };
   }
 
