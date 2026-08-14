@@ -501,6 +501,41 @@ window.MDM_SITE_CONTENT = {
       suggested: ["regex-builder", "tabbed-navigation", "site-foundation"],
     },
     {
+      id: "personal-vocabulary",
+      category: "Privacy",
+      title: "Personal vocabulary",
+      summary: "A bounded local JSON setting for private wording changes, with no filename display, no network transfer, and a one-click local reset.",
+      docsPath: "../docs/features/site/personal-vocabulary.md",
+      tags: ["privacy", "local", "settings", "json"],
+      schoolOptional: true,
+      sections: {
+        behavior: [
+          "The Settings tab always shows a keyboard-accessible local JSON picker, generic status, replace action, and clear action while School mode is off. The browser never renders the selected local filename.",
+          "A valid private record changes only user-facing site copy in this browser. It does not alter commands, URLs, identifiers, release facts, export contents, or source documentation.",
+          "Clear removes the browser-local cache immediately and restores the shipped wording. School mode hides this feature and bypasses all private replacements; turning School mode off restores the still-valid local cache."
+        ],
+        configuration: [
+          "The neutral schema uses version 1 and exactly two root fields: schemaVersion and replacements. No example mapping, template, built-in vocabulary, source filename, or source path is distributed with the site.",
+          "Validation accepts at most 65,536 UTF-8 bytes, nesting depth 3, 1,024 JSON nodes, 128 replacement entries, 96 UTF-8 bytes per key, and 384 UTF-8 bytes per value. Only bounded string values are accepted.",
+          "The validated cache has its own browser-storage record, separate from ordinary site settings, notifications, history, and exports. A fresh tab revalidates that cache before using it."
+        ],
+        failureModes: [
+          "Malformed UTF-8 or JSON, duplicate keys, unexpected fields, unsupported versions, unsafe object keys, excessive size or depth, control characters, and invalid types are rejected as a whole. A rejected new selection never applies partially and never replaces the last valid local cache.",
+          "A corrupt, missing, stale, or unsupported cached record fails closed to the shipped wording. Browser-storage refusal leaves a valid selection active only in the current tab and reports that persistence is unavailable.",
+          "When School mode is active, the controls, command-palette routes, article route, and replacements are omitted rather than merely disabled."
+        ],
+        security: [
+          "Parsing, validation, replacement, and caching are local-only. The surface makes no network request and never writes the file name, path, payload, cache contents, mappings, or user-specific data to exports, local history, notifications, logs, analytics, prompts, captures, or public records.",
+          "The parser rejects duplicate and unsafe keys before an object is accepted. Replacement rendering is bounded and uses literal text replacement at the user-facing copy boundary, never script, markup, URLs, or command identifiers."
+        ],
+        verification: [
+          "The focused Pages check exercises strict UTF-8/JSON validation, duplicate-key rejection, every declared bound, cache revalidation, no partial application, settings and palette route anchors, School-mode omission, local-only source guards, exact negative fixtures, and the real built no-file capture integrity record.",
+          "The capture deliberately shows only the empty no-file state. It contains no selected filename, private mapping, payload, cache contents, or user-specific wording."
+        ]
+      },
+      suggested: ["language-appearance", "regex-builder", "site-foundation"]
+    },
+    {
       id: "site-foundation",
       category: "Site",
       title: "Landing and documentation site",

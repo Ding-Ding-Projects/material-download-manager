@@ -3,6 +3,7 @@
 
   const content = window.MDM_SITE_CONTENT;
   const settingsContract = window.MDM_SITE_SETTINGS_CONTRACT;
+  const personalVocabularyContract = window.MDM_SITE_PERSONAL_VOCABULARY_CONTRACT;
   const notificationContract = window.MDM_SITE_NOTIFICATION_CONTRACT;
   const releaseManifestContract = window.MDM_RELEASE_MANIFEST_CONTRACT;
   const manifest = window.MDM_RELEASE_MANIFEST || { stable: null, publication: { pages: "unverified" } };
@@ -30,6 +31,7 @@
     tabOverrides: {}
   };
   const NOTIFICATION_HISTORY_KEY = "mdm-site-notification-history-v1";
+  const VOCABULARY_CACHE_KEY = "mdm-site-personal-vocabulary-cache-v1";
   const NOTIFICATION_LIMIT = 100;
   const NOTIFICATION_TONES = notificationContract.tones;
   const NOTIFICATION_FILTERS = notificationContract.filters;
@@ -111,6 +113,26 @@
     emojiToggleTitle: ["Message decorations", "訊息裝飾"],
     emojiToggleExplanation: ["Show a small decorative emoji in notifications and decision messages. It never changes facts, control labels, or accessible names.", "喺通知同決定訊息加細細個裝飾 emoji；唔會改事實、控制標籤或者無障礙名稱。"],
     emojiToggleLabel: ["Show emojis in messages", "喺訊息顯示 emoji"],
+    personalVocabularyEyebrow: ["LOCAL WORDING", "本機字詞"],
+    personalVocabularyTitle: ["Personal vocabulary", "個人字詞"],
+    personalVocabularyExplanation: ["Choose a local JSON file only when you want private wording changes in this browser. The site never uploads the file, its name, or its contents.", "只喺你想喺呢個瀏覽器改私密字句時先揀本機 JSON 檔；網站唔會上傳檔案、檔名或者內容。"],
+    personalVocabularyFileLabel: ["Choose local personal vocabulary JSON", "選擇本機個人字詞 JSON"],
+    personalVocabularyActionGroup: ["Personal vocabulary local file actions", "個人字詞本機檔案操作"],
+    personalVocabularyChoose: ["Choose local JSON", "選擇本機 JSON"],
+    personalVocabularyReplace: ["Replace local JSON", "替換本機 JSON"],
+    personalVocabularyClear: ["Clear local JSON", "清除本機 JSON"],
+    personalVocabularyStatusCommand: ["Personal vocabulary status", "個人字詞狀態"],
+    personalVocabularyNoFile: ["No local personal vocabulary JSON is loaded.", "未載入本機個人字詞 JSON。"],
+    personalVocabularyLoaded: ["Local wording is active in this browser.", "本機字詞而家喺呢個瀏覽器生效。"],
+    personalVocabularyInvalid: ["That local JSON was not accepted. Original wording, or the last valid local wording, remains active.", "呢個本機 JSON 未被接受；原有字句或者上一份有效本機字句會繼續生效。"],
+    personalVocabularyInvalidCache: ["Stored local vocabulary data is invalid and is not active.", "已儲存嘅本機字詞資料無效，未有生效。"],
+    personalVocabularyMemoryOnly: ["Local wording is active only until this tab closes because browser storage is unavailable.", "瀏覽器儲存用唔到，本機字詞只會生效到呢個分頁關閉。"],
+    personalVocabularyClearResult: ["Local wording was cleared. Shipped wording is active again.", "本機字詞已清除，原有字句再次生效。"],
+    personalVocabularyRecovery: ["Clear removes the local cache immediately and restores shipped wording. Browser storage is the only persistence location.", "清除會即時移除本機快取並還原原有字句；瀏覽器儲存係唯一保存位置。"],
+    personalVocabularyProvenanceNone: ["No local vocabulary data is active.", "未有本機字詞資料生效。"],
+    personalVocabularyProvenanceCache: ["Persisted in this browser: validated local cache.", "已儲存喺呢個瀏覽器：已驗證本機快取。"],
+    personalVocabularyProvenanceMemory: ["Current tab only: browser storage is unavailable.", "只限目前分頁：瀏覽器儲存用唔到。"],
+    personalVocabularyProvenanceInvalid: ["No active cache: stored data was rejected during validation.", "冇生效快取：已儲存資料喺驗證時被拒絕。"],
     notificationCentre: ["NOTIFICATION CENTRE", "通知中心"],
     notificationCentreOpen: ["Notification centre", "通知中心"],
     notificationCentreTitle: ["Review notifications", "檢視通知"],
@@ -323,6 +345,78 @@
     return normalizeSettings(null);
   }
 
+  function emptyVocabularyState(status = "empty") {
+    return { status, record: personalVocabularyContract.emptyRecord() };
+  }
+
+  function readVocabularyCache() {
+    try {
+      const raw = localStorage.getItem(VOCABULARY_CACHE_KEY);
+      if (raw === null) return emptyVocabularyState();
+      const validated = personalVocabularyContract.validateTextPayload(raw);
+      return validated.ok ? { status: "loaded", record: validated.record } : emptyVocabularyState("invalid-cache");
+    } catch (_error) {
+      return emptyVocabularyState();
+    }
+  }
+
+  function applyIncomingVocabularyCache(raw) {
+    if (raw === null || raw === undefined) vocabularyState = emptyVocabularyState();
+    else {
+      const validated = personalVocabularyContract.validateTextPayload(raw);
+      vocabularyState = validated.ok ? { status: "loaded", record: validated.record } : emptyVocabularyState("invalid-cache");
+    }
+    applySettings();
+  }
+
+  function vocabularyStatusText() {
+    if (vocabularyState.status === "loaded") return localized("personalVocabularyLoaded");
+    if (vocabularyState.status === "memory") return localized("personalVocabularyMemoryOnly");
+    if (vocabularyState.status === "invalid-upload") return localized("personalVocabularyInvalid");
+    if (vocabularyState.status === "invalid-cache") return localized("personalVocabularyInvalidCache");
+    return localized("personalVocabularyNoFile");
+  }
+
+  function saveVocabularyRecord(record) {
+    const serialized = personalVocabularyContract.serializeRecord(record);
+    try {
+      localStorage.setItem(VOCABULARY_CACHE_KEY, serialized);
+      vocabularyState = { status: "loaded", record };
+    } catch (_error) {
+      vocabularyState = { status: "memory", record };
+    }
+  }
+
+  async function loadPersonalVocabularyFile(file) {
+    if (!file || !Number.isFinite(file.size) || file.size > personalVocabularyContract.limits.maxBytes) {
+      vocabularyState = { ...vocabularyState, status: "invalid-upload" };
+      applySettings();
+      return;
+    }
+    try {
+      const bytes = new Uint8Array(await file.arrayBuffer());
+      const validated = personalVocabularyContract.validateBytePayload(bytes);
+      if (!validated.ok) {
+        // A rejected file never changes the valid local cache or the active record.
+        vocabularyState = { ...vocabularyState, status: "invalid-upload" };
+        applySettings();
+        return;
+      }
+      saveVocabularyRecord(validated.record);
+      applySettings();
+    } catch (_error) {
+      vocabularyState = { ...vocabularyState, status: "invalid-upload" };
+      applySettings();
+    }
+  }
+
+  function clearPersonalVocabulary() {
+    try { localStorage.removeItem(VOCABULARY_CACHE_KEY); } catch (_error) { /* The live reset still restores shipped wording. */ }
+    vocabularyState = emptyVocabularyState();
+    applySettings();
+    notify("success", localized("personalVocabularyClear"), localized("personalVocabularyClearResult"));
+  }
+
   function saveSettings() {
     settings = { ...settings, schemaVersion: SETTINGS_SCHEMA_VERSION, revision: Number(settings.revision || 0) + 1 };
     window.settings = settings;
@@ -340,15 +434,31 @@
   function effectiveLanguage() { return isSchoolMode() ? "en" : settings.language; }
   function effectiveShowEmojis() { return !isSchoolMode() && settings.showEmojis === true; }
 
+  function renderUserFacingText(value) {
+    const schoolFiltered = settingsContract.filterSchoolCopy(value, settings, schoolModeLabel());
+    return isSchoolMode() ? schoolFiltered : personalVocabularyContract.applyReplacements(schoolFiltered, vocabularyState.record);
+  }
+
+  // Dynamic feature modules get a rendering boundary, never the local cache or its mappings.
+  // Re-rendering after this event keeps late-loaded local surfaces in step with language,
+  // School mode, funny levels, and the private replacement state.
+  window.MDM_SITE_USER_TEXT = Object.freeze({
+    render(value) { return renderUserFacingText(typeof value === "string" ? value : ""); },
+  });
+
+  function notifyUserTextConsumers() {
+    window.dispatchEvent(new CustomEvent("mdm-site-user-text-change"));
+  }
+
   function schoolSafeText(value) {
-    return settingsContract.filterSchoolCopy(value, settings, schoolModeLabel());
+    return renderUserFacingText(value);
   }
 
   function localized(key) {
     const pair = COPY[key] || [key, key];
-    if (effectiveLanguage() === "yue") return pair[1];
-    if (effectiveLanguage() === "bilingual") return `${pair[0]} · ${pair[1]}`;
-    return pair[0];
+    if (effectiveLanguage() === "yue") return renderUserFacingText(pair[1]);
+    if (effectiveLanguage() === "bilingual") return renderUserFacingText(`${pair[0]} · ${pair[1]}`);
+    return renderUserFacingText(pair[0]);
   }
 
   function applyTranslations() {
@@ -357,7 +467,7 @@
     $$('[data-copy-aria]').forEach((element) => { element.setAttribute("aria-label", localized(element.dataset.copyAria)); });
     root.lang = effectiveLanguage() === "yue" ? "zh-Hant" : "en";
     const section = effectiveLanguage() === "yue" ? "文件" : "Documentation";
-    document.title = isSchoolMode() ? `${settings.displayName || DEFAULTS.displayName} · ${schoolModeLabel()}` : `${settings.displayName || DEFAULTS.displayName} · ${section}`;
+    document.title = isSchoolMode() ? `${renderUserFacingText(settings.displayName || DEFAULTS.displayName)} · ${schoolModeLabel()}` : `${renderUserFacingText(settings.displayName || DEFAULTS.displayName)} · ${section}`;
   }
 
   function hexRgb(hex) {
@@ -381,12 +491,13 @@
     root.style.setProperty("--on-accent", luminance > .58 ? "#1d1b20" : "#ffffff");
     const strip = $("#tab-strip");
     strip.setAttribute("aria-orientation", settings.tabPosition === "top" ? "horizontal" : "vertical");
-    $("#brand-name").textContent = settings.displayName || DEFAULTS.displayName;
+    $("#brand-name").textContent = renderUserFacingText(settings.displayName || DEFAULTS.displayName);
     applyAppearanceOverrides();
     renderReleaseGate();
     applyTranslations();
     applySchoolModeSurface();
     renderSettingsControls();
+    notifyUserTextConsumers();
   }
 
   function setSetting(key, value, announce = true) {
@@ -809,6 +920,7 @@
   function bindSettingsSync() {
     window.addEventListener("storage", (event) => {
       if (event.key === STORAGE_KEY && event.newValue) applyIncomingSettings(event.newValue);
+      if (event.key === VOCABULARY_CACHE_KEY) applyIncomingVocabularyCache(event.newValue);
       if (event.key === NOTIFICATION_HISTORY_KEY) applyIncomingNotificationState(event.newValue);
     });
   }
@@ -846,6 +958,7 @@
     $("#show-emojis").checked = settings.showEmojis;
     if (document.activeElement !== $("#school-mode-name")) $("#school-mode-name").value = schoolModeLabel();
     $("#school-mode-enabled").checked = isSchoolMode();
+    renderPersonalVocabularyControls();
     renderSchoolControls();
     renderTonePreview();
     renderAppearanceEditor();
@@ -868,6 +981,30 @@
       status.dataset.active = String(isSchoolMode());
     }
     if (explanation) explanation.textContent = `${name}: ${localized("schoolModeExplanation")}`;
+  }
+
+  function renderPersonalVocabularyControls() {
+    const input = $("#personal-vocabulary-file");
+    const status = $("#personal-vocabulary-status");
+    const card = $("#personal-vocabulary-card");
+    // The native input never retains or renders a selected local file name.
+    if (input) input.value = "";
+    if (status) {
+      status.textContent = vocabularyStatusText();
+      status.dataset.state = vocabularyState.status;
+    }
+    if (card) card.dataset.vocabularyState = vocabularyState.status;
+  }
+
+  function renderAboutFeatureLinks() {
+    const container = $("#about-feature-links");
+    if (!container) return;
+    container.replaceChildren(...visibleFeatures().map((feature) => {
+      const button = create("button", "chip-button", schoolSafeText(feature.title));
+      button.type = "button";
+      button.addEventListener("click", () => selectArticle(feature.id));
+      return button;
+    }));
   }
 
   function applySchoolModeSurface() {
@@ -893,8 +1030,10 @@
       $("#school-mode-enabled")?.focus();
     }
     renderSchoolControls();
+    if (typeof renderCategories === "function" && $("#category-filters")) renderCategories();
     if (typeof renderFeatureGrid === "function" && $("#feature-grid")) renderFeatureGrid();
     if (typeof renderArticle === "function" && $("#article-detail")) renderArticle();
+    if (typeof renderAboutFeatureLinks === "function" && $("#about-feature-links")) renderAboutFeatureLinks();
     if (typeof renderReleaseList === "function" && $("#release-list")) renderReleaseList();
     if (typeof renderTabDiscovery === "function" && $("#tab-results")) renderTabDiscovery();
     if (typeof renderPalette === "function" && $("#palette-results")) renderPalette();
@@ -912,7 +1051,14 @@
       fontScale: settings.fontScale !== DEFAULTS.fontScale ? `Persisted in this browser: ${settings.fontScale}%` : "Compiled-in value: 100%",
       reducedMotion: settings.reducedMotion ? "Persisted in this browser: on" : "Compiled-in value: off",
       tabPosition: settings.tabPosition !== DEFAULTS.tabPosition ? `Persisted in this browser: ${settings.tabPosition}` : "Compiled-in value: left",
-      displayName: settings.displayName !== DEFAULTS.displayName ? "Persisted in this browser" : `Compiled-in value: ${DEFAULTS.displayName}`
+      displayName: settings.displayName !== DEFAULTS.displayName ? "Persisted in this browser" : `Compiled-in value: ${DEFAULTS.displayName}`,
+      personalVocabulary: vocabularyState.status === "loaded"
+        ? localized("personalVocabularyProvenanceCache")
+        : vocabularyState.status === "memory"
+          ? localized("personalVocabularyProvenanceMemory")
+          : vocabularyState.status === "invalid-cache"
+            ? localized("personalVocabularyProvenanceInvalid")
+            : localized("personalVocabularyProvenanceNone")
     };
     Object.entries(pairs).forEach(([key, value]) => {
       const element = $(`[data-provenance="${key}"]`);
@@ -1305,8 +1451,13 @@
     });
   }
 
+  function visibleFeatures() {
+    return content.features.filter((feature) => !isSchoolMode() || feature.schoolOptional !== true);
+  }
+
   function renderCategories() {
-    const categories = ["All", ...new Set(content.features.map((feature) => feature.category))];
+    const categories = ["All", ...new Set(visibleFeatures().map((feature) => feature.category))];
+    if (!categories.includes(categoryFilter)) categoryFilter = "All";
     const container = $("#category-filters");
     container.replaceChildren();
     categories.forEach((category) => {
@@ -1319,14 +1470,15 @@
 
   function renderFeatureGrid() {
     const state = searchStates.features;
-    const list = content.features.filter((feature) => {
+    const available = visibleFeatures();
+    const list = available.filter((feature) => {
       const searchable = schoolSafeText(`${feature.title} ${feature.summary} ${feature.category} ${feature.tags.join(" ")}`);
       return (categoryFilter === "All" || feature.category === categoryFilter) && searchMatches("features", searchable);
     });
     const grid = $("#feature-grid");
     grid.replaceChildren();
-    $("#feature-metric-count").textContent = String(content.features.length);
-    $("#feature-count").textContent = `${list.length} / ${content.features.length} articles`;
+    $("#feature-metric-count").textContent = String(available.length);
+    $("#feature-count").textContent = `${list.length} / ${available.length} articles`;
     if (!list.length) {
       grid.append(create("div", "release-empty", state.error || "No feature articles match this search."));
       return;
@@ -1364,7 +1516,8 @@
   function renderArticle() {
     const detail = $("#article-detail");
     detail.replaceChildren();
-    const feature = content.features.find((item) => item.id === currentArticleId);
+    const available = visibleFeatures();
+    const feature = available.find((item) => item.id === currentArticleId);
     if (!feature) {
       const empty = create("div", "empty-article-state");
       empty.append(create("span", "empty-icon", "✦"));
@@ -1396,7 +1549,7 @@
     suggestions.append(create("h3", null, "Suggested articles"));
     const list = create("ul", "suggestion-list");
     feature.suggested.forEach((suggestedId) => {
-      const target = content.features.find((item) => item.id === suggestedId);
+      const target = available.find((item) => item.id === suggestedId);
       if (!target) return;
       const item = create("li");
       const button = create("button", "chip-button", schoolSafeText(target.title));
@@ -1609,12 +1762,16 @@
       { id: "search.tabs", label: "Tabs · four searches", description: "Open the tab discovery lab", action: () => focusElement("tab-strip-search", "settings") },
       { id: "destination.notifications", label: "Notification centre", description: "Review, filter, export, dismiss, or delete local notification history", action: () => openNotificationCentre(), schoolOptional: true },
       { id: "setting.language", label: "Settings · language mode", description: "Choose English, Cantonese, or bilingual copy", action: () => focusElement("language-mode-buttons", "settings") },
+      { id: "setting.personal-vocabulary-upload", label: `Settings · ${localized("personalVocabularyChoose")}`, description: localized("personalVocabularyExplanation"), schoolOptional: true, action: () => focusElement("personal-vocabulary-upload", "settings") },
+      { id: "setting.personal-vocabulary-status", label: `Settings · ${localized("personalVocabularyStatusCommand")}`, description: vocabularyStatusText(), schoolOptional: true, action: () => focusElement("personal-vocabulary-status", "settings") },
+      { id: "setting.personal-vocabulary-replace", label: `Settings · ${localized("personalVocabularyReplace")}`, description: localized("personalVocabularyExplanation"), schoolOptional: true, action: () => focusElement("personal-vocabulary-replace", "settings") },
+      { id: "setting.personal-vocabulary-clear", label: `Settings · ${localized("personalVocabularyClear")}`, description: localized("personalVocabularyRecovery"), schoolOptional: true, action: () => focusElement("personal-vocabulary-clear", "settings") },
       { id: "setting.funny-en", label: "Settings · English funny level", description: "Adjust English voice from 1 to 5", schoolOptional: true, action: () => focusElement("funny-en", "settings") },
       { id: "setting.funny-yue", label: "Settings · Cantonese funny level", description: "Adjust Cantonese voice from 1 to 5", schoolOptional: true, action: () => focusElement("funny-yue", "settings") },
       { id: "setting.theme", label: "Settings · theme", description: "Choose system, light, or dark", action: () => focusElement("theme-setting", "settings") },
       { id: "setting.accent", label: "Settings · accent", description: "Choose the seed color", action: () => focusElement("accent-setting", "settings") },
       { id: "setting.appearance", label: "Settings · appearance editor", description: "Edit per-surface radius, color, and spacing", action: () => focusElement("appearance-target", "settings") },
-      ...content.features.map((feature) => ({ id: `feature.${feature.id}`, label: feature.title, description: `${feature.category} · ${feature.summary}`, action: () => selectArticle(feature.id) }))
+      ...visibleFeatures().map((feature) => ({ id: `feature.${feature.id}`, label: schoolSafeText(feature.title), description: schoolSafeText(`${feature.category} · ${feature.summary}`), action: () => selectArticle(feature.id) }))
     ];
     const stable = manifest.stable;
     const pagesVerified = ["verified", "workflow-deployed"].includes(manifest.publication?.pages);
@@ -1734,10 +1891,22 @@
     $("#school-mode-enabled").addEventListener("change", (event) => setSchoolMode(Boolean(event.target.checked)));
     $("#school-mode-name").addEventListener("input", (event) => setSchoolModeName(event.target.value));
     $("#reset-school-mode").addEventListener("click", resetSchoolMode);
+    const choosePersonalVocabulary = () => {
+      if (!isSchoolMode()) $("#personal-vocabulary-file").click();
+    };
+    $("#personal-vocabulary-upload").addEventListener("click", choosePersonalVocabulary);
+    $("#personal-vocabulary-replace").addEventListener("click", choosePersonalVocabulary);
+    $("#personal-vocabulary-file").addEventListener("change", (event) => {
+      const file = event.currentTarget.files?.[0] || null;
+      // Reset before asynchronous parsing so the native picker never displays a local file name.
+      event.currentTarget.value = "";
+      void loadPersonalVocabularyFile(file);
+    });
+    $("#personal-vocabulary-clear").addEventListener("click", clearPersonalVocabulary);
     $("#display-name").addEventListener("input", (event) => {
       settings = { ...settings, displayName: normalizeLabel(event.target.value, DEFAULTS.displayName, 80) };
       saveSettings();
-      $("#brand-name").textContent = settings.displayName;
+      $("#brand-name").textContent = renderUserFacingText(settings.displayName);
       applyTranslations();
       renderProvenance();
     });
@@ -1874,7 +2043,7 @@
     renderReleaseList();
     renderTabDiscovery();
     $("#publication-status").textContent = ["verified", "workflow-deployed"].includes(manifest.publication?.pages) ? "Pages publication verified" : "Local source · Pages publication unverified";
-    $("#about-feature-links").replaceChildren(...content.features.map((feature) => { const button = create("button", "chip-button", feature.title); button.type = "button"; button.addEventListener("click", () => selectArticle(feature.id)); return button; }));
+    renderAboutFeatureLinks();
     applySettings();
     bindTabs();
     bindContextMenu();
@@ -1897,6 +2066,7 @@
   let notificationDeleteIds = [];
   let notificationDeleteRevision = null;
   let notificationTimers = new Map();
+  let vocabularyState = readVocabularyCache();
   let settings = readSettings();
   initialize();
 })();

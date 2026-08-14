@@ -7,4 +7,5 @@ security boundaries, and verification evidence.
 ## Articles
 
 - [Landing and documentation site](./landing-and-documentation-site.md)
+- [Personal vocabulary](./personal-vocabulary.md)
 - [Universal feature coverage](./universal-feature-coverage.md)

@@ -14,10 +14,14 @@ const featureCatalogueCaptureRelative = "docs/screenshots/site/feature-catalogue
 const featureCatalogueCaptureAbsolute = path.resolve(repoRoot, featureCatalogueCaptureRelative);
 const notificationHardeningCaptureRelative = "docs/screenshots/site/notification-centre-hardening.png";
 const notificationHardeningCaptureAbsolute = path.resolve(repoRoot, notificationHardeningCaptureRelative);
+const personalVocabularyCaptureRelative = "docs/screenshots/site/personal-vocabulary-no-file.png";
+const personalVocabularyCaptureAbsolute = path.resolve(repoRoot, personalVocabularyCaptureRelative);
 let featureCatalogueCaptureBytes = null;
 let featureCatalogueCaptureError = null;
 let notificationHardeningCaptureBytes = null;
 let notificationHardeningCaptureError = null;
+let personalVocabularyCaptureBytes = null;
+let personalVocabularyCaptureError = null;
 try {
   featureCatalogueCaptureBytes = await readFile(featureCatalogueCaptureAbsolute);
 } catch (error) {
@@ -27,6 +31,11 @@ try {
   notificationHardeningCaptureBytes = await readFile(notificationHardeningCaptureAbsolute);
 } catch (error) {
   notificationHardeningCaptureError = error;
+}
+try {
+  personalVocabularyCaptureBytes = await readFile(personalVocabularyCaptureAbsolute);
+} catch (error) {
+  personalVocabularyCaptureError = error;
 }
 
 async function read(relativePath) {
@@ -52,7 +61,7 @@ async function exists(relativePath) {
 }
 
 function loadScript(source, filename, globalName) {
-  const context = { window: {} };
+  const context = { window: {}, TextEncoder, TextDecoder, Uint8Array, ArrayBuffer };
   vm.runInNewContext(source, context, { filename });
   return context.window[globalName];
 }
@@ -69,8 +78,43 @@ async function walk(directory, prefix = "") {
 }
 
 const universalStatuses = new Set(["implemented", "partial", "planned"]);
+const personalVocabularyEvidenceFields = ["capture", "focusedTests", "implementation", "interaction", "localizedCopy", "persistence"];
 
-function validateUniversalFeatureManifest(candidate, sourceCorpus) {
+function validatePersonalVocabularyEvidence(feature, runtimeCorpus, testCorpus) {
+  assert.equal(feature.docsPath, "../docs/features/site/personal-vocabulary.md", "personal-vocabulary must name its dedicated article");
+  assert.deepEqual(Object.keys(feature.evidence || {}).sort(), personalVocabularyEvidenceFields, "personal-vocabulary evidence must have every required surface proof");
+  for (const field of ["implementation", "localizedCopy", "persistence", "interaction"]) {
+    assert.ok(Array.isArray(feature.evidence[field]) && feature.evidence[field].length > 0, `personal-vocabulary ${field} evidence is required`);
+    feature.evidence[field].forEach((anchor) => {
+      assert.ok(typeof anchor === "string" && anchor.length > 0, `personal-vocabulary ${field} evidence has an empty anchor`);
+      assert.ok(runtimeCorpus.includes(anchor), `personal-vocabulary ${field} anchor is missing: ${anchor}`);
+    });
+  }
+  assert.ok(Array.isArray(feature.evidence.focusedTests) && feature.evidence.focusedTests.length > 0, "personal-vocabulary focused test evidence is required");
+  feature.evidence.focusedTests.forEach((label) => assert.ok(testCorpus.includes(`run("${label}"`), `personal-vocabulary focused test is missing: ${label}`));
+  const capture = feature.evidence.capture;
+  assert.deepEqual(Object.keys(capture || {}).sort(), ["height", "path", "sha256", "state", "width"], "personal-vocabulary capture evidence must be complete");
+  assert.equal(capture.path, "../docs/screenshots/site/personal-vocabulary-no-file.png", "personal-vocabulary capture path changed");
+  assert.match(capture.state, /^Built Settings no-file state/, "personal-vocabulary capture must describe its generic state");
+  assert.ok(Number.isInteger(capture.width) && capture.width > 0, "personal-vocabulary capture width is required");
+  assert.ok(Number.isInteger(capture.height) && capture.height > 0, "personal-vocabulary capture height is required");
+  assert.match(capture.sha256, /^[0-9a-f]{64}$/i, "personal-vocabulary capture hash is required");
+}
+
+function validatePersonalVocabularyCapture(feature, bytes, readError) {
+  const capture = feature?.evidence?.capture;
+  const resolved = path.resolve(siteRoot, capture.path);
+  assert.equal(resolved, personalVocabularyCaptureAbsolute, "personal-vocabulary capture must stay at its declared repository path");
+  assert.ok(Buffer.isBuffer(bytes), readError?.message || "personal-vocabulary capture is present");
+  const signature = Buffer.from([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]);
+  assert.deepEqual([...bytes.subarray(0, 8)], [...signature], "personal-vocabulary capture is a PNG");
+  assert.equal(bytes.toString("ascii", 12, 16), "IHDR", "personal-vocabulary capture has an IHDR header");
+  assert.equal(bytes.readUInt32BE(16), capture.width, "personal-vocabulary capture width matches inventory evidence");
+  assert.equal(bytes.readUInt32BE(20), capture.height, "personal-vocabulary capture height matches inventory evidence");
+  assert.equal(createHash("sha256").update(bytes).digest("hex"), capture.sha256.toLowerCase(), "personal-vocabulary capture hash matches inventory evidence");
+}
+
+function validateUniversalFeatureManifest(candidate, sourceCorpus, testCorpus = "") {
   assert.equal(candidate?.schemaVersion, 1, "schemaVersion must be 1");
   assert.equal(candidate?.surface, "GitHub Pages landing and documentation site", "surface must name the Pages site");
   assert.ok(Array.isArray(candidate?.requiredIds) && candidate.requiredIds.length > 0, "requiredIds must be a non-empty hand-written list");
@@ -101,6 +145,7 @@ function validateUniversalFeatureManifest(candidate, sourceCorpus) {
       assert.ok(feature.runtimeAnchors.length > 0, `${feature.id} needs runtime anchors while ${feature.status}`);
       feature.runtimeAnchors.forEach((anchor) => assert.ok(sourceCorpus.includes(anchor), `${feature.id} runtime anchor is missing: ${anchor}`));
     }
+    if (feature.id === "personal-vocabulary") validatePersonalVocabularyEvidence(feature, sourceCorpus, testCorpus);
   }
   candidate.requiredIds.forEach((id) => assert.ok(ids.has(id), `required feature record is missing: ${id}`));
   assert.equal(ids.size, requiredIds.size, "feature records and requiredIds must have the same coverage");
@@ -120,6 +165,7 @@ const expectedFiles = [
   "data/release-manifest.js",
   "data/universal-feature-manifest.js",
   "data/settings-contract.js",
+  "data/personal-vocabulary-contract.js",
   "data/notification-contract.js",
   "data/release-manifest-contract.js",
   "assets/dim-sum.svg"
@@ -138,12 +184,15 @@ const manifestJsonSource = await read("data/release-manifest.json");
 const manifestJsSource = await read("data/release-manifest.js");
 const universalFeatureManifestSource = await read("data/universal-feature-manifest.js");
 const settingsContractSource = await read("data/settings-contract.js");
+const personalVocabularyContractSource = await read("data/personal-vocabulary-contract.js");
+const checkSource = await read("check.mjs");
 const notificationContractSource = await read("data/notification-contract.js");
 const releaseManifestContractSource = await read("data/release-manifest-contract.js");
 const content = loadScript(contentSource, "content.js", "MDM_SITE_CONTENT");
 const manifestFromJs = loadScript(manifestJsSource, "release-manifest.js", "MDM_RELEASE_MANIFEST");
 const universalFeatureManifest = loadScript(universalFeatureManifestSource, "universal-feature-manifest.js", "MDM_UNIVERSAL_FEATURE_MANIFEST");
 const settingsContract = loadScript(settingsContractSource, "settings-contract.js", "MDM_SITE_SETTINGS_CONTRACT");
+const personalVocabularyContract = loadScript(personalVocabularyContractSource, "personal-vocabulary-contract.js", "MDM_SITE_PERSONAL_VOCABULARY_CONTRACT");
 const notificationContract = loadScript(notificationContractSource, "notification-contract.js", "MDM_SITE_NOTIFICATION_CONTRACT");
 const releaseManifestContract = loadScript(releaseManifestContractSource, "release-manifest-contract.js", "MDM_RELEASE_MANIFEST_CONTRACT");
 const manifestFromJson = JSON.parse(manifestJsonSource);
@@ -159,6 +208,7 @@ run("site build preserves every local runtime script", () => {
     "./content.js",
     "./data/universal-feature-manifest.js",
     "./data/settings-contract.js",
+    "./data/personal-vocabulary-contract.js",
     "./data/notification-contract.js",
     "./data/release-manifest-contract.js",
     "./data/release-manifest.js",
@@ -305,8 +355,8 @@ run("verified extension action has a positive accessible rendering contract", ()
   assert.equal(descriptor.steps.length, 3);
 });
 
-const universalSourceCorpus = `${html}\n${css}\n${app}\n${contentSource}\n${notificationContractSource}`;
-const universalFeatureEntries = validateUniversalFeatureManifest(universalFeatureManifest, universalSourceCorpus);
+const universalSourceCorpus = `${html}\n${css}\n${app}\n${contentSource}\n${personalVocabularyContractSource}\n${notificationContractSource}`;
+const universalFeatureEntries = validateUniversalFeatureManifest(universalFeatureManifest, universalSourceCorpus, checkSource);
 run("universal feature manifest is explicit and independently validated", () => {
   assert.equal(universalFeatureEntries.length, universalFeatureManifest.requiredIds.length);
   assert.ok(universalFeatureEntries.some((feature) => feature.status === "planned"), "pending contract entries must remain visible");
@@ -314,22 +364,22 @@ run("universal feature manifest is explicit and independently validated", () => 
 run("universal manifest validator rejects missing records, duplicates, unsafe docs, and missing probes", () => {
   const missing = JSON.parse(JSON.stringify(universalFeatureManifest));
   missing.features.shift();
-  assert.throws(() => validateUniversalFeatureManifest(missing, universalSourceCorpus), /required feature record is missing/);
+  assert.throws(() => validateUniversalFeatureManifest(missing, universalSourceCorpus, checkSource), /required feature record is missing/);
 
   const duplicate = JSON.parse(JSON.stringify(universalFeatureManifest));
   duplicate.features.push({ ...duplicate.features[0] });
-  assert.throws(() => validateUniversalFeatureManifest(duplicate, universalSourceCorpus), /duplicate feature id/);
+  assert.throws(() => validateUniversalFeatureManifest(duplicate, universalSourceCorpus, checkSource), /duplicate feature id/);
 
   const unsafeDocs = JSON.parse(JSON.stringify(universalFeatureManifest));
   unsafeDocs.features[0].docsPath = "../../outside.md";
-  assert.throws(() => validateUniversalFeatureManifest(unsafeDocs, universalSourceCorpus), /escapes the repository/);
+  assert.throws(() => validateUniversalFeatureManifest(unsafeDocs, universalSourceCorpus, checkSource), /escapes the repository/);
 
   const missingProbe = JSON.parse(JSON.stringify(universalFeatureManifest));
   const emojiFeature = missingProbe.features.find((feature) => feature.id === "emoji-toggle");
   emojiFeature.runtimeAnchors = [];
-  assert.throws(() => validateUniversalFeatureManifest(missingProbe, universalSourceCorpus), /needs runtime anchors/);
+  assert.throws(() => validateUniversalFeatureManifest(missingProbe, universalSourceCorpus, checkSource), /needs runtime anchors/);
   const missingRuntimeAnchorSource = universalSourceCorpus.replace('id="show-emojis"', 'id="show-emojis-removed"');
-  assert.throws(() => validateUniversalFeatureManifest(universalFeatureManifest, missingRuntimeAnchorSource), /emoji-toggle runtime anchor is missing/);
+  assert.throws(() => validateUniversalFeatureManifest(universalFeatureManifest, missingRuntimeAnchorSource, checkSource), /emoji-toggle runtime anchor is missing/);
 });
 for (const feature of universalFeatureEntries) {
   await stat(path.resolve(siteRoot, feature.docsPath));
@@ -362,6 +412,7 @@ run("emoji and School settings have an executable versioned state contract", () 
     showEmojis: false,
     schoolModeEnabled: true,
     schoolModeName: " Focus\u0000 mode ",
+    personalVocabulary: { enabled: true },
     unknownSecret: "must be ignored"
   }, defaults, "School mode", "Material Download Manager");
   assert.equal(migrated.schemaVersion, 2);
@@ -370,6 +421,7 @@ run("emoji and School settings have an executable versioned state contract", () 
   assert.equal(migrated.showEmojis, false);
   assert.equal(migrated.schoolMode.enabled, true);
   assert.equal(migrated.schoolMode.name, "Focus mode");
+  assert.equal(migrated.personalVocabulary, undefined, "private vocabulary data is never folded into ordinary settings");
   assert.equal(migrated.unknownSecret, undefined, "unknown storage fields are not copied into runtime state");
   assert.deepEqual(JSON.parse(JSON.stringify(settingsContract.effectiveSettings(migrated))), { language: "en", funnyEn: 1, funnyYue: 1, showEmojis: false, schoolMode: true });
   assert.equal(settingsContract.filterSchoolCopy("Cantonese · bilingual · funny · emoji · 蝦餃 · School mode", migrated, "Focus mode"), "English-only · English-only · English-only · English-only · · Focus mode");
@@ -388,6 +440,106 @@ run("emoji and School controls are wired to persistence, reset, and live suppres
   assert.match(html, /data\/universal-feature-manifest\.js/);
   assert.match(app, /window\.addEventListener\("storage"/);
   assert.match(app, /marker\.setAttribute\("aria-hidden", "true"\)/);
+});
+
+run("personal vocabulary strict contract", () => {
+  assert.equal(personalVocabularyContract.schemaVersion, 1);
+  assert.deepEqual(JSON.parse(JSON.stringify(personalVocabularyContract.limits)), {
+    maxBytes: 65_536,
+    maxDepth: 3,
+    maxNodes: 1_024,
+    maxEntries: 128,
+    maxKeyBytes: 96,
+    maxValueBytes: 384,
+    maxRenderedTextBytes: 32_768
+  });
+  const sourceKey = String.fromCharCode(97);
+  const replacementValue = String.fromCharCode(98);
+  const replacements = Object.create(null);
+  replacements[sourceKey] = replacementValue;
+  const neutralPayload = JSON.stringify({ schemaVersion: personalVocabularyContract.schemaVersion, replacements });
+  const accepted = personalVocabularyContract.validateTextPayload(neutralPayload);
+  assert.equal(accepted.ok, true, "a generated in-memory neutral record is accepted");
+  assert.equal(personalVocabularyContract.applyReplacements(sourceKey.repeat(2), accepted.record), replacementValue.repeat(2));
+  const roundTrip = personalVocabularyContract.validateTextPayload(personalVocabularyContract.serializeRecord(accepted.record));
+  assert.equal(roundTrip.ok, true, "the validated cache serializes and revalidates");
+  assert.equal(personalVocabularyContract.validateBytePayload(new Uint8Array([0xC3, 0x28])).ok, false, "malformed UTF-8 is rejected");
+  assert.equal(personalVocabularyContract.validateBytePayload(new Uint8Array(personalVocabularyContract.limits.maxBytes + 1)).code, "byte-limit", "byte bounds are enforced before decoding");
+  const duplicatePayload = `{"schemaVersion":${personalVocabularyContract.schemaVersion},"replacements":{"${sourceKey}":"${replacementValue}","${sourceKey}":"${replacementValue}"}}`;
+  assert.equal(personalVocabularyContract.validateTextPayload(duplicatePayload).code, "duplicate-key", "duplicate JSON keys are rejected before application");
+  const unknownRoot = Object.create(null);
+  unknownRoot.schemaVersion = personalVocabularyContract.schemaVersion;
+  unknownRoot.replacements = Object.create(null);
+  unknownRoot[String.fromCharCode(101)] = true;
+  assert.equal(personalVocabularyContract.validateTextPayload(JSON.stringify(unknownRoot)).code, "unexpected-field", "unexpected root fields are rejected");
+  const unsafeReplacements = Object.create(null);
+  unsafeReplacements[["_", "_", "proto", "_", "_"].join("")] = replacementValue;
+  assert.equal(personalVocabularyContract.validateTextPayload(JSON.stringify({ schemaVersion: personalVocabularyContract.schemaVersion, replacements: unsafeReplacements })).code, "unsafe-key", "unsafe keys are rejected");
+  const overlongKey = Object.create(null);
+  overlongKey[String.fromCharCode(107).repeat(personalVocabularyContract.limits.maxKeyBytes + 1)] = replacementValue;
+  assert.equal(personalVocabularyContract.validateTextPayload(JSON.stringify({ schemaVersion: personalVocabularyContract.schemaVersion, replacements: overlongKey })).code, "invalid-key", "source-key bounds are enforced");
+  const overlongValue = Object.create(null);
+  overlongValue[sourceKey] = String.fromCharCode(118).repeat(personalVocabularyContract.limits.maxValueBytes + 1);
+  assert.equal(personalVocabularyContract.validateTextPayload(JSON.stringify({ schemaVersion: personalVocabularyContract.schemaVersion, replacements: overlongValue })).code, "invalid-value", "replacement-value bounds are enforced");
+  const tooMany = Object.create(null);
+  for (let index = 0; index <= personalVocabularyContract.limits.maxEntries; index += 1) tooMany[`k${index}`] = replacementValue;
+  assert.equal(personalVocabularyContract.validateTextPayload(JSON.stringify({ schemaVersion: personalVocabularyContract.schemaVersion, replacements: tooMany })).code, "entry-limit", "entry bounds are enforced");
+  const tooDeep = "[".repeat(personalVocabularyContract.limits.maxDepth + 2) + "0" + "]".repeat(personalVocabularyContract.limits.maxDepth + 2);
+  assert.equal(personalVocabularyContract.validateTextPayload(tooDeep).code, "nesting-limit", "nesting bounds are enforced");
+  assert.equal(personalVocabularyContract.validateTextPayload(JSON.stringify({ schemaVersion: personalVocabularyContract.schemaVersion, replacements: { [sourceKey]: {} } })).code, "invalid-value", "nested replacement values are rejected");
+});
+
+run("personal vocabulary controls are local-only, localized, searchable, and School-omitted", () => {
+  for (const marker of ["id=\"personal-vocabulary-file\"", "id=\"personal-vocabulary-upload\"", "id=\"personal-vocabulary-replace\"", "id=\"personal-vocabulary-clear\"", "id=\"personal-vocabulary-status\"", "data-school-optional", "data-setting-search=\"personal vocabulary"]) assert.ok(html.includes(marker), `${marker} is present`);
+  for (const marker of ["personalVocabularyNoFile", "personalVocabularyLoaded", "personalVocabularyInvalid", "personalVocabularyReplace", "personalVocabularyClear", "personalVocabularyFileLabel"]) assert.ok(app.includes(marker), `${marker} has localized copy wiring`);
+  for (const marker of ["VOCABULARY_CACHE_KEY", "function readVocabularyCache", "function applyIncomingVocabularyCache", "function loadPersonalVocabularyFile", "function clearPersonalVocabulary", "function renderUserFacingText", "window.MDM_SITE_USER_TEXT", "mdm-site-user-text-change", "visibleFeatures", "schoolOptional: true", "setting.personal-vocabulary-upload", "setting.personal-vocabulary-status", "setting.personal-vocabulary-replace", "setting.personal-vocabulary-clear"]) assert.ok(app.includes(marker) || contentSource.includes(marker), `${marker} is wired`);
+  assert.match(html, /type="file"[^>]+accept="application\/json,\.json"/, "the semantic picker limits file affordance to JSON");
+  assert.match(css, /\.private-file-input\s*\{/, "the native picker is visually hidden so its local filename is never rendered");
+  assert.match(app, /event\.currentTarget\.value = "";/, "the picker is reset before asynchronous parsing");
+  assert.doesNotMatch(app, /\bfile\.name\b/, "local filenames are never read into the renderer");
+  assert.doesNotMatch(personalVocabularyContractSource, /\b(fetch|XMLHttpRequest|sendBeacon|WebSocket)\b/, "the neutral contract has no network path");
+  assert.doesNotMatch(app, /settings = \{ \.\.\.settings, personalVocabulary/, "the private cache is never folded into ordinary settings");
+  const vocabularyFeature = content.features.find((feature) => feature.id === "personal-vocabulary");
+  assert.equal(vocabularyFeature?.schoolOptional, true, "the feature article is omitted while School mode is on");
+  const exportFunctions = ["function exportVisibleNotifications", "function changelogMarkdown"].map((marker) => {
+    const start = app.indexOf(marker);
+    const end = app.indexOf("\n  function ", start + marker.length);
+    return app.slice(start, end < 0 ? app.length : end);
+  }).join("\n");
+  assert.doesNotMatch(exportFunctions, /VOCABULARY_CACHE_KEY|personalVocabularyContract/, "exports cannot serialize private vocabulary data");
+});
+
+run("personal vocabulary negative fixtures", () => {
+  const feature = universalFeatureManifest.features.find((candidate) => candidate.id === "personal-vocabulary");
+  const withoutPicker = universalSourceCorpus.replace('id="personal-vocabulary-file"', 'id="personal-vocabulary-file-removed"');
+  assert.notEqual(withoutPicker, universalSourceCorpus, "picker negative fixture changes the runtime corpus");
+  assert.throws(() => validatePersonalVocabularyEvidence(feature, withoutPicker, checkSource), /implementation anchor is missing/);
+  const withoutLocalizedStatus = universalSourceCorpus.replace("personalVocabularyNoFile", "personalVocabularyNoFileRemoved");
+  assert.notEqual(withoutLocalizedStatus, universalSourceCorpus, "localized-copy negative fixture changes the runtime corpus");
+  assert.throws(() => validatePersonalVocabularyEvidence(feature, withoutLocalizedStatus, checkSource), /localizedCopy anchor is missing/);
+  const withoutCacheValidation = universalSourceCorpus.replace("function readVocabularyCache", "function readVocabularyCacheRemoved");
+  assert.notEqual(withoutCacheValidation, universalSourceCorpus, "cache-validation negative fixture changes the runtime corpus");
+  assert.throws(() => validatePersonalVocabularyEvidence(feature, withoutCacheValidation, checkSource), /persistence anchor is missing/);
+  const withoutDynamicBoundary = universalSourceCorpus.replace("window.MDM_SITE_USER_TEXT", "window.MDM_SITE_USER_TEXT_REMOVED");
+  assert.notEqual(withoutDynamicBoundary, universalSourceCorpus, "dynamic rendering-boundary negative fixture changes the runtime corpus");
+  assert.throws(() => validatePersonalVocabularyEvidence(feature, withoutDynamicBoundary, checkSource), /implementation anchor is missing/);
+  const withoutFocusedTest = checkSource.replace('run("personal vocabulary strict contract"', 'run("personal vocabulary strict contract removed"');
+  assert.notEqual(withoutFocusedTest, checkSource, "focused-test negative fixture changes the test corpus");
+  assert.throws(() => validatePersonalVocabularyEvidence(feature, universalSourceCorpus, withoutFocusedTest), /focused test is missing/);
+  const withoutArticle = JSON.parse(JSON.stringify(feature));
+  withoutArticle.docsPath = "../docs/features/site/other.md";
+  assert.throws(() => validatePersonalVocabularyEvidence(withoutArticle, universalSourceCorpus, checkSource), /dedicated article/);
+  const withoutCapture = JSON.parse(JSON.stringify(feature));
+  delete withoutCapture.evidence.capture;
+  assert.throws(() => validatePersonalVocabularyEvidence(withoutCapture, universalSourceCorpus, checkSource), /evidence must have every required surface proof/);
+  const mismatchedCapture = JSON.parse(JSON.stringify(feature));
+  mismatchedCapture.evidence.capture.sha256 = "0".repeat(64);
+  assert.throws(() => validatePersonalVocabularyCapture(mismatchedCapture, personalVocabularyCaptureBytes, personalVocabularyCaptureError), /hash matches inventory evidence/);
+});
+
+run("personal vocabulary built capture integrity", () => {
+  const feature = universalFeatureManifest.features.find((candidate) => candidate.id === "personal-vocabulary");
+  validatePersonalVocabularyCapture(feature, personalVocabularyCaptureBytes, personalVocabularyCaptureError);
 });
 
 run("notification history contract bounds text, tones, filters, and exports", () => {
@@ -509,13 +661,21 @@ run("notification hardening capture is pinned to a safe path, hash, and dimensio
   assert.equal(createHash("sha256").update(notificationHardeningCaptureBytes).digest("hex"), "a4213067c25b0ef639957dc264d30c6eb78d86db88cdee98de5ef6f73471757c", "capture hash matches provenance");
 });
 
- run("feature article inventory covers every embedded feature", () => {
-  assert.equal(content.features.length, 17);
+const requiredSiteArticleIds = Object.freeze([
+  "reliable-transfers", "auto-organize-downloads", "record-export", "local-history", "command-palette", "tabbed-navigation",
+  "notification-center", "destructive-action-gate", "renderer-accessibility", "regex-builder", "language-appearance", "squirrel-updates",
+  "browser-extension", "local-totp-core", "progress-window", "in-app-documentation-browser", "personal-vocabulary", "site-foundation"
+]);
+
+run("feature article inventory covers every embedded feature", () => {
   assert.match(html, /id="feature-metric-count">—<\/span>/);
   assert.match(html, /id="feature-count">— articles<\/span>/);
   assert.match(app, /feature-metric-count/);
   const ids = new Set(content.features.map((feature) => feature.id));
+  assert.equal(ids.size, content.features.length, "feature article IDs are unique");
+  assert.deepEqual([...ids].sort(), [...requiredSiteArticleIds].sort(), "the hand-written article inventory is complete");
   assert.ok(ids.has("auto-organize-downloads"), "auto-organize article is in the explicit feature inventory");
+  assert.ok(ids.has("personal-vocabulary"), "personal-vocabulary article is in the explicit feature inventory");
   for (const feature of content.features) {
     assert.ok(feature.title && feature.summary && feature.category, `${feature.id} has identity fields`);
     assert.deepEqual(Object.keys(feature.sections).sort(), ["behavior", "configuration", "failureModes", "security", "verification"]);
