@@ -6,6 +6,7 @@
   <meta name="description" content="Material Download Manager landing page and offline feature documentation.">
   <title>Material Download Manager · Documentation</title>
   <link rel="stylesheet" href="./styles.css">
+  <link rel="stylesheet" href="./converter.css">
 </head>
 <body>
   <a class="skip-link" href="#main-content">Skip to content</a>
@@ -45,6 +46,9 @@
           </button>
           <button class="tab-button" type="button" role="tab" aria-selected="false" aria-controls="panel-features" id="tab-features" data-tab="features">
             <span class="tab-icon" aria-hidden="true">✦</span><span class="tab-label" data-copy="features">Features</span>
+          </button>
+          <button class="tab-button" type="button" role="tab" aria-selected="false" aria-controls="panel-converter" id="tab-converter" data-tab="converter">
+            <span class="tab-icon" aria-hidden="true">⇄</span><span class="tab-label" data-copy="converter">Converter</span>
           </button>
           <button class="tab-button" type="button" role="tab" aria-selected="false" aria-controls="panel-changelog" id="tab-changelog" data-tab="changelog">
             <span class="tab-icon" aria-hidden="true">◷</span><span class="tab-label" data-copy="changelog">Changelog</span>
@@ -90,7 +94,7 @@
 
           <div class="metric-grid" aria-label="Project evidence summary">
             <article class="metric-card"><span class="metric-value" id="feature-metric-count">—</span><span class="metric-label" data-copy="featureArticles">feature articles</span><span class="metric-note" data-copy="featureArticlesNote">embedded offline</span></article>
-            <article class="metric-card"><span class="metric-value">5</span><span class="metric-label" data-copy="siteTabs">browser-style tabs</span><span class="metric-note" data-copy="siteTabsNote">keyboard reachable</span></article>
+            <article class="metric-card"><span class="metric-value">6</span><span class="metric-label" data-copy="siteTabs">browser-style tabs</span><span class="metric-note" data-copy="siteTabsNote">keyboard reachable</span></article>
             <article class="metric-card"><span class="metric-value">0</span><span class="metric-label" data-copy="remoteAssets">remote assets</span><span class="metric-note" data-copy="remoteAssetsNote">no CDN, no analytics</span></article>
             <article class="metric-card"><span class="metric-value" id="release-metric">—</span><span class="metric-label" data-copy="stableInstaller">stable installer</span><span class="metric-note" id="release-metric-note">not proven</span></article>
           </div>
@@ -164,6 +168,91 @@
                 <h2 data-copy="selectArticle">Select an article</h2>
                 <p data-copy="selectArticleHint">Choose a feature card to read behavior, configuration, failure modes, security, verification, and suggested articles.</p>
               </div>
+            </article>
+          </div>
+        </section>
+
+        <section class="tab-panel" id="panel-converter" role="tabpanel" aria-labelledby="tab-converter" tabindex="0" hidden>
+          <div class="page-heading">
+            <div>
+              <p class="eyebrow">LOCAL CONVERSION</p>
+              <h1 data-converter-copy="title">Local file converter</h1>
+              <p data-converter-copy="lede">Choose files from this device, inspect their bounded bytes locally, and use only the browser adapters that this page can prove are available.</p>
+            </div>
+            <span class="count-badge" id="converter-status-badge" aria-live="polite">browser local</span>
+          </div>
+
+          <div class="converter-layout">
+            <div class="converter-intro">
+              <article class="surface-card converter-picker">
+                <div class="card-heading-row"><div><p class="eyebrow">SOURCE PICKER</p><h2 data-converter-copy="pickTitle">Choose source files</h2></div><span class="state-icon state-icon-accent" aria-hidden="true">↓</span></div>
+                <label class="converter-field" for="converter-file-input"><span>Local source files</span><input id="converter-file-input" type="file" multiple aria-describedby="converter-picker-help converter-privacy-boundary"></label>
+                <p class="field-explanation" id="converter-picker-help" data-converter-copy="pickHelp">There is no total-file cap. The queue retains file references, not every source byte, and each conversion reads only one bounded source per worker.</p>
+                <p class="converter-boundary" id="converter-privacy-boundary" data-converter-copy="privacy">Local-only: no file path is exposed by this browser page, no upload occurs, and no converter service is contacted.</p>
+              </article>
+              <aside class="converter-status" aria-live="polite" aria-atomic="true">
+                <p class="eyebrow">QUEUE STATUS</p>
+                <strong id="converter-status-message">Ready for local file selection.</strong>
+                <span id="converter-persistence-status">IndexedDB metadata only; source File objects and generated Blobs are never persisted.</span>
+                <span id="converter-storage-estimate">Browser storage estimate: checking…</span>
+              </aside>
+            </div>
+
+            <div class="converter-workspace">
+              <article class="surface-card converter-panel">
+                <div class="card-heading-row"><div><p class="eyebrow">SOURCE QUEUE</p><h2 data-converter-copy="queueTitle">Bounded queue</h2></div><span class="state-icon state-icon-accent" aria-hidden="true">≋</span></div>
+                <p class="converter-queue-summary" id="converter-queue-summary" role="status">0 selected · 0 visible · 0 active</p>
+                <div class="converter-queue-actions" role="group" aria-label="Converter queue actions">
+                  <button class="button button-outlined" id="converter-select-all" type="button" data-converter-copy="selectAll">Select visible</button>
+                  <button class="button button-outlined" id="converter-select-inverse" type="button" data-converter-copy="invert">Invert selection</button>
+                  <button class="button button-outlined" id="converter-pause" type="button" data-converter-copy="pause">Pause new work</button>
+                  <button class="button button-tonal" id="converter-resume" type="button" data-converter-copy="resume">Resume queue</button>
+                  <button class="button button-outlined" id="converter-cancel" type="button" data-converter-copy="cancel">Cancel selected</button>
+                  <button class="button button-outlined" id="converter-retry" type="button" data-converter-copy="retry">Retry failed</button>
+                  <button class="button button-outlined" id="converter-export" type="button" data-converter-copy="export">Export safe results</button>
+                </div>
+                <ul class="converter-record-list" id="converter-record-list" aria-label="Local conversion queue" aria-live="polite"></ul>
+              </article>
+
+              <div class="converter-panel">
+                <article class="surface-card converter-panel">
+                  <div class="card-heading-row"><div><p class="eyebrow">TARGET REVIEW</p><h2 data-converter-copy="targetTitle">Guided target and loss disclosure</h2></div><span class="state-icon state-icon-warning" aria-hidden="true">!</span></div>
+                  <p class="converter-preview-meta" id="converter-selected-adapter">Choose an enabled adapter that matches the selected source.</p>
+                  <div class="converter-target-grid">
+                    <label class="converter-field"><span data-converter-copy="targetName">Download name</span><input id="converter-target-name" type="text" maxlength="180" autocomplete="off" aria-describedby="converter-target-help"></label>
+                    <p class="converter-boundary" id="converter-target-help" data-converter-copy="targetHelp">For a batch, each source keeps its own base name and uses the selected target extension.</p>
+                  </div>
+                  <div class="converter-loss-notice" id="converter-loss-notice" hidden>
+                    <strong>Conversion changes</strong>
+                    <p id="converter-loss-text"></p>
+                    <label><input id="converter-loss-acknowledgement" type="checkbox"><span data-converter-copy="acknowledgeLoss">I understand the stated conversion changes before queueing it.</span></label>
+                  </div>
+                  <div class="converter-target-actions">
+                    <button class="button button-filled" id="converter-queue-selected" type="button" disabled data-converter-copy="queueSelected">Queue selected conversion</button>
+                    <button class="button button-outlined" id="converter-open-editor" type="button" disabled aria-describedby="converter-open-editor-boundary" data-converter-copy="openEditor">Open in external editor</button>
+                  </div>
+                  <p class="converter-disabled-explanation" id="converter-open-editor-boundary" data-converter-copy="openEditorBoundary">Not available in this static browser surface. Download the validated result, then choose an editor locally.</p>
+                </article>
+
+                <article class="surface-card converter-preview">
+                  <div class="card-heading-row"><div><p class="eyebrow">PREVIEW</p><h2 data-converter-copy="previewTitle">Bounded local preview</h2></div><span class="state-icon state-icon-accent" aria-hidden="true">⌕</span></div>
+                  <p class="converter-preview-meta" id="converter-preview-meta" data-converter-copy="previewEmpty">Select one source to inspect its detected type, bytes, and a small local preview.</p>
+                  <div class="converter-preview-body" id="converter-preview-body"></div>
+                  <p class="converter-boundary" data-converter-copy="storageBoundary">Browser boundary: destination free space and a chosen filesystem path are unavailable to this static page. It creates a download only after a complete bounded Blob validates; the browser controls the final save location.</p>
+                </article>
+              </div>
+            </div>
+
+            <article class="surface-card converter-panel">
+              <div class="card-heading-row"><div><p class="eyebrow">FORMAT CATALOG</p><h2 data-converter-copy="catalogTitle">Adapter catalog</h2></div><span class="state-icon state-icon-accent" aria-hidden="true">⇄</span></div>
+              <p class="field-explanation" data-converter-copy="catalogLede">Every known browser-local route is visible. Disabled formats name the missing bundled adapter instead of pretending a device tool or online service is available.</p>
+              <div class="converter-catalog" id="converter-adapter-catalog" aria-live="polite"></div>
+            </article>
+
+            <article class="surface-card converter-panel">
+              <div class="card-heading-row"><div><p class="eyebrow">LOCAL HISTORY</p><h2 data-converter-copy="historyTitle">Result history</h2></div><span class="state-icon state-icon-accent" aria-hidden="true">◷</span></div>
+              <p class="converter-history-meta">The visible history stores conversion metadata only. Source bytes, generated bytes, file paths, object URLs, and external-editor state are omitted.</p>
+              <ul class="converter-history-list" id="converter-history-list" aria-live="polite"></ul>
             </article>
           </div>
         </section>
@@ -429,8 +518,10 @@
   <script src="./data/universal-feature-manifest.js"></script>
   <script src="./data/settings-contract.js"></script>
   <script src="./data/notification-contract.js"></script>
+  <script src="./data/converter-contract.js"></script>
   <script src="./data/release-manifest-contract.js"></script>
   <script src="./data/release-manifest.js"></script>
   <script src="./app.js"></script>
+  <script src="./converter.js"></script>
 </body>
 </html>

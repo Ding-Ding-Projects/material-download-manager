@@ -49,6 +49,7 @@
     sections: ["Sections", "章節"],
     overview: ["Overview", "總覽"],
     features: ["Features", "功能"],
+    converter: ["Converter", "轉換器"],
     changelog: ["Changelog", "更新紀錄"],
     settings: ["Settings", "設定"],
     about: ["About", "關於"],
@@ -1561,6 +1562,7 @@
   const tabRecords = [
     { label: "Overview", title: "Landing page", strip: "Main window / Documentation", group: "Core", pinned: true },
     { label: "Features", title: "Feature index", strip: "Main window / Documentation", group: "Core", pinned: false },
+    { label: "Converter", title: "Browser-local file conversion", strip: "Main window / Documentation", group: "Core", pinned: false },
     { label: "Changelog", title: "Release evidence", strip: "Main window / Documentation", group: "Release evidence", pinned: false },
     { label: "Settings", title: "Site preferences", strip: "Main window / Documentation", group: "Preferences", pinned: false },
     { label: "About", title: "Publication status", strip: "Main window / Documentation", group: "Preferences", pinned: false }
@@ -1599,6 +1601,7 @@
     const commands = [
       { id: "tab.overview", label: "Overview", description: "Open the landing summary", action: () => selectTab("overview", true) },
       { id: "tab.features", label: "Features", description: "Open the feature index", action: () => selectTab("features", true) },
+      { id: "tab.converter", label: "Converter", description: "Open the browser-local file converter", action: () => selectTab("converter", true) },
       { id: "tab.changelog", label: "Changelog", description: "Open recorded release evidence", action: () => selectTab("changelog", true) },
       { id: "tab.settings", label: "Settings", description: "Open language and appearance settings", action: () => selectTab("settings", true) },
       { id: "tab.about", label: "About", description: "Open publication and verification status", action: () => selectTab("about", true) },
@@ -1607,6 +1610,9 @@
       { id: "search.features", label: "Features · search", description: "Focus the feature search field", action: () => focusElement("feature-search", "features") },
       { id: "search.settings", label: "Settings · search", description: "Focus the settings search field", action: () => focusElement("settings-search", "settings") },
       { id: "search.tabs", label: "Tabs · four searches", description: "Open the tab discovery lab", action: () => focusElement("tab-strip-search", "settings") },
+      { id: "converter.source", label: "Converter · choose source files", description: "Focus the local file picker", action: () => { selectTab("converter", true); window.MDM_SITE_CONVERTER?.focus("source"); } },
+      { id: "converter.catalog", label: "Converter · adapter catalog", description: "Review enabled and unavailable local adapters", action: () => { selectTab("converter", true); window.MDM_SITE_CONVERTER?.focus("catalog"); } },
+      { id: "converter.results", label: "Converter · safe result export", description: "Review queue results and export metadata without source bytes", action: () => { selectTab("converter", true); window.MDM_SITE_CONVERTER?.focus("source"); } },
       { id: "destination.notifications", label: "Notification centre", description: "Review, filter, export, dismiss, or delete local notification history", action: () => openNotificationCentre(), schoolOptional: true },
       { id: "setting.language", label: "Settings · language mode", description: "Choose English, Cantonese, or bilingual copy", action: () => focusElement("language-mode-buttons", "settings") },
       { id: "setting.funny-en", label: "Settings · English funny level", description: "Adjust English voice from 1 to 5", schoolOptional: true, action: () => focusElement("funny-en", "settings") },
