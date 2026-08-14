@@ -421,7 +421,14 @@ export async function sniffFileType(file, { signatureBytes = CONVERTER_LIMITS.si
   });
 }
 
-async function* sourceChunks(source, { chunkBytes = CONVERTER_LIMITS.chunkBytes, maxBytes = CONVERTER_LIMITS.inputBytes, signal, onProgress, runtime = globalThis } = {}) {
+async function* sourceChunks(source, {
+  chunkBytes = CONVERTER_LIMITS.chunkBytes,
+  maxBytes = CONVERTER_LIMITS.inputBytes,
+  signal,
+  onProgress,
+  runtime = globalThis,
+  waitForResume = null,
+} = {}) {
   const size = assertBlobLike(source, runtime, "The selected source");
   const safeMaximum = Math.max(0, Number(maxBytes) || 0);
   if (size > safeMaximum) throw new ConverterError("source-too-large", `The selected source exceeds the ${safeMaximum}-byte local adapter limit.`);
@@ -429,6 +436,10 @@ async function* sourceChunks(source, { chunkBytes = CONVERTER_LIMITS.chunkBytes,
   let offset = 0;
   reportProgress(onProgress, 0, size);
   while (offset < size) {
+    throwIfCancelled(signal);
+    // The options surface owns the pause promise.  Check before every bounded
+    // slice so pausing never asks the browser to read another input chunk.
+    if (typeof waitForResume === "function") await waitForResume();
     throwIfCancelled(signal);
     const next = Math.min(size, offset + chunkSize);
     const bytes = await readBoundedSlice(source, offset, next, runtime);
@@ -659,6 +670,7 @@ async function validateOutput(output, direction, expectedDigest, runtime, option
     chunkBytes: options.chunkBytes,
     maxBytes: CONVERTER_LIMITS.outputBytes,
     onProgress: null,
+    waitForResume: options.waitForResume,
     runtime,
   };
   if (direction === "encode-base64") observed = await digestDecodedText(output, "base64", runtime, validationOptions);
@@ -686,7 +698,14 @@ function sourceDescriptorFor(adapter, detected) {
  * Blob only in page memory; persistence helpers accept redacted outcomes, not
  * the File, Blob, filename, path, MIME claim, or source content.
  */
-export async function convertLocalFile({ file, adapterId, signal = null, onProgress = null, runtime = globalThis } = {}) {
+export async function convertLocalFile({
+  file,
+  adapterId,
+  signal = null,
+  onProgress = null,
+  waitForResume = null,
+  runtime = globalThis,
+} = {}) {
   if (!adapterRuntimeSupported(runtime)) throw new ConverterError("runtime-unavailable", "This browser does not expose the bounded Blob and text APIs required for local conversion.");
   const adapter = getAdapter(adapterId);
   const availability = resolveAdapterAvailability(adapter, { runtime });
@@ -696,7 +715,7 @@ export async function convertLocalFile({ file, adapterId, signal = null, onProgr
   const detected = await sniffFileType(file, { runtime });
   if (!adapterAcceptsSource(adapter, detected)) throw new ConverterError("unsupported-source", "The selected source type is not compatible with this local adapter.");
   const collector = outputCollector(runtime, adapter.target.mime);
-  const options = { signal, onProgress, chunkBytes: adapter.limits.chunkBytes, runtime };
+  const options = { signal, onProgress, chunkBytes: adapter.limits.chunkBytes, waitForResume, runtime };
   let transformed;
   if (adapter.direction === "encode-base64") transformed = await encodeBinary(file, collector, "base64", options);
   else if (adapter.direction === "encode-hex") transformed = await encodeBinary(file, collector, "hex", options);
@@ -710,6 +729,7 @@ export async function convertLocalFile({ file, adapterId, signal = null, onProgr
     signal,
     chunkBytes: adapter.limits.chunkBytes,
     expectedMime: adapter.target.mime,
+    waitForResume,
   });
   return Object.freeze({
     ok: true,
