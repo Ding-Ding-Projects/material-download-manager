@@ -6,6 +6,7 @@ import type { ExportFormat, ExportResult } from "./export";
 import type { HistoryFilter, HistoryView, HistoryAccessState } from "./history";
 import type { DistributedDownloadSelection, SourceIdentity } from "./distributedProtocol";
 import type { ScheduledSettingsRecord } from "./scheduledSettings";
+import type { AppLogoSettings } from "./appLogo";
 
 export type DownloadCategory =
   | "image"
@@ -190,6 +191,7 @@ export const SETTING_KEYS = [
   "sshHosts",
   "sshDefaultWorkerCount",
   "externalEditorPath",
+  "appLogo",
 ] as const;
 
 export type SettingKey = (typeof SETTING_KEYS)[number];
@@ -246,6 +248,8 @@ export interface AppSettings {
   sshDefaultWorkerCount: number;
   /** Absolute local executable selected for the optional editor handoff. */
   externalEditorPath: string | null;
+  /** Configuration only; logo bytes and private cache details never enter settings. */
+  appLogo: AppLogoSettings;
   settingProvenance: SettingsProvenance;
 }
 
@@ -572,6 +576,10 @@ export const IPC = {
   QUEUE_START: "queue:start",
   QUEUE_STOP: "queue:stop",
   PICK_FOLDER: "dialog:pickFolder",
+  LOGO_GET: "logo:get",
+  LOGO_PICK: "logo:pick",
+  LOGO_SET: "logo:set",
+  LOGO_CLEAR: "logo:clear",
   WINDOW_MINIMIZE: "window:minimize",
   WINDOW_MAXIMIZE: "window:maximize",
   WINDOW_CLOSE: "window:close",

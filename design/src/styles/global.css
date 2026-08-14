@@ -139,6 +139,129 @@ textarea {
   color: var(--text-primary);
 }
 
+.app-logo {
+  display: block;
+  flex: 0 0 auto;
+  max-width: 32px;
+  max-height: 32px;
+  object-fit: contain;
+  border-radius: 5px;
+}
+
+.app-logo-settings {
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+}
+
+.app-logo-preset-search,
+.app-logo-preview,
+.app-logo-controls,
+.app-logo-coordinate-grid {
+  min-width: 0;
+}
+
+.app-logo-preset-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.app-logo-preset {
+  display: grid;
+  min-height: 86px;
+  width: 100%;
+  place-items: center;
+  gap: 7px;
+  padding: 10px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius);
+  background: var(--bg-input);
+  color: var(--text-primary);
+  cursor: pointer;
+}
+
+.app-logo-preset:hover,
+.app-logo-preset:focus-visible,
+.app-logo-preset.selected {
+  border-color: var(--accent-solid);
+  outline: none;
+}
+
+.app-logo-preset.selected {
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent-solid) 25%, transparent);
+}
+
+.app-logo-controls,
+.app-logo-coordinate-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.app-logo-coordinate-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.app-logo-coordinate-grid legend {
+  grid-column: 1 / -1;
+  margin-bottom: 6px;
+}
+
+.app-logo-preview-targets {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.app-logo-preview-targets figure {
+  display: grid;
+  min-width: 38px;
+  margin: 0;
+  gap: 5px;
+  place-items: center;
+}
+
+.app-logo-preview-targets figcaption {
+  color: var(--text-secondary);
+  font-size: 11px;
+}
+
+.app-logo-preview-frame {
+  display: grid;
+  width: 132px;
+  height: 132px;
+  max-width: 132px;
+  max-height: 132px;
+  place-items: center;
+  overflow: hidden;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius);
+  background-image: linear-gradient(45deg, color-mix(in srgb, var(--bg-panel) 82%, var(--text-secondary)) 25%, transparent 25%), linear-gradient(-45deg, color-mix(in srgb, var(--bg-panel) 82%, var(--text-secondary)) 25%, transparent 25%), linear-gradient(45deg, transparent 75%, color-mix(in srgb, var(--bg-panel) 82%, var(--text-secondary)) 75%), linear-gradient(-45deg, transparent 75%, color-mix(in srgb, var(--bg-panel) 82%, var(--text-secondary)) 75%);
+  background-position: 0 0, 0 6px, 6px -6px, -6px 0;
+  background-size: 12px 12px;
+}
+
+.app-logo-preview-frame img {
+  display: block;
+  object-fit: contain;
+  max-width: 100%;
+  max-height: 100%;
+}
+
+@media (max-width: 620px) {
+  .app-logo-preset-grid,
+  .app-logo-controls,
+  .app-logo-coordinate-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
 .titlebar-controls {
   display: flex;
   height: 100%;

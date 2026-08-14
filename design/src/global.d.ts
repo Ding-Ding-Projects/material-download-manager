@@ -39,6 +39,7 @@ import type {
   TotpRegistrationMetadata,
 } from "@shared/authenticator";
 import type { OllamaRefreshResult, OllamaSuiteState } from "@shared/ollama";
+import type { AppLogoSettings, AppLogoSnapshot } from "@shared/appLogo";
 
 export interface MaterialDownloadManagerAPI {
   getState(): Promise<StateSnapshot>;
@@ -67,6 +68,10 @@ export interface MaterialDownloadManagerAPI {
   revealBrowserExtension(): Promise<void>;
   getSettings(): Promise<AppSettings>;
   setSettings(settings: SettingsPatch, resetKeys?: SettingKey[]): Promise<AppSettings>;
+  getAppLogo(): Promise<AppLogoSnapshot>;
+  pickAppLogo(): Promise<AppLogoSnapshot>;
+  setAppLogo(settings: AppLogoSettings): Promise<AppLogoSnapshot>;
+  clearAppLogo(): Promise<AppLogoSnapshot>;
   getPresentationSettings(): Promise<PresentationSettings>;
   setPresentationSettings(settings: PresentationPatch, resetKeys?: PresentationSettingKey[]): Promise<PresentationSettings>;
   getScheduleRules(): Promise<ScheduledSettingsRecord[]>;

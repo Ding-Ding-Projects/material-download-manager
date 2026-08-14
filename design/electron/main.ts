@@ -89,6 +89,8 @@ import {
   UpdateService,
 } from "./updater/UpdateService";
 import { OllamaSuiteStore } from "./ollama/OllamaSuiteStore";
+import { LogoCustomizationStore, type PreparedLogoVersion } from "./logo/LogoCustomizationStore";
+import { cloneAppLogoSettings, DEFAULT_APP_LOGO_SETTINGS, isAppLogoSettings, type AppLogoSettings } from "../shared/appLogo";
 
 const isDev = isDevelopmentLaunch(app.isPackaged);
 const UPDATE_WORK_STATE_MAX_AGE_MS = 10_000;
@@ -128,6 +130,7 @@ let schoolModeCredentialService: SchoolModeCredentialService;
 let authenticatorService: TotpRegistrationService;
 let externalEditorService: ExternalEditorService;
 let ollamaSuiteStore: OllamaSuiteStore;
+let logoCustomizationStore: LogoCustomizationStore;
 const historyAccessSession = new HistoryAccessSession();
 let updater: UpdateService | null = null;
 let handoffServer: HandoffServer | null = null;
@@ -136,7 +139,11 @@ const changelogHandlers = createChangelogIpcHandlers(
   new ChangelogStore(DEFAULT_CHANGELOG_ENTRIES, CHANGELOG_REPOSITORY_URL)
 );
 
-const appIconPath = path.join(__dirname, "../../build/icon.ico");
+// The installed identity icon is immutable and packaged separately from the
+// userData logo cache. Custom app-logo choices only affect renderer chrome.
+const appIconPath = app.isPackaged
+  ? path.join(process.resourcesPath, "app-icon.ico")
+  : path.join(__dirname, "../../build/icon.ico");
 
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -335,6 +342,17 @@ function broadcastScheduleRules(records: ScheduledSettingsRecord[]) {
   if (progressWindow && !progressWindow.isDestroyed()) progressWindow.webContents.send(IPC.SCHEDULE_CHANGED, records);
 }
 
+function logoPickerCopy(settings: AppSettings): { title: string; filterName: string } {
+  const english = { title: "Choose a local app logo", filterName: "Still images" };
+  const cantonese = { title: "揀本機應用程式標誌", filterName: "靜態圖片" };
+  if (settings.schoolModeEnabled || settings.languageMode === "english") return english;
+  if (settings.languageMode === "cantonese") return cantonese;
+  return {
+    title: `${english.title} · ${cantonese.title}`,
+    filterName: `${english.filterName} · ${cantonese.filterName}`,
+  };
+}
+
 async function processBrowserHandoffs(commandLine: readonly string[]) {
   if (!manager) return;
   const settings = manager.getSettings();
@@ -399,6 +417,63 @@ function registerIpcHandlers() {
     } finally {
       release();
     }
+  }
+
+  // Image conversion writes a versioned private cache and settings persistence
+  // writes state/history. Serialize the whole prepare → persist → activate
+  // transaction so concurrent controls cannot cross-wire their manifests.
+  let logoMutationTail = Promise.resolve();
+  async function withLogoMutation<T>(operation: () => Promise<T>): Promise<T> {
+    const previous = logoMutationTail;
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => { release = resolve; });
+    logoMutationTail = previous.then(() => gate);
+    await previous;
+    try {
+      return await operation();
+    } finally {
+      release();
+    }
+  }
+
+  async function restorePriorLogoSetting(previous: AppSettings): Promise<void> {
+    if (previous.settingProvenance.appLogo === "compiled-in") {
+      await manager.setSettings({}, ["appLogo"]);
+      return;
+    }
+    await manager.setSettings({ appLogo: previous.appLogo });
+  }
+
+  async function activatePreparedLogo(previous: AppSettings, prepared: PreparedLogoVersion) {
+    let persisted = false;
+    try {
+      await manager.setSettings({ appLogo: prepared.settings });
+      persisted = true;
+      await logoCustomizationStore.commitPrepared(prepared);
+    } catch {
+      await logoCustomizationStore.discardPrepared(prepared);
+      if (persisted) await restorePriorLogoSetting(previous).catch(() => undefined);
+      throw new Error("The local image was not applied; the previous valid logo remains active.");
+    }
+    broadcastState();
+    return logoCustomizationStore.getSnapshot(prepared.settings);
+  }
+
+  async function activatePresetLogo(previous: AppSettings, next: AppLogoSettings, resetToCompiledDefault: boolean) {
+    const clear = await logoCustomizationStore.prepareClear();
+    let persisted = false;
+    try {
+      if (resetToCompiledDefault) await manager.setSettings({}, ["appLogo"]);
+      else await manager.setSettings({ appLogo: next });
+      persisted = true;
+      await logoCustomizationStore.commitClear(clear);
+    } catch {
+      await logoCustomizationStore.rollbackClear(clear).catch(() => undefined);
+      if (persisted) await restorePriorLogoSetting(previous).catch(() => undefined);
+      throw new Error("The logo reset was not applied; the previous valid logo remains active.");
+    }
+    broadcastState();
+    return logoCustomizationStore.getSnapshot(manager.getSettings().appLogo);
   }
 
   ipcMain.handle(IPC.GET_STATE, (event) => {
@@ -550,6 +625,9 @@ function registerIpcHandlers() {
     assertTrustedSender(event);
     assertPartialSettings(settings);
     const validatedResetKeys: SettingKey[] = validateSettingResetKeys(resetKeys);
+    if (Object.prototype.hasOwnProperty.call(settings, "appLogo") || validatedResetKeys.includes("appLogo")) {
+      throw new Error("App-logo configuration has a dedicated validated image lifecycle.");
+    }
     if (validatedResetKeys.includes("sshHosts")) {
       throw new Error("The managed SSH host inventory has a dedicated lifecycle boundary");
     }
@@ -557,6 +635,49 @@ function registerIpcHandlers() {
       throw new Error("A setting cannot be changed and reset in the same mutation");
     }
     return manager.setSettings(settings, validatedResetKeys);
+  });
+
+  ipcMain.handle(IPC.LOGO_GET, async (event) => {
+    assertTrustedSender(event);
+    return logoCustomizationStore.getSnapshot(manager.getSettings().appLogo);
+  });
+  ipcMain.handle(IPC.LOGO_PICK, async (event) => {
+    assertTrustedSender(event);
+    if (!mainWindow || mainWindow.isDestroyed()) throw new Error("The logo picker is unavailable until the app window is ready.");
+    const copy = logoPickerCopy(manager.getSettings());
+    const picked = await dialog.showOpenDialog(mainWindow, {
+      title: copy.title,
+      properties: ["openFile"],
+      filters: [{ name: copy.filterName, extensions: ["png", "jpg", "jpeg", "webp"] }],
+    });
+    if (picked.canceled || picked.filePaths.length !== 1) {
+      return logoCustomizationStore.getSnapshot(manager.getSettings().appLogo);
+    }
+    return withLogoMutation(async () => {
+      const previous = manager.getSettings();
+      const prepared = await logoCustomizationStore.prepareImportFromFile(picked.filePaths[0], previous.appLogo);
+      return activatePreparedLogo(previous, prepared);
+    });
+  });
+  ipcMain.handle(IPC.LOGO_SET, async (event, settings: unknown) => {
+    assertTrustedSender(event);
+    if (!isAppLogoSettings(settings)) throw new Error("Invalid app-logo configuration.");
+    return withLogoMutation(async () => {
+      const previous = manager.getSettings();
+      const next = cloneAppLogoSettings(settings as AppLogoSettings);
+      if (next.source === "custom") {
+        const prepared = await logoCustomizationStore.prepareUpdate(previous.appLogo, next);
+        return activatePreparedLogo(previous, prepared);
+      }
+      return activatePresetLogo(previous, next, false);
+    });
+  });
+  ipcMain.handle(IPC.LOGO_CLEAR, async (event) => {
+    assertTrustedSender(event);
+    return withLogoMutation(async () => {
+      const previous = manager.getSettings();
+      return activatePresetLogo(previous, cloneAppLogoSettings(DEFAULT_APP_LOGO_SETTINGS), true);
+    });
   });
   ipcMain.handle(IPC.SCHEDULE_GET, (event) => {
     assertTrustedSender(event);
@@ -1086,6 +1207,7 @@ app.whenReady().then(async () => {
     : path.resolve(__dirname, "../../../worker");
   sshProvisioning = new SshProvisioningService({ bundlePath: workerBundlePath, vault: sshVault, client: sshWorkerClient });
   manager = new DownloadManager(app.getPath("userData"), undefined, { credentialVault: sshVault });
+  logoCustomizationStore = new LogoCustomizationStore(app.getPath("userData"));
   externalEditorService = new ExternalEditorService(app.getPath("userData"));
   ollamaSuiteStore = new OllamaSuiteStore(app.getPath("userData"));
   const hadStateFile = await fsp.stat(path.join(app.getPath("userData"), "state.json")).then(() => true, () => false);

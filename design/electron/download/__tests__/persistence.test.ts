@@ -9,7 +9,7 @@ import { migrateSettings, StateStore } from "../persistence";
 test("default settings are versioned and mark every value as compiled-in", () => {
   const settings = createDefaultSettings("C:/Downloads/MaterialDownloadManager");
 
-  assert.equal(SETTINGS_SCHEMA_VERSION, 8);
+  assert.equal(SETTINGS_SCHEMA_VERSION, 9);
   assert.equal(settings.settingsVersion, SETTINGS_SCHEMA_VERSION);
   assert.equal(settings.languageMode, "english");
   assert.equal(settings.displayName, "Material Download Manager");
@@ -33,6 +33,16 @@ test("default settings are versioned and mark every value as compiled-in", () =>
   assert.equal(settings.uiFontSize, 13);
   assert.equal(settings.uiFontWeight, 400);
   assert.equal(settings.externalEditorPath, null);
+  assert.deepEqual(settings.appLogo, {
+    schemaVersion: 1,
+    source: "preset",
+    preset: "material",
+    fit: "contain",
+    crop: { x: 0, y: 0, width: 1, height: 1 },
+    focalPoint: { x: 0.5, y: 0.5 },
+    background: "transparent",
+    backgroundColor: "#16171d",
+  });
   assert.equal(settings.autoOrganizeEnabled, true);
   assert.deepEqual(settings.autoOrganizeRules, []);
   assert.ok(Object.values(settings.settingProvenance).every((source) => source === "compiled-in"));

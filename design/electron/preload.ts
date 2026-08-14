@@ -46,6 +46,7 @@ import {
 } from "../shared/types";
 import { isPresentationSettings, isUpdateInstallResult, isUpdateState, isUpdateUnsavedWorkState } from "../shared/types";
 import { isScheduledSettingsRecords, type ScheduledSettingsRecord } from "../shared/scheduledSettings";
+import { isAppLogoSettings, isAppLogoSnapshot, type AppLogoSettings, type AppLogoSnapshot } from "../shared/appLogo";
 import {
   isExternalEditorDiscovery,
   isExternalEditorOpenResult,
@@ -233,6 +234,27 @@ const api = {
   getSettings: (): Promise<AppSettings> => ipcRenderer.invoke(IPC.SETTINGS_GET),
   setSettings: (settings: SettingsPatch, resetKeys: SettingKey[] = []): Promise<AppSettings> =>
     ipcRenderer.invoke(IPC.SETTINGS_SET, settings, resetKeys),
+  getAppLogo: async (): Promise<AppLogoSnapshot> => {
+    const result: unknown = await ipcRenderer.invoke(IPC.LOGO_GET);
+    if (!isAppLogoSnapshot(result)) throw new Error("Invalid app-logo state from main process");
+    return result;
+  },
+  pickAppLogo: async (): Promise<AppLogoSnapshot> => {
+    const result: unknown = await ipcRenderer.invoke(IPC.LOGO_PICK);
+    if (!isAppLogoSnapshot(result)) throw new Error("Invalid app-logo picker result from main process");
+    return result;
+  },
+  setAppLogo: async (settings: AppLogoSettings): Promise<AppLogoSnapshot> => {
+    if (!isAppLogoSettings(settings)) return Promise.reject(new Error("Invalid app-logo configuration"));
+    const result: unknown = await ipcRenderer.invoke(IPC.LOGO_SET, settings);
+    if (!isAppLogoSnapshot(result)) throw new Error("Invalid app-logo update result from main process");
+    return result;
+  },
+  clearAppLogo: async (): Promise<AppLogoSnapshot> => {
+    const result: unknown = await ipcRenderer.invoke(IPC.LOGO_CLEAR);
+    if (!isAppLogoSnapshot(result)) throw new Error("Invalid app-logo reset result from main process");
+    return result;
+  },
   saveSshHost: (draft: SshHostDraft): Promise<AppSettings> =>
     ipcRenderer.invoke(IPC.SSH_HOST_SAVE, draft),
   importSshBootstrapKey: (hostId: string): Promise<AppSettings> =>

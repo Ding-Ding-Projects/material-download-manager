@@ -1,6 +1,7 @@
 import { useAppStore } from "../store/useAppStore";
 import { getUiCopy } from "../i18n/ui";
-import { CloseIcon, LogoIcon, MaximizeIcon, MinimizeIcon } from "./icons";
+import { CloseIcon, MaximizeIcon, MinimizeIcon } from "./icons";
+import AppLogo from "./AppLogo";
 
 export default function TitleBar() {
   const minimizeWindow = useAppStore((s) => s.minimizeWindow);
@@ -13,7 +14,7 @@ export default function TitleBar() {
   return (
     <header className="titlebar">
       <div className="titlebar-brand">
-        <LogoIcon size={20} />
+        <AppLogo size={20} />
         <span className="titlebar-title" title={displayName}>{displayName}</span>
       </div>
       <div className="titlebar-controls">

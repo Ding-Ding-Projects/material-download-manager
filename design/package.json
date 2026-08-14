@@ -68,6 +68,10 @@
     ],
     "extraResources": [
       {
+        "from": "build/icon.ico",
+        "to": "app-icon.ico"
+      },
+      {
         "from": "../worker",
         "to": "ssh-worker",
         "filter": [

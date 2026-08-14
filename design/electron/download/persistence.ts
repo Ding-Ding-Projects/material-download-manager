@@ -23,6 +23,7 @@ import {
   SETTINGS_SCHEMA_VERSION,
 } from "../../shared/settings";
 import { isSafeEditorExecutable } from "../../shared/externalEditor";
+import { cloneAppLogoSettings, isAppLogoSettings } from "../../shared/appLogo";
 import { normalizeRegexFlags } from "../../shared/regex";
 import { cloneSshHostConfigs, isSshHostConfigs } from "../../shared/ssh";
 import { validateScheduledSettingsRecords, type ScheduledSettingsRecord } from "../../shared/scheduledSettings";
@@ -182,6 +183,13 @@ export function migrateSettings(input: unknown, defaultSaveFolder: string): AppS
   adopt("externalEditorPath", (value): value is AppSettings["externalEditorPath"] =>
     value === null || isSafeEditorExecutable(value)
   );
+  if (hasOwn(raw, "appLogo") && isAppLogoSettings(raw.appLogo)) {
+    const storedSource = storedProvenance?.appLogo;
+    if (storedSource !== "compiled-in") {
+      settings.appLogo = cloneAppLogoSettings(raw.appLogo);
+      provenance.appLogo = "persisted";
+    }
+  }
 
   // A newer file is read conservatively: known keys are still validated, but
   // the in-memory schema is always the current one so the next save upgrades it.
