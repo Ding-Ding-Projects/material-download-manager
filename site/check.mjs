@@ -491,8 +491,8 @@ run("personal vocabulary strict contract", () => {
 
 run("personal vocabulary controls are local-only, localized, searchable, and School-omitted", () => {
   for (const marker of ["id=\"personal-vocabulary-file\"", "id=\"personal-vocabulary-upload\"", "id=\"personal-vocabulary-replace\"", "id=\"personal-vocabulary-clear\"", "id=\"personal-vocabulary-status\"", "data-school-optional", "data-setting-search=\"personal vocabulary"]) assert.ok(html.includes(marker), `${marker} is present`);
-  for (const marker of ["personalVocabularyNoFile", "personalVocabularyLoaded", "personalVocabularyInvalid", "personalVocabularyReplace", "personalVocabularyClear", "personalVocabularyFileLabel"]) assert.ok(app.includes(marker), `${marker} has localized copy wiring`);
-  for (const marker of ["VOCABULARY_CACHE_KEY", "function readVocabularyCache", "function applyIncomingVocabularyCache", "function loadPersonalVocabularyFile", "function clearPersonalVocabulary", "function renderUserFacingText", "window.MDM_SITE_USER_TEXT", "mdm-site-user-text-change", "visibleFeatures", "schoolOptional: true", "setting.personal-vocabulary-upload", "setting.personal-vocabulary-status", "setting.personal-vocabulary-replace", "setting.personal-vocabulary-clear"]) assert.ok(app.includes(marker) || contentSource.includes(marker), `${marker} is wired`);
+  for (const marker of ["personalVocabularyNoFile:", "personalVocabularyLoaded:", "personalVocabularyInvalid:", "personalVocabularyReplace:", "personalVocabularyClear:", "personalVocabularyFileLabel:"]) assert.ok(app.includes(marker), `${marker} has localized copy wiring`);
+  for (const marker of ["const VOCABULARY_CACHE_KEY =", "function readVocabularyCache(", "function applyIncomingVocabularyCache(", "function loadPersonalVocabularyFile(", "function clearPersonalVocabulary(", "function renderUserFacingText(", "window.MDM_SITE_USER_TEXT =", "mdm-site-user-text-change", "visibleFeatures", "schoolOptional: true", "\"setting.personal-vocabulary-upload\"", "\"setting.personal-vocabulary-status\"", "\"setting.personal-vocabulary-replace\"", "\"setting.personal-vocabulary-clear\""]) assert.ok(app.includes(marker) || contentSource.includes(marker), `${marker} is wired`);
   assert.match(html, /type="file"[^>]+accept="application\/json,\.json"/, "the semantic picker limits file affordance to JSON");
   assert.match(css, /\.private-file-input\s*\{/, "the native picker is visually hidden so its local filename is never rendered");
   assert.match(app, /event\.currentTarget\.value = "";/, "the picker is reset before asynchronous parsing");
@@ -513,28 +513,29 @@ run("personal vocabulary negative fixtures", () => {
   const feature = universalFeatureManifest.features.find((candidate) => candidate.id === "personal-vocabulary");
   const withoutPicker = universalSourceCorpus.replace('id="personal-vocabulary-file"', 'id="personal-vocabulary-file-removed"');
   assert.notEqual(withoutPicker, universalSourceCorpus, "picker negative fixture changes the runtime corpus");
-  assert.throws(() => validatePersonalVocabularyEvidence(feature, withoutPicker, checkSource), /implementation anchor is missing/);
-  const withoutLocalizedStatus = universalSourceCorpus.replace("personalVocabularyNoFile", "personalVocabularyNoFileRemoved");
+  assert.throws(() => validatePersonalVocabularyEvidence(feature, withoutPicker, checkSource), /implementation anchor is missing/, "removing the picker must fail implementation evidence");
+  const withoutLocalizedStatus = universalSourceCorpus.replace("personalVocabularyNoFile:", "personalVocabularyNoFileRemoved:");
   assert.notEqual(withoutLocalizedStatus, universalSourceCorpus, "localized-copy negative fixture changes the runtime corpus");
-  assert.throws(() => validatePersonalVocabularyEvidence(feature, withoutLocalizedStatus, checkSource), /localizedCopy anchor is missing/);
-  const withoutCacheValidation = universalSourceCorpus.replace("function readVocabularyCache", "function readVocabularyCacheRemoved");
+  assert.throws(() => validatePersonalVocabularyEvidence(feature, withoutLocalizedStatus, checkSource), /localizedCopy anchor is missing/, "removing localized no-file copy must fail localization evidence");
+  const withoutCacheValidation = universalSourceCorpus.replace("function readVocabularyCache(", "function readVocabularyCacheRemoved(");
   assert.notEqual(withoutCacheValidation, universalSourceCorpus, "cache-validation negative fixture changes the runtime corpus");
-  assert.throws(() => validatePersonalVocabularyEvidence(feature, withoutCacheValidation, checkSource), /persistence anchor is missing/);
-  const withoutDynamicBoundary = universalSourceCorpus.replace("window.MDM_SITE_USER_TEXT", "window.MDM_SITE_USER_TEXT_REMOVED");
+  assert.throws(() => validatePersonalVocabularyEvidence(feature, withoutCacheValidation, checkSource), /persistence anchor is missing/, "removing cache validation must fail persistence evidence");
+  const withoutDynamicBoundary = universalSourceCorpus.replace("window.MDM_SITE_USER_TEXT =", "window.MDM_SITE_USER_TEXT_REMOVED =");
   assert.notEqual(withoutDynamicBoundary, universalSourceCorpus, "dynamic rendering-boundary negative fixture changes the runtime corpus");
-  assert.throws(() => validatePersonalVocabularyEvidence(feature, withoutDynamicBoundary, checkSource), /implementation anchor is missing/);
-  const withoutFocusedTest = checkSource.replace('run("personal vocabulary strict contract"', 'run("personal vocabulary strict contract removed"');
+  assert.throws(() => validatePersonalVocabularyEvidence(feature, withoutDynamicBoundary, checkSource), /implementation anchor is missing/, "removing the dynamic text boundary must fail implementation evidence");
+  const focusedTestNeedle = `run("${["personal", "vocabulary", "strict", "contract"].join(" ")}"`;
+  const withoutFocusedTest = checkSource.replace(focusedTestNeedle, 'run("personal vocabulary strict contract removed"');
   assert.notEqual(withoutFocusedTest, checkSource, "focused-test negative fixture changes the test corpus");
-  assert.throws(() => validatePersonalVocabularyEvidence(feature, universalSourceCorpus, withoutFocusedTest), /focused test is missing/);
+  assert.throws(() => validatePersonalVocabularyEvidence(feature, universalSourceCorpus, withoutFocusedTest), /focused test is missing/, "removing the focused test must fail test evidence");
   const withoutArticle = JSON.parse(JSON.stringify(feature));
   withoutArticle.docsPath = "../docs/features/site/other.md";
-  assert.throws(() => validatePersonalVocabularyEvidence(withoutArticle, universalSourceCorpus, checkSource), /dedicated article/);
+  assert.throws(() => validatePersonalVocabularyEvidence(withoutArticle, universalSourceCorpus, checkSource), /dedicated article/, "removing the article must fail documentation evidence");
   const withoutCapture = JSON.parse(JSON.stringify(feature));
   delete withoutCapture.evidence.capture;
-  assert.throws(() => validatePersonalVocabularyEvidence(withoutCapture, universalSourceCorpus, checkSource), /evidence must have every required surface proof/);
+  assert.throws(() => validatePersonalVocabularyEvidence(withoutCapture, universalSourceCorpus, checkSource), /evidence must have every required surface proof/, "removing capture metadata must fail capture evidence");
   const mismatchedCapture = JSON.parse(JSON.stringify(feature));
   mismatchedCapture.evidence.capture.sha256 = "0".repeat(64);
-  assert.throws(() => validatePersonalVocabularyCapture(mismatchedCapture, personalVocabularyCaptureBytes, personalVocabularyCaptureError), /hash matches inventory evidence/);
+  assert.throws(() => validatePersonalVocabularyCapture(mismatchedCapture, personalVocabularyCaptureBytes, personalVocabularyCaptureError), /hash matches inventory evidence/, "changing the capture hash must fail capture validation");
 });
 
 run("personal vocabulary built capture integrity", () => {

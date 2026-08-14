@@ -67,13 +67,13 @@
         docsPath: "../docs/features/site/personal-vocabulary.md",
         status: "partial",
         probes: ["personal-vocabulary-visible-control", "personal-vocabulary-strict-contract", "personal-vocabulary-local-cache", "personal-vocabulary-school-omission", "personal-vocabulary-built-capture"],
-        runtimeAnchors: ["id=\"personal-vocabulary-file\"", "function loadPersonalVocabularyFile", "VOCABULARY_CACHE_KEY", "function clearPersonalVocabulary", "function renderUserFacingText", "window.MDM_SITE_USER_TEXT"],
+        runtimeAnchors: ["id=\"personal-vocabulary-file\"", "function loadPersonalVocabularyFile(", "const VOCABULARY_CACHE_KEY =", "function clearPersonalVocabulary(", "function renderUserFacingText(", "window.MDM_SITE_USER_TEXT ="],
         evidence: {
-          implementation: ["id=\"personal-vocabulary-file\"", "function loadPersonalVocabularyFile", "function clearPersonalVocabulary", "window.MDM_SITE_USER_TEXT"],
-          localizedCopy: ["personalVocabularyNoFile", "personalVocabularyReplace", "personalVocabularyClear"],
-          persistence: ["VOCABULARY_CACHE_KEY", "function readVocabularyCache", "function applyIncomingVocabularyCache"],
+          implementation: ["id=\"personal-vocabulary-file\"", "function loadPersonalVocabularyFile(", "function clearPersonalVocabulary(", "window.MDM_SITE_USER_TEXT ="],
+          localizedCopy: ["personalVocabularyNoFile:", "personalVocabularyReplace:", "personalVocabularyClear:"],
+          persistence: ["const VOCABULARY_CACHE_KEY =", "function readVocabularyCache(", "function applyIncomingVocabularyCache("],
           focusedTests: ["personal vocabulary strict contract", "personal vocabulary negative fixtures"],
-          interaction: ["personal-vocabulary-upload", "personal-vocabulary-replace", "personal-vocabulary-clear", "setting.personal-vocabulary-upload"],
+          interaction: ["id=\"personal-vocabulary-upload\"", "id=\"personal-vocabulary-replace\"", "id=\"personal-vocabulary-clear\"", "\"setting.personal-vocabulary-upload\""],
           capture: {
             path: "../docs/screenshots/site/personal-vocabulary-no-file.png",
             state: "Built Settings no-file state with generic choose, replace, and clear controls",
