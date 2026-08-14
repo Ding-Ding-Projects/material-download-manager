@@ -3,6 +3,7 @@ import { readProgressWindowItemId } from "@shared/progressWindow";
 import type { DownloadItem, DownloadStatus } from "@shared/types";
 import { useAppStore } from "../store/useAppStore";
 import { getUiCopy } from "../i18n/ui";
+import { useUiCopy } from "../i18n/useUiCopy";
 import { formatBytes, formatEta, formatSpeed } from "../utils/format";
 import { CloseIcon, LogoIcon, MinimizeIcon, PauseIcon, ResumeIcon, StopIcon } from "./icons";
 import "../styles/progress.css";
@@ -41,7 +42,7 @@ export default function ProgressWindow() {
   const resumeDownload = useAppStore((state) => state.resumeDownload);
   const cancelDownload = useAppStore((state) => state.cancelDownload);
   const [targetId, setTargetId] = useState(() => readProgressWindowItemId(window.location.search));
-  const copy = useMemo(() => getUiCopy(settings), [settings]);
+  const copy = useUiCopy(settings);
   const item = items.find((candidate) => candidate.id === targetId) ?? null;
   const percent = progressValue(item);
   const name = item?.fileName || item?.url || copy.text("Download progress", "下載進度");

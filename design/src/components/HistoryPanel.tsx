@@ -3,6 +3,7 @@ import type { ExportFormat } from "@shared/export";
 import { createDefaultRegexBuilderState, type RegexBuilderState } from "@shared/regex";
 import { HISTORY_ACTIONS, type HistoryAccessState, type HistoryAction, type HistoryDiff, type HistoryFilter, type HistoryRevision, type HistoryView } from "@shared/history";
 import { getUiCopy } from "../i18n/ui";
+import { useUiCopy } from "../i18n/useUiCopy";
 import { localizedPrefixedRegexEvaluationError } from "../hooks/useIsolatedRegex";
 import { useAppStore } from "../store/useAppStore";
 import RegexBuilder from "./RegexBuilder";
@@ -60,10 +61,7 @@ function historyExportError(message: string, copy: ReturnType<typeof getUiCopy>)
 
 export default function HistoryPanel() {
   const settings = useAppStore((state) => state.settings);
-  const copy = useMemo(
-    () => getUiCopy(settings),
-    [settings?.funnyLevelCantonese, settings?.funnyLevelEnglish, settings?.languageMode, settings?.schoolModeEnabled, settings?.schoolModeName, settings?.showEmojis]
-  );
+  const copy = useUiCopy(settings);
   const [builder, setBuilder] = useState<RegexBuilderState>(() => createDefaultRegexBuilderState());
   const [regexOpen, setRegexOpen] = useState(false);
   const regexButtonRef = useRef<HTMLButtonElement>(null);

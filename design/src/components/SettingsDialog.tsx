@@ -19,7 +19,7 @@ import {
 } from "@shared/regex";
 import { localizedRegexEvaluationError, useIsolatedRegexBatch } from "../hooks/useIsolatedRegex";
 import { getSettingsCopy } from "../i18n/settings";
-import { getUiCopy } from "../i18n/ui";
+import { useUiCopy } from "../i18n/useUiCopy";
 import { useAppStore } from "../store/useAppStore";
 import {
   DEFAULT_DISPLAY_NAME,
@@ -142,6 +142,30 @@ const SETTINGS_SEARCH_INDEX = [
     targetId: "settings-language-mode",
     tab: "language" as const,
     labels: ["Language mode English Cantonese bilingual funny level", "語言模式 英文 廣東話 雙語 搞笑程度"],
+  },
+  {
+    id: "settings-personal-vocabulary-upload",
+    targetId: "settings-personal-vocabulary-choose",
+    tab: "language" as const,
+    labels: ["Personal vocabulary JSON upload private local choose picker bounded schema", "個人詞彙 JSON 私密 本機 上載 揀檔 有限 schema"],
+  },
+  {
+    id: "settings-personal-vocabulary-status",
+    targetId: "settings-personal-vocabulary-status",
+    tab: "language" as const,
+    labels: ["Personal vocabulary status no file loaded invalid local-only private cache", "個人詞彙 狀態 未有檔案 已載入 無效 只限本機 私密快取"],
+  },
+  {
+    id: "settings-personal-vocabulary-replace",
+    targetId: "settings-personal-vocabulary-choose",
+    tab: "language" as const,
+    labels: ["Replace personal vocabulary JSON select another local file", "更換 個人詞彙 JSON 揀另一個本機檔案"],
+  },
+  {
+    id: "settings-personal-vocabulary-clear",
+    targetId: "settings-personal-vocabulary-clear",
+    tab: "language" as const,
+    labels: ["Clear reset personal vocabulary private local cache shipped wording", "清除 重設 個人詞彙 私密本機快取 原有文字"],
   },
   {
     id: "settings-appearance-heading",
@@ -276,6 +300,8 @@ export default function SettingsDialog() {
   const pickFolder = useAppStore((s) => s.pickFolder);
   const currentSettings = useAppStore((s) => s.settings);
   const settingsFocus = useAppStore((s) => s.settingsFocus);
+  const personalVocabulary = useAppStore((s) => s.personalVocabulary);
+  const setPersonalVocabularyRuntime = useAppStore((s) => s.setPersonalVocabularyRuntime);
 
   const [form, setForm] = useState<AppSettings>(
     () => currentSettings ?? createDefaultSettings("")
@@ -288,7 +314,17 @@ export default function SettingsDialog() {
   const [saving, setSaving] = useState(false);
   const [accentError, setAccentError] = useState<string | null>(null);
   const [activeSettingsTab, setActiveSettingsTab] = useState<SettingsTab>(() => {
-    if (settingsFocus === "language" || settingsFocus === "school-mode" || settingsFocus === "show-emojis" || settingsFocus === "narrator") return "language";
+    if (
+      settingsFocus === "language"
+      || settingsFocus === "school-mode"
+      || settingsFocus === "show-emojis"
+      || settingsFocus === "narrator"
+      || settingsFocus === "personal-vocabulary"
+      || settingsFocus === "personal-vocabulary-upload"
+      || settingsFocus === "personal-vocabulary-status"
+      || settingsFocus === "personal-vocabulary-replace"
+      || settingsFocus === "personal-vocabulary-clear"
+    ) return "language";
     if (settingsFocus === "appearance" || settingsFocus === "downloads" || settingsFocus === "authenticator" || settingsFocus === "ollama" || settingsFocus === "advanced") return settingsFocus;
     if (settingsFocus === "auto-organize" || settingsFocus === "auto-organize-rules") return "downloads";
     return readSettingsTab();
@@ -316,6 +352,8 @@ export default function SettingsDialog() {
   const [schoolModeCredentialConfirmation, setSchoolModeCredentialConfirmation] = useState("");
   const [schoolModeCredentialBusy, setSchoolModeCredentialBusy] = useState(false);
   const [schoolModeCredentialError, setSchoolModeCredentialError] = useState<string | null>(null);
+  const [personalVocabularyOperation, setPersonalVocabularyOperation] = useState<"choose" | "clear" | null>(null);
+  const [personalVocabularyOperationError, setPersonalVocabularyOperationError] = useState(false);
   const autoOrganizeRuleButtonRefs = useRef(new Map<string, HTMLButtonElement>());
   const autoOrganizeRuleMoveButtonRefs = useRef(new Map<string, HTMLButtonElement>());
   const autoOrganizeRuleNameRefs = useRef(new Map<string, HTMLInputElement>());
@@ -339,7 +377,7 @@ export default function SettingsDialog() {
   const [externalEditorWorkspaceBusy, setExternalEditorWorkspaceBusy] = useState(false);
   const [externalEditorWorkspaceMessage, setExternalEditorWorkspaceMessage] = useState<string | null>(null);
 
-  const ui = useMemo(() => getUiCopy(form), [form]);
+  const ui = useUiCopy(form);
   const copy = useMemo(() => getSettingsCopy(ui.languageMode), [ui.languageMode]);
   const editorDiscoveryUnavailableText = form.languageMode === "cantonese"
     ? "編輯器探索暫時不可用。"
@@ -520,7 +558,15 @@ export default function SettingsDialog() {
       searchable: `${AUTO_ORGANIZE_TARGET_LABELS[category].join(" ")} destination path 目的路徑 ${displayAutoOrganizePath(form.defaultSaveFolder, AUTO_ORGANIZE_FOLDERS[category])}`,
     }));
     const visibleBaseEntries = form.schoolModeEnabled
-      ? baseEntries.filter((entry) => entry.id !== "settings-language-heading" && entry.id !== "settings-show-emojis" && entry.id !== "settings-narrator")
+      ? baseEntries.filter((entry) => !new Set([
+        "settings-language-heading",
+        "settings-show-emojis",
+        "settings-narrator",
+        "settings-personal-vocabulary-upload",
+        "settings-personal-vocabulary-status",
+        "settings-personal-vocabulary-replace",
+        "settings-personal-vocabulary-clear",
+      ]).has(entry.id))
       : baseEntries;
     return [...visibleBaseEntries, ...pathEntries, ...ruleEntries];
   }, [form.autoOrganizeEnabled, form.autoOrganizeRules, form.defaultSaveFolder, form.displayName, form.schoolModeEnabled]);
@@ -622,7 +668,14 @@ export default function SettingsDialog() {
     appliedSettingsFocus.current = settingsFocus;
     const targetTab: SettingsTab = settingsFocus === "auto-organize" || settingsFocus === "auto-organize-rules"
       ? "downloads"
-      : settingsFocus === "school-mode" || settingsFocus === "show-emojis" || settingsFocus === "narrator"
+      : settingsFocus === "school-mode"
+        || settingsFocus === "show-emojis"
+        || settingsFocus === "narrator"
+        || settingsFocus === "personal-vocabulary"
+        || settingsFocus === "personal-vocabulary-upload"
+        || settingsFocus === "personal-vocabulary-status"
+        || settingsFocus === "personal-vocabulary-replace"
+        || settingsFocus === "personal-vocabulary-clear"
         ? "language"
         : settingsFocus;
     setActiveSettingsTab(targetTab);
@@ -632,6 +685,14 @@ export default function SettingsDialog() {
         ? "settings-show-emojis-toggle"
         : settingsFocus === "narrator"
           ? "settings-narrator-panel"
+          : settingsFocus === "personal-vocabulary-status"
+            ? "settings-personal-vocabulary-status"
+            : settingsFocus === "personal-vocabulary-clear"
+              ? "settings-personal-vocabulary-clear"
+              : settingsFocus === "personal-vocabulary"
+                || settingsFocus === "personal-vocabulary-upload"
+                || settingsFocus === "personal-vocabulary-replace"
+                ? "settings-personal-vocabulary-choose"
         : settingsFocus === "language"
       ? "settings-language-mode"
       : settingsFocus === "appearance"
@@ -789,6 +850,36 @@ export default function SettingsDialog() {
   async function handlePickFolder() {
     const picked = await pickFolder();
     if (picked) update("defaultSaveFolder", picked);
+  }
+
+  async function handleChoosePersonalVocabulary() {
+    if (personalVocabularyOperation !== null) return;
+    setPersonalVocabularyOperation("choose");
+    setPersonalVocabularyOperationError(false);
+    try {
+      const runtime = await window.api.choosePersonalVocabularyFile();
+      setPersonalVocabularyRuntime(runtime);
+    } catch {
+      // Deliberately omit parser, picker, and path diagnostics from the renderer.
+      setPersonalVocabularyOperationError(true);
+    } finally {
+      setPersonalVocabularyOperation(null);
+    }
+  }
+
+  async function handleClearPersonalVocabulary() {
+    if (personalVocabularyOperation !== null) return;
+    setPersonalVocabularyOperation("clear");
+    setPersonalVocabularyOperationError(false);
+    try {
+      const runtime = await window.api.clearPersonalVocabulary();
+      setPersonalVocabularyRuntime(runtime);
+    } catch {
+      // The local cache is fail-closed; this generic state intentionally has no details.
+      setPersonalVocabularyOperationError(true);
+    } finally {
+      setPersonalVocabularyOperation(null);
+    }
   }
 
   function clearSchoolModeCredentialForm() {
@@ -1517,6 +1608,50 @@ export default function SettingsDialog() {
         </div>
         <p className="setting-disclosure" role="note">{copy.funnyDisclosure}</p>
         <p className="setting-preview" role="status">{ui.funnyPreview}</p>
+
+        <section className="settings-section" id="settings-personal-vocabulary" aria-labelledby="settings-personal-vocabulary-heading" tabIndex={-1}>
+          <div className="settings-section-heading" id="settings-personal-vocabulary-heading">{ui.personalVocabularyTitle}</div>
+          <p className="setting-helper" id="settings-personal-vocabulary-help">{ui.personalVocabularyHelp}</p>
+          <p
+            className={personalVocabulary.status.state === "invalid" || personalVocabularyOperationError ? "field-error" : "setting-helper"}
+            id="settings-personal-vocabulary-status"
+            role={personalVocabulary.status.state === "invalid" || personalVocabularyOperationError ? "alert" : "status"}
+            aria-live="polite"
+            aria-atomic="true"
+            tabIndex={-1}
+          >
+            {personalVocabularyOperation !== null
+              ? ui.personalVocabularyBusy
+              : personalVocabularyOperationError
+                ? ui.text("The local JSON control is unavailable. Shipped wording remains in use.", "本機 JSON 控制暫時不可用，會繼續使用原有文字。")
+                : personalVocabulary.status.state === "loaded"
+                  ? ui.personalVocabularyLoaded(personalVocabulary.status.entryCount)
+                  : personalVocabulary.status.state === "invalid"
+                    ? ui.personalVocabularyInvalid
+                    : ui.personalVocabularyNoFile}
+          </p>
+          <div className="button-row" aria-describedby="settings-personal-vocabulary-help settings-personal-vocabulary-status">
+            <button
+              type="button"
+              className="btn btn-secondary"
+              id="settings-personal-vocabulary-choose"
+              onClick={() => void handleChoosePersonalVocabulary()}
+              disabled={personalVocabularyOperation !== null}
+            >
+              {personalVocabulary.status.entryCount > 0 ? ui.personalVocabularyReplace : ui.personalVocabularyChoose}
+            </button>
+            <button
+              type="button"
+              className="btn btn-ghost"
+              id="settings-personal-vocabulary-clear"
+              onClick={() => void handleClearPersonalVocabulary()}
+              disabled={personalVocabularyOperation !== null || personalVocabulary.status.state === "no-file"}
+            >
+              {ui.personalVocabularyClear}
+            </button>
+          </div>
+        </section>
+
         <section className="settings-section" id="settings-narrator-panel" aria-labelledby="settings-narrator-heading" tabIndex={-1}>
           <div className="settings-section-heading" id="settings-narrator-heading">{copy.narratorTitle}</div>
           <p className="setting-helper">{copy.narratorDisclosure}</p>

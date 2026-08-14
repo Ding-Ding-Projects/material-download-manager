@@ -17,7 +17,7 @@ import {
   TrashIcon,
 } from "./icons";
 import ContextMenu, { ContextMenuItem, ContextMenuSeparator } from "./ContextMenu";
-import { getUiCopy } from "../i18n/ui";
+import { useUiCopy } from "../i18n/useUiCopy";
 import { localizedRegexEvaluationError } from "../hooks/useIsolatedRegex";
 
 const STATUS_LABEL: Record<DownloadStatus, string> = {
@@ -55,7 +55,7 @@ interface DownloadTableProps {
 
 export default function DownloadTable({ filteredItems, regexError, regexPending }: DownloadTableProps) {
   const settings = useAppStore((s) => s.settings);
-  const copy = getUiCopy(settings);
+  const copy = useUiCopy(settings);
   const sort = useAppStore((s) => s.sort);
   const setSort = useAppStore((s) => s.setSort);
   const selectedIds = useAppStore((s) => s.selectedIds);

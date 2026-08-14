@@ -3,6 +3,7 @@ import { DEFAULT_QUEUE_ID } from "@shared/types";
 import { createDefaultRegexBuilderState, type RegexBuilderState } from "@shared/regex";
 import { useAppStore } from "../store/useAppStore";
 import { getUiCopy } from "../i18n/ui";
+import { useUiCopy } from "../i18n/useUiCopy";
 import {
   LinkAddIcon,
   PlayIcon,
@@ -224,7 +225,7 @@ export default function Toolbar({ searchEvaluationError = null, searchEvaluation
   const stopQueue = useAppStore((s) => s.stopQueue);
   const stopAllActive = useAppStore((s) => s.stopAllActive);
   const settings = useAppStore((s) => s.settings);
-  const copy = getUiCopy(settings);
+  const copy = useUiCopy(settings);
   const [regexOpen, setRegexOpen] = useState(false);
   const [sampleText, setSampleText] = useState("");
   const [openMenu, setOpenMenu] = useState<string | null>(null);

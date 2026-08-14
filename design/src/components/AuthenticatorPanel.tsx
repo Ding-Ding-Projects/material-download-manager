@@ -12,7 +12,7 @@ import {
 import { nextTotpTimestampMs, remainingTotpSeconds } from "@shared/authenticatorDisplay";
 import { useIsolatedRegexBatch, localizedRegexEvaluationError } from "../hooks/useIsolatedRegex";
 import { createDefaultRegexBuilderState, validateRegexPattern, type RegexBuilderState } from "@shared/regex";
-import { getUiCopy } from "../i18n/ui";
+import { useUiCopy } from "../i18n/useUiCopy";
 import { useAppStore } from "../store/useAppStore";
 import DestructiveActionGate, { type DestructiveActionRequest } from "./DestructiveActionGate";
 import RegexBuilder from "./RegexBuilder";
@@ -133,7 +133,7 @@ function emptyLiveCodeState(period: number, timestampMs: number): LiveCodeState 
 
 export default function AuthenticatorPanel() {
   const settings = useAppStore((state) => state.settings);
-  const ui = useMemo(() => getUiCopy(settings), [settings]);
+  const ui = useUiCopy(settings);
   const [draft, setDraft] = useState<AuthenticatorDraft>(initialDraft);
   const [qrModel, setQrModel] = useState<TotpQrRegistrationModel | null>(null);
   const [manualSecretVisible, setManualSecretVisible] = useState(false);

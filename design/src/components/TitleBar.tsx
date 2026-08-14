@@ -1,5 +1,5 @@
 import { useAppStore } from "../store/useAppStore";
-import { getUiCopy } from "../i18n/ui";
+import { useUiCopy } from "../i18n/useUiCopy";
 import { CloseIcon, LogoIcon, MaximizeIcon, MinimizeIcon } from "./icons";
 
 export default function TitleBar() {
@@ -8,7 +8,7 @@ export default function TitleBar() {
   const closeWindow = useAppStore((s) => s.closeWindow);
   const settings = useAppStore((s) => s.settings);
   const displayName = settings?.displayName ?? "Material Download Manager";
-  const copy = getUiCopy(settings);
+  const copy = useUiCopy(settings);
 
   return (
     <header className="titlebar">

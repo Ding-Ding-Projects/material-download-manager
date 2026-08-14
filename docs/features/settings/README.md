@@ -14,3 +14,6 @@
   native date/time and weekday editing, timezone and cross-midnight semantics,
   deterministic precedence, local history, and credential-free external-source
   metadata for HTTPS/loopback and Home Assistant boolean states.
+- [Personal vocabulary JSON](personal-vocabulary.md) — a bounded versioned
+  local JSON picker, private cache separation, literal renderer-boundary
+  wording replacement, School-mode suppression, and explicit no-leak checks.

@@ -28,6 +28,7 @@ AB Download Manager codebase.
 - Notification feature docs: docs/features/notifications/
 - Safety feature docs: docs/features/safety/
 - Settings feature docs: docs/features/settings/
+- Personal vocabulary JSON: [`docs/features/settings/personal-vocabulary.md`](docs/features/settings/personal-vocabulary.md)
 - Download engine docs: docs/features/download-engine/
 - Browser handoff docs: [`docs/features/integrations/browser-extension.md`](docs/features/integrations/browser-extension.md)
 - External editor handoff: [`docs/features/integrations/external-editor.md`](docs/features/integrations/external-editor.md)
@@ -43,6 +44,32 @@ AB Download Manager codebase.
 - Local TOTP/authenticator registration: [`docs/features/security/totp-authenticator-core.md`](docs/features/security/totp-authenticator-core.md)
 - Spoken narrator: [`docs/features/notifications/spoken-narrator.md`](docs/features/notifications/spoken-narrator.md)
 - Local Ollama suite manager foundation: [`docs/features/product/ollama-suite-manager.md`](docs/features/product/ollama-suite-manager.md)
+
+<details>
+<summary>Personal vocabulary JSON foundation (verified locally)</summary>
+
+The desktop Settings dialog now always provides a local Personal vocabulary JSON
+control when School mode is off. It validates a bounded versioned schema before
+using a separate private application-data cache, reports only generic status and
+an entry count, and never retains or displays the source name or path. Approved
+literal replacements apply only to localized renderer copy; app settings,
+download state, history, exports, diagnostics, and captures omit replacement
+data and source metadata.
+
+The Language Settings search, its adjacent Regex builder, and `Ctrl+Shift+F`
+command-palette destinations reach the upload, status, replace, and clear
+controls. School mode removes those routes and restores the prior local cache
+behavior when it is turned off.
+
+<img src="docs/screenshots/settings/personal-vocabulary-empty.png" alt="Real built Settings dialog showing the empty Personal vocabulary section with a choose JSON button and disabled clear action" width="575">
+
+The generic empty-control capture is 1,150×720 pixels, SHA-256
+`3b48cdca04a431be6ec84236364ef027830f457dba1bf844e222234dd69e33d4`.
+It intentionally contains no selected file, replacement value, cache metadata,
+or personal data. Detailed behavior, limits, security boundaries, and local
+verification are in the [Personal vocabulary JSON article](docs/features/settings/personal-vocabulary.md).
+
+</details>
 
 <details>
 <summary>Spoken narrator (verified)</summary>

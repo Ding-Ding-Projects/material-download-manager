@@ -5,6 +5,21 @@ unverified surface has shipped.
 
 ## In progress
 
+- Personal vocabulary JSON foundation is implemented on task branch
+  `codex/desktop-personal-vocabulary`. The Language Settings tab now has a
+  local picker, generic status, replace, and clear controls backed by a
+  strict, bounded versioned schema and a separate private application-data
+  cache. Renderer copy may use the validated mapping in memory only; normal
+  settings, download state, history, exports, logs, diagnostics, and captures
+  omit mapping values and source metadata. Settings search, its anchored Regex
+  builder, the command palette, language modes, funny-level controls, narrow
+  layout, and School-mode suppression are covered by focused checks. The real
+  empty-control capture is
+  [`personal-vocabulary-empty.png`](docs/screenshots/settings/personal-vocabulary-empty.png),
+  1,150×720, SHA-256
+  `3b48cdca04a431be6ec84236364ef027830f457dba1bf844e222234dd69e33d4`.
+  Integration into `main` and remote release proof remain pending.
+
 - Local Ollama suite manager foundation is implemented on this task jer: the
   Settings and command-palette destination records credential-free loopback
   providers, refreshes installed-model metadata through `GET /api/tags` with

@@ -39,6 +39,7 @@ import type {
   TotpRegistrationMetadata,
 } from "@shared/authenticator";
 import type { OllamaRefreshResult, OllamaSuiteState } from "@shared/ollama";
+import type { PersonalVocabularyRuntime } from "@shared/personalVocabulary";
 
 export interface MaterialDownloadManagerAPI {
   getState(): Promise<StateSnapshot>;
@@ -77,6 +78,10 @@ export interface MaterialDownloadManagerAPI {
   resetSchoolModeCredential(current: string): Promise<PresentationSettings>;
   disableSchoolMode(current: string): Promise<PresentationSettings>;
   onPresentationChanged(cb: (settings: PresentationSettings) => void): () => void;
+  getPersonalVocabularyRuntime(): Promise<PersonalVocabularyRuntime>;
+  choosePersonalVocabularyFile(): Promise<PersonalVocabularyRuntime>;
+  clearPersonalVocabulary(): Promise<PersonalVocabularyRuntime>;
+  onPersonalVocabularyChanged(cb: (runtime: PersonalVocabularyRuntime) => void): () => void;
   saveSshHost(draft: SshHostDraft): Promise<AppSettings>;
   importSshBootstrapKey(hostId: string): Promise<AppSettings>;
   provisionSshHost(hostId: string): Promise<AppSettings>;

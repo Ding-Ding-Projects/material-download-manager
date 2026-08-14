@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type RefObject } from "react";
 import { useAppStore } from "../store/useAppStore";
-import { getUiCopy } from "../i18n/ui";
+import { useUiCopy } from "../i18n/useUiCopy";
 import { CloseIcon, ErrorIcon, TrashIcon } from "./icons";
 
 export interface DestructiveActionRequest {
@@ -28,7 +28,7 @@ interface DestructiveActionGateProps {
 
 export default function DestructiveActionGate({ request, actionName: actionNameOverride, affectedLabel: affectedLabelOverride, returnFocusRef, onCancel, onConfirm }: DestructiveActionGateProps) {
   const settings = useAppStore((state) => state.settings);
-  const copy = getUiCopy(settings);
+  const copy = useUiCopy(settings);
   const effective = settings ? { showEmojis: settings.showEmojis && !settings.schoolModeEnabled } : { showEmojis: false };
   const [keys, setKeys] = useState<[boolean, boolean]>([false, false]);
   const [progress, setProgress] = useState(0);

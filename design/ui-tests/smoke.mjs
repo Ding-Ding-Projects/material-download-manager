@@ -32,6 +32,7 @@ const RUNTIME_CHECK_IDS = [
   "progress-window",
   "settings-open",
   "settings-narrator-controls",
+  "settings-personal-vocabulary-controls",
   "settings-external-editor",
   "settings-scheduled-settings",
   "settings-authenticator-surface",
@@ -60,6 +61,8 @@ const RUNTIME_CHECK_IDS = [
   "download-completion-top-layer",
   "settings-dialog-escape",
   "settings-auto-organize-command-palette",
+  "settings-personal-vocabulary-command-palette",
+  "settings-personal-vocabulary-school-mode",
   "settings-auto-organize-preview-ipc",
   "settings-reset-provenance",
 ];
@@ -1834,6 +1837,78 @@ async function main(argv) {
       return evidence;
     });
 
+    await runCheck(result, "settings-personal-vocabulary-controls", async () => {
+      await clickByRole(cdp, "tab", "Language", '[role="dialog"]');
+      await waitForPage(cdp, `Boolean(document.querySelector("#settings-personal-vocabulary"))`, "personal vocabulary Settings surface", options.timeoutMs);
+      const emptyState = await cdp.evaluate(pageExpression(`
+        const section = document.getElementById("settings-personal-vocabulary");
+        const helper = document.getElementById("settings-personal-vocabulary-help");
+        const status = document.getElementById("settings-personal-vocabulary-status");
+        const choose = document.getElementById("settings-personal-vocabulary-choose");
+        const clear = document.getElementById("settings-personal-vocabulary-clear");
+        const search = document.querySelector('#settings-panel-language input[aria-label="Search settings"]');
+        const regex = document.querySelector("#settings-panel-language .settings-search-row button[aria-expanded]");
+        if (!(section instanceof HTMLElement) || !isVisible(section)) throw new Error("personal vocabulary section is missing or hidden");
+        if (!(helper instanceof HTMLElement) || !/file name and path are never saved/i.test(helper.textContent ?? "")) throw new Error("personal vocabulary helper does not state file-metadata privacy");
+        if (!(status instanceof HTMLElement) || status.getAttribute("role") !== "status" || !/No private vocabulary file is loaded/i.test(status.textContent ?? "")) throw new Error("personal vocabulary empty status is incomplete");
+        if (!(choose instanceof HTMLButtonElement) || !isVisible(choose) || accessibleName(choose) !== "Choose personal vocabulary JSON") throw new Error("personal vocabulary choose action is missing");
+        if (!(clear instanceof HTMLButtonElement) || !clear.disabled || accessibleName(clear) !== "Clear personal vocabulary") throw new Error("personal vocabulary clear action must be visibly unavailable with no cache");
+        if (!(search instanceof HTMLInputElement) || !(regex instanceof HTMLButtonElement)) throw new Error("personal vocabulary Settings search or adjacent Regex builder is missing");
+        if (/pv-test-|personal-vocabulary-cache\.json/i.test(section.textContent ?? "")) throw new Error("generic empty Settings control exposed private test/cache content");
+        return { status: normalise(status.textContent), choose: accessibleName(choose), clearDisabled: clear.disabled, search: accessibleName(search), regex: accessibleName(regex) };
+      `));
+
+      await setInputValue(cdp, '#settings-panel-language input[aria-label="Search settings"]', "Personal vocabulary JSON");
+      await waitForPage(cdp, `Boolean([...document.querySelectorAll("#settings-panel-language .settings-search-results button")].find((button) => /Personal vocabulary JSON/.test(button.textContent ?? "")))`, "personal vocabulary Settings search result", options.timeoutMs);
+      const searchEvidence = await cdp.evaluate(pageExpression(`
+        const results = document.querySelector("#settings-panel-language .settings-search-results");
+        const upload = results ? [...results.querySelectorAll("button")].find((button) => /Personal vocabulary JSON/.test(button.textContent ?? "")) : null;
+        if (!(upload instanceof HTMLButtonElement)) throw new Error("personal vocabulary upload search result is missing");
+        upload.click();
+        return { result: accessibleName(upload) };
+      `));
+      await waitForPage(cdp, `document.activeElement?.id === "settings-personal-vocabulary-choose"`, "personal vocabulary upload exact Settings focus", options.timeoutMs);
+
+      await setSelectValue(cdp, "#settings-language-mode", "cantonese");
+      await waitForPage(cdp, `/個人詞彙/.test(document.getElementById("settings-personal-vocabulary")?.textContent ?? "")`, "Cantonese personal vocabulary copy", options.timeoutMs);
+      await setSelectValue(cdp, "#settings-language-mode", "bilingual");
+      await waitForPage(cdp, `/Personal vocabulary/.test(document.getElementById("settings-personal-vocabulary")?.textContent ?? "") && /個人詞彙/.test(document.getElementById("settings-personal-vocabulary")?.textContent ?? "")`, "bilingual personal vocabulary copy", options.timeoutMs);
+      await setInputValue(cdp, "#settings-funny-english", "5");
+      await setInputValue(cdp, "#settings-funny-cantonese", "1");
+      const localized = await cdp.evaluate(pageExpression(`
+        const englishFunny = document.getElementById("settings-funny-english");
+        const cantoneseFunny = document.getElementById("settings-funny-cantonese");
+        const status = document.getElementById("settings-personal-vocabulary-status");
+        if (!(englishFunny instanceof HTMLInputElement) || englishFunny.value !== "5") throw new Error("English funny level did not update beside personal vocabulary");
+        if (!(cantoneseFunny instanceof HTMLInputElement) || cantoneseFunny.value !== "1") throw new Error("Cantonese funny level did not update beside personal vocabulary");
+        if (!(status instanceof HTMLElement) || !/No private vocabulary file is loaded/.test(status.textContent ?? "")) throw new Error("personal vocabulary status facts changed under funny-level controls");
+        return { languageMode: "bilingual", funnyLevels: [englishFunny.value, cantoneseFunny.value], factualStatus: normalise(status.textContent) };
+      `));
+
+      await cdp.send("Emulation.setDeviceMetricsOverride", { width: 520, height: 720, deviceScaleFactor: 2, mobile: false });
+      let narrow;
+      try {
+        await cdp.evaluate(`document.getElementById("settings-personal-vocabulary")?.scrollIntoView({ block: "center", inline: "nearest" })`);
+        narrow = await cdp.evaluate(pageExpression(`
+          const dialog = document.querySelector('[role="dialog"]');
+          const section = document.getElementById("settings-personal-vocabulary");
+          if (!(dialog instanceof HTMLElement) || !(section instanceof HTMLElement) || !isVisible(section)) throw new Error("personal vocabulary narrow surface is missing");
+          const overflow = Math.max(0, document.documentElement.scrollWidth - window.innerWidth, document.body.scrollWidth - window.innerWidth, dialog.scrollWidth - dialog.clientWidth, section.scrollWidth - section.clientWidth);
+          if (overflow > 1) throw new Error("personal vocabulary narrow surface overflows horizontally: " + overflow);
+          const controls = [...section.querySelectorAll("button")].filter(isVisible).map((button) => ({ name: accessibleName(button), box: button.getBoundingClientRect() }));
+          if (controls.some(({ box }) => box.left < dialog.getBoundingClientRect().left - 1 || box.right > dialog.getBoundingClientRect().right + 1)) throw new Error("personal vocabulary narrow controls escape the dialog");
+          return { width: window.innerWidth, horizontalOverflow: overflow, visibleButtons: controls.map(({ name }) => name) };
+        `));
+      } finally {
+        await cdp.send("Emulation.clearDeviceMetricsOverride").catch(() => undefined);
+      }
+      await setSelectValue(cdp, "#settings-language-mode", "english");
+      await setInputValue(cdp, "#settings-funny-english", "1");
+      await setInputValue(cdp, "#settings-funny-cantonese", "3");
+      await setInputValue(cdp, '#settings-panel-language input[aria-label="Search settings"]', "");
+      return { emptyState, searchEvidence, focusedTarget: "settings-personal-vocabulary-choose", localized, narrow };
+    });
+
     await runCheck(result, "settings-external-editor", async () => {
       await clickByRole(cdp, "tab", "Advanced", '[role="dialog"]');
       await waitForPage(cdp, `Boolean(document.querySelector("#settings-external-editor-select"))`, "external editor selector", options.timeoutMs);
@@ -2983,6 +3058,65 @@ async function main(argv) {
       await dispatchEscape(cdp);
       await waitForPage(cdp, `!document.querySelector(".dialog")`, "close Settings after reset proof", options.timeoutMs);
       return { ...evidence, provenance: after.settingProvenance.autoOrganizeRules, defaultFolderPreserved: true };
+    });
+
+    await runCheck(result, "settings-personal-vocabulary-command-palette", async () => {
+      await cdp.evaluate(pageExpression(`
+        document.dispatchEvent(new KeyboardEvent("keydown", { key: "f", code: "KeyF", ctrlKey: true, shiftKey: true, bubbles: true }));
+      `));
+      await waitForPage(cdp, `Boolean(document.querySelector('[role="dialog"].command-palette'))`, "command palette for personal vocabulary", options.timeoutMs);
+      await setInputValue(cdp, 'input[aria-label="Command palette search"]', "Personal vocabulary JSON");
+      await waitForPage(cdp, `Boolean([...document.querySelectorAll(".command-palette-row")].find((row) => /Settings · Personal vocabulary JSON/.test(row.textContent ?? "")))`, "personal vocabulary command-palette result", options.timeoutMs);
+      const resultRow = await cdp.evaluate(pageExpression(`
+        const row = [...document.querySelectorAll(".command-palette-row")].find((candidate) => /Settings · Personal vocabulary JSON/.test(candidate.textContent ?? ""));
+        if (!(row instanceof HTMLButtonElement) || !isVisible(row)) throw new Error("personal vocabulary command-palette result is not operable");
+        if (!/private local JSON/i.test(row.textContent ?? "")) throw new Error("personal vocabulary command-palette result lacks scoped local description");
+        row.click();
+        return { label: accessibleName(row) };
+      `));
+      await waitForPage(cdp, `(() => {
+        const tab = document.getElementById("settings-tab-language");
+        return Boolean(document.querySelector('[role="dialog"]')) && tab?.getAttribute("aria-selected") === "true" && document.activeElement?.id === "settings-personal-vocabulary-choose";
+      })()`, "personal vocabulary exact command-palette teleport", options.timeoutMs);
+      await dispatchEscape(cdp);
+      await waitForPage(cdp, `!document.querySelector('[role="dialog"]')`, "personal vocabulary command destination Settings close", options.timeoutMs);
+      return { ...resultRow, target: "settings-personal-vocabulary-choose", focus: true };
+    });
+
+    await runCheck(result, "settings-personal-vocabulary-school-mode", async () => {
+      const before = await cdp.evaluate("window.api.getSettings()");
+      if (before.schoolModeEnabled) throw new Error("disposable smoke profile unexpectedly starts in School mode");
+      const enabled = await cdp.evaluate("window.api.setSettings({ schoolModeEnabled: true })");
+      if (!enabled?.schoolModeEnabled) throw new Error("main process did not enable School mode for the disposable smoke profile");
+      await clickByRole(cdp, "button", "Settings");
+      await waitForPage(cdp, `Boolean(document.querySelector('[role="dialog"]'))`, "School mode Settings dialog", options.timeoutMs);
+      const settingsEvidence = await cdp.evaluate(pageExpression(`
+        const personal = document.getElementById("settings-personal-vocabulary");
+        const search = document.querySelector('#settings-panel-language input[aria-label="Search settings"]');
+        if (personal) throw new Error("School mode left the personal vocabulary control discoverable in Settings");
+        if (!(search instanceof HTMLInputElement)) throw new Error("School mode Settings search is missing");
+        search.value = "personal vocabulary";
+        search.dispatchEvent(new Event("input", { bubbles: true }));
+        search.dispatchEvent(new Event("change", { bubbles: true }));
+        const resultText = document.querySelector("#settings-panel-language .settings-search-results")?.textContent ?? "";
+        if (/personal vocabulary|個人詞彙/i.test(resultText)) throw new Error("School mode left personal vocabulary search results discoverable");
+        return { controlPresent: false, searchResultContainsVocabulary: false };
+      `));
+      await dispatchEscape(cdp);
+      await waitForPage(cdp, `!document.querySelector('[role="dialog"]')`, "School mode Settings close", options.timeoutMs);
+      await cdp.evaluate(pageExpression(`
+        document.dispatchEvent(new KeyboardEvent("keydown", { key: "f", code: "KeyF", ctrlKey: true, shiftKey: true, bubbles: true }));
+      `));
+      await waitForPage(cdp, `Boolean(document.querySelector('[role="dialog"].command-palette'))`, "School mode command palette", options.timeoutMs);
+      await setInputValue(cdp, 'input[aria-label="Command palette search"]', "personal vocabulary");
+      const paletteEvidence = await cdp.evaluate(pageExpression(`
+        const text = document.querySelector(".command-palette")?.textContent ?? "";
+        if (/personal vocabulary|個人詞彙/i.test(text)) throw new Error("School mode left personal vocabulary commands discoverable in the command palette");
+        return { commandPresent: false };
+      `));
+      await dispatchEscape(cdp);
+      await waitForPage(cdp, `!document.querySelector('[role="dialog"].command-palette')`, "School mode command palette close", options.timeoutMs);
+      return { enabled: true, settings: settingsEvidence, palette: paletteEvidence, restoredOnProfileRemoval: true };
     });
   } catch (error) {
     result.fatalError = result.fatalError ?? formatError(error);

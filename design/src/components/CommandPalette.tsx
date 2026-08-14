@@ -3,7 +3,7 @@ import RegexBuilder from "./RegexBuilder";
 import { validateRegexPattern, type RegexBuilderState } from "@shared/regex";
 import { localizedRegexEvaluationError, useIsolatedRegexBatch } from "../hooks/useIsolatedRegex";
 import { useAppStore } from "../store/useAppStore";
-import { getUiCopy } from "../i18n/ui";
+import { useUiCopy } from "../i18n/useUiCopy";
 import "../styles/command-palette.css";
 
 export interface PaletteCommand {
@@ -23,7 +23,7 @@ interface CommandPaletteProps {
 
 export default function CommandPalette({ commands, open: controlledOpen, onOpenChange }: CommandPaletteProps) {
   const settings = useAppStore((state) => state.settings);
-  const copy = getUiCopy(settings);
+  const copy = useUiCopy(settings);
   const [localOpen, setLocalOpen] = useState(false);
   const [query, setQuery] = useState<RegexBuilderState>({ mode: "text", pattern: "", flags: "g", sample: "" });
   const [activeIndex, setActiveIndex] = useState(0);

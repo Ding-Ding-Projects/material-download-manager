@@ -10,7 +10,7 @@ import {
 } from "@shared/documentation";
 import { localizedRegexEvaluationError, useIsolatedRegexBatch } from "../hooks/useIsolatedRegex";
 import { DOCUMENTATION_ARTICLES } from "../generated/documentationArticles";
-import { getUiCopy } from "../i18n/ui";
+import { useUiCopy } from "../i18n/useUiCopy";
 import { useAppStore } from "../store/useAppStore";
 import { DocumentIcon } from "./icons";
 import RegexBuilder from "./RegexBuilder";
@@ -20,10 +20,7 @@ const DEFAULT_ARTICLE_ID = "features/site/landing-and-documentation-site.md";
 
 export default function DocumentationPanel() {
   const settings = useAppStore((state) => state.settings);
-  const copy = useMemo(
-    () => getUiCopy(settings),
-    [settings?.funnyLevelCantonese, settings?.funnyLevelEnglish, settings?.languageMode, settings?.schoolModeEnabled, settings?.schoolModeName, settings?.showEmojis],
-  );
+  const copy = useUiCopy(settings);
   const visibleArticles = useMemo(
     () => settings?.schoolModeEnabled
       ? DOCUMENTATION_ARTICLES.filter((article) => !isSchoolModeSuppressedText(`${article.title}\n${article.body}`))

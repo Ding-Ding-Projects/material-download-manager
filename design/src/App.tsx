@@ -3,7 +3,7 @@ import { DEFAULT_QUEUE_ID, type DownloadCategory, type DownloadItem } from "@sha
 import type { TabState } from "@shared/tabModel";
 import { useAppStore } from "./store/useAppStore";
 import { loadTabState, saveTabState } from "./store/tabPreferences";
-import { getUiCopy } from "./i18n/ui";
+import { useUiCopy } from "./i18n/useUiCopy";
 import { chooseDimSum, type DimSumDish } from "./dimSum";
 import { CATEGORY_LABELS, CATEGORY_ORDER } from "./utils/category";
 import TitleBar from "./components/TitleBar";
@@ -60,10 +60,7 @@ export default function App() {
   const [dimSumSurprise, setDimSumSurprise] = useState<DimSumDish | null>(null);
   const dimSumDrawn = useRef(false);
   const displayNameMigrationAttempted = useRef(false);
-  const copy = useMemo(
-    () => getUiCopy(settings),
-    [settings?.funnyLevelCantonese, settings?.funnyLevelEnglish, settings?.languageMode, settings?.schoolModeEnabled, settings?.schoolModeName, settings?.showEmojis]
-  );
+  const copy = useUiCopy(settings);
   const observedItems = useRef(false);
   const previousItems = useRef(new Map<string, Pick<DownloadItem, "status" | "error" | "fileName" | "url">>());
   const activeItems = items.filter((item) => item.status === "added" || item.status === "queued" || item.status === "downloading");
@@ -203,6 +200,40 @@ export default function App() {
         section: "Settings",
         onSelect: () => openSettings("narrator"),
       }] : []),
+      ...(!settings?.schoolModeEnabled ? [
+        {
+          id: "settings.personal-vocabulary-upload",
+          label: copy.text("Settings · Personal vocabulary JSON", "設定 · 個人詞彙 JSON"),
+          description: copy.text("Choose a bounded private local JSON file for approved wording replacements", "揀一個有限制嘅私密本機 JSON 檔案，用作核准文字替換"),
+          keywords: ["personal", "vocabulary", "json", "private", "local", "upload", "choose"],
+          section: "Settings",
+          onSelect: () => openSettings("personal-vocabulary-upload"),
+        },
+        {
+          id: "settings.personal-vocabulary-status",
+          label: copy.text("Settings · Personal vocabulary status", "設定 · 個人詞彙狀態"),
+          description: copy.text("Review the private local file state without exposing its name, path, or wording", "檢視私密本機檔案狀態，唔會顯示檔名、路徑或者文字"),
+          keywords: ["personal", "vocabulary", "status", "loaded", "invalid", "local", "private"],
+          section: "Settings",
+          onSelect: () => openSettings("personal-vocabulary-status"),
+        },
+        {
+          id: "settings.personal-vocabulary-replace",
+          label: copy.text("Settings · Replace personal vocabulary JSON", "設定 · 更換個人詞彙 JSON"),
+          description: copy.text("Replace the current private local wording file after full validation", "完全驗證之後更換目前私密本機文字檔案"),
+          keywords: ["personal", "vocabulary", "replace", "json", "local", "private"],
+          section: "Settings",
+          onSelect: () => openSettings("personal-vocabulary-replace"),
+        },
+        {
+          id: "settings.personal-vocabulary-clear",
+          label: copy.text("Settings · Clear personal vocabulary", "設定 · 清除個人詞彙"),
+          description: copy.text("Purge the private local cache and restore shipped wording immediately", "清除私密本機快取，立即還原原有文字"),
+          keywords: ["personal", "vocabulary", "clear", "reset", "cache", "local", "private"],
+          section: "Settings",
+          onSelect: () => openSettings("personal-vocabulary-clear"),
+        },
+      ] : []),
       ...(!settings?.schoolModeEnabled ? [{
         id: "settings.appearance",
         label: copy.text("Settings · Appearance", "設定 · 外觀"),
