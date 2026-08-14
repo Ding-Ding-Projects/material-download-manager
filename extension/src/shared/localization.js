@@ -229,6 +229,8 @@ const UI_TEXT = {
   ollamaAgeMinutes: { en: "{{count}} minutes ago", yue: "{{count}} 分鐘前" },
   ollamaAgeHours: { en: "{{count}} hours ago", yue: "{{count}} 個鐘前" },
   ollamaModelSearchLabel: { en: "Search local models", yue: "搜尋本機模型" },
+  ollamaPickerFilter: { en: "Filter choices", yue: "篩選選項" },
+  ollamaPickerSearchLabel: { en: "Search choices", yue: "搜尋選項" },
   ollamaModelRegexHeading: { en: "Local model search regex builder", yue: "本機模型搜尋 regex 建構器" },
   ollamaModelSummary: { en: "{{visible}} of {{total}} verified local model tags", yue: "{{visible}} / {{total}} 個已核實本機模型 tag" },
   ollamaModelSearchInvalid: { en: "The local model regex is invalid; no model result is shown.", yue: "本機模型 regex 無效；暫時唔會顯示模型結果。" },
