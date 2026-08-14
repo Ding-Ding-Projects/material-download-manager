@@ -36,6 +36,39 @@ selection, bulk dismiss, typed delete confirmation, and JSON export. The
 manifest continues to mark this universal feature partial while the complete
 two-key destructive confirmation and full capture matrix remain outstanding.
 
+## Browser-local Ollama suite
+
+The Features surface independently includes a browser-local Ollama suite. It
+accepts only `http://127.0.0.1:11434`, `http://localhost:11434`, or
+`http://[::1]:11434`, and it uses only fixed documented local API routes for
+version, installed/running tags, model inspection, pull, delete, copy, and
+chat. It never contacts a cloud model, accepts a credential, uses a proxy,
+launches a program, or accepts an arbitrary URL or shell command.
+
+The Runtime tab keeps a bounded last-valid local cache. The Model Store shows
+installed tags from the local API and can validate a user-selected,
+complete-marked catalog snapshot without pretending that a static site has
+authenticated the official catalog. The pull cart has no payment semantics and
+supports bounded concurrency, durable item state, cancellation, retry, and
+partial outcomes. Local chat supports streamed responses and capability-gated
+in-memory image attachments; history and exports omit attachments, endpoint
+metadata, raw payloads, environment values, and local source paths.
+
+The exact browser boundary is visible in the UI: Pages served over HTTPS can be
+blocked from requesting an HTTP loopback API by mixed-content or CORS policy,
+and the site cannot read exact host GPU, VRAM, driver, free disk, executable,
+or credential-vault state. It does not fall back to a cloud service. See
+[Browser-local Ollama suite manager](../docs/features/site/ollama-suite-manager.md)
+for the full behavior, security, failure, and verification contract.
+
+Run the focused local suite before the standard checks:
+
+```powershell
+npm --prefix site run test:ollama
+npm --prefix site run check
+npm --prefix site run build
+```
+
 ### Notification centre capture evidence
 
 ![Notification centre showing a persisted dismissed record](../docs/screenshots/site/notification-centre-history.png)

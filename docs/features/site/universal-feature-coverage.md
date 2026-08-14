@@ -29,6 +29,18 @@ still marks the feature `partial`: the full two-key destructive slider,
 complete notification-centre bulk surface across every product, and the
 real-artifact capture matrix remain open.
 
+The Features surface also independently contains a browser-local Ollama suite.
+It accepts only the documented credential-free loopback API on port 11434,
+uses fixed documented routes, maintains a bounded local runtime cache and
+optional complete-marked catalog snapshot, provides batch pull, local streamed
+chat, capability-gated attachments, allowlisted browser-only harness profiles,
+history, redacted export, and its own anchored regular-expression builders.
+The browser-only boundary is explicit: the static Pages surface cannot
+authenticate an exhaustive official catalog, start a host process, inspect a
+driver or exact GPU/VRAM/free-disk state, or evade browser mixed-content/CORS
+rules. Missing evidence stays visible rather than being delegated to the
+desktop app or replaced with a cloud model.
+
 ## Configuration
 
 Settings use schema version 2 under the `mdm-site-settings-v2` browser-storage
@@ -83,6 +95,11 @@ screen-reader names, narrow layouts, and every future contract entry remains a
 required follow-up as each manifest entry moves from planned or partial to
 implemented.
 
+The Ollama-specific `npm --prefix site run test:ollama` command validates
+loopback allowlisting, catalog completeness and duplicate-key rejection,
+bounded persistence, conservative fit verdicts, browser-only harness
+allowlisting, attachment gating, and exact negative fixtures.
+
 ## Capture evidence
 
 ![Feature catalogue showing coverage-aware copy](../../screenshots/site/feature-catalogue-coverage.png)
@@ -107,6 +124,7 @@ launcher absent from the visible surface.
 ## Suggested articles
 
 - [Landing and documentation site](./landing-and-documentation-site.md)
+- [Browser-local Ollama suite manager](./ollama-suite-manager.md)
 - [Language and appearance settings](../settings/language-and-appearance.md)
 - [Notification centre](../notifications/notification-center.md)
 - [Regex builder](../search/regex-builder.md)

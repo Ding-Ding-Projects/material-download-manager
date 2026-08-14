@@ -10,6 +10,7 @@
     requiredIds: [
       "language-modes", "funny-levels", "emoji-toggle", "school-mode", "narration",
       "scheduled-settings", "external-settings-sources", "dim-sum-surprise", "regex-builder",
+      "ollama-suite-manager",
       "notifications", "appearance-editor", "tabs", "tab-locks", "support-tickets",
       "authenticator", "mutation-history", "landing-and-docs", "command-palette",
       "destructive-confirmation", "local-history", "changelog", "external-editor", "exports",
@@ -98,6 +99,16 @@
         status: "partial",
         probes: ["ten-percent-draw", "local-dish-asset", "school-suppression"],
         runtimeAnchors: ["function maybeShowSurprise", "dim-sum-surprise"]
+      },
+      {
+        id: "ollama-suite-manager",
+        title: "Browser-local Ollama suite manager",
+        category: "local-ai",
+        requiredSurfaces: ["feature index", "runtime", "model store", "batch pull", "chat", "harness", "history", "documentation"],
+        docsPath: "../docs/features/site/ollama-suite-manager.md",
+        status: "implemented",
+        probes: ["loopback-api-allowlist", "runtime-version-tags-ps", "complete-catalog-snapshot", "catalog-offline-boundary", "fit-evidence", "batch-pull-state", "streamed-local-chat", "attachment-capability-gate", "allowlisted-browser-harness", "local-history-export", "school-suppression", "anchored-regex-searches", "negative-guard-fixtures"],
+        runtimeAnchors: ["id=\"ollama-suite-root\"", "OLLAMA_SUITE_CONTRACT", "function refreshRuntime", "function startPullQueue", "function sendChat", "function runProfile", "function parseCatalogSnapshot", "function renderConfirmation"]
       },
       {
         id: "regex-builder",
