@@ -1,0 +1,65 @@
+/* Local logo customization surface. No remote image, font, or converter is used. */
+.logo-customization-card { grid-column: 1 / -1; gap: 1rem; }
+.logo-customization-card .card-heading-row { align-items: start; }
+.logo-customization-layout { display: grid; grid-template-columns: minmax(15rem, .9fr) minmax(18rem, 1.1fr); gap: 1rem; align-items: start; }
+.logo-section { display: grid; gap: .7rem; min-width: 0; padding: 1rem; border: 1px solid var(--outline-variant); border-radius: var(--radius-md); background: var(--surface-container); }
+.logo-section h3, .logo-section p { margin: 0; }
+.logo-preset-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .55rem; }
+.logo-preset { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: .5rem; min-width: 0; min-height: 4.5rem; padding: .65rem; border: 1px solid var(--outline-variant); border-radius: .85rem; background: var(--surface-container-low); color: var(--on-surface); cursor: pointer; text-align: left; }
+.logo-preset:hover, .logo-preset:focus-visible, .logo-preset[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); }
+.logo-preset[aria-pressed="true"] { box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 45%, transparent); }
+.logo-preset-glyph { display: grid; width: 2.25rem; height: 2.25rem; place-items: center; border-radius: .7rem; background: var(--accent); color: var(--on-accent); font-size: 1.3rem; font-weight: 800; }
+.logo-preset-glyph[data-tone="teal"], [data-logo-preset="queue"] .logo-glyph { background: #00696b; color: #ffffff; }
+.logo-preset-glyph[data-tone="amber"], [data-logo-preset="relay"] .logo-glyph { background: #8e4f00; color: #ffffff; }
+.logo-preset-copy { display: grid; min-width: 0; gap: .1rem; }
+.logo-preset-copy strong { overflow-wrap: anywhere; white-space: normal; }
+.logo-preset-copy small { color: var(--on-surface-variant); font-size: .72rem; }
+.logo-upload-row, .logo-action-row, .logo-radio-row, .logo-schedule-presets { display: flex; flex-wrap: wrap; gap: .55rem; align-items: center; }
+.logo-file-label { display: inline-flex; align-items: center; min-height: 2.75rem; padding: 0 .9rem; border: 1px solid var(--outline); border-radius: .9rem; background: var(--surface-container-high); color: var(--on-surface); cursor: pointer; font-weight: 700; }
+.logo-file-label:hover, .logo-file-label:focus-within { border-color: var(--accent); background: var(--accent-soft); }
+.logo-file-label input { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.logo-privacy-note { padding: .75rem; border-inline-start: .25rem solid var(--accent); border-radius: .6rem; background: color-mix(in srgb, var(--accent-soft) 65%, var(--surface-container)); color: var(--on-surface-variant); }
+.logo-preview-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .7rem; }
+.logo-preview-card { display: grid; gap: .45rem; min-width: 0; padding: .75rem; border: 1px solid var(--outline-variant); border-radius: .85rem; background: var(--surface-container-low); }
+.logo-preview-card strong { color: var(--on-surface); }
+.logo-preview-card small { color: var(--on-surface-variant); }
+[data-logo-render-target] { --logo-fit: contain; --logo-focal-x: 50%; --logo-focal-y: 50%; --logo-crop-zoom: 1; --logo-background: transparent; }
+.logo-artwork { display: grid; width: 100%; height: 100%; place-items: center; overflow: hidden; border-radius: inherit; background: linear-gradient(45deg, color-mix(in srgb, var(--outline-variant) 35%, transparent) 25%, transparent 25%) 0 0 / .8rem .8rem, linear-gradient(-45deg, color-mix(in srgb, var(--outline-variant) 35%, transparent) 25%, transparent 25%) 0 0 / .8rem .8rem, var(--logo-background); }
+[data-logo-background="color"] .logo-artwork { background: var(--logo-background); }
+.logo-glyph { display: grid; width: 100%; height: 100%; place-items: center; border-radius: inherit; background: var(--accent); color: var(--on-accent); font-weight: 800; }
+.logo-custom-image { display: block; width: 100%; height: 100%; object-fit: var(--logo-fit); object-position: var(--logo-focal-x) var(--logo-focal-y); transform: scale(var(--logo-crop-zoom)); transform-origin: var(--logo-focal-x) var(--logo-focal-y); }
+.brand-mark .logo-artwork { border-radius: inherit; }
+.brand-mark .logo-glyph { font-size: 1.35rem; }
+.logo-preview-target { position: relative; display: grid; place-items: center; overflow: hidden; min-height: 5.5rem; border: 1px solid var(--outline-variant); border-radius: 1rem; }
+.logo-preview-target::after { position: absolute; inset: 14%; border: 1px dashed color-mix(in srgb, var(--on-surface) 55%, transparent); border-radius: .65rem; content: ""; pointer-events: none; }
+.logo-preview-target .logo-artwork { width: var(--logo-preview-size, 4rem); height: var(--logo-preview-size, 4rem); border-radius: var(--logo-preview-radius, 1rem); box-shadow: var(--shadow-1); }
+.logo-preview-target[data-target="favicon"] { --logo-preview-size: 1.5rem; --logo-preview-radius: .38rem; }
+.logo-preview-target[data-target="compact"] { --logo-preview-size: 2.5rem; --logo-preview-radius: .7rem; }
+.logo-preview-target[data-target="hero"] { --logo-preview-size: 4rem; --logo-preview-radius: 1rem; }
+.logo-control-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .7rem; }
+.logo-control-grid .field-control, .logo-control-grid .color-control { min-width: 0; }
+.logo-control-grid input[type="range"] { width: 100%; }
+.logo-control-grid output { color: var(--on-surface-variant); font-size: .82rem; }
+.logo-radio-row { padding: .55rem; border: 1px solid var(--outline-variant); border-radius: .75rem; }
+.compact-radio { display: inline-flex; align-items: center; min-height: 2.5rem; gap: .4rem; padding: .2rem .45rem; border-radius: .65rem; color: var(--on-surface); }
+.compact-radio:focus-within { outline: 2px solid var(--accent); outline-offset: 2px; }
+.logo-schedule-editor { display: grid; gap: .7rem; padding: .8rem; border: 1px solid var(--outline-variant); border-radius: .85rem; background: var(--surface-container-low); }
+.logo-schedule-time-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .65rem; }
+.logo-status, .logo-conversion-status, .logo-loss-notice { margin: 0; padding: .7rem; border-radius: .7rem; background: var(--surface-container-high); color: var(--on-surface-variant); }
+.logo-status[data-tone="error"] { border-inline-start: .25rem solid #ba1a1a; color: #ba1a1a; }
+.logo-status[data-tone="warning"], .logo-loss-notice { border-inline-start: .25rem solid #8e4f00; }
+.logo-conversion-status { border-inline-start: .25rem solid var(--accent); }
+
+@media (max-width: 58rem) {
+  .logo-customization-layout { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 44rem) {
+  .logo-preset-grid { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 36rem) {
+  .logo-preset-grid, .logo-preview-grid, .logo-control-grid, .logo-schedule-time-grid { grid-template-columns: 1fr; }
+  .logo-preview-card { grid-template-columns: auto minmax(0, 1fr); align-items: center; }
+  .logo-preview-target { min-width: 5.5rem; }
+}
