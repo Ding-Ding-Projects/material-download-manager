@@ -821,12 +821,12 @@ run("browser-local Ollama suite capture is pinned to a safe path, hash, and dime
 });
 
 run("site personal-vocabulary capture is pinned to a safe path, hash, and dimensions", () => {
-  const feature = content.features.find((entry) => entry.id === "personal-vocabulary");
+  const feature = universalFeatureEntries.find((entry) => entry.id === "personal-vocabulary");
   validatePersonalVocabularyCapture(feature, personalVocabularyCaptureBytes, personalVocabularyCaptureError);
 });
 
 run("feature article inventory covers every embedded feature", () => {
-  assert.equal(content.features.length, 18);
+  assert.equal(content.features.length, 19);
   const requiredSiteArticleIds = Object.freeze([
   "reliable-transfers", "auto-organize-downloads", "record-export", "local-history", "command-palette", "tabbed-navigation",
   "notification-center", "destructive-action-gate", "renderer-accessibility", "regex-builder", "language-appearance", "squirrel-updates",
