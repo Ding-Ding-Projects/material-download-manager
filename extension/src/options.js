@@ -18,6 +18,20 @@ import {
 } from "./shared/personal-vocabulary.js";
 import { normalizeTotpRegistration, parseTotpUri } from "./shared/totp.js";
 import { createQrMatrix, qrMatrixToSvg } from "./shared/qr.js";
+import { colorTranslations, parseColorInput } from "./shared/color.js";
+import {
+  LOGO_STORAGE_KEY,
+  LOGO_LIMITS,
+  LOGO_PRESETS,
+  LOGO_VARIANT_SIZES,
+  createCustomLogoRecord,
+  createPresetLogoRecord,
+  defaultLogoDescriptor,
+  inspectLogoBytes,
+  logoDisplayDescriptor,
+  normalizeLogoRecord,
+  presetSourceDataUrl,
+} from "./shared/logo.js";
 
 let settings = sanitizeSettings(DEFAULT_SETTINGS);
 let activeTab = "connection";
@@ -33,6 +47,15 @@ let personalVocabularyStatus = "empty";
 let personalVocabularyFeedback = null;
 let pendingPersonalVocabularyClear = null;
 let lastConnectionResult = null;
+let logo = defaultLogoDescriptor();
+let stagedLogo = null;
+let logoSource = { kind: "preset", presetId: logo.presetId };
+let logoPresetRegexOpen = false;
+let logoPresetRegexMode = false;
+const logoUploadFilterRegexState = { open: false, mode: false };
+const logoColorRegexState = { open: false, mode: false };
+const logoAcceptedUploadTypes = new Set(["image/png", "image/jpeg", "image/webp"]);
+let logoPreviewGeneration = 0;
 const REQUIRED_SEARCHABLE_SETTING_IDS = Object.freeze([
   "handoff-endpoint",
   "auto-capture-downloads",
@@ -52,6 +75,15 @@ const REQUIRED_SEARCHABLE_SETTING_IDS = Object.freeze([
   "personal-vocabulary-choose",
   "personal-vocabulary-replace",
   "personal-vocabulary-clear",
+  "logo-preset-search",
+  "logo-upload-filter-search",
+  "logo-upload",
+  "logo-fit",
+  "logo-crop-zoom",
+  "logo-focal-x",
+  "logo-focal-y",
+  "logo-background",
+  "logo-color-search",
   "authenticator-uri",
   "authenticator-issuer",
   "authenticator-account",
@@ -126,6 +158,74 @@ const elements = {
   importSettings: document.querySelector("#import-settings"),
   importFile: document.querySelector("#import-file"),
   resetSettings: document.querySelector("#reset-settings"),
+  logoCard: document.querySelector("#logo-customization-card"),
+  logoFocusSearch: document.querySelector("#logo-focus-search"),
+  logoProvenance: document.querySelector("#logo-provenance"),
+  logoStatus: document.querySelector("#logo-status"),
+  logoPresetSearch: document.querySelector("#logo-preset-search"),
+  logoPresetRegexToggle: document.querySelector("#logo-preset-regex-toggle"),
+  logoPresetRegex: document.querySelector("#logo-preset-regex"),
+  logoPresetRegexPattern: document.querySelector("#logo-preset-regex-pattern"),
+  logoPresetRegexFlags: document.querySelector("#logo-preset-regex-flags"),
+  logoPresetRegexSample: document.querySelector("#logo-preset-regex-sample"),
+  logoPresetRegexFeedback: document.querySelector("#logo-preset-regex-feedback"),
+  logoPresetRegexMatches: document.querySelector("#logo-preset-regex-matches"),
+  logoPresetRegexApply: document.querySelector("#logo-preset-regex-apply"),
+  logoPresetRegexCopy: document.querySelector("#logo-preset-regex-copy"),
+  logoPresetRegexExport: document.querySelector("#logo-preset-regex-export"),
+  logoPresetRegexMode: document.querySelector("#logo-preset-regex-mode"),
+  logoPresetSummary: document.querySelector("#logo-preset-summary"),
+  logoPresetList: document.querySelector("#logo-preset-list"),
+  logoApplyPreset: document.querySelector("#logo-apply-preset"),
+  logoUploadFilterSearch: document.querySelector("#logo-upload-filter-search"),
+  logoUploadFilterRegexToggle: document.querySelector("#logo-upload-filter-regex-toggle"),
+  logoUploadFilterRegex: document.querySelector("#logo-upload-filter-regex"),
+  logoUploadFilterRegexPattern: document.querySelector("#logo-upload-filter-regex-pattern"),
+  logoUploadFilterRegexFlags: document.querySelector("#logo-upload-filter-regex-flags"),
+  logoUploadFilterRegexSample: document.querySelector("#logo-upload-filter-regex-sample"),
+  logoUploadFilterRegexFeedback: document.querySelector("#logo-upload-filter-regex-feedback"),
+  logoUploadFilterRegexMatches: document.querySelector("#logo-upload-filter-regex-matches"),
+  logoUploadFilterRegexApply: document.querySelector("#logo-upload-filter-regex-apply"),
+  logoUploadFilterRegexCopy: document.querySelector("#logo-upload-filter-regex-copy"),
+  logoUploadFilterRegexExport: document.querySelector("#logo-upload-filter-regex-export"),
+  logoUploadFilterRegexMode: document.querySelector("#logo-upload-filter-regex-mode"),
+  logoUploadFilterSummary: document.querySelector("#logo-upload-filter-summary"),
+  logoUploadFormatList: document.querySelector("#logo-upload-format-list"),
+  logoUploadFormats: [...document.querySelectorAll("[data-logo-upload-format]")],
+  logoUpload: document.querySelector("#logo-upload"),
+  logoUploadStatus: document.querySelector("#logo-upload-status"),
+  logoFit: document.querySelector("#logo-fit"),
+  logoFitOptions: [...document.querySelectorAll('input[name="logo-fit"]')],
+  logoCropZoom: document.querySelector("#logo-crop-zoom"),
+  logoCropZoomOutput: document.querySelector("#logo-crop-zoom-output"),
+  logoFocalX: document.querySelector("#logo-focal-x"),
+  logoFocalXOutput: document.querySelector("#logo-focal-x-output"),
+  logoFocalY: document.querySelector("#logo-focal-y"),
+  logoFocalYOutput: document.querySelector("#logo-focal-y-output"),
+  logoTransparentBackground: document.querySelector("#logo-transparent-background"),
+  logoBackground: document.querySelector("#logo-background"),
+  logoBackgroundAlpha: document.querySelector("#logo-background-alpha"),
+  logoBackgroundAlphaOutput: document.querySelector("#logo-background-alpha-output"),
+  logoColorValue: document.querySelector("#logo-color-value"),
+  logoColorStatus: document.querySelector("#logo-color-status"),
+  logoColorSearch: document.querySelector("#logo-color-search"),
+  logoColorRegexToggle: document.querySelector("#logo-color-regex-toggle"),
+  logoColorRegex: document.querySelector("#logo-color-regex"),
+  logoColorRegexPattern: document.querySelector("#logo-color-regex-pattern"),
+  logoColorRegexFlags: document.querySelector("#logo-color-regex-flags"),
+  logoColorRegexSample: document.querySelector("#logo-color-regex-sample"),
+  logoColorRegexFeedback: document.querySelector("#logo-color-regex-feedback"),
+  logoColorRegexMatches: document.querySelector("#logo-color-regex-matches"),
+  logoColorRegexApply: document.querySelector("#logo-color-regex-apply"),
+  logoColorRegexCopy: document.querySelector("#logo-color-regex-copy"),
+  logoColorRegexExport: document.querySelector("#logo-color-regex-export"),
+  logoColorRegexMode: document.querySelector("#logo-color-regex-mode"),
+  logoColorSearchSummary: document.querySelector("#logo-color-search-summary"),
+  logoColorTranslations: document.querySelector("#logo-color-translations"),
+  logoApplyCustom: document.querySelector("#logo-apply-custom"),
+  logoApplyCustomHelp: document.querySelector("#logo-apply-custom-help"),
+  logoReset: document.querySelector("#logo-reset"),
+  logoPreviews: Object.fromEntries(LOGO_VARIANT_SIZES.map((size) => [size, document.querySelector(`#logo-preview-${size}`)])),
   authenticatorUri: document.querySelector("#authenticator-uri"),
   authenticatorParseUri: document.querySelector("#authenticator-parse-uri"),
   authenticatorGenerateSecret: document.querySelector("#authenticator-generate-secret"),
@@ -200,6 +300,13 @@ function localizePage() {
   elements.schoolModeCredentialStatus.textContent = localize("schoolModeCredentialStatus", settings, { name: schoolModeName });
   elements.narratorStatus.textContent = localize(settings.narratorEnabled ? "narratorReady" : "narratorDisabled", settings);
   elements.authenticatorList?.setAttribute("aria-label", localize("authenticatorListHeading", settings));
+  elements.logoPresetList?.setAttribute("aria-label", localize("logoPresetHeading", settings));
+  if (elements.logoPresetSearch) elements.logoPresetSearch.placeholder = localize("logoPresetSearchLabel", settings);
+  if (elements.logoPresetRegexSample && !elements.logoPresetRegexSample.value) elements.logoPresetRegexSample.value = localize("logoPresetSearchLabel", settings);
+  if (elements.logoUploadFilterSearch) elements.logoUploadFilterSearch.placeholder = localize("logoUploadFilterLabel", settings);
+  if (elements.logoUploadFilterRegexSample && !elements.logoUploadFilterRegexSample.value) elements.logoUploadFilterRegexSample.value = localize("logoUploadFilterLabel", settings);
+  if (elements.logoColorSearch) elements.logoColorSearch.placeholder = localize("logoColorSearchLabel", settings);
+  if (elements.logoColorRegexSample && !elements.logoColorRegexSample.value) elements.logoColorRegexSample.value = localize("logoColorSearchLabel", settings);
   if (elements.authenticatorListSearch) elements.authenticatorListSearch.placeholder = localize("authenticatorListSearchLabel", settings);
   if (elements.authenticatorListRegexSample && !elements.authenticatorListRegexSample.value) elements.authenticatorListRegexSample.value = localize("authenticatorListSearchLabel", settings);
   const schoolModeCard = document.querySelector("#school-mode-card");
@@ -215,6 +322,457 @@ function localizePage() {
   updatePersonalVocabularyStatus();
   clearToast();
   elements.dirtyState.textContent = "";
+  refreshLogoPresentation();
+}
+
+function logoPresetKey(id) {
+  return id === "download-orbit" ? "logoPresetDownloadOrbit" : id === "handoff-ribbon" ? "logoPresetHandoffRibbon" : "logoPresetMaterialStack";
+}
+
+function localizeLogoPreset(id) {
+  return localize(logoPresetKey(id), settings);
+}
+
+function logoBackgroundWithAlpha() {
+  const alpha = Math.round(Math.min(1, Math.max(0, Number(elements.logoBackgroundAlpha.value))) * 255).toString(16).padStart(2, "0");
+  return alpha === "ff" ? elements.logoBackground.value.toLowerCase() : `${elements.logoBackground.value.toLowerCase()}${alpha}`;
+}
+
+function setLogoBackgroundColor(value) {
+  const normalized = parseColorInput(value) ?? "#ffffff";
+  const hex = normalized.slice(0, 7);
+  const alpha = normalized.length === 9 ? Number.parseInt(normalized.slice(7, 9), 16) / 255 : 1;
+  elements.logoBackground.value = hex;
+  elements.logoBackgroundAlpha.value = String(alpha);
+  elements.logoColorValue.value = normalized.toUpperCase();
+}
+
+function logoControls() {
+  return {
+    fit: elements.logoFitOptions.find((option) => option.checked)?.value ?? "contain",
+    cropZoom: Number(elements.logoCropZoom.value),
+    focalX: Number(elements.logoFocalX.value),
+    focalY: Number(elements.logoFocalY.value),
+    background: elements.logoTransparentBackground.checked ? "transparent" : logoBackgroundWithAlpha(),
+  };
+}
+
+function updateLogoControlOutputs() {
+  elements.logoCropZoomOutput.value = `${Number(elements.logoCropZoom.value).toFixed(2)}×`;
+  elements.logoCropZoomOutput.textContent = elements.logoCropZoomOutput.value;
+  elements.logoFocalXOutput.value = `${Math.round(Number(elements.logoFocalX.value) * 100)}%`;
+  elements.logoFocalXOutput.textContent = elements.logoFocalXOutput.value;
+  elements.logoFocalYOutput.value = `${Math.round(Number(elements.logoFocalY.value) * 100)}%`;
+  elements.logoFocalYOutput.textContent = elements.logoFocalYOutput.value;
+  elements.logoBackgroundAlphaOutput.value = `${Math.round(Number(elements.logoBackgroundAlpha.value) * 100)}%`;
+  elements.logoBackgroundAlphaOutput.textContent = elements.logoBackgroundAlphaOutput.value;
+  const fit = elements.logoFitOptions.find((option) => option.checked)?.value ?? "contain";
+  const focalUsable = fit !== "fill" && (fit === "cover" || Number(elements.logoCropZoom.value) > 1);
+  elements.logoFitOptions.forEach((option) => { option.disabled = settings.schoolModeEnabled; });
+  [elements.logoFocalX, elements.logoFocalY].forEach((control) => { control.disabled = !focalUsable || settings.schoolModeEnabled; });
+  elements.logoTransparentBackground.disabled = settings.schoolModeEnabled;
+  elements.logoBackground.disabled = settings.schoolModeEnabled || elements.logoTransparentBackground.checked;
+  elements.logoBackgroundAlpha.disabled = settings.schoolModeEnabled || elements.logoTransparentBackground.checked;
+  elements.logoColorValue.disabled = settings.schoolModeEnabled || elements.logoTransparentBackground.checked;
+  elements.logoApplyCustom.disabled = !activeLogoSource() || settings.schoolModeEnabled;
+}
+
+function setLogoPreviewImage(image, descriptor, size) {
+  if (!image) return;
+  const source = descriptor?.variants?.[String(size)] ?? logoDisplayDescriptor(descriptor, size).previewDataUrl;
+  image.src = source;
+  image.alt = descriptor?.kind === "custom"
+    ? localize("logoCustomPreviewAlt", settings, { name: settings.managerName, size })
+    : localize("logoPreviewAlt", settings, { name: settings.managerName, preset: localizeLogoPreset(descriptor?.presetId ?? "material-stack"), size });
+  image.style.backgroundColor = descriptor?.background && descriptor.background !== "transparent" ? descriptor.background : "transparent";
+}
+
+function renderLogoPreviews(descriptor = logo) {
+  LOGO_VARIANT_SIZES.forEach((size) => setLogoPreviewImage(elements.logoPreviews[size], descriptor, size));
+}
+
+function fillLogoControls(descriptor = logo) {
+  const resolved = descriptor && typeof descriptor === "object" ? descriptor : defaultLogoDescriptor();
+  elements.logoFitOptions.forEach((option) => { option.checked = option.value === (resolved.fit ?? "contain"); });
+  elements.logoCropZoom.value = String(resolved.cropZoom ?? 1);
+  elements.logoFocalX.value = String(resolved.focalX ?? 0.5);
+  elements.logoFocalY.value = String(resolved.focalY ?? 0.5);
+  elements.logoTransparentBackground.checked = (resolved.background ?? "transparent") === "transparent";
+  setLogoBackgroundColor((resolved.background && resolved.background !== "transparent") ? resolved.background : "#ffffff");
+  updateLogoControlOutputs();
+  renderLogoColorTranslations();
+}
+
+function renderLogoColorTranslations() {
+  const translations = colorTranslations(logoBackgroundWithAlpha());
+  elements.logoColorTranslations.replaceChildren();
+  if (!translations || elements.logoTransparentBackground.checked) {
+    elements.logoColorStatus.textContent = elements.logoTransparentBackground.checked ? localize("logoColorTransparent", settings) : localize("logoColorInvalid", settings);
+    refreshLogoColorSearchSummary(0, 0);
+    return;
+  }
+  elements.logoColorStatus.textContent = localize("logoColorValid", settings);
+  const entries = Object.entries(translations).filter(([key]) => !key.startsWith("contrast"));
+  const predicate = logoFilterPredicate(logoColorRegexConfig);
+  let visible = 0;
+  for (const [format, value] of entries) {
+    if (!predicate || !predicate(`${format} ${value}`)) continue;
+    visible += 1;
+    const row = document.createElement("div");
+    row.className = "logo-color-translation";
+    const label = document.createElement("strong");
+    label.textContent = format;
+    const code = document.createElement("code");
+    code.textContent = value;
+    row.append(label, code);
+    elements.logoColorTranslations.append(row);
+  }
+  if (predicate && predicate(`contrast ${translations.contrastOnWhite} ${translations.contrastOnBlack}`)) {
+    const contrast = document.createElement("p");
+    contrast.className = "logo-color-contrast";
+    contrast.textContent = localize("logoColorContrast", settings, { white: translations.contrastOnWhite, black: translations.contrastOnBlack });
+    elements.logoColorTranslations.append(contrast);
+  }
+  refreshLogoColorSearchSummary(visible, entries.length);
+}
+
+function refreshLogoPresentation() {
+  if (!elements.logoCard) return;
+  const current = logo && typeof logo === "object" ? logo : defaultLogoDescriptor();
+  renderLogoPreviews(stagedLogo?.record ?? current);
+  const kind = current.kind === "custom" ? localize("logoCustomActive", settings) : localize("logoPresetActive", settings, { preset: localizeLogoPreset(current.presetId ?? "material-stack") });
+  elements.logoProvenance.textContent = settings.schoolModeEnabled
+    ? localize("logoSchoolModeSuppressed", settings, { name: settings.schoolModeName })
+    : localize("logoProvenanceState", settings, { state: kind });
+  elements.logoUploadStatus.textContent = stagedLogo?.status ?? "";
+  elements.logoApplyPreset.disabled = settings.schoolModeEnabled;
+  elements.logoReset.disabled = settings.schoolModeEnabled;
+  elements.logoUpload.disabled = settings.schoolModeEnabled;
+  document.querySelectorAll("[data-logo-preset]").forEach((button) => {
+    const selected = logoSource.kind === "preset" && button.dataset.logoPreset === logoSource.presetId;
+    button.setAttribute("aria-pressed", String(selected));
+    button.disabled = settings.schoolModeEnabled || button.hidden;
+    const preview = button.querySelector("img");
+    if (preview) {
+      const id = button.dataset.logoPreset;
+      preview.src = presetSourceDataUrl(id);
+      preview.alt = localize("logoPresetPreviewAlt", settings, { preset: localizeLogoPreset(id) });
+    }
+  });
+  updateLogoControlOutputs();
+  elements.logoApplyCustomHelp.textContent = settings.schoolModeEnabled
+    ? localize("logoSchoolModeSuppressed", settings, { name: settings.schoolModeName })
+    : activeLogoSource()
+      ? localize("logoApplyCustomReady", settings)
+      : localize("logoApplyCustomHelp", settings);
+  refreshLogoPresetSearch();
+  refreshLogoUploadFilter();
+  renderLogoColorTranslations();
+}
+
+function activeLogoSource() {
+  if (stagedLogo?.source) return stagedLogo.source;
+  if (logo?.kind === "custom" && typeof logo.sourceDataUrl === "string") return logo.sourceDataUrl;
+  return null;
+}
+
+let logoPreviewTimer = null;
+async function regenerateLogoPreview() {
+  if (settings.schoolModeEnabled) return;
+  const generation = ++logoPreviewGeneration;
+  const controls = logoControls();
+  try {
+    const source = activeLogoSource();
+    const record = source
+      ? await createCustomLogoRecord(source, controls)
+      : await createPresetLogoRecord(logoSource.presetId ?? "material-stack", controls);
+    if (generation !== logoPreviewGeneration) return;
+    stagedLogo = source ? { ...(stagedLogo ?? {}), source, record, status: localize("logoPreviewUpdated", settings) } : null;
+    renderLogoPreviews(record);
+    elements.logoStatus.textContent = localize("logoPreviewUpdated", settings);
+    updateLogoControlOutputs();
+  } catch (error) {
+    if (generation !== logoPreviewGeneration) return;
+    stagedLogo = stagedLogo ? { ...stagedLogo, record: null, status: logoErrorMessage(error) } : null;
+    renderLogoPreviews(logo);
+    elements.logoStatus.textContent = logoErrorMessage(error);
+    updateLogoControlOutputs();
+  }
+}
+
+function scheduleLogoPreview() {
+  if (logoPreviewTimer !== null) clearTimeout(logoPreviewTimer);
+  logoPreviewTimer = window.setTimeout(() => { void regenerateLogoPreview(); }, 180);
+}
+
+function logoErrorMessage(error) {
+  const code = error?.code ?? "";
+  const key = {
+    "logo-file-size": "logoFileSizeError",
+    "logo-image-bounds": "logoImageBoundsError",
+    "logo-animated-image": "logoAnimatedError",
+    "logo-type-mismatch": "logoTypeMismatchError",
+    "logo-upload-filter": "logoUploadFilterRejected",
+    "logo-unsupported-type": "logoUnsupportedError",
+    "logo-invalid-png": "logoInvalidError",
+    "logo-invalid-jpeg": "logoInvalidError",
+    "logo-invalid-webp": "logoInvalidError",
+    "logo-output-size": "logoOutputSizeError",
+    "logo-output-invalid": "logoConversionFailed",
+    "logo-converter-unavailable": "logoConversionFailed",
+    "logo-conversion-failed": "logoConversionFailed",
+  }[code] ?? "logoConversionFailed";
+  return localize(key, settings);
+}
+
+async function loadLogo() {
+  try {
+    const response = await chrome.runtime.sendMessage({ type: "GET_LOGO" });
+    if (!response?.ok) throw new Error("worker");
+    logo = response.schoolModeSuppressed ? null : normalizeLogoRecord(response.logo);
+    logoSource = logo?.kind === "preset" ? { kind: "preset", presetId: logo.presetId } : { kind: "preset", presetId: "material-stack" };
+    stagedLogo = null;
+    fillLogoControls(logo);
+    renderLogoPreviews(logo);
+    elements.logoStatus.textContent = response.cacheState === "corrupt-reset" ? localize("logoCacheReset", settings) : "";
+    refreshLogoPresentation();
+  } catch {
+    logo = null;
+    stagedLogo = null;
+    fillLogoControls(null);
+    renderLogoPreviews(null);
+    elements.logoStatus.textContent = localize("serviceWorkerUnavailable", settings);
+  }
+}
+
+async function saveLogoRecord(record) {
+  try {
+    const response = await chrome.runtime.sendMessage({ type: "SAVE_LOGO", logo: record });
+    if (!response?.ok) {
+      const key = response?.result?.code === "logo-school-mode-hidden"
+        ? "logoSchoolModeSuppressed"
+        : response?.result?.code === "logo-storage-failed" ? "logoStorageFailed" : "logoInvalidError";
+      elements.logoStatus.textContent = localize(key, settings, { name: settings.schoolModeName });
+      return false;
+    }
+    logo = normalizeLogoRecord(response.logo);
+    stagedLogo = null;
+    fillLogoControls(logo);
+    renderLogoPreviews(logo);
+    elements.logoStatus.textContent = response.actionUpdated ? localize("logoSaved", settings) : localize("logoSavedActionRetry", settings);
+    refreshLogoPresentation();
+    return true;
+  } catch {
+    elements.logoStatus.textContent = localize("serviceWorkerUnavailable", settings);
+    return false;
+  }
+}
+
+function refreshLogoPresetSearch() {
+  const query = elements.logoPresetSearch.value.trim();
+  let predicate = () => true;
+  if (logoPresetRegexMode && query) {
+    const validation = validateRegex(elements.logoPresetRegexPattern.value, elements.logoPresetRegexFlags.value);
+    if (!validation.valid) {
+      elements.logoPresetRegexFeedback.textContent = `${localize("regexInvalid", settings)} ${validation.error}`;
+      document.querySelectorAll("[data-logo-preset]").forEach((button) => { button.hidden = true; });
+      elements.logoPresetSummary.textContent = localize("searchNoMatches", settings);
+      return;
+    }
+    predicate = (value) => evaluateRegex(elements.logoPresetRegexPattern.value, elements.logoPresetRegexFlags.value, value).matches.length > 0;
+  } else if (query) {
+    const normalized = query.toLocaleLowerCase();
+    predicate = (value) => value.toLocaleLowerCase().includes(normalized);
+  }
+  let visible = 0;
+  LOGO_PRESETS.forEach((preset) => {
+    const button = document.querySelector(`[data-logo-preset="${preset.id}"]`);
+    if (!button) return;
+    const show = predicate(`${preset.id} ${localizeLogoPreset(preset.id)}`);
+    button.hidden = !show;
+    button.disabled = settings.schoolModeEnabled || !show;
+    if (show) visible += 1;
+  });
+  elements.logoPresetSummary.textContent = query
+    ? localize("logoPresetSearchSummary", settings, { visible, total: LOGO_PRESETS.length })
+    : "";
+  if (!logoPresetRegexMode) elements.logoPresetRegexFeedback.textContent = "";
+}
+
+function evaluateLogoPresetRegex() {
+  const evaluation = evaluateRegex(elements.logoPresetRegexPattern.value, elements.logoPresetRegexFlags.value, elements.logoPresetRegexSample.value);
+  elements.logoPresetRegexMatches.replaceChildren();
+  if (!evaluation.valid) {
+    elements.logoPresetRegexFeedback.textContent = `${localize("regexInvalid", settings)} ${evaluation.error}`;
+    refreshLogoPresetSearch();
+    return evaluation;
+  }
+  elements.logoPresetRegexFeedback.textContent = evaluation.matches.length
+    ? localize("regexMatches", settings, { count: evaluation.matches.length })
+    : localize("regexNoMatches", settings);
+  evaluation.matches.forEach((match) => {
+    const item = document.createElement("li");
+    const captures = match.captures.length ? ` · captures: ${match.captures.map((capture) => capture ?? "∅").join(", ")}` : "";
+    item.textContent = `“${match.text}” at ${match.index}${captures}`;
+    elements.logoPresetRegexMatches.append(item);
+  });
+  refreshLogoPresetSearch();
+  return evaluation;
+}
+
+function logoFilterPredicate(config) {
+  const query = config.search.value.trim();
+  if (config.state.mode && query) {
+    const validation = validateRegex(config.pattern.value, config.flags.value);
+    if (!validation.valid) {
+      config.feedback.textContent = `${localize("regexInvalid", settings)} ${validation.error}`;
+      return null;
+    }
+    return (value) => evaluateRegex(config.pattern.value, config.flags.value, value).matches.length > 0;
+  }
+  if (query) {
+    const normalized = query.toLocaleLowerCase();
+    return (value) => value.toLocaleLowerCase().includes(normalized);
+  }
+  if (!config.state.mode) config.feedback.textContent = "";
+  return () => true;
+}
+
+function evaluateLogoFilterRegex(config, refresh) {
+  const evaluation = evaluateRegex(config.pattern.value, config.flags.value, config.sample.value);
+  config.matches.replaceChildren();
+  if (!evaluation.valid) {
+    config.feedback.textContent = `${localize("regexInvalid", settings)} ${evaluation.error}`;
+    refresh();
+    return evaluation;
+  }
+  config.feedback.textContent = evaluation.matches.length
+    ? localize("regexMatches", settings, { count: evaluation.matches.length })
+    : localize("regexNoMatches", settings);
+  evaluation.matches.forEach((match) => {
+    const item = document.createElement("li");
+    const captures = match.captures.length ? ` · captures: ${match.captures.map((capture) => capture ?? "∅").join(", ")}` : "";
+    item.textContent = `“${match.text}” at ${match.index}${captures}`;
+    config.matches.append(item);
+  });
+  refresh();
+  return evaluation;
+}
+
+function wireLogoFilterRegexBuilder(config, refresh) {
+  config.search.addEventListener("input", () => {
+    if (config.state.mode) config.pattern.value = config.search.value;
+    refresh();
+  });
+  config.toggle.addEventListener("click", () => {
+    config.state.open = !config.state.open;
+    config.panel.hidden = !config.state.open;
+    config.toggle.setAttribute("aria-expanded", String(config.state.open));
+    if (config.state.open) config.pattern.focus();
+  });
+  [config.pattern, config.flags, config.sample].forEach((input) => input.addEventListener("input", () => evaluateLogoFilterRegex(config, refresh)));
+  document.querySelectorAll(config.fragmentSelector).forEach((button) => {
+    button.addEventListener("click", () => {
+      config.pattern.value = appendRegexFragment(config.pattern.value, button.dataset[config.fragmentDataset]);
+      config.pattern.focus();
+      evaluateLogoFilterRegex(config, refresh);
+    });
+  });
+  config.mode.addEventListener("change", () => {
+    config.state.mode = config.mode.checked;
+    if (config.state.mode) config.pattern.value = config.search.value;
+    refresh();
+  });
+  config.apply.addEventListener("click", () => {
+    const validation = validateRegex(config.pattern.value, config.flags.value);
+    if (!validation.valid) { evaluateLogoFilterRegex(config, refresh); return; }
+    config.search.value = config.pattern.value;
+    config.mode.checked = true;
+    config.state.mode = true;
+    refresh();
+  });
+  config.copy.addEventListener("click", async () => {
+    try {
+      await navigator.clipboard.writeText(`/${config.pattern.value}/${config.flags.value}`);
+      showToast(localize("regexPatternCopied", settings));
+    } catch {
+      showToast(localize("copyFailed", settings));
+    }
+  });
+  config.export.addEventListener("click", () => {
+    const blob = new Blob([JSON.stringify({ pattern: config.pattern.value, flags: config.flags.value }, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = config.fileName;
+    anchor.click();
+    URL.revokeObjectURL(url);
+  });
+}
+
+const logoUploadFilterRegexConfig = {
+  state: logoUploadFilterRegexState,
+  search: elements.logoUploadFilterSearch,
+  toggle: elements.logoUploadFilterRegexToggle,
+  panel: elements.logoUploadFilterRegex,
+  pattern: elements.logoUploadFilterRegexPattern,
+  flags: elements.logoUploadFilterRegexFlags,
+  sample: elements.logoUploadFilterRegexSample,
+  feedback: elements.logoUploadFilterRegexFeedback,
+  matches: elements.logoUploadFilterRegexMatches,
+  mode: elements.logoUploadFilterRegexMode,
+  apply: elements.logoUploadFilterRegexApply,
+  copy: elements.logoUploadFilterRegexCopy,
+  export: elements.logoUploadFilterRegexExport,
+  fragmentSelector: "[data-logo-upload-filter-fragment]",
+  fragmentDataset: "logoUploadFilterFragment",
+  fileName: "material-download-manager-logo-upload-filter-regex.json",
+};
+
+const logoColorRegexConfig = {
+  state: logoColorRegexState,
+  search: elements.logoColorSearch,
+  toggle: elements.logoColorRegexToggle,
+  panel: elements.logoColorRegex,
+  pattern: elements.logoColorRegexPattern,
+  flags: elements.logoColorRegexFlags,
+  sample: elements.logoColorRegexSample,
+  feedback: elements.logoColorRegexFeedback,
+  matches: elements.logoColorRegexMatches,
+  mode: elements.logoColorRegexMode,
+  apply: elements.logoColorRegexApply,
+  copy: elements.logoColorRegexCopy,
+  export: elements.logoColorRegexExport,
+  fragmentSelector: "[data-logo-color-fragment]",
+  fragmentDataset: "logoColorFragment",
+  fileName: "material-download-manager-logo-color-regex.json",
+};
+
+function refreshLogoUploadFilter() {
+  const predicate = logoFilterPredicate(logoUploadFilterRegexConfig);
+  const query = elements.logoUploadFilterSearch.value.trim();
+  let visible = 0;
+  elements.logoUploadFormats.forEach((button) => {
+    const type = button.dataset.logoUploadFormat;
+    const show = predicate ? predicate(`${type} ${button.textContent}`) : false;
+    button.hidden = !show;
+    button.disabled = settings.schoolModeEnabled || !show;
+    button.setAttribute("aria-pressed", String(logoAcceptedUploadTypes.has(type)));
+    if (show) visible += 1;
+  });
+  const selected = [...logoAcceptedUploadTypes];
+  elements.logoUpload.accept = selected.join(",");
+  elements.logoUpload.disabled = settings.schoolModeEnabled || selected.length === 0;
+  elements.logoUploadFilterSummary.textContent = query
+    ? localize("logoFilterSearchSummary", settings, { visible, total: elements.logoUploadFormats.length })
+    : selected.length ? localize("logoUploadFilterSelected", settings, { count: selected.length }) : localize("logoUploadFilterEmpty", settings);
+}
+
+function refreshLogoColorSearchSummary(visible, total) {
+  const query = elements.logoColorSearch.value.trim();
+  elements.logoColorSearchSummary.textContent = query
+    ? localize("logoFilterSearchSummary", settings, { visible, total })
+    : "";
 }
 
 function updatePersonalVocabularyStatus() {
@@ -894,11 +1452,13 @@ async function loadState() {
     updateConnectionState(response?.lastResult);
     refreshSearch();
     await refreshPersonalVocabulary();
+    await loadLogo();
     await loadAuthenticatorState();
   } catch {
     showToast(localize("serviceWorkerUnavailable", settings));
     fillForm();
     await refreshPersonalVocabulary();
+    await loadLogo();
     await loadAuthenticatorState();
   }
 }
@@ -1086,7 +1646,7 @@ elements.importFile.addEventListener("change", async () => {
     elements.importFile.value = "";
   }
 });
-elements.resetSettings.addEventListener("click", async () => {
+  elements.resetSettings.addEventListener("click", async () => {
   settings = sanitizeSettings(DEFAULT_SETTINGS);
   fillForm();
   await persistSettings("settingsReset");
@@ -1220,6 +1780,192 @@ document.querySelectorAll("[data-authenticator-fragment]").forEach((button) => {
     elements.authenticatorListRegexPattern.dispatchEvent(new Event("input"));
   });
 });
+
+elements.logoFocusSearch.addEventListener("click", () => {
+    applyTab("appearance");
+    elements.search.value = "logo";
+    refreshSearch();
+    elements.search.focus();
+  });
+  document.querySelectorAll("[data-logo-preset]").forEach((button) => {
+    button.addEventListener("click", () => {
+      if (button.hidden || settings.schoolModeEnabled) return;
+      logoSource = { kind: "preset", presetId: button.dataset.logoPreset };
+      stagedLogo = null;
+      refreshLogoPresentation();
+      scheduleLogoPreview();
+    });
+  });
+  elements.logoApplyPreset.addEventListener("click", async () => {
+    if (settings.schoolModeEnabled) return;
+    elements.logoApplyPreset.disabled = true;
+    try {
+      const record = await createPresetLogoRecord(logoSource.presetId ?? "material-stack", logoControls());
+      await saveLogoRecord(record);
+    } catch (error) {
+      elements.logoStatus.textContent = logoErrorMessage(error);
+    } finally {
+      refreshLogoPresentation();
+    }
+  });
+  elements.logoUpload.addEventListener("change", async () => {
+    const file = elements.logoUpload.files?.[0];
+    if (!file || settings.schoolModeEnabled) return;
+    try {
+      if (file.size > LOGO_LIMITS.inputBytes) {
+        const error = new Error("logo-file-size");
+        error.code = "logo-file-size";
+        throw error;
+      }
+      const inspection = inspectLogoBytes(new Uint8Array(await file.arrayBuffer()));
+      if (!logoAcceptedUploadTypes.has(inspection.type)) {
+        const error = new Error("logo-upload-filter");
+        error.code = "logo-upload-filter";
+        throw error;
+      }
+      stagedLogo = { source: file, record: null, status: localize("logoFileSelected", settings) };
+      elements.logoUploadStatus.textContent = stagedLogo.status;
+      updateLogoControlOutputs();
+      scheduleLogoPreview();
+    } catch (error) {
+      stagedLogo = null;
+      elements.logoUploadStatus.textContent = logoErrorMessage(error);
+      updateLogoControlOutputs();
+    } finally {
+      elements.logoUpload.value = "";
+    }
+  });
+  [...elements.logoFitOptions, elements.logoCropZoom, elements.logoFocalX, elements.logoFocalY].forEach((control) => {
+    control.addEventListener("input", () => {
+      updateLogoControlOutputs();
+      scheduleLogoPreview();
+    });
+    control.addEventListener("change", () => {
+      updateLogoControlOutputs();
+      scheduleLogoPreview();
+    });
+  });
+  elements.logoTransparentBackground.addEventListener("change", () => {
+    updateLogoControlOutputs();
+    renderLogoColorTranslations();
+    scheduleLogoPreview();
+  });
+  elements.logoBackground.addEventListener("input", () => {
+    elements.logoColorValue.value = logoBackgroundWithAlpha().toUpperCase();
+    renderLogoColorTranslations();
+    scheduleLogoPreview();
+  });
+  elements.logoBackgroundAlpha.addEventListener("input", () => {
+    updateLogoControlOutputs();
+    elements.logoColorValue.value = logoBackgroundWithAlpha().toUpperCase();
+    renderLogoColorTranslations();
+    scheduleLogoPreview();
+  });
+  elements.logoColorValue.addEventListener("input", () => {
+    if (elements.logoTransparentBackground.checked) return;
+    const normalized = parseColorInput(elements.logoColorValue.value);
+    if (!normalized) {
+      elements.logoColorStatus.textContent = localize("logoColorInvalid", settings);
+      return;
+    }
+    setLogoBackgroundColor(normalized);
+    updateLogoControlOutputs();
+    renderLogoColorTranslations();
+    scheduleLogoPreview();
+  });
+  elements.logoApplyCustom.addEventListener("click", async () => {
+    if (settings.schoolModeEnabled) return;
+    elements.logoApplyCustom.disabled = true;
+    try {
+      const source = activeLogoSource();
+      if (!source) throw new Error("logo-missing-source");
+      const record = stagedLogo?.record ?? await createCustomLogoRecord(source, logoControls());
+      await saveLogoRecord(record);
+    } catch (error) {
+      elements.logoStatus.textContent = logoErrorMessage(error);
+    } finally {
+      refreshLogoPresentation();
+    }
+  });
+  elements.logoReset.addEventListener("click", async () => {
+    if (settings.schoolModeEnabled) return;
+    try {
+      const response = await chrome.runtime.sendMessage({ type: "CLEAR_LOGO" });
+      if (!response?.ok) throw new Error(response?.result?.code ?? "logo-storage-failed");
+      logo = null;
+      stagedLogo = null;
+      logoSource = { kind: "preset", presetId: "material-stack" };
+      fillLogoControls(null);
+      renderLogoPreviews(null);
+      elements.logoStatus.textContent = response.actionUpdated ? localize("logoResetComplete", settings) : localize("logoSavedActionRetry", settings);
+    } catch (error) {
+      elements.logoStatus.textContent = error?.message === "logo-school-mode-hidden"
+        ? localize("logoSchoolModeSuppressed", settings, { name: settings.schoolModeName })
+        : localize("logoStorageFailed", settings);
+    } finally {
+      refreshLogoPresentation();
+    }
+  });
+  elements.logoPresetSearch.addEventListener("input", () => {
+    if (logoPresetRegexMode) elements.logoPresetRegexPattern.value = elements.logoPresetSearch.value;
+    refreshLogoPresetSearch();
+  });
+  elements.logoPresetRegexToggle.addEventListener("click", () => {
+    logoPresetRegexOpen = !logoPresetRegexOpen;
+    elements.logoPresetRegex.hidden = !logoPresetRegexOpen;
+    elements.logoPresetRegexToggle.setAttribute("aria-expanded", String(logoPresetRegexOpen));
+    if (logoPresetRegexOpen) elements.logoPresetRegexPattern.focus();
+  });
+  [elements.logoPresetRegexPattern, elements.logoPresetRegexFlags, elements.logoPresetRegexSample].forEach((input) => input.addEventListener("input", evaluateLogoPresetRegex));
+  document.querySelectorAll("[data-logo-fragment]").forEach((button) => {
+    button.addEventListener("click", () => {
+      elements.logoPresetRegexPattern.value = appendRegexFragment(elements.logoPresetRegexPattern.value, button.dataset.logoFragment);
+      elements.logoPresetRegexPattern.focus();
+      evaluateLogoPresetRegex();
+    });
+  });
+  elements.logoPresetRegexMode.addEventListener("change", () => {
+    logoPresetRegexMode = elements.logoPresetRegexMode.checked;
+    if (logoPresetRegexMode) elements.logoPresetRegexPattern.value = elements.logoPresetSearch.value;
+    refreshLogoPresetSearch();
+  });
+  elements.logoPresetRegexApply.addEventListener("click", () => {
+    const validation = validateRegex(elements.logoPresetRegexPattern.value, elements.logoPresetRegexFlags.value);
+    if (!validation.valid) { evaluateLogoPresetRegex(); return; }
+    elements.logoPresetSearch.value = elements.logoPresetRegexPattern.value;
+    elements.logoPresetRegexMode.checked = true;
+    logoPresetRegexMode = true;
+    refreshLogoPresetSearch();
+  });
+  elements.logoPresetRegexCopy.addEventListener("click", async () => {
+    try {
+      await navigator.clipboard.writeText(`/${elements.logoPresetRegexPattern.value}/${elements.logoPresetRegexFlags.value}`);
+      showToast(localize("regexPatternCopied", settings));
+    } catch {
+      showToast(localize("copyFailed", settings));
+    }
+  });
+  elements.logoPresetRegexExport.addEventListener("click", () => {
+    const blob = new Blob([JSON.stringify({ pattern: elements.logoPresetRegexPattern.value, flags: elements.logoPresetRegexFlags.value }, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = "material-download-manager-logo-preset-regex.json";
+    anchor.click();
+    URL.revokeObjectURL(url);
+  });
+  elements.logoUploadFormats.forEach((button) => {
+    button.addEventListener("click", () => {
+      const type = button.dataset.logoUploadFormat;
+      if (!type || button.hidden || settings.schoolModeEnabled) return;
+      if (logoAcceptedUploadTypes.has(type)) logoAcceptedUploadTypes.delete(type);
+      else logoAcceptedUploadTypes.add(type);
+      refreshLogoUploadFilter();
+    });
+  });
+  wireLogoFilterRegexBuilder(logoUploadFilterRegexConfig, refreshLogoUploadFilter);
+  wireLogoFilterRegexBuilder(logoColorRegexConfig, renderLogoColorTranslations);
+  refreshLogoUploadFilter();
 elements.authenticatorListRegexMode.addEventListener("change", () => {
   authenticatorListRegexMode = elements.authenticatorListRegexMode.checked;
   if (authenticatorListRegexMode) elements.authenticatorListRegexPattern.value = elements.authenticatorListSearch.value;
@@ -1278,6 +2024,8 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
     fillForm();
     refreshSearch();
     refreshAuthenticatorPresentation();
+    updateConnectionState(lastConnectionResult);
+    void loadLogo();
   }
   if (changes[PERSONAL_VOCABULARY_STORAGE_KEY]) {
     void refreshPersonalVocabulary().then(() => {
@@ -1286,7 +2034,7 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
       refreshSearch();
     });
   }
-  if (changes[SETTINGS_KEY]) updateConnectionState(lastConnectionResult);
+  if (changes[LOGO_STORAGE_KEY]) void loadLogo();
 });
 
 await loadState();

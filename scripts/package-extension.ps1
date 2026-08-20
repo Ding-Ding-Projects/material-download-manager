@@ -22,11 +22,63 @@ $maxArchiveUncompressedBytes = 64MB
 $maxArchiveSignatureCandidates = 32
 $maxManifestBytes = 16KB
 $maxPairingBytes = 4KB
+$maxStaticIconBytes = 512KB
+$staticIconPaths = [ordered]@{
+  '16' = 'assets/icons/icon16.png'
+  '32' = 'assets/icons/icon32.png'
+  '48' = 'assets/icons/icon48.png'
+  '128' = 'assets/icons/icon128.png'
+}
 $forbiddenMaterialExtensionPattern = '(?i)\.(?:pem|key|pfx|p12|cer|crt|der|jks|keystore|pk8|crx)$'
 $forbiddenKeyMarkerPattern = '(?im)-----BEGIN (?:[A-Z0-9-]+ )*(?:PRIVATE KEY|CERTIFICATE)-----'
 $crxMagic = [byte[]](0x43, 0x72, 0x32, 0x34)
 $zipMagic = [byte[]](0x50, 0x4b, 0x03, 0x04)
 Add-Type -AssemblyName System.IO.Compression.FileSystem
+
+function Assert-StaticExtensionIcons($Manifest, [string]$Root, [string]$Label) {
+  if ($null -eq $Manifest.icons -or $Manifest.icons -isnot [psobject]) {
+    Stop-WithMessage "$Label must declare packaged static icons."
+  }
+  if ($null -eq $Manifest.action -or $Manifest.action -isnot [psobject] -or
+      $null -eq $Manifest.action.default_icon -or $Manifest.action.default_icon -isnot [psobject]) {
+    Stop-WithMessage "$Label must declare action.default_icon static fallbacks."
+  }
+
+  foreach ($sizeText in $staticIconPaths.Keys) {
+    $expectedPath = [string]$staticIconPaths[$sizeText]
+    foreach ($iconSetName in @('icons', 'action.default_icon')) {
+      $iconSet = if ($iconSetName -eq 'icons') { $Manifest.icons } else { $Manifest.action.default_icon }
+      $property = $iconSet.PSObject.Properties[$sizeText]
+      if ($null -eq $property -or [string]$property.Value -ne $expectedPath) {
+        Stop-WithMessage "$Label ${iconSetName}[$sizeText] must be $expectedPath."
+      }
+    }
+
+    $iconPath = Join-Path $Root $expectedPath
+    if (-not (Test-Path -LiteralPath $iconPath -PathType Leaf)) {
+      Stop-WithMessage "$Label static icon is missing: $expectedPath"
+    }
+    $iconInfo = Get-Item -LiteralPath $iconPath
+    if ($iconInfo.Length -lt 33 -or $iconInfo.Length -gt $maxStaticIconBytes) {
+      Stop-WithMessage "$Label static icon has an invalid byte size: $expectedPath"
+    }
+    $iconBytes = [System.IO.File]::ReadAllBytes($iconPath)
+    $pngSignature = [byte[]](137, 80, 78, 71, 13, 10, 26, 10)
+    for ($index = 0; $index -lt $pngSignature.Length; $index += 1) {
+      if ($iconBytes[$index] -ne $pngSignature[$index]) {
+        Stop-WithMessage "$Label static icon is not a PNG: $expectedPath"
+      }
+    }
+    if ([System.Text.Encoding]::ASCII.GetString($iconBytes, 12, 4) -ne 'IHDR') {
+      Stop-WithMessage "$Label static icon has no PNG IHDR: $expectedPath"
+    }
+    $expectedSize = [byte][int]$sizeText
+    if ($iconBytes[16] -ne 0 -or $iconBytes[17] -ne 0 -or $iconBytes[18] -ne 0 -or $iconBytes[19] -ne $expectedSize -or
+        $iconBytes[20] -ne 0 -or $iconBytes[21] -ne 0 -or $iconBytes[22] -ne 0 -or $iconBytes[23] -ne $expectedSize) {
+      Stop-WithMessage "$Label static icon dimensions do not match $sizeText x $sizeText: $expectedPath"
+    }
+  }
+}
 
 function Find-MagicOffset([byte[]]$Bytes, [byte[]]$Magic, [int]$MaximumOffset, [int]$StartOffset = 0) {
   if ($null -eq $Bytes -or $Bytes.Length -lt $Magic.Length) {
@@ -220,6 +272,7 @@ if ([string]::IsNullOrWhiteSpace([string]$extensionManifest.name)) {
 if ($extensionManifest.PSObject.Properties.Name -contains 'key') {
   Stop-WithMessage 'Extension manifest must not embed a signing key.'
 }
+Assert-StaticExtensionIcons $extensionManifest $extensionRootFull 'Extension manifest'
 $pairingSourcePath = Join-Path $extensionRootFull 'src/shared/pairing.js'
 if (-not (Test-Path -LiteralPath $pairingSourcePath -PathType Leaf)) {
   Stop-WithMessage 'Extension source is missing the empty pairing capability module.'
@@ -232,8 +285,8 @@ if ($pairingSource -notmatch '(?m)^\s*export const HANDOFF_CAPABILITY = "";\s*$'
 
 # The zip carries exactly what "Load unpacked" needs, plus the extension's own
 # documentation. Tests and npm metadata stay out of the installable payload.
-$payloadEntries = @('manifest.json', 'src', 'README.md', 'docs')
-foreach ($entry in @('manifest.json', 'src')) {
+$payloadEntries = @('manifest.json', 'src', 'assets', 'README.md', 'docs')
+foreach ($entry in @('manifest.json', 'src', 'assets')) {
   if (-not (Test-Path -LiteralPath (Join-Path $extensionRootFull $entry))) {
     Stop-WithMessage "Required extension payload entry is missing: $entry"
   }
@@ -264,6 +317,7 @@ try {
     $stagedManifest | Add-Member -MemberType NoteProperty -Name 'version' -Value $Version
   }
   $stagedManifest | ConvertTo-Json -Depth 20 | Set-Content -LiteralPath $stagedManifestPath -Encoding utf8NoBOM
+  Assert-StaticExtensionIcons $stagedManifest $stagingDirectory 'Packaged extension manifest'
   $stagedPairingPath = Join-Path $stagingDirectory 'src/shared/pairing.js'
   $stagedPairing = Get-Content -LiteralPath $stagedPairingPath -Raw
   if ($stagedPairing -notmatch '(?m)^\s*export const HANDOFF_CAPABILITY = "";\s*$' -or
@@ -380,7 +434,7 @@ try {
     Stop-WithMessage 'The packaged archive has no bounded empty pairing capability module.'
   }
 
-  $requiredArchiveEntries = @('manifest.json', 'src/shared/pairing.js')
+  $requiredArchiveEntries = @('manifest.json', 'src/shared/pairing.js') + @($staticIconPaths.Values)
   foreach ($referencedPath in @(
       [string]$embeddedManifest.background.service_worker,
       [string]$embeddedManifest.action.default_popup,

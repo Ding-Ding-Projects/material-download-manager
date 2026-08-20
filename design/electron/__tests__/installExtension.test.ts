@@ -21,6 +21,21 @@ import {
 } from "../extension/installExtension";
 
 const TEST_CAPABILITY = "a".repeat(43);
+const STATIC_ICON_PATHS = Object.freeze({
+  16: "assets/icons/icon16.png",
+  32: "assets/icons/icon32.png",
+  48: "assets/icons/icon48.png",
+  128: "assets/icons/icon128.png",
+});
+
+function staticIconPng(size: number): Buffer {
+  const bytes = Buffer.alloc(33);
+  Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]).copy(bytes);
+  bytes.write("IHDR", 12, "ascii");
+  bytes[19] = size;
+  bytes[23] = size;
+  return bytes;
+}
 
 test("extension install result keeps staging success separate from folder-open state", async () => {
   const openedPaths: string[] = [];
@@ -66,8 +81,19 @@ async function makeSource(root: string): Promise<string> {
   const source = path.join(root, "extension");
   await fsp.mkdir(path.join(source, "src"), { recursive: true });
   await fsp.mkdir(path.join(source, "docs"), { recursive: true });
-  await fsp.writeFile(path.join(source, "manifest.json"), '{"manifest_version":3,"name":"x","version":"0.0.0","background":{"service_worker":"src/service-worker.js"}}');
+  await fsp.mkdir(path.join(source, "assets", "icons"), { recursive: true });
+  await fsp.writeFile(path.join(source, "manifest.json"), JSON.stringify({
+    manifest_version: 3,
+    name: "x",
+    version: "0.0.0",
+    background: { service_worker: "src/service-worker.js" },
+    icons: STATIC_ICON_PATHS,
+    action: { default_icon: STATIC_ICON_PATHS },
+  }));
   await fsp.writeFile(path.join(source, "src", "service-worker.js"), "// worker");
+  for (const [sizeText, relativePath] of Object.entries(STATIC_ICON_PATHS)) {
+    await fsp.writeFile(path.join(source, relativePath), staticIconPng(Number(sizeText)));
+  }
   await fsp.writeFile(path.join(source, "README.md"), "# extension");
   await fsp.writeFile(path.join(source, "docs", "contract.md"), "# contract");
   return source;
@@ -89,6 +115,7 @@ test("installBrowserExtension stages a loadable payload and reports it installed
     // manifest.json sits at the target root so Load unpacked works directly.
     await fsp.access(path.join(installed, "manifest.json"));
     await fsp.access(path.join(installed, "src", "service-worker.js"));
+    await fsp.access(path.join(installed, "assets", "icons", "icon128.png"));
     assert.match(await fsp.readFile(path.join(installed, "src", "shared", "pairing.js"), "utf8"), new RegExp(TEST_CAPABILITY));
     await fsp.access(path.join(installed, "README.md"));
 
@@ -128,6 +155,24 @@ test("installBrowserExtension refuses an incomplete source", async () => {
 
     await assert.rejects(() => installBrowserExtension(source, userData, TEST_CAPABILITY), /service-worker\.js|missing/);
     // A refused install leaves nothing half-staged that would look installed.
+    assert.equal(await installedExtensionPath(userData, TEST_CAPABILITY), null);
+  } finally {
+    await fsp.rm(root, { recursive: true, force: true });
+  }
+});
+
+test("installBrowserExtension rejects a missing or malformed static manifest icon", async () => {
+  const root = await fsp.mkdtemp(path.join(os.tmpdir(), "mdm-ext-static-icon-"));
+  try {
+    const source = await makeSource(root);
+    const userData = path.join(root, "userData");
+    await fsp.mkdir(userData, { recursive: true });
+
+    await fsp.rm(path.join(source, STATIC_ICON_PATHS[48]));
+    await assert.rejects(() => installBrowserExtension(source, userData, TEST_CAPABILITY), /static icon.*missing/i);
+
+    await fsp.writeFile(path.join(source, STATIC_ICON_PATHS[48]), staticIconPng(16));
+    await assert.rejects(() => installBrowserExtension(source, userData, TEST_CAPABILITY), /48 x 48 PNG/);
     assert.equal(await installedExtensionPath(userData, TEST_CAPABILITY), null);
   } finally {
     await fsp.rm(root, { recursive: true, force: true });

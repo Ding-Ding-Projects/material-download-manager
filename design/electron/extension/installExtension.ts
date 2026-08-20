@@ -16,10 +16,17 @@ import {
 export const BROWSER_EXTENSION_DIRECTORY_NAME = "browser-extension";
 
 const REQUIRED_PAYLOAD = ["manifest.json", path.join("src", "service-worker.js")];
-const PAYLOAD_ENTRIES = ["manifest.json", "src", "README.md", "docs"];
+const PAYLOAD_ENTRIES = ["manifest.json", "src", "assets", "README.md", "docs"];
 const CAPABILITY_MODULE = path.join("src", "shared", "pairing.js");
 const CAPABILITY_PATTERN = /^[A-Za-z0-9_-]{43}$/u;
 const CHROME_OPEN_TIMEOUT_MS = 2_000;
+const STATIC_ICON_PATHS = Object.freeze({
+  16: "assets/icons/icon16.png",
+  32: "assets/icons/icon32.png",
+  48: "assets/icons/icon48.png",
+  128: "assets/icons/icon128.png",
+});
+const PNG_SIGNATURE = [137, 80, 78, 71, 13, 10, 26, 10];
 
 let installQueue: Promise<unknown> = Promise.resolve();
 
@@ -56,6 +63,39 @@ async function isPresent(candidate: string): Promise<boolean> {
   }
 }
 
+async function assertStaticExtensionIcons(root: string, record: Record<string, unknown>, label: string): Promise<void> {
+  const action = record.action;
+  if (!record.icons || typeof record.icons !== "object" || !action || typeof action !== "object") {
+    throw new Error(`${label} must declare packaged static extension icons`);
+  }
+  const defaultIcon = (action as Record<string, unknown>).default_icon;
+  if (!defaultIcon || typeof defaultIcon !== "object") {
+    throw new Error(`${label} must declare action.default_icon static fallbacks`);
+  }
+
+  for (const [sizeText, expectedPath] of Object.entries(STATIC_ICON_PATHS)) {
+    for (const [iconSetLabel, iconSet] of [["icons", record.icons], ["action.default_icon", defaultIcon]] as const) {
+      if ((iconSet as Record<string, unknown>)[sizeText] !== expectedPath) {
+        throw new Error(`${label} ${iconSetLabel}[${sizeText}] must be ${expectedPath}`);
+      }
+    }
+    if (!isSafeRelativePath(expectedPath)) throw new Error(`${label} declared an unsafe static icon path`);
+    const candidate = path.join(root, expectedPath);
+    await assertRegularPath(candidate, `${label} ${expectedPath}`);
+    const stat = await fsp.lstat(candidate);
+    if (!stat.isFile() || stat.size < 33 || stat.size > 512 * 1024) {
+      throw new Error(`${label} static icon ${expectedPath} is not a bounded regular file`);
+    }
+    const bytes = await fsp.readFile(candidate);
+    if (!PNG_SIGNATURE.every((byte, index) => bytes[index] === byte)
+      || bytes.subarray(12, 16).toString("ascii") !== "IHDR"
+      || bytes[16] !== 0 || bytes[17] !== 0 || bytes[18] !== 0 || bytes[19] !== Number(sizeText)
+      || bytes[20] !== 0 || bytes[21] !== 0 || bytes[22] !== 0 || bytes[23] !== Number(sizeText)) {
+      throw new Error(`${label} static icon ${expectedPath} is not the declared ${sizeText} x ${sizeText} PNG`);
+    }
+  }
+}
+
 async function assertLoadablePayload(root: string, label: string, requireCapability = false): Promise<void> {
   await assertRegularPath(root, label);
   const rootStat = await fsp.lstat(root);
@@ -81,6 +121,7 @@ async function assertLoadablePayload(root: string, label: string, requireCapabil
   if (!background || typeof background !== "object" || typeof (background as Record<string, unknown>).service_worker !== "string") {
     throw new Error(`${label} manifest.json must declare a background service worker`);
   }
+  await assertStaticExtensionIcons(root, record, label);
   const declaredFiles = [
     (background as Record<string, unknown>).service_worker,
     record.options_page,

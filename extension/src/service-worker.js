@@ -36,6 +36,12 @@ import { appendDisplayNameMutation } from "./shared/mutation-journal.js";
 import { createNarrator } from "./shared/narrator.js";
 import { createChromeTtsAdapter } from "./shared/chrome-tts.js";
 import { createAuthenticatorStore } from "./shared/authenticator-store.js";
+import {
+  LOGO_STORAGE_KEY,
+  createActionIconImageData,
+  logoDisplayDescriptor,
+  rehydrateLogoRecord,
+} from "./shared/logo.js";
 
 const MENU_ID = "send-to-material-download-manager";
 const STATUS_TIMEOUT_MS = 1_500;
@@ -99,6 +105,7 @@ const RESULT_NARRATION_CATEGORIES = Object.freeze({
 });
 let contextMenuRefresh = Promise.resolve();
 let downloadClaimMutation = Promise.resolve();
+let logoMutation = Promise.resolve();
 let initializationPromise = null;
 // A warm worker can make a capture decision without a second storage round
 // trip. The cache is deliberately empty on cold start, so a disabled setting
@@ -135,6 +142,89 @@ async function refreshPersonalVocabulary() {
   const state = await readPersonalVocabulary(chrome.storage.local);
   setActivePersonalVocabulary(state.replacements);
   return state;
+}
+
+async function readLogoRecord() {
+  const stored = await chrome.storage.local.get(LOGO_STORAGE_KEY);
+  if (!Object.prototype.hasOwnProperty.call(stored, LOGO_STORAGE_KEY)) return { logo: null, cacheState: "default" };
+  try {
+    // Rehydrate from the source and controls every time. Derived cache PNGs
+    // are not authoritative pixels and cannot impersonate another source.
+    return { logo: await rehydrateLogoRecord(stored[LOGO_STORAGE_KEY]), cacheState: "loaded" };
+  } catch {
+    // A corrupt cache never partially applies. Remove only this local logo
+    // key, then fall back to the shipped mark without exposing image data.
+    try { await chrome.storage.local.remove?.(LOGO_STORAGE_KEY); } catch { /* A later retry retains the same fail-closed fallback. */ }
+    return { logo: null, cacheState: "corrupt-reset" };
+  }
+}
+
+async function applyLogoToAction(logo) {
+  if (typeof chrome.action?.setIcon !== "function") throw new Error("The browser action icon API is unavailable.");
+  await chrome.action.setIcon({ imageData: await createActionIconImageData(logo) });
+}
+
+async function refreshActionLogo() {
+  const [settings, state] = await Promise.all([readSettings(), readLogoRecord()]);
+  try {
+    await applyLogoToAction(settings.schoolModeEnabled ? null : state.logo);
+    return { updated: true, cacheState: state.cacheState };
+  } catch {
+    return { updated: false, cacheState: state.cacheState };
+  }
+}
+
+function mutateLogo(mutator) {
+  logoMutation = logoMutation.catch(() => {}).then(mutator);
+  return logoMutation;
+}
+
+async function saveLogo(candidate) {
+  return mutateLogo(async () => {
+    const settings = await readSettings();
+    if (settings.schoolModeEnabled) {
+      const error = new Error("School mode hides custom logo controls.");
+      error.code = "logo-school-mode-hidden";
+      throw error;
+    }
+    let logo;
+    try {
+      logo = await rehydrateLogoRecord(candidate);
+    } catch {
+      const error = new Error("The logo record failed local validation.");
+      error.code = "logo-invalid-record";
+      throw error;
+    }
+    try {
+      await chrome.storage.local.set({ [LOGO_STORAGE_KEY]: logo });
+    } catch {
+      const failure = new Error("The logo could not be saved locally.");
+      failure.code = "logo-storage-failed";
+      throw failure;
+    }
+    const action = await refreshActionLogo();
+    return { logo, actionUpdated: action.updated, cacheState: action.cacheState };
+  });
+}
+
+async function clearLogo() {
+  return mutateLogo(async () => {
+    const settings = await readSettings();
+    if (settings.schoolModeEnabled) {
+      const error = new Error("School mode hides custom logo controls.");
+      error.code = "logo-school-mode-hidden";
+      throw error;
+    }
+    try {
+      await chrome.storage.local.remove(LOGO_STORAGE_KEY);
+    } catch {
+      const failure = new Error("The logo cache could not be cleared.");
+      failure.code = "logo-storage-failed";
+      throw failure;
+    }
+    const action = await refreshActionLogo();
+    return { logo: null, actionUpdated: action.updated, cacheState: action.cacheState };
+  });
 }
 
 async function narrateResult(value) {
@@ -839,6 +929,7 @@ function initialize() {
         // Timer polling still handles the normal path.  The next worker event
         // retries recovery if this browser does not expose alarms.
       }
+      await refreshActionLogo();
       await recoverAutomaticDownloads();
     })();
   }
@@ -878,15 +969,20 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
       .then(refreshContextMenu)
       .catch(() => setActivePersonalVocabulary(null));
   }
-  if (!changes[SETTINGS_KEY]) return;
-  const settings = sanitizeSettings(changes[SETTINGS_KEY].newValue);
-  cachedSettings = settings;
-  // Revalidate every narrator-affecting setting change, including School mode,
-  // language, funny levels, sound, and reduced-motion state. This prevents an
-  // in-flight event from speaking with stale language or tone after a change.
-  narratorSettingsGeneration += 1;
-  narrator.cancel();
-  void refreshContextMenu(settings);
+  if (changes[SETTINGS_KEY]) {
+    const settings = sanitizeSettings(changes[SETTINGS_KEY].newValue);
+    cachedSettings = settings;
+    // Revalidate every narrator-affecting setting change, including School mode,
+    // language, funny levels, sound, and reduced-motion state. This prevents an
+    // in-flight event from speaking with stale language or tone after a change.
+    narratorSettingsGeneration += 1;
+    narrator.cancel();
+    void refreshContextMenu(settings);
+    void mutateLogo(refreshActionLogo);
+  }
+  if (changes[LOGO_STORAGE_KEY]) {
+    void mutateLogo(refreshActionLogo);
+  }
 });
 
 chrome.downloads.onCreated.addListener((item) => {
@@ -924,8 +1020,9 @@ chrome.runtime.onMessage.addListener((rawMessage, sender, sendResponse) => {
 
   void (async () => {
     if (message.type === "GET_STATE") {
-      const personalVocabulary = await refreshPersonalVocabulary();
-      sendResponse({ ok: true, settings: await readSettings(), lastResult: await readLastResult(), personalVocabulary: { status: personalVocabulary.status } });
+      const [personalVocabulary, settings, logoState, lastResult] = await Promise.all([refreshPersonalVocabulary(), readSettings(), readLogoRecord(), readLastResult()]);
+      const visibleLogo = settings.schoolModeEnabled ? null : logoState.logo;
+      sendResponse({ ok: true, settings, lastResult, personalVocabulary: { status: personalVocabulary.status }, logo: logoDisplayDescriptor(visibleLogo), logoCacheState: logoState.cacheState, logoSchoolModeSuppressed: settings.schoolModeEnabled });
       return;
     }
     if (message.type === "GET_PERSONAL_VOCABULARY_STATE") {
@@ -947,6 +1044,31 @@ chrome.runtime.onMessage.addListener((rawMessage, sender, sendResponse) => {
       await clearPersonalVocabulary(chrome.storage.local);
       setActivePersonalVocabulary(null);
       sendResponse({ ok: true, result: { ok: true, status: "empty" } });
+      return;
+    }
+    if (message.type === "GET_LOGO") {
+      const [settings, state] = await Promise.all([readSettings(), readLogoRecord()]);
+      const visibleLogo = settings.schoolModeEnabled ? null : state.logo;
+      sendResponse({ ok: true, logo: visibleLogo, display: logoDisplayDescriptor(visibleLogo), cacheState: state.cacheState, schoolModeSuppressed: settings.schoolModeEnabled });
+      return;
+    }
+    if (message.type === "SAVE_LOGO") {
+      try {
+        const saved = await saveLogo(message.logo);
+        sendResponse({ ok: true, logo: saved.logo, display: logoDisplayDescriptor(saved.logo), actionUpdated: saved.actionUpdated, cacheState: saved.cacheState });
+      } catch (error) {
+        const code = ["logo-storage-failed", "logo-school-mode-hidden"].includes(error?.code) ? error.code : "logo-invalid-record";
+        sendResponse({ ok: false, result: { ok: false, code } });
+      }
+      return;
+    }
+    if (message.type === "CLEAR_LOGO") {
+      try {
+        const cleared = await clearLogo();
+        sendResponse({ ok: true, logo: null, display: logoDisplayDescriptor(null), actionUpdated: cleared.actionUpdated, cacheState: cleared.cacheState });
+      } catch (error) {
+        sendResponse({ ok: false, result: { ok: false, code: error?.code === "logo-school-mode-hidden" ? "logo-school-mode-hidden" : "logo-storage-failed" } });
+      }
       return;
     }
     if (message.type === "GET_AUTHENTICATOR_STATE") {

@@ -1,4 +1,5 @@
 import { DEFAULT_SETTINGS, SETTINGS_KEY, sanitizeSettings } from "./shared/settings.js";
+import { LOGO_STORAGE_KEY, logoDisplayDescriptor } from "./shared/logo.js";
 import { normalizeDownloadUrl } from "./shared/handoff.js";
 import { decorateMessage, localize, setActivePersonalVocabulary } from "./shared/localization.js";
 import { PERSONAL_VOCABULARY_STORAGE_KEY, readPersonalVocabulary } from "./shared/personal-vocabulary.js";
@@ -17,6 +18,7 @@ async function refreshPersonalVocabulary() {
 
 const elements = {
   managerName: document.querySelector("#manager-name"),
+  logo: document.querySelector("#popup-logo"),
   popupTitle: document.querySelector("#popup-title"),
   statusMessage: document.querySelector("#status-message"),
   recoveryMessage: document.querySelector("#recovery-message"),
@@ -41,6 +43,13 @@ function applyLanguage() {
   elements.recoveryMessage.textContent = settings.handoffEndpoint
     ? localize("readyBody", settings)
     : localize("optionsRecovery", settings);
+}
+
+function applyLogo(descriptor) {
+  const logo = descriptor && typeof descriptor === "object" ? descriptor : logoDisplayDescriptor(null, 48);
+  elements.logo.src = logo.previewDataUrl;
+  elements.logo.alt = localize("logoPreviewAlt", settings, { name: settings.managerName, preset: localize(`logoPreset${logo.presetId === "download-orbit" ? "DownloadOrbit" : logo.presetId === "handoff-ribbon" ? "HandoffRibbon" : "MaterialStack"}`, settings) });
+  elements.logo.style.backgroundColor = logo.background === "transparent" ? "transparent" : logo.background;
 }
 
 function resultMessage(value) {
@@ -87,6 +96,7 @@ async function renderState(state) {
   await refreshPersonalVocabulary();
   applyLanguage();
   renderStatus();
+  applyLogo(state?.logo);
   elements.sendButton.disabled = !settings.handoffEndpoint || !normalizeDownloadUrl(elements.url.value);
 }
 
@@ -149,7 +159,7 @@ elements.optionsButton.addEventListener("click", () => {
 });
 
 chrome.storage.onChanged.addListener((changes, areaName) => {
-  if (areaName !== "local" || (!changes[SETTINGS_KEY] && !changes[PERSONAL_VOCABULARY_STORAGE_KEY])) return;
+  if (areaName !== "local" || (!changes[SETTINGS_KEY] && !changes[PERSONAL_VOCABULARY_STORAGE_KEY] && !changes[LOGO_STORAGE_KEY])) return;
   void (async () => {
     if (changes[SETTINGS_KEY]) settings = sanitizeSettings(changes[SETTINGS_KEY].newValue);
     if (changes[PERSONAL_VOCABULARY_STORAGE_KEY]) await refreshPersonalVocabulary();
@@ -157,6 +167,12 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
     renderStatus();
     elements.sendButton.disabled = !settings.handoffEndpoint || !normalizeDownloadUrl(elements.url.value);
   })();
+  if (areaName === "local" && changes[LOGO_STORAGE_KEY]) {
+    void getState().then((state) => {
+      if (state) renderState(state);
+      else applyLanguage();
+    });
+  }
 });
 
 const state = await getState();

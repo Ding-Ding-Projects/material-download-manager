@@ -169,7 +169,20 @@ try {
       $reader.Dispose()
     }
     Assert-Equal ([string]$embeddedManifest.version) '7.8.9' 'embedded manifest version is stamped'
-    foreach ($required in @('manifest.json', [string]$embeddedManifest.background.service_worker, [string]$embeddedManifest.action.default_popup, [string]$embeddedManifest.options_page)) {
+    foreach ($required in @(
+        'manifest.json',
+        [string]$embeddedManifest.background.service_worker,
+        [string]$embeddedManifest.action.default_popup,
+        [string]$embeddedManifest.options_page,
+        [string]$embeddedManifest.icons.'16',
+        [string]$embeddedManifest.icons.'32',
+        [string]$embeddedManifest.icons.'48',
+        [string]$embeddedManifest.icons.'128',
+        [string]$embeddedManifest.action.default_icon.'16',
+        [string]$embeddedManifest.action.default_icon.'32',
+        [string]$embeddedManifest.action.default_icon.'48',
+        [string]$embeddedManifest.action.default_icon.'128'
+      ) | Select-Object -Unique) {
       Assert-True ($archiveNames -contains $required) "ZIP includes manifest-referenced entry $required"
     }
     Assert-True (@($archiveNames | Where-Object { $_ -match '(?i)\.(?:pem|key|pfx|p12|cer|crt|der|jks|keystore|pk8|crx)$' }).Count -eq 0) 'ZIP contains no signing or CRX material'
@@ -556,18 +569,29 @@ try {
 
   $fakeExtensionPayload = Join-Path $tempRoot 'fake-pages-extension-payload'
   New-Item -ItemType Directory -Path (Join-Path $fakeExtensionPayload 'src/shared') -Force | Out-Null
+  New-Item -ItemType Directory -Path (Join-Path $fakeExtensionPayload 'assets/icons') -Force | Out-Null
+  $fakeStaticIcons = [ordered]@{
+    '16' = 'assets/icons/icon16.png'
+    '32' = 'assets/icons/icon32.png'
+    '48' = 'assets/icons/icon48.png'
+    '128' = 'assets/icons/icon128.png'
+  }
   [ordered]@{
     manifest_version = 3
     name = 'Fixture extension'
     version = '7.8.9'
     background = [ordered]@{ service_worker = 'src/service-worker.js'; type = 'module' }
-    action = [ordered]@{ default_popup = 'src/popup.html' }
+    icons = $fakeStaticIcons
+    action = [ordered]@{ default_popup = 'src/popup.html'; default_icon = $fakeStaticIcons }
     options_page = 'src/options.html'
   } | ConvertTo-Json -Depth 10 | Set-Content -LiteralPath (Join-Path $fakeExtensionPayload 'manifest.json') -Encoding utf8NoBOM
   Set-Content -LiteralPath (Join-Path $fakeExtensionPayload 'src/service-worker.js') -Value 'export {};' -Encoding utf8NoBOM
   Set-Content -LiteralPath (Join-Path $fakeExtensionPayload 'src/popup.html') -Value '<!doctype html><title>Fixture</title>' -Encoding utf8NoBOM
   Set-Content -LiteralPath (Join-Path $fakeExtensionPayload 'src/options.html') -Value '<!doctype html><title>Fixture options</title>' -Encoding utf8NoBOM
   Set-Content -LiteralPath (Join-Path $fakeExtensionPayload 'src/shared/pairing.js') -Value 'export const HANDOFF_CAPABILITY = "";' -Encoding utf8NoBOM
+  foreach ($sizeText in $fakeStaticIcons.Keys) {
+    Copy-Item -LiteralPath (Join-Path $extensionRoot ([string]$fakeStaticIcons[$sizeText])) -Destination (Join-Path $fakeExtensionPayload ([string]$fakeStaticIcons[$sizeText]))
+  }
   $global:MdmFakeExtensionZip = Join-Path $tempRoot 'material-download-manager-extension-7.8.9.zip'
   Compress-Archive -Path (Join-Path $fakeExtensionPayload '*') -DestinationPath $global:MdmFakeExtensionZip -CompressionLevel Optimal
   $global:MdmFakeReleaseAssetDirectory = Join-Path $tempRoot 'fake-pages-release-assets'

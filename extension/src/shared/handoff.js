@@ -1,6 +1,7 @@
 import { HANDOFF_DECISION_PATH, HANDOFF_PROTOCOL_VERSION } from "./settings.js";
 import { normalizeTotpRegistration, parseTotpUri } from "./totp.js";
 import { MAX_PERSONAL_VOCABULARY_BYTES } from "./personal-vocabulary.js";
+import { LOGO_RECORD_KEYS, LOGO_VARIANT_SIZES } from "./logo.js";
 
 export const HANDOFF_SOURCE = "material-download-manager-extension";
 export const MAX_URL_LENGTH = 8192;
@@ -26,6 +27,22 @@ function boundedText(value, maxLength) {
 
 function hasOnlyKeys(value, keys) {
   return Object.keys(value).every((key) => keys.includes(key));
+}
+
+function hasExactKeys(value, keys) {
+  const actual = Object.keys(value);
+  return actual.length === keys.length && actual.every((key) => keys.includes(key));
+}
+
+function boundedLogoRecord(value) {
+  if (!isRecord(value) || !hasExactKeys(value, LOGO_RECORD_KEYS) || !isRecord(value.variants)) return null;
+  const variantNames = Object.keys(value.variants);
+  const expectedNames = LOGO_VARIANT_SIZES.map(String);
+  if (variantNames.length !== expectedNames.length || variantNames.some((name) => !expectedNames.includes(name))) return null;
+  if (Object.values(value.variants).some((item) => typeof item !== "string" || item.length === 0 || item.length > 350_000)) return null;
+  if (value.sourceDataUrl !== null && (typeof value.sourceDataUrl !== "string" || value.sourceDataUrl.length === 0 || value.sourceDataUrl.length > 2_800_000)) return null;
+  if (typeof value.kind !== "string" || typeof value.fit !== "string" || typeof value.background !== "string") return null;
+  return value;
 }
 
 function normalizeAuthenticatorInput(value) {
@@ -200,6 +217,15 @@ export function validateIncomingMessage(value) {
     return isBoundedPersonalVocabularyText(value.text) && hasOnlyKeys(value, ["type", "text"])
       ? { type: value.type, text: value.text }
       : null;
+  }
+  if (["GET_AUTHENTICATOR_STATE", "CANCEL_AUTHENTICATOR", "EXPORT_AUTHENTICATOR_METADATA", "GET_LOGO", "CLEAR_LOGO"].includes(value.type)) {
+    return hasOnlyKeys(value, ["type"]) ? { type: value.type } : null;
+  }
+  if (value.type === "SAVE_LOGO" && hasOnlyKeys(value, ["type", "logo"]) && isRecord(value.logo)) {
+    // Exact top-level and variant boundaries limit the worker channel before
+    // the image decoder and canonical renderer inspect bytes.
+    const logo = boundedLogoRecord(value.logo);
+    return logo ? { type: value.type, logo } : null;
   }
   if (value.type === "PREPARE_AUTHENTICATOR") {
     const input = normalizeAuthenticatorInput(value.input);
