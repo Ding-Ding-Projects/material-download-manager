@@ -1,6 +1,43 @@
 # Handoff: Material Download Manager
 
 ## Browser-captured downloads, tray startup, and completion flow (released source follow-up, 2026-08-12)
+## Personal vocabulary JSON foundation (task branch, 2026-08-12)
+
+This task branch adds the bounded private local JSON foundation required by the
+desktop Settings surface. While School mode is off, the Language Settings tab
+shows accessible choose, status, replace, and clear controls. A native main-
+process picker validates a complete version-1 JSON payload before writing an
+atomic, revalidated private cache. It never returns the source filename, path,
+or file metadata to the renderer. The status projection is generic and may
+contain only state and entry count.
+
+The approved mapping reaches renderer localization only through a volatile,
+trusted IPC projection. It is cleared immediately for School mode and clear,
+reloaded only from the main-process validated cache when School mode turns off,
+and otherwise falls back to shipped wording. `AppSettings`, download-manager
+state, persistence, exports, local history, diagnostics, logs, telemetry, and
+captures have no personal-vocabulary payload or file-metadata field.
+
+### Evidence
+
+- Focused parser/store/no-leak checks cover strict schema and byte bounds,
+  duplicate and unsafe keys, invalid replacement rollback, cache corruption,
+  clear, School mode, and a deliberate sentinel-leak failure. The ordinary app
+  state, `DownloadManager.getState()`, settings, exported history, and history
+  snapshots are asserted sentinel-free.
+- Built UI smoke covers the empty control, disabled clear state, Settings
+  search plus anchored Regex builder, command-palette teleport, all language
+  modes, funny-level extremes, narrow layout, and School-mode suppression.
+- Real built generic capture:
+  [`personal-vocabulary-empty.png`](docs/screenshots/settings/personal-vocabulary-empty.png),
+  1,150×720, SHA-256
+  `3b48cdca04a431be6ec84236364ef027830f457dba1bf844e222234dd69e33d4`.
+  It intentionally includes no user file, mapping, cache metadata, or personal
+  data.
+- Integration into `main`, remote workflow/release evidence, and the remaining
+  wider universal feature work are not claimed by this task branch.
+
+## Local Ollama suite manager foundation (task jer, 2026-08-12)
 
 The active desktop/extension implementation changes automatic browser capture
 from immediate takeover to an authenticated pending decision. When a browser

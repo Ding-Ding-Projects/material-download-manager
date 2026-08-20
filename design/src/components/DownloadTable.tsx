@@ -17,7 +17,7 @@ import {
   SortIcon,
   TrashIcon,
 } from "./icons";
-import ContextMenu, { ContextMenuItem } from "./ContextMenu";
+import ContextMenu, { ContextMenuItem, ContextMenuSeparator } from "./ContextMenu";
 import { type DestructiveActionRequest } from "./DestructiveActionGate";
 import { useUiCopy } from "../i18n/useUiCopy";
 import RegexBuilder from "./RegexBuilder";

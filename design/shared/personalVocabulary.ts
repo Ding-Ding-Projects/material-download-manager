@@ -65,7 +65,6 @@ function hasProtectedTechnicalSyntax(value: string): boolean {
   if (/^(?:[A-Za-z]:[\\/]|\\\\|\/)/u.test(value)) return true;
   return /(?:^|\s)(?:git|gh|npm|npx|node|pnpm|yarn|pwsh|powershell|cmd|python|py|cargo|docker)(?:\s|$)/iu.test(value);
 }
-
 function boundedText(value: unknown, maximum: number, allowEmpty = false): value is string {
   return typeof value === "string"
     && (allowEmpty || value.length > 0)
