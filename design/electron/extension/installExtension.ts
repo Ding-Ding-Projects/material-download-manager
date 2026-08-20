@@ -81,7 +81,7 @@ async function assertStaticExtensionIcons(root: string, record: Record<string, u
     }
     if (!isSafeRelativePath(expectedPath)) throw new Error(`${label} declared an unsafe static icon path`);
     const candidate = path.join(root, expectedPath);
-    await assertRegularPath(candidate, `${label} ${expectedPath}`);
+    await assertRegularPath(candidate, `${label} static icon ${expectedPath}`);
     const stat = await fsp.lstat(candidate);
     if (!stat.isFile() || stat.size < 33 || stat.size > 512 * 1024) {
       throw new Error(`${label} static icon ${expectedPath} is not a bounded regular file`);
