@@ -139,4 +139,3 @@ export function inspectLogoImageBytes(input: Buffer): LogoImageInspection {
   if (bufferIsAt(input, 0, [0x52, 0x49, 0x46, 0x46]) && bufferIsAt(input, 8, [0x57, 0x45, 0x42, 0x50])) return inspectWebp(input);
   throw new Error("Only PNG, JPEG, and still WebP images are supported.");
 }
-

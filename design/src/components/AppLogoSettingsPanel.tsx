@@ -171,7 +171,7 @@ export default function AppLogoSettingsPanel({
         {syntaxError && <p className="field-error" role="alert">{syntaxError}</p>}
       </div>
 
-      <div className="app-logo-preset-grid" role="list" aria-label={ui.text("Shipped app-logo presets", "內置程式標誌預設")}> 
+      <div className="app-logo-preset-grid" role="list" aria-label={ui.text("Shipped app-logo presets", "內置程式標誌預設")}>
         {visiblePresets.map((preset) => (
           <div key={preset} role="listitem"><button type="button" className={`app-logo-preset${value.source === "preset" && value.preset === preset ? " selected" : ""}`} aria-pressed={value.source === "preset" && value.preset === preset} onClick={() => onChange({ ...cloneAppLogoSettings(value), source: "preset", preset })}>
             <AppLogoPresetMark preset={preset} size={36} decorative />
@@ -190,7 +190,7 @@ export default function AppLogoSettingsPanel({
         </div>
       </div>
 
-      <div className="app-logo-controls" aria-label={ui.text("Logo rendering controls", "標誌外觀控制")}> 
+      <div className="app-logo-controls" aria-label={ui.text("Logo rendering controls", "標誌外觀控制")}>
         <label className="field"><span className="field-label">{ui.text("Fit", "適應方式")}</span><select className="input select" value={value.fit} onChange={(event) => onChange({ ...cloneAppLogoSettings(value), fit: event.target.value as AppLogoSettings["fit"] })}><option value="contain">{ui.text("Contain", "Contain")}</option><option value="cover">{ui.text("Cover", "Cover")}</option><option value="fill">{ui.text("Fill", "Fill")}</option></select></label>
         <label className="field"><span className="field-label">{ui.text("Background", "背景")}</span><select className="input select" value={value.background} onChange={(event) => onChange({ ...cloneAppLogoSettings(value), background: event.target.value as AppLogoSettings["background"] })}><option value="transparent">{ui.text("Transparent", "透明")}</option><option value="color">{ui.text("Color", "顏色")}</option></select></label>
         <label className="field"><span className="field-label">{ui.text("Background color", "背景顏色")}</span><div className="field-row"><input type="color" value={value.backgroundColor.slice(0, 7)} aria-label={ui.text("Background color picker", "背景顏色選擇器")} onChange={(event) => onChange({ ...cloneAppLogoSettings(value), backgroundColor: event.target.value })} /><input className="input" value={value.backgroundColor} aria-invalid={!isHexColor(value.backgroundColor)} onChange={(event) => onChange({ ...cloneAppLogoSettings(value), backgroundColor: event.target.value })} /></div></label>
