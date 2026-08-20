@@ -14,10 +14,14 @@ const featureCatalogueCaptureRelative = "docs/screenshots/site/feature-catalogue
 const featureCatalogueCaptureAbsolute = path.resolve(repoRoot, featureCatalogueCaptureRelative);
 const notificationHardeningCaptureRelative = "docs/screenshots/site/notification-centre-hardening.png";
 const notificationHardeningCaptureAbsolute = path.resolve(repoRoot, notificationHardeningCaptureRelative);
+const ollamaSuiteCaptureRelative = "docs/screenshots/site/ollama-suite-browser-local.png";
+const ollamaSuiteCaptureAbsolute = path.resolve(repoRoot, ollamaSuiteCaptureRelative);
 let featureCatalogueCaptureBytes = null;
 let featureCatalogueCaptureError = null;
 let notificationHardeningCaptureBytes = null;
 let notificationHardeningCaptureError = null;
+let ollamaSuiteCaptureBytes = null;
+let ollamaSuiteCaptureError = null;
 try {
   featureCatalogueCaptureBytes = await readFile(featureCatalogueCaptureAbsolute);
 } catch (error) {
@@ -27,6 +31,11 @@ try {
   notificationHardeningCaptureBytes = await readFile(notificationHardeningCaptureAbsolute);
 } catch (error) {
   notificationHardeningCaptureError = error;
+}
+try {
+  ollamaSuiteCaptureBytes = await readFile(ollamaSuiteCaptureAbsolute);
+} catch (error) {
+  ollamaSuiteCaptureError = error;
 }
 
 async function read(relativePath) {
@@ -52,7 +61,7 @@ async function exists(relativePath) {
 }
 
 function loadScript(source, filename, globalName) {
-  const context = { window: {}, TextDecoder, TextEncoder, btoa, atob };
+  const context = { window: {}, TextDecoder, TextEncoder, btoa, atob, URL };
   vm.runInNewContext(source, context, { filename });
   return context.window[globalName];
 }
@@ -113,6 +122,10 @@ const expectedFiles = [
   "converter.css",
   "app.js",
   "converter.js",
+  "ollama-suite.css",
+  "app.js",
+  "ollama-suite.js",
+  "ollama-suite.test.mjs",
   "content.js",
   "package.json",
   "README.md",
@@ -125,6 +138,7 @@ const expectedFiles = [
   "data/notification-contract.js",
   "data/converter-contract.js",
   "data/release-manifest-contract.js",
+  "data/ollama-suite-contract.js",
   "assets/dim-sum.svg"
 ];
 for (const relativePath of expectedFiles) {
@@ -134,9 +148,11 @@ for (const relativePath of expectedFiles) {
 
 const html = await read("index.html");
 const css = await read("styles.css");
+const ollamaSuiteCss = await read("ollama-suite.css");
 const app = await read("app.js");
 const converterCss = await read("converter.css");
 const converterSource = await read("converter.js");
+const ollamaSuiteSource = await read("ollama-suite.js");
 const buildSource = await read("build.mjs");
 const contentSource = await read("content.js");
 const manifestJsonSource = await read("data/release-manifest.json");
@@ -146,6 +162,7 @@ const settingsContractSource = await read("data/settings-contract.js");
 const notificationContractSource = await read("data/notification-contract.js");
 const converterContractSource = await read("data/converter-contract.js");
 const releaseManifestContractSource = await read("data/release-manifest-contract.js");
+const ollamaSuiteContractSource = await read("data/ollama-suite-contract.js");
 const content = loadScript(contentSource, "content.js", "MDM_SITE_CONTENT");
 const manifestFromJs = loadScript(manifestJsSource, "release-manifest.js", "MDM_RELEASE_MANIFEST");
 const universalFeatureManifest = loadScript(universalFeatureManifestSource, "universal-feature-manifest.js", "MDM_UNIVERSAL_FEATURE_MANIFEST");
@@ -153,6 +170,7 @@ const settingsContract = loadScript(settingsContractSource, "settings-contract.j
 const notificationContract = loadScript(notificationContractSource, "notification-contract.js", "MDM_SITE_NOTIFICATION_CONTRACT");
 const converterContract = loadScript(converterContractSource, "converter-contract.js", "MDM_SITE_CONVERTER_CONTRACT");
 const releaseManifestContract = loadScript(releaseManifestContractSource, "release-manifest-contract.js", "MDM_RELEASE_MANIFEST_CONTRACT");
+const ollamaSuiteContract = loadScript(ollamaSuiteContractSource, "ollama-suite-contract.js", "OLLAMA_SUITE_CONTRACT");
 const manifestFromJson = JSON.parse(manifestJsonSource);
 
 run("site builder never recursively removes a caller-selected output path", () => {
@@ -171,6 +189,9 @@ run("site build preserves every local runtime script", () => {
     "./data/release-manifest-contract.js",
     "./data/release-manifest.js",
     "./app.js",
+    "./data/ollama-suite-contract.js",
+    "./app.js",
+    "./ollama-suite.js",
     "./converter.js"
   ];
   for (const script of scripts) {
@@ -396,7 +417,7 @@ run("verified extension action has a positive accessible rendering contract", ()
   assert.equal(descriptor.steps.length, 3);
 });
 
-const universalSourceCorpus = `${html}\n${css}\n${converterCss}\n${app}\n${converterSource}\n${contentSource}\n${notificationContractSource}\n${converterContractSource}`;
+const universalSourceCorpus = `${html}\n${css}\n${converterCss}\n${ollamaSuiteCss}\n${app}\n${converterSource}\n${ollamaSuiteSource}\n${contentSource}\n${notificationContractSource}\n${converterContractSource}\n${ollamaSuiteContractSource}`;
 const universalFeatureEntries = validateUniversalFeatureManifest(universalFeatureManifest, universalSourceCorpus);
 run("universal feature manifest is explicit and independently validated", () => {
   assert.equal(universalFeatureEntries.length, universalFeatureManifest.requiredIds.length);
@@ -421,6 +442,41 @@ run("universal manifest validator rejects missing records, duplicates, unsafe do
   assert.throws(() => validateUniversalFeatureManifest(missingProbe, universalSourceCorpus), /needs runtime anchors/);
   const missingRuntimeAnchorSource = universalSourceCorpus.replace('id="show-emojis"', 'id="show-emojis-removed"');
   assert.throws(() => validateUniversalFeatureManifest(universalFeatureManifest, missingRuntimeAnchorSource), /emoji-toggle runtime anchor is missing/);
+});
+run("browser-local Ollama suite is independently wired, bounded, and fail-closed", () => {
+  assert.equal(typeof ollamaSuiteContract.isAllowedEndpoint, "function");
+  assert.equal(ollamaSuiteContract.isAllowedEndpoint("http://127.0.0.1:11434"), true);
+  assert.equal(ollamaSuiteContract.isAllowedEndpoint("https://ollama.com/api"), false);
+  assert.equal(ollamaSuiteContract.isAllowedEndpoint("http://127.0.0.1:11434/api/tags"), false);
+  for (const marker of ["id=\"ollama-suite-root\"", "data-school-optional", "data/ollama-suite-contract.js", "ollama-suite.js", "ollama-suite.css"]) assert.ok(html.includes(marker), `${marker} is present`);
+  for (const marker of ["/api/version", "/api/tags", "/api/ps", "/api/show", "/api/pull", "/api/delete", "/api/copy", "/api/chat", "Attachments remain disabled", "static Pages site cannot start Ollama", "browser-only suite rejected an unregistered local API route", "OLLAMA_SUITE_CONTRACT", "MDM_SITE_USER_TEXT?.render", "mdm-site-user-text-change"]) assert.ok(ollamaSuiteSource.includes(marker) || ollamaSuiteContractSource.includes(marker), `${marker} is present`);
+  assert.doesNotMatch(ollamaSuiteSource, /\b(?:child_process|execFile|spawn|PowerShell|cmd\.exe)\b/);
+  assert.match(ollamaSuiteCss, /\.ollama-confirm-layer\s*\{/);
+  const catalog = {
+    schemaVersion: 1,
+    kind: "official-catalog-snapshot",
+    sourceRevision: "checked-catalog-revision",
+    refreshedAt: "2026-08-12T20:00:00.000Z",
+    pageCount: 1,
+    complete: true,
+    models: [{ tag: "example/model:latest", family: "example", description: "A bounded catalog fixture.", sizeBytes: 1024, capabilities: ["completion"] }]
+  };
+  assert.equal(JSON.parse(JSON.stringify(ollamaSuiteContract.normalizeCatalogSnapshot(catalog))).models.length, 1);
+  const incomplete = JSON.parse(JSON.stringify(catalog));
+  incomplete.complete = false;
+  assert.equal(ollamaSuiteContract.normalizeCatalogSnapshot(incomplete), null);
+  assert.throws(() => ollamaSuiteContract.parseCatalogSnapshot(JSON.stringify(catalog).replace('"schemaVersion":1', '"schemaVersion":1,"schemaVersion":1')), /Duplicate JSON key/);
+});
+run("browser-local Ollama negative fixtures remove exact safeguards", () => {
+  const noRouteGuard = ollamaSuiteSource.replace('if (!allowed.has(path)) throw new Error("The browser-only suite rejected an unregistered local API route.");', "");
+  assert.notEqual(noRouteGuard, ollamaSuiteSource, "route fixture changes the source");
+  assert.doesNotMatch(noRouteGuard, /browser-only suite rejected an unregistered local API route/);
+  const noAttachmentGate = ollamaSuiteSource.replace("attachmentInput.disabled = !attachmentAllowed(chat);", "attachmentInput.disabled = false;");
+  assert.notEqual(noAttachmentGate, ollamaSuiteSource, "attachment fixture changes the source");
+  assert.doesNotMatch(noAttachmentGate, /attachmentInput\.disabled = !attachmentAllowed\(chat\);/);
+  const noCompleteCatalogGate = ollamaSuiteContractSource.replace("value.complete !== true", "value.complete !== false");
+  assert.notEqual(noCompleteCatalogGate, ollamaSuiteContractSource, "catalog-completeness fixture changes the source");
+  assert.match(noCompleteCatalogGate, /value\.complete !== false/);
 });
 for (const feature of universalFeatureEntries) {
   await stat(path.resolve(siteRoot, feature.docsPath));
@@ -598,6 +654,18 @@ run("notification hardening capture is pinned to a safe path, hash, and dimensio
   assert.equal(notificationHardeningCaptureBytes.readUInt32BE(16), 945, "capture width is 945 pixels");
   assert.equal(notificationHardeningCaptureBytes.readUInt32BE(20), 1012, "capture height is 1012 pixels");
   assert.equal(createHash("sha256").update(notificationHardeningCaptureBytes).digest("hex"), "a4213067c25b0ef639957dc264d30c6eb78d86db88cdee98de5ef6f73471757c", "capture hash matches provenance");
+});
+
+run("browser-local Ollama suite capture is pinned to a safe path, hash, and dimensions", () => {
+  const relative = path.relative(repoRoot, ollamaSuiteCaptureAbsolute);
+  assert.ok(relative && relative !== ".." && !relative.startsWith(".." + path.sep), "capture path stays inside the repository");
+  assert.ok(Buffer.isBuffer(ollamaSuiteCaptureBytes), ollamaSuiteCaptureError?.message || "capture file is present");
+  const signature = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+  assert.deepEqual([...ollamaSuiteCaptureBytes.subarray(0, 8)], [...signature], "capture is a PNG");
+  assert.equal(ollamaSuiteCaptureBytes.toString("ascii", 12, 16), "IHDR", "PNG has an IHDR header");
+  assert.equal(ollamaSuiteCaptureBytes.readUInt32BE(16), 945, "capture width is 945 pixels");
+  assert.equal(ollamaSuiteCaptureBytes.readUInt32BE(20), 1012, "capture height is 1012 pixels");
+  assert.equal(createHash("sha256").update(ollamaSuiteCaptureBytes).digest("hex"), "dae4158bba7aa1d062afe5444b5e7982b58c12f7722f49219109c162119c6bb5", "capture hash matches provenance");
 });
 
  run("feature article inventory covers every embedded feature", () => {

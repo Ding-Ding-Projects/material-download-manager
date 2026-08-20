@@ -8,3 +8,4 @@ security boundaries, and verification evidence.
 
 - [Landing and documentation site](./landing-and-documentation-site.md)
 - [Universal feature coverage](./universal-feature-coverage.md)
+- [Browser-local Ollama suite manager](./ollama-suite-manager.md)
