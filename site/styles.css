@@ -180,6 +180,7 @@ kbd { display: inline-flex; align-items: center; min-height: 1.4rem; padding: .0
 }
 
 .brand-lockup { gap: .75rem; min-width: 0; }
+.brand-lockup > div { min-width: 0; }
 .brand-mark { display: grid; place-items: center; width: 2.4rem; height: 2.4rem; border-radius: .8rem; background: var(--accent); color: var(--on-accent); font-weight: 800; font-size: 1.35rem; box-shadow: var(--shadow-1); }
 .brand-name { max-width: 32ch; margin: 0; overflow: hidden; color: var(--on-surface); font-size: 1rem; font-weight: 750; text-overflow: ellipsis; white-space: nowrap; }
 .eyebrow { margin: 0 0 .32rem; color: var(--on-surface-variant); font-size: .7rem; font-weight: 800; letter-spacing: .13em; line-height: 1.2; }
@@ -488,6 +489,18 @@ html[data-reduced-motion="true"] *, html[data-reduced-motion="true"] *::before, 
   .hero-grid { grid-template-columns: minmax(0, 1fr) minmax(17rem, .7fr); }
   .metric-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .feature-layout { grid-template-columns: minmax(13rem, .72fr) minmax(0, 1.28fr); }
+}
+
+/* Keep the app name whole beside the two real top-bar actions at tablet widths. */
+@media (min-width: 761px) and (max-width: 1040px) {
+  .topbar { align-items: flex-start; flex-wrap: wrap; gap: .65rem; }
+  .brand-lockup { flex: 1 1 100%; }
+  .brand-name { max-width: none; }
+  .topbar-actions { flex: 1 1 100%; width: 100%; justify-content: space-between; gap: .4rem; }
+  .topbar-actions .button { padding-inline: .72rem; font-size: .9rem; }
+  .status-chip { max-width: 10rem; }
+  .app-shell { min-height: calc(100vh - 8.5rem); }
+  .tab-rail, html[data-tab-position="top"] .tab-rail { top: 8.5rem; min-height: calc(100vh - 8.5rem); }
 }
 
 @media (max-width: 760px) {

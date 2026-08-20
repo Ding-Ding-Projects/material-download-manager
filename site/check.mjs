@@ -52,7 +52,7 @@ async function exists(relativePath) {
 }
 
 function loadScript(source, filename, globalName) {
-  const context = { window: {} };
+  const context = { window: {}, TextDecoder, TextEncoder, btoa, atob };
   vm.runInNewContext(source, context, { filename });
   return context.window[globalName];
 }
@@ -110,7 +110,9 @@ function validateUniversalFeatureManifest(candidate, sourceCorpus) {
 const expectedFiles = [
   "index.html",
   "styles.css",
+  "converter.css",
   "app.js",
+  "converter.js",
   "content.js",
   "package.json",
   "README.md",
@@ -121,6 +123,7 @@ const expectedFiles = [
   "data/universal-feature-manifest.js",
   "data/settings-contract.js",
   "data/notification-contract.js",
+  "data/converter-contract.js",
   "data/release-manifest-contract.js",
   "assets/dim-sum.svg"
 ];
@@ -132,6 +135,8 @@ for (const relativePath of expectedFiles) {
 const html = await read("index.html");
 const css = await read("styles.css");
 const app = await read("app.js");
+const converterCss = await read("converter.css");
+const converterSource = await read("converter.js");
 const buildSource = await read("build.mjs");
 const contentSource = await read("content.js");
 const manifestJsonSource = await read("data/release-manifest.json");
@@ -139,12 +144,14 @@ const manifestJsSource = await read("data/release-manifest.js");
 const universalFeatureManifestSource = await read("data/universal-feature-manifest.js");
 const settingsContractSource = await read("data/settings-contract.js");
 const notificationContractSource = await read("data/notification-contract.js");
+const converterContractSource = await read("data/converter-contract.js");
 const releaseManifestContractSource = await read("data/release-manifest-contract.js");
 const content = loadScript(contentSource, "content.js", "MDM_SITE_CONTENT");
 const manifestFromJs = loadScript(manifestJsSource, "release-manifest.js", "MDM_RELEASE_MANIFEST");
 const universalFeatureManifest = loadScript(universalFeatureManifestSource, "universal-feature-manifest.js", "MDM_UNIVERSAL_FEATURE_MANIFEST");
 const settingsContract = loadScript(settingsContractSource, "settings-contract.js", "MDM_SITE_SETTINGS_CONTRACT");
 const notificationContract = loadScript(notificationContractSource, "notification-contract.js", "MDM_SITE_NOTIFICATION_CONTRACT");
+const converterContract = loadScript(converterContractSource, "converter-contract.js", "MDM_SITE_CONVERTER_CONTRACT");
 const releaseManifestContract = loadScript(releaseManifestContractSource, "release-manifest-contract.js", "MDM_RELEASE_MANIFEST_CONTRACT");
 const manifestFromJson = JSON.parse(manifestJsonSource);
 
@@ -160,9 +167,11 @@ run("site build preserves every local runtime script", () => {
     "./data/universal-feature-manifest.js",
     "./data/settings-contract.js",
     "./data/notification-contract.js",
+    "./data/converter-contract.js",
     "./data/release-manifest-contract.js",
     "./data/release-manifest.js",
-    "./app.js"
+    "./app.js",
+    "./converter.js"
   ];
   for (const script of scripts) {
     const marker = '<script src="' + script + '"></script>';
@@ -200,6 +209,88 @@ run("site has local search fields with individual regex-builder anchors", () => 
   }
   assert.match(app, /data-builder-pattern/);
   assert.match(app, /JavaScript RegExp/);
+});
+
+run("browser-local converter has a categorized accessible shell, palette route, and local-only boundary", () => {
+  for (const marker of ["panel-converter", "tab-converter", "converter-file-input", "converter-record-list", "converter-target-name", "converter-loss-acknowledgement", "converter-adapter-catalog", "converter-history-list", "converter-open-editor", "data/converter-contract.js", "converter.js", "converter.css"]) assert.ok(html.includes(marker), `${marker} is present`);
+  for (const marker of ["tab.converter", "converter.source", "converter.catalog", "converter.results", "MDM_SITE_CONVERTER"]) assert.match(app, new RegExp(marker.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+  for (const marker of ["converter-layout", "converter-category", "converter-regex-builder", "converter-adapter"]) assert.match(converterCss, new RegExp(`\\.${marker}\\s*\\{`));
+  for (const marker of ["new MutationObserver", "window.addEventListener(\"storage\"", "indexedDB", "createImageBitmap", "canvas.toBlob", "downloadBlob", "exportSafeResults", "data-converter-search-input", "data-converter-builder-toggle"]) assert.match(converterSource, new RegExp(marker.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+  assert.doesNotMatch(converterSource, /\bfetch\s*\(/, "converter does not call a network converter");
+  assert.doesNotMatch(converterSource, /navigator\.sendBeacon|XMLHttpRequest|WebSocket/, "converter does not transmit source data");
+  assert.match(converterSource, /static browser surface/, "external-editor boundary is explicit");
+});
+
+run("converter contract lists every category and fails closed around local adapter proof", () => {
+  assert.equal(converterContract.version, 1);
+  assert.deepEqual(JSON.parse(JSON.stringify(converterContract.categories)), [
+    "Documents/PDF", "Images", "Audio", "Video", "Archives", "Structured Data/Spreadsheets", "Code/Text", "Binary Encodings"
+  ]);
+  assert.equal(converterContract.validateRegistry(converterContract.adapters), converterContract.adapters);
+  assert.equal(converterContract.validateQueuePolicy(converterContract.queuePolicy), converterContract.queuePolicy);
+  for (const category of converterContract.categories) assert.ok(converterContract.adapters.some((adapter) => adapter.category === category), `${category} has a hand-written catalog entry`);
+  for (const adapter of converterContract.adapters.filter((item) => item.enabled)) {
+    assert.equal(adapter.bundled, true, `${adapter.id} is explicitly bundled`);
+    assert.equal(adapter.browserLocal, true, `${adapter.id} is browser local`);
+    assert.ok(adapter.packageProof.length > 12, `${adapter.id} carries package proof`);
+  }
+  const pdf = converterContract.adapters.find((adapter) => adapter.id === "pdf-inspect");
+  assert.equal(pdf.enabled, false);
+  assert.match(pdf.reason, /does not bundle an offline PDF parser\/writer/);
+  const image = converterContract.adapters.find((adapter) => adapter.id === "image-to-png");
+  assert.equal(image.enabled, true);
+  assert.match(image.packageProof, /Canvas 2D/);
+  const unsafe = JSON.parse(JSON.stringify(converterContract.adapters));
+  const unsafePdf = unsafe.find((adapter) => adapter.id === "pdf-inspect");
+  unsafePdf.enabled = true;
+  assert.throws(() => converterContract.validateRegistry(unsafe), /bundled=true/, "an unbundled PDF adapter cannot be enabled");
+  const cap = { ...converterContract.queuePolicy, maxQueueItems: 1 };
+  assert.throws(() => converterContract.validateQueuePolicy(cap), /artificial total-file cap/, "an artificial queue cap turns the contract red");
+  const missingCategory = converterContract.adapters.filter((adapter) => adapter.category !== "Video");
+  assert.throws(() => converterContract.validateRegistry(missingCategory), /Required converter category is missing: Video/, "removing an entire category turns the contract red");
+});
+
+run("converter contract sniffs bounded bytes and runs real local text and binary transforms", () => {
+  const png = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 0]);
+  assert.equal(converterContract.sniffBytes(png, "spoofed.txt", "text/plain").kind, "png", "signature wins over extension and MIME hint");
+  const pdf = new TextEncoder().encode("%PDF-1.7\n");
+  assert.equal(converterContract.sniffBytes(pdf, "report.txt").kind, "pdf");
+  const json = new TextEncoder().encode('[{"name":"Ada","score":7}]');
+  assert.equal(converterContract.sniffBytes(json, "scores.csv").kind, "json");
+  const csv = new TextEncoder().encode("name,score\nAda,7\n");
+  assert.equal(converterContract.sniffBytes(csv, "scores.bin").kind, "csv");
+  const normalized = converterContract.transform("text-normalize", new TextEncoder().encode("one\r\ntwo\rthree"));
+  assert.equal(normalized.text, "one\ntwo\nthree");
+  const formatted = converterContract.transform("json-format", json);
+  assert.match(formatted.text, /\n    "name": "Ada"/);
+  const csvAsJson = converterContract.transform("csv-to-json", csv);
+  assert.deepEqual(JSON.parse(csvAsJson.text), [{ name: "Ada", score: "7" }]);
+  const jsonAsCsv = converterContract.transform("json-to-csv", json);
+  assert.match(jsonAsCsv.text, /name,score/);
+  const base64 = converterContract.transform("binary-to-base64", new Uint8Array([0, 1, 2, 3]));
+  assert.equal(base64.text, "AAECAw==");
+  const binary = converterContract.transform("base64-to-binary", new TextEncoder().encode("AAECAw=="));
+  assert.deepEqual([...binary.bytes], [0, 1, 2, 3]);
+  assert.equal(converterContract.validateOutput(converterContract.adapters.find((adapter) => adapter.id === "json-format"), new TextEncoder().encode(formatted.text)), true);
+  assert.equal(converterContract.validateOutput(converterContract.adapters.find((adapter) => adapter.id === "image-to-png"), png), true);
+});
+
+run("converter regex builders, School-mode observation, safe export omissions, and bounded worker markers are explicit", () => {
+  for (const category of converterContract.categories) {
+    assert.ok(Object.prototype.hasOwnProperty.call(converterContract.adapters.reduce((groups, adapter) => { groups[adapter.category] = true; return groups; }, {}), category), `${category} is rendered from its own catalog state`);
+  }
+  assert.match(converterSource, /contract\.categories\.forEach\(\(category\)/);
+  assert.match(converterSource, /data-converter-search-input/);
+  assert.match(converterSource, /converter-regex-builder/);
+  assert.match(converterSource, /contract\.isSafeRegex/);
+  assert.match(converterSource, /data-school-mode/);
+  assert.match(converterSource, /funnyEn/);
+  assert.match(converterSource, /funnyYue/);
+  assert.match(converterSource, /maxConcurrentConversions/);
+  assert.match(converterSource, /Source bytes[\s\S]*Generated result bytes[\s\S]*Browser file paths/);
+  assert.doesNotMatch(converterSource, /maxQueueItems|totalFileLimit/, "runtime does not define an artificial total-file cap");
+  assert.match(converterContract.isSafeRegex("(a+)+$", "g"), /rejected/);
+  assert.equal(converterContract.isSafeRegex("^png$", "g"), null);
 });
 
 run("release manifest JSON and browser form agree", () => {
@@ -305,7 +396,7 @@ run("verified extension action has a positive accessible rendering contract", ()
   assert.equal(descriptor.steps.length, 3);
 });
 
-const universalSourceCorpus = `${html}\n${css}\n${app}\n${contentSource}\n${notificationContractSource}`;
+const universalSourceCorpus = `${html}\n${css}\n${converterCss}\n${app}\n${converterSource}\n${contentSource}\n${notificationContractSource}\n${converterContractSource}`;
 const universalFeatureEntries = validateUniversalFeatureManifest(universalFeatureManifest, universalSourceCorpus);
 run("universal feature manifest is explicit and independently validated", () => {
   assert.equal(universalFeatureEntries.length, universalFeatureManifest.requiredIds.length);
@@ -471,7 +562,7 @@ run("stable installer is absent until verified metadata exists", () => {
 });
 
 run("site has no remote asset loading or external font imports", () => {
-  const assetMarkup = `${html}\n${css}\n${app}`;
+  const assetMarkup = `${html}\n${css}\n${converterCss}\n${app}\n${converterSource}\n${converterContractSource}`;
   assert.doesNotMatch(assetMarkup, /(?:src|href)\s*=\s*["']https?:\/\//i);
   assert.doesNotMatch(assetMarkup, /url\(\s*["']?https?:\/\//i);
   assert.doesNotMatch(assetMarkup, /@import\s+url/i);
@@ -510,12 +601,13 @@ run("notification hardening capture is pinned to a safe path, hash, and dimensio
 });
 
  run("feature article inventory covers every embedded feature", () => {
-  assert.equal(content.features.length, 17);
+  assert.equal(content.features.length, 18);
   assert.match(html, /id="feature-metric-count">—<\/span>/);
   assert.match(html, /id="feature-count">— articles<\/span>/);
   assert.match(app, /feature-metric-count/);
   const ids = new Set(content.features.map((feature) => feature.id));
   assert.ok(ids.has("auto-organize-downloads"), "auto-organize article is in the explicit feature inventory");
+  assert.ok(ids.has("file-converter"), "browser-local file converter article is in the explicit feature inventory");
   for (const feature of content.features) {
     assert.ok(feature.title && feature.summary && feature.category, `${feature.id} has identity fields`);
     assert.deepEqual(Object.keys(feature.sections).sort(), ["behavior", "configuration", "failureModes", "security", "verification"]);

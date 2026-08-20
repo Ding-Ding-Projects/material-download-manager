@@ -16,7 +16,7 @@
       "bulk-actions", "accessibility-responsive", "offline-documentation", "overlay-surfaces",
       "rich-controls", "guided-forms", "filter-collapse", "blank-slate-presets",
       "provider-authored-markup", "release-evidence", "local-assets-and-no-signing",
-      "captures-and-evidence"
+      "captures-and-evidence", "file-converter"
     ],
     features: [
       {
@@ -248,6 +248,16 @@
         status: "partial",
         probes: ["format-inventory", "field-preservation", "filtered-export", "archive-export"],
         runtimeAnchors: ["function downloadFile"]
+      },
+      {
+        id: "file-converter",
+        title: "Browser-local categorized file converter",
+        category: "local tools",
+        requiredSurfaces: ["converter tab", "adapter catalog", "queue", "target review", "history", "command palette"],
+        docsPath: "../docs/features/site/universal-feature-coverage.md",
+        status: "partial",
+        probes: ["required-categories", "byte-sniffing", "bundled-adapter-proof", "disabled-unavailable-adapters", "bounded-queue", "loss-disclosure", "output-validation", "local-history-export", "category-regex-builders", "school-mode-rendering", "palette-route", "negative-unbundled-adapter", "negative-total-file-cap"],
+        runtimeAnchors: ["MDM_SITE_CONVERTER_CONTRACT", "converter-adapter-catalog", "function validateQueuePolicy"]
       },
       {
         id: "bulk-actions",

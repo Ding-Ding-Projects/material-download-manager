@@ -36,6 +36,42 @@ selection, bulk dismiss, typed delete confirmation, and JSON export. The
 manifest continues to mark this universal feature partial while the complete
 two-key destructive confirmation and full capture matrix remain outstanding.
 
+## Browser-local file converter
+
+The **Converter** tab is a local browser foundation, not a claim that every
+desktop conversion format is available. It has one independently searchable,
+plain-text-first regex builder per category:
+
+- Documents/PDF
+- Images
+- Audio
+- Video
+- Archives
+- Structured Data/Spreadsheets
+- Code/Text
+- Binary Encodings
+
+The enabled adapters are real browser-local transformations: Canvas-based PNG,
+JPEG, and WebP output after browser decoder/encoder validation; UTF-8 line-end
+normalization; JSON formatting; CSV-to-JSON and JSON-array-to-CSV; and Base64
+encoding/decoding. The catalog explicitly disables PDF manipulation, audio and
+video transcoding, archive work, and XLSX/ODS work because this static page does
+not bundle the required offline parser, codec, or writer. It never substitutes a
+network service, a command-line tool, or a device-installed dependency.
+
+Each file is sniffed from bounded bytes rather than its extension or MIME claim.
+The no-total-cap queue keeps runtime `File` references rather than preloading
+every source byte; it has bounded concurrency, pause, resume, cancel, retry, and
+per-item outcomes. Generated result bytes remain in memory only long enough for
+the user to download a fully validated Blob. IndexedDB stores safe queue/result
+metadata and history when available, but never source bytes, result bytes,
+browser file paths, object URLs, file handles, or external-editor state. A
+reloaded record therefore asks for its original file again before it can resume.
+
+The page cannot inspect a chosen download destination, free destination storage,
+or launch an external editor. It creates a browser download only after complete
+output validation and states that browser boundary in the target review.
+
 ### Notification centre capture evidence
 
 ![Notification centre showing a persisted dismissed record](../docs/screenshots/site/notification-centre-history.png)

@@ -135,6 +135,39 @@ window.MDM_SITE_CONTENT = {
       suggested: ["record-export", "regex-builder"]
     },
     {
+      id: "file-converter",
+      category: "Local tools",
+      title: "Browser-local file converter",
+      summary: "A categorized local adapter catalog with bounded byte sniffing, real browser-only transforms, explicit unavailable formats, queue controls, and safe result exports.",
+      docsPath: "../docs/features/site/universal-feature-coverage.md",
+      tags: ["converter", "offline", "csv", "images", "base64", "queue"],
+      sections: {
+        behavior: [
+          "The Converter tab accepts user-selected local files, reads only bounded bytes to identify a format, and lists Documents/PDF, Images, Audio, Video, Archives, Structured Data/Spreadsheets, Code/Text, and Binary Encodings as separate searchable catalog categories.",
+          "Browser Canvas image output, UTF-8 text normalization, JSON formatting, CSV/JSON transforms, and Base64 transforms are real local adapters. Every PDF, media, archive, or workbook path without a bundled adapter remains visibly disabled with its exact reason.",
+          "The queue has no total-file cap. It keeps runtime File references instead of preloading every source byte, runs a small bounded worker set, supports pause, resume, cancellation, retry, per-record outcomes, and browser-download results only after output validation."
+        ],
+        configuration: [
+          "Each catalog category owns a plain-text-first search with its own adjacent JavaScript regex builder, guided pattern fragments, flags, sample text, and bounded local matching.",
+          "A target-name field guides a single result or preserves individual base names in a batch. Any conversion that can alter metadata, encoding, transparency, or formatting requires an explicit acknowledgement before it is queued.",
+          "Queue metadata and history are kept locally through IndexedDB when the browser permits it. Source files and generated result blobs are deliberately not persisted, so a reloaded record asks the user to select its original source again."
+        ],
+        failureModes: [
+          "Oversized, malformed, unsupported, encrypted, or unsupported-format sources remain untouched. Disabled adapters explain the missing bundled browser adapter instead of offering a guessed output or an online workaround.",
+          "The static browser surface cannot inspect a chosen destination folder, its free space, or open an external editor. It creates a browser download only after a complete bounded Blob validates, and says plainly when a reload has discarded an in-memory result Blob.",
+          "Cancellation stops queued work immediately and marks an in-flight job to stop before it offers a result. A failed item never makes a batch claim success."
+        ],
+        security: [
+          "No file is uploaded, no device PATH is consulted, no remote converter is called, and no source bytes, object URLs, browser file handles, or browser file paths enter local history or result exports.",
+          "Every enabled registry entry declares bundled local proof, input/output bounds, source kinds, target type, lossiness, and output validation. Unavailable entries cannot be selected."
+        ],
+        verification: [
+          "The site check validates every required category, enabled-adapter bundled proof, byte sniffing, CSV/JSON and Base64 transforms, output validation, no artificial queue cap, local-only registry claims, localized School-mode anchors, catalog regex builders, palette routes, and negative fixtures that turn red when an unbundled adapter is enabled or a total-file cap appears."
+        ]
+      },
+      suggested: ["record-export", "regex-builder", "local-history"]
+    },
+    {
       id: "command-palette",
       category: "Navigation",
       title: "Command palette",

@@ -34,15 +34,17 @@ if (requestedOutput) {
     if (!(error && typeof error === "object" && "code" in error && error.code === "ENOENT")) throw error;
   }
 }
-const files = ["index.html", "styles.css", "app.js", "content.js", "data", "assets"];
+const files = ["index.html", "styles.css", "converter.css", "app.js", "converter.js", "content.js", "data", "assets"];
 const runtimeScripts = [
   "./content.js",
   "./data/universal-feature-manifest.js",
   "./data/settings-contract.js",
   "./data/notification-contract.js",
+  "./data/converter-contract.js",
   "./data/release-manifest-contract.js",
   "./data/release-manifest.js",
-  "./app.js"
+  "./app.js",
+  "./converter.js"
 ];
 for (const file of files) await cp(path.join(siteRoot, file), path.join(outputRoot, file), { recursive: true });
 
