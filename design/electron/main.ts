@@ -243,6 +243,7 @@ function createWindow() {
       void getRendererPersonalVocabularyRuntime().then((runtime) => {
         if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send(IPC.PERSONAL_VOCABULARY_CHANGED, runtime);
       });
+      mainWindow.webContents.send(IPC.OLLAMA_STATE_CHANGED, ollamaSuiteStore.getState());
     }
   });
 
@@ -598,6 +599,10 @@ function broadcastState() {
   if (progressWindow && !progressWindow.isDestroyed()) progressWindow.webContents.send(IPC.STATE_CHANGED, state);
 }
 
+function broadcastOllamaState(state = ollamaSuiteStore.getState()) {
+  if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send(IPC.OLLAMA_STATE_CHANGED, state);
+}
+
 function broadcastPresentation(presentation: PresentationSettings) {
   refreshTrayPresentation();
   if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send(IPC.PRESENTATION_CHANGED, presentation);
@@ -908,6 +913,107 @@ function registerIpcHandlers() {
     assertTrustedSender(event);
     if (typeof id !== "string") throw new Error("Invalid Ollama provider identifier");
     return ollamaSuiteStore.refreshProvider(id);
+  });
+  ipcMain.handle(IPC.OLLAMA_REFRESH_CATALOG_CAPABILITY, async (event) => {
+    assertTrustedSender(event);
+    return ollamaSuiteStore.refreshCatalogCapability();
+  });
+  ipcMain.handle(IPC.OLLAMA_REFRESH_MODEL_DETAILS, async (event, providerId: unknown, modelName: unknown) => {
+    assertTrustedSender(event);
+    if (typeof providerId !== "string") throw new Error("Invalid Ollama provider identifier");
+    return ollamaSuiteStore.refreshModelDetails(providerId, modelName);
+  });
+  ipcMain.handle(IPC.OLLAMA_PROBE_HARDWARE, async (event) => {
+    assertTrustedSender(event);
+    return ollamaSuiteStore.probeHardware();
+  });
+  ipcMain.handle(IPC.OLLAMA_START_PULL_BATCH, async (event, input: unknown) => {
+    assertTrustedSender(event);
+    return ollamaSuiteStore.startPullBatch(input);
+  });
+  ipcMain.handle(IPC.OLLAMA_RETRY_PULL_BATCH, async (event, id: unknown) => {
+    assertTrustedSender(event);
+    if (typeof id !== "string") throw new Error("Invalid Ollama pull batch identifier");
+    return ollamaSuiteStore.retryPullBatch(id);
+  });
+  ipcMain.handle(IPC.OLLAMA_CANCEL_PULL_BATCH, async (event, id: unknown) => {
+    assertTrustedSender(event);
+    if (typeof id !== "string") throw new Error("Invalid Ollama pull batch identifier");
+    return ollamaSuiteStore.cancelPullBatch(id);
+  });
+  ipcMain.handle(IPC.OLLAMA_DELETE_MODEL, async (event, providerId: unknown, modelName: unknown) => {
+    assertTrustedSender(event);
+    if (typeof providerId !== "string") throw new Error("Invalid Ollama provider identifier");
+    return ollamaSuiteStore.deleteModel(providerId, modelName);
+  });
+  ipcMain.handle(IPC.OLLAMA_COPY_MODEL, async (event, providerId: unknown, input: unknown) => {
+    assertTrustedSender(event);
+    if (typeof providerId !== "string") throw new Error("Invalid Ollama provider identifier");
+    return ollamaSuiteStore.copyModel(providerId, input);
+  });
+  ipcMain.handle(IPC.OLLAMA_GENERATE, async (event, input: unknown) => {
+    assertTrustedSender(event);
+    return ollamaSuiteStore.generate(input);
+  });
+  ipcMain.handle(IPC.OLLAMA_CREATE_CHAT, async (event, input: unknown) => {
+    assertTrustedSender(event);
+    return ollamaSuiteStore.createChatSession(input);
+  });
+  ipcMain.handle(IPC.OLLAMA_RENAME_CHAT, async (event, id: unknown, name: unknown) => {
+    assertTrustedSender(event);
+    if (typeof id !== "string") throw new Error("Invalid local chat identifier");
+    return ollamaSuiteStore.renameChatSession(id, name);
+  });
+  ipcMain.handle(IPC.OLLAMA_DELETE_CHAT, async (event, id: unknown) => {
+    assertTrustedSender(event);
+    if (typeof id !== "string") throw new Error("Invalid local chat identifier");
+    return ollamaSuiteStore.deleteChatSession(id);
+  });
+  ipcMain.handle(IPC.OLLAMA_SEND_CHAT, async (event, input: unknown) => {
+    assertTrustedSender(event);
+    return ollamaSuiteStore.sendChat(input);
+  });
+  ipcMain.handle(IPC.OLLAMA_CANCEL_CHAT, async (event, id: unknown) => {
+    assertTrustedSender(event);
+    if (typeof id !== "string") throw new Error("Invalid local chat identifier");
+    return ollamaSuiteStore.cancelChat(id);
+  });
+  ipcMain.handle(IPC.OLLAMA_EXPORT_CHAT, (event, id: unknown, format: unknown) => {
+    assertTrustedSender(event);
+    if (typeof id !== "string" || !isExportFormat(format)) throw new Error("Invalid local chat export request");
+    return ollamaSuiteStore.exportChat(id, format);
+  });
+  ipcMain.handle(IPC.OLLAMA_REGISTER_HARNESS, async (event, input: unknown) => {
+    assertTrustedSender(event);
+    return ollamaSuiteStore.registerHarnessProfile(input);
+  });
+  ipcMain.handle(IPC.OLLAMA_PICK_HARNESS_EXECUTABLE, async (event) => {
+    assertTrustedSender(event);
+    const result = await dialog.showOpenDialog({ title: "Choose approved Ollama harness executable", properties: ["openFile"], filters: [{ name: "Executable", extensions: ["exe"] }] });
+    return result.canceled ? null : result.filePaths[0] ?? null;
+  });
+  ipcMain.handle(IPC.OLLAMA_PICK_HARNESS_FOLDER, async (event) => {
+    assertTrustedSender(event);
+    const result = await dialog.showOpenDialog({ title: "Choose Ollama harness working folder", properties: ["openDirectory", "createDirectory"] });
+    return result.canceled ? null : result.filePaths[0] ?? null;
+  });
+  ipcMain.handle(IPC.OLLAMA_REMOVE_HARNESS, async (event, id: unknown) => {
+    assertTrustedSender(event);
+    if (typeof id !== "string") throw new Error("Invalid harness profile identifier");
+    return ollamaSuiteStore.removeHarnessProfile(id);
+  });
+  ipcMain.handle(IPC.OLLAMA_PREFLIGHT_HARNESS, async (event, input: unknown) => {
+    assertTrustedSender(event);
+    return ollamaSuiteStore.preflightHarness(input);
+  });
+  ipcMain.handle(IPC.OLLAMA_LAUNCH_HARNESS, async (event, input: unknown) => {
+    assertTrustedSender(event);
+    return ollamaSuiteStore.launchHarness(input);
+  });
+  ipcMain.handle(IPC.OLLAMA_RESTORE_HARNESS, async (event, id: unknown) => {
+    assertTrustedSender(event);
+    if (typeof id !== "string") throw new Error("Invalid harness snapshot identifier");
+    return ollamaSuiteStore.restoreHarnessSnapshot(id);
   });
   ipcMain.handle(IPC.OLLAMA_EXPORT_METADATA, (event, format: unknown) => {
     assertTrustedSender(event);
@@ -1637,6 +1743,7 @@ app.whenReady().then(async () => {
   manager.on("scheduleChanged", broadcastScheduleRules);
   personalVocabularyStore.on("changed", broadcastPersonalVocabulary);
   manager.on("itemCompleted", notifyDownloadComplete);
+  ollamaSuiteStore.subscribe(broadcastOllamaState);
   await processBrowserHandoffs(process.argv);
   handoffServer = new HandoffServer({
     manager,

@@ -64,6 +64,12 @@ import {
   type ChangelogViewRequest,
 } from "./history/ChangelogStore";
 
+async function invokeOllamaState(channel: string, ...args: unknown[]): Promise<OllamaSuiteState> {
+  const result: unknown = await ipcRenderer.invoke(channel, ...args);
+  if (!isOllamaSuiteState(result)) throw new Error("Invalid local Ollama suite state from main process");
+  return result;
+}
+
 // Everything exposed to the renderer goes through this bridge. No direct
 // Node/ipcRenderer access is ever given to renderer code.
 const api = {
@@ -459,26 +465,41 @@ const api = {
     return result;
   },
 
-  getOllamaSuiteState: async (): Promise<OllamaSuiteState> => {
-    const result: unknown = await ipcRenderer.invoke(IPC.OLLAMA_GET_STATE);
-    if (!isOllamaSuiteState(result)) throw new Error("Invalid Ollama suite state from main process");
+  getOllamaSuiteState: (): Promise<OllamaSuiteState> => invokeOllamaState(IPC.OLLAMA_GET_STATE),
+  onOllamaSuiteStateChanged: (cb: (state: OllamaSuiteState) => void) => {
+    const listener = (_: unknown, state: unknown) => { if (isOllamaSuiteState(state)) cb(state); };
+    ipcRenderer.on(IPC.OLLAMA_STATE_CHANGED, listener);
+    return () => ipcRenderer.removeListener(IPC.OLLAMA_STATE_CHANGED, listener);
+  },
+  addOllamaProvider: (input: { name: string; endpoint: string }): Promise<OllamaSuiteState> => invokeOllamaState(IPC.OLLAMA_ADD_PROVIDER, input),
+  removeOllamaProvider: (id: string): Promise<OllamaSuiteState> => invokeOllamaState(IPC.OLLAMA_REMOVE_PROVIDER, id),
+  refreshOllamaProvider: (id: string): Promise<OllamaSuiteState> => invokeOllamaState(IPC.OLLAMA_REFRESH_PROVIDER, id),
+  refreshOllamaCatalogCapability: (): Promise<OllamaSuiteState> => invokeOllamaState(IPC.OLLAMA_REFRESH_CATALOG_CAPABILITY),
+  refreshOllamaModelDetails: (providerId: string, modelName: string): Promise<OllamaSuiteState> => invokeOllamaState(IPC.OLLAMA_REFRESH_MODEL_DETAILS, providerId, modelName),
+  probeOllamaHardware: (): Promise<OllamaSuiteState> => invokeOllamaState(IPC.OLLAMA_PROBE_HARDWARE),
+  startOllamaPullBatch: (input: unknown): Promise<OllamaSuiteState> => invokeOllamaState(IPC.OLLAMA_START_PULL_BATCH, input),
+  retryOllamaPullBatch: (id: string): Promise<OllamaSuiteState> => invokeOllamaState(IPC.OLLAMA_RETRY_PULL_BATCH, id),
+  cancelOllamaPullBatch: (id: string): Promise<OllamaSuiteState> => invokeOllamaState(IPC.OLLAMA_CANCEL_PULL_BATCH, id),
+  deleteOllamaModel: (providerId: string, modelName: string): Promise<OllamaSuiteState> => invokeOllamaState(IPC.OLLAMA_DELETE_MODEL, providerId, modelName),
+  copyOllamaModel: (providerId: string, input: unknown): Promise<OllamaSuiteState> => invokeOllamaState(IPC.OLLAMA_COPY_MODEL, providerId, input),
+  generateOllama: (input: unknown): Promise<OllamaSuiteState> => invokeOllamaState(IPC.OLLAMA_GENERATE, input),
+  createOllamaChat: (input: unknown): Promise<OllamaSuiteState> => invokeOllamaState(IPC.OLLAMA_CREATE_CHAT, input),
+  renameOllamaChat: (id: string, name: string): Promise<OllamaSuiteState> => invokeOllamaState(IPC.OLLAMA_RENAME_CHAT, id, name),
+  deleteOllamaChat: (id: string): Promise<OllamaSuiteState> => invokeOllamaState(IPC.OLLAMA_DELETE_CHAT, id),
+  sendOllamaChat: (input: unknown): Promise<OllamaSuiteState> => invokeOllamaState(IPC.OLLAMA_SEND_CHAT, input),
+  cancelOllamaChat: (id: string): Promise<OllamaSuiteState> => invokeOllamaState(IPC.OLLAMA_CANCEL_CHAT, id),
+  exportOllamaChat: async (id: string, format: ExportFormat): Promise<ExportResult> => {
+    const result: unknown = await ipcRenderer.invoke(IPC.OLLAMA_EXPORT_CHAT, id, format);
+    if (!isExportResult(result)) throw new Error("Invalid local Ollama chat export from main process");
     return result;
   },
-  addOllamaProvider: async (input: { name: string; endpoint: string }): Promise<OllamaSuiteState> => {
-    const result: unknown = await ipcRenderer.invoke(IPC.OLLAMA_ADD_PROVIDER, input);
-    if (!isOllamaSuiteState(result)) throw new Error("Invalid Ollama provider result from main process");
-    return result;
-  },
-  removeOllamaProvider: async (id: string): Promise<OllamaSuiteState> => {
-    const result: unknown = await ipcRenderer.invoke(IPC.OLLAMA_REMOVE_PROVIDER, id);
-    if (!isOllamaSuiteState(result)) throw new Error("Invalid Ollama provider removal result from main process");
-    return result;
-  },
-  refreshOllamaProvider: async (id: string): Promise<OllamaRefreshResult> => {
-    const result: unknown = await ipcRenderer.invoke(IPC.OLLAMA_REFRESH_PROVIDER, id);
-    if (!isOllamaRefreshResult(result)) throw new Error("Invalid Ollama refresh result from main process");
-    return result;
-  },
+  registerOllamaHarness: (input: unknown): Promise<OllamaSuiteState> => invokeOllamaState(IPC.OLLAMA_REGISTER_HARNESS, input),
+  pickOllamaHarnessExecutable: (): Promise<string | null> => ipcRenderer.invoke(IPC.OLLAMA_PICK_HARNESS_EXECUTABLE),
+  pickOllamaHarnessFolder: (): Promise<string | null> => ipcRenderer.invoke(IPC.OLLAMA_PICK_HARNESS_FOLDER),
+  removeOllamaHarness: (id: string): Promise<OllamaSuiteState> => invokeOllamaState(IPC.OLLAMA_REMOVE_HARNESS, id),
+  preflightOllamaHarness: (input: unknown): Promise<OllamaSuiteState> => invokeOllamaState(IPC.OLLAMA_PREFLIGHT_HARNESS, input),
+  launchOllamaHarness: (input: unknown): Promise<OllamaSuiteState> => invokeOllamaState(IPC.OLLAMA_LAUNCH_HARNESS, input),
+  restoreOllamaHarness: (id: string): Promise<OllamaSuiteState> => invokeOllamaState(IPC.OLLAMA_RESTORE_HARNESS, id),
   exportOllamaMetadata: async (format: ExportFormat): Promise<ExportResult> => {
     const result: unknown = await ipcRenderer.invoke(IPC.OLLAMA_EXPORT_METADATA, format);
     if (!isExportResult(result)) throw new Error("Invalid Ollama metadata export from main process");

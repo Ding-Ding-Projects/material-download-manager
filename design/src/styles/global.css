@@ -1420,6 +1420,318 @@ textarea {
   resize: vertical;
   width: 100%;
 }
+
+/* Local Ollama suite: every state stays visible rather than collapsing into a
+   generic spinner.  The cards deliberately use the same M3 surface tokens as
+   the rest of Settings and flex down to one column at narrow widths. */
+.ollama-card {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid var(--border-color);
+  border-radius: 14px;
+  background: var(--bg-row);
+  min-width: 0;
+}
+
+.ollama-card h3,
+.ollama-card h4,
+.ollama-card p {
+  margin: 0;
+}
+
+.ollama-section-header,
+.ollama-chat-header,
+.ollama-runtime-summary,
+.ollama-toolbar,
+.ollama-search-row,
+.ollama-bulk-row,
+.ollama-guided-action-grid,
+.ollama-harness-form,
+.ollama-harness-actions,
+.ollama-catalog-boundary,
+.ollama-batch-card,
+.ollama-model-card,
+.ollama-chat-compose {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  min-width: 0;
+}
+
+.ollama-section-header,
+.ollama-chat-header,
+.ollama-runtime-summary,
+.ollama-batch-card {
+  justify-content: space-between;
+}
+
+.ollama-toolbar .field,
+.ollama-search-row .field,
+.ollama-harness-form .field,
+.ollama-harness-actions .field,
+.ollama-chat-compose .field {
+  flex: 1 1 220px;
+}
+
+.ollama-catalog-boundary {
+  align-items: center;
+  border-color: color-mix(in srgb, var(--accent-purple) 55%, var(--border-color));
+  background: color-mix(in srgb, var(--bg-row) 90%, var(--accent-purple));
+}
+
+.ollama-search-row {
+  align-items: end;
+}
+
+.ollama-anchored-regex {
+  position: relative;
+  z-index: 2;
+  width: 100%;
+  border: 1px solid var(--accent-purple);
+  border-radius: 12px;
+  background: var(--bg-main);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, .26);
+}
+
+.ollama-bulk-row {
+  align-items: center;
+}
+
+.ollama-model-list,
+.ollama-batches,
+.ollama-snapshot-list,
+.ollama-chat-messages {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+
+.ollama-model-card {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  background: var(--bg-main);
+}
+
+.ollama-model-select {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  min-width: 0;
+  font-weight: 650;
+  overflow-wrap: anywhere;
+}
+
+.ollama-model-facts {
+  display: flex;
+  gap: 7px;
+  flex-wrap: wrap;
+  color: var(--text-secondary);
+}
+
+.status-chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 2px 8px;
+  border: 1px solid var(--border-color);
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 650;
+  color: var(--text-primary);
+  background: var(--bg-row-hover);
+}
+
+.status-warning,
+.status-runs-with-limits {
+  border-color: #d38b19;
+  background: rgba(211, 139, 25, .16);
+}
+
+.status-runs-well {
+  border-color: #319b60;
+  background: rgba(49, 155, 96, .16);
+}
+
+.status-unlikely {
+  border-color: #bd4646;
+  background: rgba(189, 70, 70, .16);
+}
+
+.status-unknown {
+  border-color: #71829b;
+  background: rgba(113, 130, 155, .16);
+}
+
+.status-running {
+  border-color: var(--accent-purple);
+  background: color-mix(in srgb, var(--accent-purple) 22%, transparent);
+}
+
+.ollama-guided-action-grid > section {
+  display: grid;
+  flex: 1 1 320px;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  min-width: 0;
+}
+
+.ollama-batch-card {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  background: var(--bg-main);
+}
+
+.ollama-batch-card ul {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ollama-batch-card li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(120px, 1fr) minmax(100px, .6fr) minmax(0, 1fr);
+  gap: 8px;
+  align-items: center;
+  padding: 7px;
+  border-radius: 8px;
+  background: var(--bg-row-hover);
+  overflow-wrap: anywhere;
+}
+
+.ollama-batch-card progress {
+  width: 100%;
+  min-width: 80px;
+  accent-color: var(--accent-purple);
+}
+
+.ollama-chat-tabs {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  padding-bottom: 2px;
+}
+
+.ollama-chat-tab {
+  flex: 0 0 auto;
+  min-height: 34px;
+  padding: 7px 10px;
+  border: 1px solid var(--border-color);
+  border-radius: 9px;
+  background: var(--bg-main);
+  color: var(--text-secondary);
+  font: inherit;
+  cursor: pointer;
+}
+
+.ollama-chat-tab[aria-selected="true"] {
+  color: var(--text-primary);
+  border-color: var(--accent-purple);
+  background: color-mix(in srgb, var(--accent-purple) 18%, var(--bg-main));
+}
+
+.ollama-chat-tab:focus-visible,
+.ollama-model-select input:focus-visible,
+.ollama-attachment-list button:focus-visible {
+  outline: 2px solid var(--accent-purple);
+  outline-offset: 2px;
+}
+
+.ollama-chat-card {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+
+.ollama-chat-messages {
+  max-height: 420px;
+  overflow: auto;
+  padding: 2px;
+}
+
+.ollama-chat-message {
+  display: grid;
+  gap: 5px;
+  padding: 10px;
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  overflow-wrap: anywhere;
+}
+
+.ollama-chat-message p,
+.ollama-chat-message pre {
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.ollama-chat-user {
+  background: color-mix(in srgb, var(--accent-purple) 14%, var(--bg-main));
+}
+
+.ollama-chat-assistant {
+  background: var(--bg-main);
+}
+
+.ollama-chat-compose {
+  display: grid;
+}
+
+.ollama-attachment-list {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.ollama-attachment-list > span {
+  display: inline-flex;
+  gap: 4px;
+  align-items: center;
+  max-width: 100%;
+  padding: 3px 6px;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  overflow-wrap: anywhere;
+}
+
+.ollama-snapshot-list article {
+  padding: 10px;
+  border: 1px solid var(--border-color);
+  border-radius: 9px;
+  background: var(--bg-main);
+}
+
+.ollama-snapshot-list p {
+  margin: 6px 0;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 720px) {
+  .ollama-card {
+    padding: 11px;
+  }
+
+  .ollama-batch-card li {
+    grid-template-columns: 1fr;
+  }
+
+  .ollama-section-header,
+  .ollama-chat-header,
+  .ollama-runtime-summary {
+    align-items: stretch;
+  }
+}
 .dialog-body,
 .settings-section,
 .settings-search,
