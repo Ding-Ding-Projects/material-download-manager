@@ -130,6 +130,47 @@ output { min-height: 36px; padding: 8px; border-radius: 10px; background: var(--
 #authenticator-remove-card[data-state="completed"], #personal-vocabulary-clear-card[data-state="completed"] { animation: authenticator-remove-complete 420ms ease-out both; }
 #personal-vocabulary-clear-card { margin-top: 16px; }
 
+.ollama-card { display: grid; gap: 10px; }
+.ollama-heading-row { display: flex; min-width: 0; gap: 10px; align-items: center; justify-content: space-between; }
+.ollama-heading-row h2, .ollama-heading-row h3 { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+.ollama-pill { flex: 0 0 auto; max-width: min(48%, 260px); overflow-wrap: anywhere; padding: 5px 9px; border: 1px solid var(--md-outline); border-radius: 999px; background: var(--md-surface); color: var(--md-on-surface-variant); font-size: 12px; font-weight: 750; }
+.ollama-list-search-row { display: flex; min-width: 0; gap: 10px; align-items: center; }
+.ollama-list-search-row input { min-width: 0; flex: 1; margin-top: 0; }
+.ollama-list-regex { position: relative; top: auto; right: auto; width: 100%; max-height: min(42vh, 420px); margin-top: 8px; }
+.ollama-list { display: grid; gap: 10px; margin: 0; padding: 0; list-style: none; }
+.ollama-picker-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.ollama-picker-row > select, .ollama-picker-row > input { flex: 1 1 180px; min-width: 0; }
+.ollama-picker-popover { position: relative; margin-top: 8px; padding: 12px; border: 1px solid var(--md-outline); border-radius: 14px; background: var(--md-surface-container); box-shadow: var(--md-elevation-2, 0 3px 8px rgb(0 0 0 / .16)); }
+.ollama-picker-regex { position: relative; top: auto; right: auto; width: 100%; margin-top: 8px; }
+.ollama-fit-evidence { max-width: 72ch; }
+.ollama-list-item { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 12px; align-items: start; padding: 12px; border: 1px solid var(--md-outline); border-radius: 14px; background: var(--md-surface); }
+.ollama-list-item > div { display: grid; min-width: 0; gap: 4px; }
+.ollama-list-item strong, .ollama-list-item span, .ollama-list-item small, .ollama-list-item code { overflow-wrap: anywhere; }
+.ollama-list-item small { color: var(--md-on-surface-variant); font-size: 12px; }
+.ollama-list-item .inline-actions { justify-content: flex-end; }
+.ollama-list-item input[type="checkbox"] { width: 20px; min-height: 20px; margin: 3px 0 0; }
+.ollama-fit { display: inline-flex; width: fit-content; padding: 4px 8px; border-radius: 999px; background: var(--md-surface-container-high); color: var(--md-on-surface); font-size: 12px; font-weight: 800; }
+.ollama-progress { width: 100%; height: 10px; accent-color: var(--md-primary); }
+.ollama-bulk-row { display: flex; flex-wrap: wrap; gap: 9px; align-items: center; padding-top: 4px; }
+.ollama-bulk-row .check-row { margin: 0 auto 0 0; }
+.ollama-two-column { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.ollama-chat-layout { display: grid; grid-template-columns: minmax(180px, .72fr) minmax(0, 1.8fr); gap: 14px; }
+.ollama-chat-layout aside, .ollama-conversation { min-width: 0; }
+.ollama-chat-layout aside { display: grid; align-content: start; gap: 10px; }
+.ollama-chat-layout h3 { margin: 0; font-size: 16px; }
+.ollama-session-list { max-height: 420px; overflow: auto; }
+.ollama-session-button { width: 100%; min-height: 44px; border: 1px solid var(--md-outline); border-radius: 12px; background: var(--md-surface); color: var(--md-on-surface); text-align: left; padding: 9px; cursor: pointer; font: inherit; }
+.ollama-session-button[aria-current="true"] { border-color: var(--md-primary); box-shadow: inset 3px 0 0 var(--md-primary); }
+.ollama-session-button small { display: block; padding-top: 3px; color: var(--md-on-surface-variant); }
+.ollama-conversation { display: grid; gap: 10px; padding: 14px; border: 1px solid var(--md-outline); border-radius: 16px; background: var(--md-surface); }
+.ollama-message-list { display: grid; gap: 8px; max-height: 440px; overflow: auto; margin: 0; padding: 0; list-style: none; }
+.ollama-message { max-width: 92%; padding: 10px; border-radius: 12px; background: var(--md-surface-container-high); overflow-wrap: anywhere; white-space: pre-wrap; }
+.ollama-message[data-role="user"] { justify-self: end; background: color-mix(in srgb, var(--md-primary) 18%, var(--md-surface)); }
+.ollama-message[data-status="streaming"] { border: 1px dashed var(--md-primary); }
+.ollama-message small { display: block; margin-bottom: 4px; color: var(--md-on-surface-variant); font-size: 11px; font-weight: 750; }
+#ollama-delete-card[data-state="arming"] { animation: authenticator-remove-pulse 700ms ease-in-out infinite alternate; }
+#ollama-delete-card[data-state="completed"] { animation: authenticator-remove-complete 420ms ease-out both; }
+
 @keyframes authenticator-remove-pulse {
   from { box-shadow: 0 0 0 0 #ba1a1a20; }
   to { box-shadow: 0 0 0 8px #ba1a1a08; }
@@ -151,6 +192,10 @@ output { min-height: 36px; padding: 8px; border-radius: 10px; background: var(--
   .logo-preview-grid, .logo-preset-list { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .logo-preset-search-row { grid-template-columns: 1fr; }
   .logo-color-translations { grid-template-columns: 1fr; }
+  .ollama-two-column, .ollama-chat-layout, .ollama-list-item { grid-template-columns: 1fr; }
+  .ollama-list-search-row, .ollama-heading-row { align-items: stretch; flex-direction: column; }
+  .ollama-pill { max-width: 100%; width: fit-content; }
+  .ollama-list-item .inline-actions { justify-content: flex-start; }
 }
 
 @media (prefers-color-scheme: dark) {

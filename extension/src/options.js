@@ -32,6 +32,7 @@ import {
   normalizeLogoRecord,
   presetSourceDataUrl,
 } from "./shared/logo.js";
+import { DEFAULT_OLLAMA_ENDPOINT, OLLAMA_STATE_KEY, computeHardwareFit } from "./shared/ollama.js";
 
 let settings = sanitizeSettings(DEFAULT_SETTINGS);
 let activeTab = "connection";
@@ -56,6 +57,12 @@ const logoUploadFilterRegexState = { open: false, mode: false };
 const logoColorRegexState = { open: false, mode: false };
 const logoAcceptedUploadTypes = new Set(["image/png", "image/jpeg", "image/webp"]);
 let logoPreviewGeneration = 0;
+let ollamaState = null;
+let activeOllamaSessionId = null;
+let ollamaModelRegexOpen = false;
+let ollamaModelRegexMode = false;
+let pendingOllamaDeletion = null;
+let selectedOllamaPullIds = new Set();
 const REQUIRED_SEARCHABLE_SETTING_IDS = Object.freeze([
   "handoff-endpoint",
   "auto-capture-downloads",
@@ -92,6 +99,16 @@ const REQUIRED_SEARCHABLE_SETTING_IDS = Object.freeze([
   "authenticator-digits",
   "authenticator-period",
   "authenticator-list-search",
+  "ollama-endpoint",
+  "ollama-pull-parallelism",
+  "ollama-model-search",
+  "ollama-pull-tag",
+  "ollama-chat-model",
+  "ollama-system-prompt",
+  "ollama-chat-prompt",
+  "ollama-temperature",
+  "ollama-num-context",
+  "ollama-attachment",
 ]);
 
 const elements = {
@@ -272,6 +289,83 @@ const elements = {
   authenticatorRemoveStatus: document.querySelector("#authenticator-remove-status"),
   authenticatorRemoveConfirm: document.querySelector("#authenticator-remove-confirm"),
   authenticatorRemoveCancel: document.querySelector("#authenticator-remove-cancel"),
+  ollamaEndpoint: document.querySelector("#ollama-endpoint"),
+  ollamaPullParallelism: document.querySelector("#ollama-pull-parallelism"),
+  ollamaPullParallelismSearchToggle: document.querySelector("#ollama-pull-parallelism-search-toggle"),
+  ollamaPullParallelismPicker: document.querySelector("#ollama-pull-parallelism-picker"),
+  ollamaPullParallelismSearch: document.querySelector("#ollama-pull-parallelism-search"),
+  ollamaPullParallelismRegexToggle: document.querySelector("#ollama-pull-parallelism-regex-toggle"),
+  ollamaPullParallelismRegex: document.querySelector("#ollama-pull-parallelism-regex"),
+  ollamaPullParallelismRegexPattern: document.querySelector("#ollama-pull-parallelism-regex-pattern"),
+  ollamaPullParallelismRegexFlags: document.querySelector("#ollama-pull-parallelism-regex-flags"),
+  ollamaPullParallelismRegexApply: document.querySelector("#ollama-pull-parallelism-regex-apply"),
+  ollamaPullParallelismPickerResults: document.querySelector("#ollama-pull-parallelism-picker-results"),
+  ollamaSaveConfig: document.querySelector("#ollama-save-config"),
+  ollamaRefresh: document.querySelector("#ollama-refresh"),
+  ollamaRuntimePill: document.querySelector("#ollama-runtime-pill"),
+  ollamaRuntimeStatus: document.querySelector("#ollama-runtime-status"),
+  ollamaCatalogState: document.querySelector("#ollama-catalog-state"),
+  ollamaModelSearch: document.querySelector("#ollama-model-search"),
+  ollamaModelRegexToggle: document.querySelector("#ollama-model-regex-toggle"),
+  ollamaModelRegex: document.querySelector("#ollama-model-regex"),
+  ollamaModelRegexPattern: document.querySelector("#ollama-model-regex-pattern"),
+  ollamaModelRegexFlags: document.querySelector("#ollama-model-regex-flags"),
+  ollamaModelRegexSample: document.querySelector("#ollama-model-regex-sample"),
+  ollamaModelRegexFeedback: document.querySelector("#ollama-model-regex-feedback"),
+  ollamaModelRegexMatches: document.querySelector("#ollama-model-regex-matches"),
+  ollamaModelRegexApply: document.querySelector("#ollama-model-regex-apply"),
+  ollamaModelRegexCopy: document.querySelector("#ollama-model-regex-copy"),
+  ollamaModelRegexExport: document.querySelector("#ollama-model-regex-export"),
+  ollamaModelRegexMode: document.querySelector("#ollama-model-regex-mode"),
+  ollamaModelSummary: document.querySelector("#ollama-model-summary"),
+  ollamaModelList: document.querySelector("#ollama-model-list"),
+  ollamaPullTag: document.querySelector("#ollama-pull-tag"),
+  ollamaKnownTags: document.querySelector("#ollama-known-model-tags"),
+  ollamaAddPull: document.querySelector("#ollama-add-pull"),
+  ollamaRunPulls: document.querySelector("#ollama-run-pulls"),
+  ollamaPullSelectAll: document.querySelector("#ollama-pull-select-all"),
+  ollamaBulkCancel: document.querySelector("#ollama-bulk-cancel"),
+  ollamaBulkRetry: document.querySelector("#ollama-bulk-retry"),
+  ollamaCartSummary: document.querySelector("#ollama-cart-summary"),
+  ollamaCartList: document.querySelector("#ollama-cart-list"),
+  ollamaChatModel: document.querySelector("#ollama-chat-model"),
+  ollamaChatModelSearchToggle: document.querySelector("#ollama-chat-model-search-toggle"),
+  ollamaChatModelPicker: document.querySelector("#ollama-chat-model-picker"),
+  ollamaChatModelSearch: document.querySelector("#ollama-chat-model-search"),
+  ollamaChatModelRegexToggle: document.querySelector("#ollama-chat-model-regex-toggle"),
+  ollamaChatModelRegex: document.querySelector("#ollama-chat-model-regex"),
+  ollamaChatModelRegexPattern: document.querySelector("#ollama-chat-model-regex-pattern"),
+  ollamaChatModelRegexFlags: document.querySelector("#ollama-chat-model-regex-flags"),
+  ollamaChatModelRegexApply: document.querySelector("#ollama-chat-model-regex-apply"),
+  ollamaChatModelPickerResults: document.querySelector("#ollama-chat-model-picker-results"),
+  ollamaSystemPrompt: document.querySelector("#ollama-system-prompt"),
+  ollamaCreateChat: document.querySelector("#ollama-create-chat"),
+  ollamaSessionList: document.querySelector("#ollama-session-list"),
+  ollamaChatTitle: document.querySelector("#ollama-chat-title"),
+  ollamaMessageList: document.querySelector("#ollama-message-list"),
+  ollamaChatPrompt: document.querySelector("#ollama-chat-prompt"),
+  ollamaTemperature: document.querySelector("#ollama-temperature"),
+  ollamaNumContext: document.querySelector("#ollama-num-context"),
+  ollamaAttachment: document.querySelector("#ollama-attachment"),
+  ollamaAttachmentHelp: document.querySelector("#ollama-attachment-help"),
+  ollamaSendChat: document.querySelector("#ollama-send-chat"),
+  ollamaStopChat: document.querySelector("#ollama-stop-chat"),
+  ollamaRetryChat: document.querySelector("#ollama-retry-chat"),
+  ollamaExportChat: document.querySelector("#ollama-export-chat"),
+  ollamaRenameChat: document.querySelector("#ollama-rename-chat"),
+  ollamaDeleteChat: document.querySelector("#ollama-delete-chat"),
+  ollamaChatStatus: document.querySelector("#ollama-chat-status"),
+  ollamaRunPreflight: document.querySelector("#ollama-run-preflight"),
+  ollamaHarnessBoundary: document.querySelector("#ollama-harness-boundary"),
+  ollamaTroubleshooter: document.querySelector("#ollama-troubleshooter"),
+  ollamaDeleteCard: document.querySelector("#ollama-delete-card"),
+  ollamaDeleteTarget: document.querySelector("#ollama-delete-target"),
+  ollamaDeleteKeyOne: document.querySelector("#ollama-delete-key-one"),
+  ollamaDeleteKeyTwo: document.querySelector("#ollama-delete-key-two"),
+  ollamaDeleteSlider: document.querySelector("#ollama-delete-slider"),
+  ollamaDeleteStatus: document.querySelector("#ollama-delete-status"),
+  ollamaDeleteConfirm: document.querySelector("#ollama-delete-confirm"),
+  ollamaDeleteCancel: document.querySelector("#ollama-delete-cancel"),
   toast: document.querySelector("#toast"),
 };
 
@@ -315,6 +409,7 @@ function localizePage() {
     element.hidden = settings.schoolModeEnabled;
   });
   if (settings.schoolModeEnabled && pendingPersonalVocabularyClear) closePersonalVocabularyClear({ restoreFocus: false });
+  if (settings.schoolModeEnabled && activeTab === "ollama") applyTab("connection");
   elements.funnyEnOutput.value = String(settings.funnyLevelEn);
   elements.funnyEnOutput.textContent = String(settings.funnyLevelEn);
   elements.funnyYueOutput.value = String(settings.funnyLevelYue);
@@ -866,6 +961,7 @@ async function confirmPersonalVocabularyClear() {
     personalVocabularyFeedback = "rejected";
     updatePersonalVocabularyClearGate();
   }
+  if (ollamaState) renderOllamaState();
 }
 
 function formatAuthenticatorSecret(value) {
@@ -1197,6 +1293,765 @@ document.addEventListener("keydown", (event) => {
   }
 });
 
+function ollamaResultMessage(value) {
+  const key = {
+    "ollama-state": "ollamaStateReady",
+    "ollama-refresh-complete": "ollamaRefreshComplete",
+    "ollama-config-saved": "ollamaConfigSaved",
+    "ollama-model-inspected": "ollamaModelInspected",
+    "ollama-pull-queued": "ollamaPullQueued",
+    "ollama-pull-run-requested": "ollamaPullRunRequested",
+    "ollama-pull-cancelled": "ollamaPullCancelled",
+    "ollama-pull-requeued": "ollamaPullRequeued",
+    "ollama-model-deleted": "ollamaModelDeleted",
+    "ollama-model-copied": "ollamaModelCopied",
+    "ollama-chat-created": "ollamaChatCreated",
+    "ollama-chat-complete": "ollamaChatComplete",
+    "ollama-chat-cancelled": "ollamaChatCancelled",
+    "ollama-chat-stop-requested": "ollamaChatStopRequested",
+    "ollama-chat-renamed": "ollamaChatRenamed",
+    "ollama-chat-deleted": "ollamaChatDeleted",
+    "ollama-chat-export": "ollamaChatExported",
+    "ollama-browser-harness-boundary": "ollamaHarnessBoundary",
+    "ollama-storage-corrupt": "ollamaStorageCorrupt",
+    "ollama-request-timeout": "ollamaRequestTimeout",
+    "ollama-request-failed": "ollamaRequestFailed",
+    "ollama-http-error": "ollamaHttpError",
+    "ollama-content-type": "ollamaContentType",
+    "ollama-attachment-unsupported": "ollamaAttachmentUnsupported",
+    "ollama-model-uninstalled": "ollamaModelUninstalled",
+    "ollama-chat-not-streaming": "ollamaChatNotStreaming",
+  }[value?.code];
+  return key ? localize(key, settings, { detail: value?.detail ?? "" }) : value?.detail || localize("ollamaRequestFailed", settings);
+}
+
+function formatOllamaBytes(value) {
+  if (!Number.isFinite(value) || value < 0) return localize("ollamaUnknownValue", settings);
+  const units = ["B", "KiB", "MiB", "GiB", "TiB"];
+  let size = value;
+  let index = 0;
+  while (size >= 1024 && index < units.length - 1) { size /= 1024; index += 1; }
+  return `${size >= 10 || index === 0 ? size.toFixed(0) : size.toFixed(1)} ${units[index]}`;
+}
+
+function activeOllamaSession() {
+  return ollamaState?.sessions?.find((session) => session.id === activeOllamaSessionId) ?? null;
+}
+
+function selectedOllamaModel() {
+  const session = activeOllamaSession();
+  const modelName = session?.model ?? elements.ollamaChatModel.value;
+  return ollamaState?.installed?.find((item) => item.name === modelName) ?? null;
+}
+
+function ollamaRuntimeLabel(runtime) {
+  const key = {
+    healthy: "ollamaRuntimeHealthy",
+    missing: "ollamaRuntimeMissing",
+    unhealthy: "ollamaRuntimeUnhealthy",
+    offline: "ollamaRuntimeOffline",
+    unknown: "ollamaRuntimeUnknown",
+  }[runtime?.status] ?? "ollamaRuntimeUnknown";
+  return localize(key, settings, { version: runtime?.version ?? localize("ollamaUnknownValue", settings) });
+}
+
+function ollamaFitLabel(verdict) {
+  const key = {
+    "Runs well": "ollamaFitRunsWell",
+    "Runs with limits": "ollamaFitRunsWithLimits",
+    Unlikely: "ollamaFitUnlikely",
+    Unknown: "ollamaFitUnknown",
+  }[verdict] ?? "ollamaFitUnknown";
+  return localize(key, settings);
+}
+
+function ollamaRelativeAge(value) {
+  const timestamp = Date.parse(value ?? "");
+  if (!Number.isFinite(timestamp)) return localize("ollamaNeverRefreshed", settings);
+  const elapsedMinutes = Math.max(0, Math.floor((Date.now() - timestamp) / 60_000));
+  if (elapsedMinutes < 1) return localize("ollamaAgeNow", settings);
+  if (elapsedMinutes < 60) return localize("ollamaAgeMinutes", settings, { count: elapsedMinutes });
+  return localize("ollamaAgeHours", settings, { count: Math.floor(elapsedMinutes / 60) });
+}
+
+function ollamaCatalogIsStale(catalog) {
+  if (!catalog?.refreshedAt || !catalog?.verifiedEndpoint) return true;
+  if (catalog.verifiedEndpoint !== ollamaState?.endpoint) return true;
+  return Date.now() - Date.parse(catalog.refreshedAt) > 15 * 60_000;
+}
+
+function ollamaModelSearchText(model) {
+  const details = model.details ?? {};
+  return [model.name, model.running ? "running" : "installed", details.family, ...(details.families ?? []), details.parameterSize, details.quantizationLevel, ...(model.capabilities ?? [])].filter(Boolean).join(" ");
+}
+
+function ollamaModelPredicate() {
+  const query = elements.ollamaModelSearch.value.trim();
+  if (!query) return { predicate: () => true, invalid: false };
+  if (!ollamaModelRegexMode) {
+    const normalized = query.toLocaleLowerCase();
+    return { predicate: (model) => ollamaModelSearchText(model).toLocaleLowerCase().includes(normalized), invalid: false };
+  }
+  const validation = validateRegex(elements.ollamaModelRegexPattern.value, elements.ollamaModelRegexFlags.value);
+  if (!validation.valid) {
+    elements.ollamaModelRegexFeedback.textContent = `${localize("regexInvalid", settings)} ${validation.error}`;
+    return { predicate: () => false, invalid: true };
+  }
+  return {
+    predicate: (model) => evaluateRegex(elements.ollamaModelRegexPattern.value, elements.ollamaModelRegexFlags.value, ollamaModelSearchText(model)).matches.length > 0,
+    invalid: false,
+  };
+}
+
+function renderOllamaModelList() {
+  const models = Array.isArray(ollamaState?.installed) ? ollamaState.installed : [];
+  const search = ollamaModelPredicate();
+  const visible = models.filter(search.predicate);
+  elements.ollamaModelList.replaceChildren();
+  elements.ollamaModelSummary.textContent = search.invalid
+    ? localize("ollamaModelSearchInvalid", settings)
+    : localize("ollamaModelSummary", settings, { visible: visible.length, total: models.length });
+  if (models.length === 0) {
+    const empty = document.createElement("li");
+    empty.className = "authenticator-empty";
+    empty.textContent = localize("ollamaNoInstalledModels", settings);
+    elements.ollamaModelList.append(empty);
+    return;
+  }
+  if (visible.length === 0) {
+    const empty = document.createElement("li");
+    empty.className = "authenticator-empty";
+    empty.textContent = localize("ollamaNoModelMatches", settings);
+    elements.ollamaModelList.append(empty);
+    return;
+  }
+  for (const model of visible) {
+    const row = document.createElement("li");
+    row.className = "ollama-list-item";
+    const details = document.createElement("div");
+    const title = document.createElement("strong");
+    title.textContent = model.name;
+    const facts = document.createElement("small");
+    const fit = computeHardwareFit({
+      size: model.size,
+      parameterCount: model.parameterCount,
+      details: model.details,
+      contextWindow: model.contextWindow,
+    }, {});
+    facts.textContent = localize("ollamaModelFacts", settings, {
+      size: formatOllamaBytes(model.size),
+      running: model.running ? localize("ollamaRunning", settings) : localize("ollamaInstalled", settings),
+      capabilities: model.capabilities?.length ? model.capabilities.join(", ") : localize("ollamaCapabilityUnknown", settings),
+    });
+    const fitLabel = document.createElement("span");
+    fitLabel.className = "ollama-fit";
+    fitLabel.textContent = ollamaFitLabel(fit.verdict);
+    const fitEvidence = document.createElement("small");
+    fitEvidence.className = "ollama-fit-evidence";
+    fitEvidence.textContent = localize("ollamaFitEvidence", settings, { evidence: [...fit.reasons, ...fit.assumptions].join(" ") });
+    fitLabel.setAttribute("aria-describedby", `ollama-fit-evidence-${model.name.replace(/[^A-Za-z0-9_-]/gu, "-")}`);
+    fitEvidence.id = `ollama-fit-evidence-${model.name.replace(/[^A-Za-z0-9_-]/gu, "-")}`;
+    details.append(title, facts, fitLabel, fitEvidence);
+    const actions = document.createElement("div");
+    actions.className = "inline-actions";
+    const inspect = document.createElement("button");
+    inspect.className = "button button-secondary";
+    inspect.type = "button";
+    inspect.textContent = localize("ollamaInspect", settings);
+    inspect.addEventListener("click", () => void inspectOllamaModel(model.name, inspect));
+    const pull = document.createElement("button");
+    pull.className = "button button-secondary";
+    pull.type = "button";
+    pull.textContent = localize("ollamaAddPull", settings);
+    pull.addEventListener("click", () => { elements.ollamaPullTag.value = model.name; void queueOllamaPull(); });
+    const chat = document.createElement("button");
+    chat.className = "button button-secondary";
+    chat.type = "button";
+    chat.textContent = localize("ollamaStartChat", settings);
+    chat.addEventListener("click", () => { elements.ollamaChatModel.value = model.name; void createOllamaChat(); });
+    const copy = document.createElement("button");
+    copy.className = "button button-secondary";
+    copy.type = "button";
+    copy.textContent = localize("ollamaCopyModel", settings);
+    copy.addEventListener("click", () => openOllamaCopyEditor(model.name, copy));
+    const remove = document.createElement("button");
+    remove.className = "button button-danger";
+    remove.type = "button";
+    remove.textContent = localize("ollamaDeleteModel", settings);
+    remove.addEventListener("click", () => openOllamaDeletion({ kind: "model", id: model.name, target: model.name, trigger: remove }));
+    actions.append(inspect, pull, chat, copy, remove);
+    row.append(details, actions);
+    elements.ollamaModelList.append(row);
+  }
+}
+
+function renderOllamaCart() {
+  const cart = Array.isArray(ollamaState?.cart) ? ollamaState.cart : [];
+  selectedOllamaPullIds = new Set([...selectedOllamaPullIds].filter((id) => cart.some((item) => item.id === id)));
+  elements.ollamaCartList.replaceChildren();
+  elements.ollamaCartSummary.textContent = localize("ollamaCartSummary", settings, { total: cart.length, active: cart.filter((item) => item.status === "pulling").length });
+  elements.ollamaPullSelectAll.checked = cart.length > 0 && cart.every((item) => selectedOllamaPullIds.has(item.id));
+  if (!cart.length) {
+    const empty = document.createElement("li");
+    empty.className = "authenticator-empty";
+    empty.textContent = localize("ollamaCartEmpty", settings);
+    elements.ollamaCartList.append(empty);
+    return;
+  }
+  for (const item of cart) {
+    const row = document.createElement("li");
+    row.className = "ollama-list-item";
+    const select = document.createElement("input");
+    select.type = "checkbox";
+    select.checked = selectedOllamaPullIds.has(item.id);
+    select.setAttribute("aria-label", localize("ollamaSelectPull", settings, { model: item.model }));
+    select.addEventListener("change", () => {
+      if (select.checked) selectedOllamaPullIds.add(item.id); else selectedOllamaPullIds.delete(item.id);
+      renderOllamaCart();
+    });
+    const details = document.createElement("div");
+    const title = document.createElement("strong");
+    title.textContent = item.model;
+    const status = document.createElement("small");
+    status.textContent = localize("ollamaPullFacts", settings, { status: localize(`ollamaPullStatus${item.status[0].toUpperCase()}${item.status.slice(1)}`, settings), detail: item.detail ?? localize("ollamaNoDetail", settings) });
+    details.append(title, status);
+    if (Number.isFinite(item.total) && item.total > 0) {
+      const progress = document.createElement("progress");
+      progress.className = "ollama-progress";
+      progress.max = item.total;
+      progress.value = Math.min(item.completed ?? 0, item.total);
+      progress.setAttribute("aria-label", localize("ollamaPullProgress", settings, { completed: formatOllamaBytes(item.completed ?? 0), total: formatOllamaBytes(item.total) }));
+      details.append(progress);
+    }
+    const actions = document.createElement("div");
+    actions.className = "inline-actions";
+    if (["queued", "pulling"].includes(item.status)) {
+      const cancel = document.createElement("button");
+      cancel.className = "button button-secondary";
+      cancel.type = "button";
+      cancel.textContent = localize("ollamaCancelPull", settings);
+      cancel.addEventListener("click", () => void cancelOllamaPull(item.id, cancel));
+      actions.append(cancel);
+    }
+    if (["failed", "cancelled", "interrupted"].includes(item.status)) {
+      const retry = document.createElement("button");
+      retry.className = "button button-secondary";
+      retry.type = "button";
+      retry.textContent = localize("ollamaRetryPull", settings);
+      retry.addEventListener("click", () => void retryOllamaPull(item.id, retry));
+      actions.append(retry);
+    }
+    row.append(select, details, actions);
+    elements.ollamaCartList.append(row);
+  }
+}
+
+function renderOllamaChat() {
+  const sessions = Array.isArray(ollamaState?.sessions) ? ollamaState.sessions : [];
+  if (!sessions.some((session) => session.id === activeOllamaSessionId)) activeOllamaSessionId = sessions[0]?.id ?? null;
+  elements.ollamaSessionList.replaceChildren();
+  for (const session of sessions) {
+    const item = document.createElement("li");
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "ollama-session-button";
+    button.setAttribute("aria-current", String(session.id === activeOllamaSessionId));
+    button.textContent = session.title;
+    const facts = document.createElement("small");
+    facts.textContent = `${session.model} · ${session.messages.length}`;
+    button.append(facts);
+    button.addEventListener("click", () => { activeOllamaSessionId = session.id; renderOllamaChat(); });
+    item.append(button);
+    elements.ollamaSessionList.append(item);
+  }
+  const session = activeOllamaSession();
+  elements.ollamaMessageList.replaceChildren();
+  elements.ollamaChatTitle.replaceChildren();
+  const heading = document.createElement("h3");
+  heading.textContent = session?.title ?? localize("ollamaNoChatSelected", settings);
+  elements.ollamaChatTitle.append(heading);
+  if (!session) {
+    const empty = document.createElement("li");
+    empty.className = "authenticator-empty";
+    empty.textContent = localize("ollamaNoMessages", settings);
+    elements.ollamaMessageList.append(empty);
+  } else {
+    session.messages.forEach((message) => {
+      const item = document.createElement("li");
+      item.className = "ollama-message";
+      item.dataset.role = message.role;
+      item.dataset.status = message.status;
+      const label = document.createElement("small");
+      label.textContent = localize(`ollamaMessage${message.role[0].toUpperCase()}${message.role.slice(1)}`, settings);
+      const text = document.createElement("span");
+      text.textContent = message.content || (message.status === "streaming" ? localize("ollamaStreaming", settings) : localize("ollamaNoDetail", settings));
+      item.append(label, text);
+      elements.ollamaMessageList.append(item);
+    });
+  }
+  const activeModel = selectedOllamaModel();
+  const attachmentEnabled = Boolean(session && activeModel?.capabilities?.includes("vision"));
+  elements.ollamaAttachment.disabled = !attachmentEnabled;
+  elements.ollamaAttachmentHelp.textContent = attachmentEnabled ? localize("ollamaAttachmentReady", settings) : localize("ollamaAttachmentDisabled", settings);
+  const streaming = Boolean(session?.messages?.some((message) => message.role === "assistant" && message.status === "streaming"));
+  const retryable = Boolean(session?.messages?.some((message) => message.role === "user"));
+  elements.ollamaSendChat.disabled = !session || streaming;
+  elements.ollamaStopChat.disabled = !streaming;
+  elements.ollamaRetryChat.disabled = !session || streaming || !retryable;
+  [elements.ollamaExportChat, elements.ollamaRenameChat, elements.ollamaDeleteChat].forEach((button) => { button.disabled = !session || streaming; });
+  elements.ollamaStopChat.title = streaming ? "" : localize("ollamaStopDisabled", settings);
+  elements.ollamaRetryChat.title = retryable && !streaming ? "" : localize("ollamaRetryDisabled", settings);
+}
+
+function updateOllamaModelOptions() {
+  const models = Array.isArray(ollamaState?.installed) ? ollamaState.installed : [];
+  const preferred = elements.ollamaChatModel.value;
+  elements.ollamaChatModel.replaceChildren();
+  if (!models.length) {
+    const option = document.createElement("option");
+    option.value = "";
+    option.textContent = localize("ollamaNoInstalledModels", settings);
+    elements.ollamaChatModel.append(option);
+    elements.ollamaChatModel.disabled = true;
+  } else {
+    elements.ollamaChatModel.disabled = false;
+    models.forEach((model) => {
+      const option = document.createElement("option");
+      option.value = model.name;
+      option.textContent = model.name;
+      elements.ollamaChatModel.append(option);
+    });
+    elements.ollamaChatModel.value = models.some((model) => model.name === preferred) ? preferred : models[0].name;
+  }
+  elements.ollamaKnownTags.replaceChildren();
+  models.forEach((model) => {
+    const option = document.createElement("option");
+    option.value = model.name;
+    elements.ollamaKnownTags.append(option);
+  });
+  renderOllamaPicker(
+    elements.ollamaPullParallelismPickerResults,
+    ["1", "2", "3"],
+    elements.ollamaPullParallelismSearch.value,
+    elements.ollamaPullParallelismRegexPattern.value,
+    elements.ollamaPullParallelismRegexFlags.value,
+    () => Boolean(elements.ollamaPullParallelismRegex.dataset.enabled),
+    (value) => { elements.ollamaPullParallelism.value = value; elements.ollamaPullParallelismPicker.hidden = true; elements.ollamaPullParallelismSearchToggle.setAttribute("aria-expanded", "false"); elements.ollamaPullParallelism.focus(); },
+  );
+  renderOllamaPicker(
+    elements.ollamaChatModelPickerResults,
+    models.map((model) => model.name),
+    elements.ollamaChatModelSearch.value,
+    elements.ollamaChatModelRegexPattern.value,
+    elements.ollamaChatModelRegexFlags.value,
+    () => Boolean(elements.ollamaChatModelRegex.dataset.enabled),
+    (value) => { elements.ollamaChatModel.value = value; elements.ollamaChatModelPicker.hidden = true; elements.ollamaChatModelSearchToggle.setAttribute("aria-expanded", "false"); elements.ollamaChatModel.focus(); },
+  );
+}
+
+function renderOllamaPicker(container, choices, query, pattern, flags, regexEnabled, choose) {
+  const predicate = regexEnabled()
+    ? (() => { const validation = validateRegex(pattern, flags); return validation.valid ? (value) => evaluateRegex(pattern, flags, value).matches.length > 0 : () => false; })()
+    : (value) => value.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase());
+  container.replaceChildren();
+  choices.filter(predicate).forEach((choice) => {
+    const button = document.createElement("button");
+    button.className = "button button-secondary";
+    button.type = "button";
+    button.setAttribute("role", "option");
+    button.textContent = choice;
+    button.addEventListener("click", () => choose(choice));
+    container.append(button);
+  });
+  if (!container.childElementCount) {
+    const empty = document.createElement("span");
+    empty.textContent = localize("ollamaNoModelMatches", settings);
+    container.append(empty);
+  }
+}
+
+function renderOllamaTroubleshooter() {
+  const runtime = ollamaState?.runtime;
+  const key = {
+    healthy: "ollamaTroubleshooterHealthy",
+    missing: "ollamaTroubleshooterMissing",
+    unhealthy: "ollamaTroubleshooterUnhealthy",
+    offline: "ollamaTroubleshooterOffline",
+    unknown: "ollamaTroubleshooterIdle",
+  }[runtime?.status] ?? "ollamaTroubleshooterIdle";
+  elements.ollamaTroubleshooter.textContent = localize(key, settings, { detail: runtime?.detail ?? "" });
+}
+
+function renderOllamaState({ populateConfig = false } = {}) {
+  if (!ollamaState) return;
+  if (populateConfig) {
+    elements.ollamaEndpoint.value = ollamaState.endpoint ?? DEFAULT_OLLAMA_ENDPOINT;
+    elements.ollamaPullParallelism.value = String(ollamaState.pullParallelism ?? 1);
+  }
+  const runtime = ollamaState.runtime ?? { status: "unknown" };
+  elements.ollamaRuntimePill.textContent = ollamaRuntimeLabel(runtime);
+  elements.ollamaRuntimeStatus.textContent = runtime.detail || ollamaRuntimeLabel(runtime);
+  const catalog = ollamaState.catalog ?? {};
+  const stale = ollamaCatalogIsStale(catalog);
+  elements.ollamaCatalogState.textContent = localize(stale ? "ollamaCatalogStale" : "ollamaCatalogState", settings, {
+    refreshed: ollamaRelativeAge(catalog.refreshedAt),
+    endpoint: catalog.verifiedEndpoint ?? localize("ollamaUnknownValue", settings),
+  });
+  updateOllamaModelOptions();
+  renderOllamaModelList();
+  renderOllamaCart();
+  renderOllamaChat();
+  renderOllamaTroubleshooter();
+}
+
+async function sendOllamaMessage(message) {
+  try {
+    const response = await chrome.runtime.sendMessage(message);
+    if (!response) throw new Error("worker");
+    if (response.state) {
+      ollamaState = response.state;
+      renderOllamaState();
+    }
+    return response;
+  } catch {
+    return { ok: false, code: "ollama-request-failed", detail: localize("serviceWorkerUnavailable", settings) };
+  }
+}
+
+async function loadOllamaState({ populateConfig = false, announce = false } = {}) {
+  const response = await sendOllamaMessage({ type: "GET_OLLAMA_STATE" });
+  if (response?.ok && response.state) {
+    ollamaState = response.state;
+    renderOllamaState({ populateConfig });
+    if (announce) showToast(ollamaResultMessage(response));
+    return true;
+  }
+  elements.ollamaRuntimeStatus.textContent = ollamaResultMessage(response);
+  return false;
+}
+
+async function saveOllamaConfig(trigger) {
+  trigger.disabled = true;
+  try {
+    const response = await sendOllamaMessage({
+      type: "SAVE_OLLAMA_CONFIG",
+      config: { endpoint: elements.ollamaEndpoint.value, pullParallelism: Number(elements.ollamaPullParallelism.value) },
+    });
+    elements.ollamaRuntimeStatus.textContent = ollamaResultMessage(response);
+    showToast(ollamaResultMessage(response));
+    if (response?.ok) await loadOllamaState({ populateConfig: true });
+  } finally {
+    trigger.disabled = false;
+  }
+}
+
+async function refreshOllama(trigger) {
+  trigger.disabled = true;
+  try {
+    const response = await sendOllamaMessage({ type: "REFRESH_OLLAMA" });
+    elements.ollamaRuntimeStatus.textContent = ollamaResultMessage(response);
+    showToast(ollamaResultMessage(response));
+    if (response?.state) {
+      ollamaState = response.state;
+      renderOllamaState({ populateConfig: true });
+    }
+  } finally {
+    trigger.disabled = false;
+  }
+}
+
+async function inspectOllamaModel(model, trigger) {
+  trigger.disabled = true;
+  try {
+    const response = await sendOllamaMessage({ type: "INSPECT_OLLAMA_MODEL", model });
+    elements.ollamaRuntimeStatus.textContent = ollamaResultMessage(response);
+    showToast(ollamaResultMessage(response));
+    if (response?.state) { ollamaState = response.state; renderOllamaState(); }
+  } finally {
+    trigger.disabled = false;
+  }
+}
+
+async function queueOllamaPull() {
+  const response = await sendOllamaMessage({ type: "ADD_OLLAMA_PULL", model: elements.ollamaPullTag.value.trim() });
+  elements.ollamaCartSummary.textContent = ollamaResultMessage(response);
+  showToast(ollamaResultMessage(response));
+  if (response?.ok) {
+    elements.ollamaPullTag.value = "";
+    await loadOllamaState();
+  }
+}
+
+async function runOllamaPulls(trigger) {
+  trigger.disabled = true;
+  try {
+    const response = await sendOllamaMessage({ type: "RUN_OLLAMA_PULL_QUEUE" });
+    elements.ollamaCartSummary.textContent = ollamaResultMessage(response);
+    showToast(ollamaResultMessage(response));
+    await loadOllamaState();
+  } finally {
+    trigger.disabled = false;
+  }
+}
+
+async function cancelOllamaPull(id, trigger) {
+  trigger.disabled = true;
+  try {
+    const response = await sendOllamaMessage({ type: "CANCEL_OLLAMA_PULL", id });
+    elements.ollamaCartSummary.textContent = ollamaResultMessage(response);
+    showToast(ollamaResultMessage(response));
+    await loadOllamaState();
+  } finally {
+    trigger.disabled = false;
+  }
+}
+
+async function retryOllamaPull(id, trigger) {
+  trigger.disabled = true;
+  try {
+    const response = await sendOllamaMessage({ type: "RETRY_OLLAMA_PULL", id });
+    elements.ollamaCartSummary.textContent = ollamaResultMessage(response);
+    showToast(ollamaResultMessage(response));
+    await loadOllamaState();
+  } finally {
+    trigger.disabled = false;
+  }
+}
+
+async function runSelectedOllamaPulls(type) {
+  const ids = [...selectedOllamaPullIds];
+  if (!ids.length) {
+    elements.ollamaCartSummary.textContent = localize("ollamaNoPullSelected", settings);
+    return;
+  }
+  const outcomes = [];
+  for (const id of ids) {
+    const response = await sendOllamaMessage({ type, id });
+    outcomes.push(response?.ok === true);
+  }
+  selectedOllamaPullIds.clear();
+  await loadOllamaState();
+  const message = localize("ollamaBulkOutcome", settings, { succeeded: outcomes.filter(Boolean).length, total: outcomes.length });
+  elements.ollamaCartSummary.textContent = message;
+  showToast(message);
+}
+
+function openOllamaCopyEditor(source, trigger) {
+  const row = trigger.closest(".ollama-list-item");
+  if (!row || row.querySelector("[data-ollama-copy-editor]")) return;
+  const editor = document.createElement("div");
+  editor.dataset.ollamaCopyEditor = "true";
+  editor.className = "inline-actions";
+  const input = document.createElement("input");
+  input.type = "text";
+  input.maxLength = 255;
+  input.placeholder = localize("ollamaCopyDestinationPlaceholder", settings);
+  input.setAttribute("aria-label", localize("ollamaCopyDestinationLabel", settings));
+  const confirm = document.createElement("button");
+  confirm.type = "button";
+  confirm.className = "button button-primary";
+  confirm.textContent = localize("ollamaCopyConfirm", settings);
+  const cancel = document.createElement("button");
+  cancel.type = "button";
+  cancel.className = "button button-secondary";
+  cancel.textContent = localize("ollamaDeleteCancel", settings);
+  cancel.addEventListener("click", () => { editor.remove(); trigger.focus(); });
+  confirm.addEventListener("click", async () => {
+    confirm.disabled = true;
+    try {
+      const response = await sendOllamaMessage({ type: "COPY_OLLAMA_MODEL", source, destination: input.value.trim() });
+      elements.ollamaRuntimeStatus.textContent = ollamaResultMessage(response);
+      showToast(ollamaResultMessage(response));
+      if (response?.ok) await loadOllamaState();
+    } finally { confirm.disabled = false; }
+  });
+  editor.append(input, confirm, cancel);
+  row.append(editor);
+  input.focus();
+}
+
+async function createOllamaChat() {
+  const response = await sendOllamaMessage({ type: "CREATE_OLLAMA_CHAT", model: elements.ollamaChatModel.value, systemPrompt: elements.ollamaSystemPrompt.value });
+  elements.ollamaChatStatus.textContent = ollamaResultMessage(response);
+  showToast(ollamaResultMessage(response));
+  if (response?.ok && response.session) {
+    activeOllamaSessionId = response.session.id;
+    ollamaState = response.state ?? ollamaState;
+    await loadOllamaState();
+  }
+}
+
+async function selectedOllamaAttachment() {
+  const file = elements.ollamaAttachment.files?.[0];
+  if (!file) return [];
+  if (!["image/png", "image/jpeg", "image/webp"].includes(file.type) || file.size <= 0 || file.size > 1_048_576) {
+    throw new Error(localize("ollamaAttachmentInvalid", settings));
+  }
+  const dataUrl = await new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.addEventListener("load", () => resolve(reader.result));
+    reader.addEventListener("error", () => reject(new Error("read")));
+    reader.readAsDataURL(file);
+  });
+  const data = typeof dataUrl === "string" ? dataUrl.split(",", 2)[1] : null;
+  if (!data) throw new Error(localize("ollamaAttachmentInvalid", settings));
+  return [{ mime: file.type, data }];
+}
+
+async function sendOllamaChat(trigger) {
+  const session = activeOllamaSession();
+  if (!session) { elements.ollamaChatStatus.textContent = localize("ollamaNoChatSelected", settings); return; }
+  trigger.disabled = true;
+  try {
+    const attachments = await selectedOllamaAttachment();
+    const response = await sendOllamaMessage({
+      type: "SEND_OLLAMA_CHAT",
+      id: session.id,
+      prompt: elements.ollamaChatPrompt.value,
+      options: { temperature: Number(elements.ollamaTemperature.value), numCtx: Number(elements.ollamaNumContext.value) },
+      attachments,
+    });
+    elements.ollamaChatStatus.textContent = ollamaResultMessage(response);
+    showToast(ollamaResultMessage(response));
+    if (response?.state) { ollamaState = response.state; renderOllamaState(); }
+    if (response?.ok) { elements.ollamaChatPrompt.value = ""; elements.ollamaAttachment.value = ""; }
+  } catch (error) {
+    elements.ollamaChatStatus.textContent = error instanceof Error ? error.message : localize("ollamaAttachmentInvalid", settings);
+  } finally {
+    trigger.disabled = false;
+  }
+}
+
+async function stopOllamaChat() {
+  const session = activeOllamaSession();
+  if (!session) return;
+  const response = await sendOllamaMessage({ type: "STOP_OLLAMA_CHAT", id: session.id });
+  elements.ollamaChatStatus.textContent = ollamaResultMessage(response);
+  showToast(ollamaResultMessage(response));
+}
+
+async function retryOllamaChat() {
+  const session = activeOllamaSession();
+  if (!session) return;
+  const response = await sendOllamaMessage({ type: "RETRY_OLLAMA_CHAT", id: session.id });
+  elements.ollamaChatStatus.textContent = ollamaResultMessage(response);
+  showToast(ollamaResultMessage(response));
+  if (response?.state) { ollamaState = response.state; renderOllamaState(); }
+}
+
+function exportOllamaChatFile(value) {
+  const payload = value?.export;
+  if (!payload) throw new Error("export");
+  const blob = new Blob([JSON.stringify(payload, null, 2) + "\n"], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = "material-download-manager-ollama-chat-redacted.json";
+  anchor.click();
+  URL.revokeObjectURL(url);
+}
+
+async function exportOllamaChat() {
+  const session = activeOllamaSession();
+  if (!session) return;
+  const response = await sendOllamaMessage({ type: "EXPORT_OLLAMA_CHAT", id: session.id });
+  try {
+    if (!response?.ok) throw new Error("export");
+    exportOllamaChatFile(response);
+    elements.ollamaChatStatus.textContent = ollamaResultMessage(response);
+    showToast(ollamaResultMessage(response));
+  } catch {
+    elements.ollamaChatStatus.textContent = localize("ollamaExportFailed", settings);
+  }
+}
+
+function renameOllamaChat() {
+  const session = activeOllamaSession();
+  if (!session || elements.ollamaChatTitle.querySelector("[data-ollama-rename-editor]")) return;
+  const editor = document.createElement("div");
+  editor.dataset.ollamaRenameEditor = "true";
+  editor.className = "inline-actions";
+  const input = document.createElement("input");
+  input.type = "text";
+  input.maxLength = 120;
+  input.value = session.title;
+  input.setAttribute("aria-label", localize("ollamaRenameChat", settings));
+  const save = document.createElement("button");
+  save.type = "button";
+  save.className = "button button-primary";
+  save.textContent = localize("ollamaRenameSave", settings);
+  const cancel = document.createElement("button");
+  cancel.type = "button";
+  cancel.className = "button button-secondary";
+  cancel.textContent = localize("ollamaDeleteCancel", settings);
+  cancel.addEventListener("click", () => renderOllamaChat());
+  save.addEventListener("click", async () => {
+    save.disabled = true;
+    try {
+      const response = await sendOllamaMessage({ type: "RENAME_OLLAMA_CHAT", id: session.id, title: input.value });
+      elements.ollamaChatStatus.textContent = ollamaResultMessage(response);
+      showToast(ollamaResultMessage(response));
+      if (response?.ok) await loadOllamaState();
+    } finally { save.disabled = false; }
+  });
+  editor.append(input, save, cancel);
+  elements.ollamaChatTitle.append(editor);
+  input.focus();
+}
+
+function closeOllamaDeletion({ restoreFocus = true } = {}) {
+  const trigger = pendingOllamaDeletion?.trigger;
+  pendingOllamaDeletion = null;
+  elements.ollamaDeleteCard.hidden = true;
+  elements.ollamaDeleteCard.removeAttribute("data-state");
+  elements.ollamaDeleteKeyOne.value = "";
+  elements.ollamaDeleteKeyTwo.value = "";
+  elements.ollamaDeleteSlider.value = "0";
+  elements.ollamaDeleteConfirm.disabled = true;
+  elements.ollamaDeleteStatus.textContent = "";
+  if (restoreFocus) trigger?.focus();
+}
+
+function updateOllamaDeletionGate() {
+  const target = pendingOllamaDeletion;
+  if (!target) return;
+  const matches = elements.ollamaDeleteKeyOne.value.trim().toUpperCase() === "REMOVE" && elements.ollamaDeleteKeyTwo.value.trim() === target.target;
+  const full = Number(elements.ollamaDeleteSlider.value) === 100;
+  const moving = Number(elements.ollamaDeleteSlider.value) > 0;
+  elements.ollamaDeleteConfirm.disabled = !(matches && full);
+  elements.ollamaDeleteCard.dataset.state = matches || moving ? "arming" : "idle";
+  elements.ollamaDeleteStatus.textContent = matches ? localize("ollamaDeleteReady", settings) : localize("ollamaDeleteIncomplete", settings);
+}
+
+function openOllamaDeletion(target) {
+  pendingOllamaDeletion = target;
+  elements.ollamaDeleteTarget.textContent = target.target;
+  elements.ollamaDeleteCard.hidden = false;
+  elements.ollamaDeleteKeyOne.value = "";
+  elements.ollamaDeleteKeyTwo.value = "";
+  elements.ollamaDeleteSlider.value = "0";
+  updateOllamaDeletionGate();
+  elements.ollamaDeleteKeyOne.focus();
+}
+
+async function confirmOllamaDeletion() {
+  const target = pendingOllamaDeletion;
+  if (!target || elements.ollamaDeleteConfirm.disabled) return;
+  elements.ollamaDeleteConfirm.disabled = true;
+  const response = await sendOllamaMessage(target.kind === "model"
+    ? { type: "DELETE_OLLAMA_MODEL", model: target.id }
+    : { type: "DELETE_OLLAMA_CHAT", id: target.id });
+  elements.ollamaDeleteStatus.textContent = ollamaResultMessage(response);
+  showToast(ollamaResultMessage(response));
+  if (response?.ok) {
+    elements.ollamaDeleteCard.dataset.state = "completed";
+    await loadOllamaState();
+    window.setTimeout(() => closeOllamaDeletion(), 420);
+  } else {
+    updateOllamaDeletionGate();
+  }
+}
+
 function fillForm() {
   elements.endpoint.value = settings.handoffEndpoint;
   elements.autoCaptureDownloads.checked = settings.autoCaptureDownloads;
@@ -1319,6 +2174,7 @@ function updateConnectionState(value = null) {
 }
 
 function applyTab(nextTab) {
+  if (settings.schoolModeEnabled && nextTab === "ollama") nextTab = "connection";
   activeTab = nextTab;
   document.querySelectorAll("[role=tab]").forEach((tab) => {
     const selected = tab.dataset.tab === activeTab;
@@ -1333,6 +2189,7 @@ function applyTab(nextTab) {
     startAuthenticatorCodeTimer();
     void refreshAuthenticatorCodes();
   }
+  if (activeTab === "ollama") void loadOllamaState({ populateConfig: !ollamaState });
 }
 
 function activateAdjacentTab(direction) {
@@ -1454,12 +2311,14 @@ async function loadState() {
     await refreshPersonalVocabulary();
     await loadLogo();
     await loadAuthenticatorState();
+    await loadOllamaState({ populateConfig: true });
   } catch {
     showToast(localize("serviceWorkerUnavailable", settings));
     fillForm();
     await refreshPersonalVocabulary();
     await loadLogo();
     await loadAuthenticatorState();
+    await loadOllamaState({ populateConfig: true });
   }
 }
 
@@ -2017,6 +2876,104 @@ elements.authenticatorExport.addEventListener("click", async () => {
   }
 });
 
+elements.ollamaSaveConfig.addEventListener("click", () => void saveOllamaConfig(elements.ollamaSaveConfig));
+elements.ollamaRefresh.addEventListener("click", () => void refreshOllama(elements.ollamaRefresh));
+elements.ollamaAddPull.addEventListener("click", () => void queueOllamaPull());
+elements.ollamaPullTag.addEventListener("keydown", (event) => {
+  if (event.key === "Enter") { event.preventDefault(); void queueOllamaPull(); }
+});
+elements.ollamaRunPulls.addEventListener("click", () => void runOllamaPulls(elements.ollamaRunPulls));
+elements.ollamaPullSelectAll.addEventListener("change", () => {
+  const cart = ollamaState?.cart ?? [];
+  selectedOllamaPullIds = elements.ollamaPullSelectAll.checked ? new Set(cart.map((item) => item.id)) : new Set();
+  renderOllamaCart();
+});
+elements.ollamaBulkCancel.addEventListener("click", () => void runSelectedOllamaPulls("CANCEL_OLLAMA_PULL"));
+elements.ollamaBulkRetry.addEventListener("click", () => void runSelectedOllamaPulls("RETRY_OLLAMA_PULL"));
+elements.ollamaModelSearch.addEventListener("input", () => {
+  if (ollamaModelRegexMode) elements.ollamaModelRegexPattern.value = elements.ollamaModelSearch.value;
+  renderOllamaModelList();
+});
+elements.ollamaModelRegexToggle.addEventListener("click", () => {
+  ollamaModelRegexOpen = !ollamaModelRegexOpen;
+  elements.ollamaModelRegex.hidden = !ollamaModelRegexOpen;
+  elements.ollamaModelRegexToggle.setAttribute("aria-expanded", String(ollamaModelRegexOpen));
+  if (ollamaModelRegexOpen) elements.ollamaModelRegexPattern.focus();
+});
+[elements.ollamaModelRegexPattern, elements.ollamaModelRegexFlags, elements.ollamaModelRegexSample].forEach((input) => input.addEventListener("input", () => {
+  const evaluation = evaluateRegex(elements.ollamaModelRegexPattern.value, elements.ollamaModelRegexFlags.value, elements.ollamaModelRegexSample.value);
+  elements.ollamaModelRegexMatches.replaceChildren();
+  if (!evaluation.valid) {
+    elements.ollamaModelRegexFeedback.textContent = `${localize("regexInvalid", settings)} ${evaluation.error}`;
+  } else {
+    elements.ollamaModelRegexFeedback.textContent = evaluation.matches.length ? localize("regexMatches", settings, { count: evaluation.matches.length }) : localize("regexNoMatches", settings);
+    evaluation.matches.forEach((match) => {
+      const item = document.createElement("li");
+      item.textContent = `“${match.text}” at ${match.index}`;
+      elements.ollamaModelRegexMatches.append(item);
+    });
+  }
+  renderOllamaModelList();
+}));
+document.querySelectorAll("[data-ollama-fragment]").forEach((button) => {
+  button.addEventListener("click", () => {
+    elements.ollamaModelRegexPattern.value = appendRegexFragment(elements.ollamaModelRegexPattern.value, button.dataset.ollamaFragment);
+    elements.ollamaModelRegexPattern.focus();
+    elements.ollamaModelRegexPattern.dispatchEvent(new Event("input"));
+  });
+});
+elements.ollamaModelRegexMode.addEventListener("change", () => {
+  ollamaModelRegexMode = elements.ollamaModelRegexMode.checked;
+  if (ollamaModelRegexMode) elements.ollamaModelRegexPattern.value = elements.ollamaModelSearch.value;
+  renderOllamaModelList();
+});
+elements.ollamaModelRegexApply.addEventListener("click", () => {
+  const validation = validateRegex(elements.ollamaModelRegexPattern.value, elements.ollamaModelRegexFlags.value);
+  if (!validation.valid) { elements.ollamaModelRegexPattern.dispatchEvent(new Event("input")); return; }
+  elements.ollamaModelSearch.value = elements.ollamaModelRegexPattern.value;
+  elements.ollamaModelRegexMode.checked = true;
+  ollamaModelRegexMode = true;
+  renderOllamaModelList();
+});
+elements.ollamaModelRegexCopy.addEventListener("click", async () => {
+  try { await navigator.clipboard.writeText(`/${elements.ollamaModelRegexPattern.value}/${elements.ollamaModelRegexFlags.value}`); showToast(localize("regexPatternCopied", settings)); }
+  catch { showToast(localize("copyFailed", settings)); }
+});
+elements.ollamaModelRegexExport.addEventListener("click", () => {
+  const blob = new Blob([JSON.stringify({ pattern: elements.ollamaModelRegexPattern.value, flags: elements.ollamaModelRegexFlags.value }, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = "material-download-manager-ollama-model-regex.json";
+  anchor.click();
+  URL.revokeObjectURL(url);
+});
+elements.ollamaChatModel.addEventListener("change", () => renderOllamaChat());
+elements.ollamaCreateChat.addEventListener("click", () => void createOllamaChat());
+elements.ollamaSendChat.addEventListener("click", () => void sendOllamaChat(elements.ollamaSendChat));
+elements.ollamaStopChat.addEventListener("click", () => void stopOllamaChat());
+elements.ollamaRetryChat.addEventListener("click", () => void retryOllamaChat());
+elements.ollamaExportChat.addEventListener("click", () => void exportOllamaChat());
+elements.ollamaRenameChat.addEventListener("click", () => renameOllamaChat());
+elements.ollamaDeleteChat.addEventListener("click", () => {
+  const session = activeOllamaSession();
+  if (session) openOllamaDeletion({ kind: "chat", id: session.id, target: session.title, trigger: elements.ollamaDeleteChat });
+});
+[elements.ollamaDeleteKeyOne, elements.ollamaDeleteKeyTwo, elements.ollamaDeleteSlider].forEach((control) => control.addEventListener("input", updateOllamaDeletionGate));
+elements.ollamaDeleteConfirm.addEventListener("click", () => void confirmOllamaDeletion());
+elements.ollamaDeleteCancel.addEventListener("click", () => closeOllamaDeletion());
+elements.ollamaRunPreflight.addEventListener("click", async () => {
+  const boundary = await sendOllamaMessage({ type: "GET_OLLAMA_HARNESS_BOUNDARY" });
+  elements.ollamaHarnessBoundary.textContent = boundary?.profile?.preflight ?? ollamaResultMessage(boundary);
+  await refreshOllama(elements.ollamaRunPreflight);
+});
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape" && pendingOllamaDeletion) {
+    event.preventDefault();
+    closeOllamaDeletion();
+  }
+});
+
 chrome.storage.onChanged.addListener((changes, areaName) => {
   if (areaName !== "local") return;
   if (changes[SETTINGS_KEY]) {
@@ -2035,6 +2992,10 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
     });
   }
   if (changes[LOGO_STORAGE_KEY]) void loadLogo();
+  if (changes[OLLAMA_STATE_KEY]) {
+    ollamaState = changes[OLLAMA_STATE_KEY].newValue;
+    renderOllamaState();
+  }
 });
 
 await loadState();
