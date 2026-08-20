@@ -318,6 +318,19 @@
               <label class="switch-row"><input id="show-emojis" type="checkbox"><span class="switch-visual" aria-hidden="true"></span><span data-copy="emojiToggleLabel">Show emojis in messages</span></label>
               <p class="provenance" data-provenance="showEmojis">Compiled-in value: on</p>
             </article>
+            <article class="settings-card personal-vocabulary-card" id="personal-vocabulary-card" data-setting-search="personal vocabulary local json upload choose replace clear reset privacy wording accessibility" data-school-optional>
+              <div class="card-heading-row"><div><p class="eyebrow" data-copy="personalVocabularyEyebrow">LOCAL WORDING</p><h2 data-copy="personalVocabularyTitle">Personal vocabulary</h2></div><span class="state-icon state-icon-accent" aria-hidden="true">⌁</span></div>
+              <p class="field-explanation" id="personal-vocabulary-help" data-copy="personalVocabularyExplanation">Choose a local JSON file only when you want private wording changes in this browser. The site never uploads the file, its name, or its contents.</p>
+              <input id="personal-vocabulary-file" class="private-file-input" type="file" accept="application/json,.json" data-copy-aria="personalVocabularyFileLabel" aria-label="Choose local personal vocabulary JSON" aria-describedby="personal-vocabulary-help personal-vocabulary-status" tabindex="-1">
+              <div class="personal-vocabulary-actions" role="group" data-copy-aria="personalVocabularyActionGroup" aria-label="Personal vocabulary local file actions">
+                <button class="button button-tonal" id="personal-vocabulary-upload" type="button" data-copy="personalVocabularyChoose">Choose local JSON</button>
+                <button class="button button-outlined" id="personal-vocabulary-replace" type="button" data-copy="personalVocabularyReplace">Replace local JSON</button>
+                <button class="text-button" id="personal-vocabulary-clear" type="button" data-copy="personalVocabularyClear">Clear local JSON</button>
+              </div>
+              <p class="field-help" id="personal-vocabulary-status" role="status" aria-live="polite" data-copy="personalVocabularyNoFile">No local personal vocabulary JSON is loaded.</p>
+              <p class="field-help" data-copy="personalVocabularyRecovery">Clear removes the local cache immediately and restores shipped wording. Browser storage is the only persistence location.</p>
+              <p class="provenance" data-provenance="personalVocabulary">No local vocabulary data is active.</p>
+            </article>
             <article class="settings-card" data-setting-search="school mode focus english reset name">
               <div class="card-heading-row"><div><p class="eyebrow" id="school-mode-eyebrow">School mode</p><h2 id="school-mode-title">School mode</h2></div><span class="state-icon state-icon-accent" aria-hidden="true">▣</span></div>
               <p class="field-explanation" id="school-mode-explanation">School mode: This user-named mode keeps the site in English and removes playful language, Cantonese options, funny-level controls, and the dim sum surprise while it is on.</p>
@@ -519,6 +532,7 @@
   <script src="./content.js"></script>
   <script src="./data/universal-feature-manifest.js"></script>
   <script src="./data/settings-contract.js"></script>
+  <script src="./data/personal-vocabulary-contract.js"></script>
   <script src="./data/notification-contract.js"></script>
   <script src="./data/converter-contract.js"></script>
   <script src="./data/release-manifest-contract.js"></script>

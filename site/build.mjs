@@ -39,6 +39,7 @@ const runtimeScripts = [
   "./content.js",
   "./data/universal-feature-manifest.js",
   "./data/settings-contract.js",
+  "./data/personal-vocabulary-contract.js",
   "./data/notification-contract.js",
   "./data/converter-contract.js",
   "./data/release-manifest-contract.js",

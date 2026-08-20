@@ -375,6 +375,10 @@ kbd { display: inline-flex; align-items: center; min-height: 1.4rem; padding: .0
 .settings-card[hidden] { display: none; }
 .field-explanation { margin: 0 !important; font-size: .82rem; }
 .provenance { margin: .15rem 0 0 !important; color: var(--on-surface-variant); font-size: .72rem !important; }
+.private-file-input { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%); border: 0; white-space: nowrap; }
+.personal-vocabulary-actions { display: flex; flex-wrap: wrap; gap: .55rem; align-items: center; }
+.personal-vocabulary-actions .button, .personal-vocabulary-actions .text-button { min-height: 2.5rem; }
+.personal-vocabulary-card .field-help { margin: 0; }
 .field-control { display: grid; gap: .35rem; color: var(--on-surface-variant); font-size: .76rem; font-weight: 750; }
 .field-control input[type="text"], .field-control select, .field-control input[type="date"] { width: 100%; min-height: var(--control-height); padding: .5rem .65rem; border: 1px solid var(--outline); border-radius: .65rem; background: var(--surface); color: var(--on-surface); }
 .color-control { flex-wrap: wrap; gap: .6rem; color: var(--on-surface-variant); font-size: .76rem; font-weight: 750; }

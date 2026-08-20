@@ -8,7 +8,7 @@
     title: "Universal user-facing feature coverage",
     surface: "GitHub Pages landing and documentation site",
     requiredIds: [
-      "language-modes", "funny-levels", "emoji-toggle", "school-mode", "narration",
+      "language-modes", "funny-levels", "emoji-toggle", "school-mode", "personal-vocabulary", "narration",
       "scheduled-settings", "external-settings-sources", "dim-sum-surprise", "regex-builder",
       "ollama-suite-manager",
       "notifications", "appearance-editor", "tabs", "tab-locks", "support-tickets",
@@ -59,6 +59,30 @@
         status: "partial",
         probes: ["school-mode-name", "school-mode-toggle", "school-mode-reset", "school-mode-live-suppression"],
         runtimeAnchors: ["schoolMode", "schoolModeName", "applySchoolModeSurface"]
+      },
+      {
+        id: "personal-vocabulary",
+        title: "Local personal-vocabulary JSON control",
+        category: "privacy",
+        requiredSurfaces: ["settings", "settings search", "command palette", "feature articles", "School mode"],
+        docsPath: "../docs/features/site/personal-vocabulary.md",
+        status: "partial",
+        probes: ["personal-vocabulary-visible-control", "personal-vocabulary-strict-contract", "personal-vocabulary-local-cache", "personal-vocabulary-school-omission", "personal-vocabulary-built-capture"],
+        runtimeAnchors: ["id=\"personal-vocabulary-file\"", "function loadPersonalVocabularyFile(", "const VOCABULARY_CACHE_KEY =", "function clearPersonalVocabulary(", "function renderUserFacingText(", "window.MDM_SITE_USER_TEXT ="],
+        evidence: {
+          implementation: ["id=\"personal-vocabulary-file\"", "function loadPersonalVocabularyFile(", "function clearPersonalVocabulary(", "window.MDM_SITE_USER_TEXT ="],
+          localizedCopy: ["personalVocabularyNoFile:", "personalVocabularyReplace:", "personalVocabularyClear:"],
+          persistence: ["const VOCABULARY_CACHE_KEY =", "function readVocabularyCache(", "function applyIncomingVocabularyCache("],
+          focusedTests: ["personal vocabulary strict contract", "personal vocabulary negative fixtures"],
+          interaction: ["id=\"personal-vocabulary-upload\"", "id=\"personal-vocabulary-replace\"", "id=\"personal-vocabulary-clear\"", "\"setting.personal-vocabulary-upload\""],
+          capture: {
+            path: "../docs/screenshots/site/personal-vocabulary-no-file.png",
+            state: "Built Settings no-file state with generic choose, replace, and clear controls",
+            width: 827,
+            height: 669,
+            sha256: "5d141dc04ae81f1fd06a540f3bc2cbc665abbb2e0a26ae4cffbaa72848971e29"
+          }
+        }
       },
       {
         id: "narration",
