@@ -9,6 +9,7 @@ of guessing a commit, release, or date.
 
 - **Scope:** source repairs supporting [Pages foundation #17](https://github.com/Ding-Ding-Projects/material-download-manager/issues/17), with broader acceptance still tracked in [#18](https://github.com/Ding-Ding-Projects/material-download-manager/issues/18). No new release or deployment is claimed.
 - **Packaged extension resources:** include the existing `assets/**/*` files in the Windows application resource allowlist. A regression uses electron-builder's actual file matcher and the production extension installer, checks every declared static icon byte-for-byte, and rejects removal of an exact icon. The Linux/Node 22 fixture passes **13/13**; this is not installed-Windows acceptance.
+- **Electron compile:** remove two unused imports of obsolete Ollama refresh exports from the preload bridge. The actual Electron TypeScript compilation passes; no IPC behavior or runtime validation is removed.
 
 ## Unreleased — browser-extension download surfaces
 

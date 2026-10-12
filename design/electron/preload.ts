@@ -35,7 +35,7 @@ import type {
 import { isTotpRegistrationExportRecord, isTotpRegistrationMetadata } from "../shared/authenticator";
 import { isSshHostStatus } from "../shared/ssh";
 import { isExportResult } from "../shared/export";
-import { isOllamaRefreshResult, isOllamaSuiteState, type OllamaRefreshResult, type OllamaSuiteState } from "../shared/ollama";
+import { isOllamaSuiteState, type OllamaSuiteState } from "../shared/ollama";
 import { isConverterState, type ConverterState } from "../shared/converter";
 import { isHistoryAccessState, isHistoryDiff, isHistoryPruneResult, isHistoryRevision, isHistoryView } from "../shared/history";
 import { isDownloadCategory } from "../shared/settings";
