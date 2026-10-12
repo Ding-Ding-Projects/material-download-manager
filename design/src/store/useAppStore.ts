@@ -213,11 +213,6 @@ export const useAppStore = create<AppState>((set, get) => ({
       personalVocabularyGeneration += 1;
       applyPersonalVocabularyRuntime(runtime);
     });
-    refreshPersonalVocabularyRendererMemory();
-    const unsubscribePersonalVocabulary = window.api.onPersonalVocabularyChanged((runtime) => {
-      personalVocabularyGeneration += 1;
-      applyPersonalVocabularyRuntime(runtime);
-    });
     return () => {
       unsubscribe();
       unsubscribePresentation();

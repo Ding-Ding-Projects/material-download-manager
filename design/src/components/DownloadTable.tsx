@@ -20,6 +20,7 @@ import {
 import ContextMenu, { ContextMenuItem, ContextMenuSeparator } from "./ContextMenu";
 import { type DestructiveActionRequest } from "./DestructiveActionGate";
 import { useUiCopy } from "../i18n/useUiCopy";
+import { getUiCopy } from "../i18n/ui";
 import RegexBuilder from "./RegexBuilder";
 import { localizedRegexEvaluationError, useIsolatedRegexBatch } from "../hooks/useIsolatedRegex";
 
