@@ -88,6 +88,7 @@
         "filter": [
           "manifest.json",
           "src/**/*",
+          "assets/**/*",
           "README.md",
           "docs/**/*"
         ]

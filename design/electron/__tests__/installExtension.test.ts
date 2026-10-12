@@ -328,3 +328,46 @@ test("Chrome extensions action uses only the fixed internal page and reports ref
   assert.equal(isBrowserChromeExtensionsResult({ opened: true, url: "https://example.test", error: null }), false);
   assert.equal(isBrowserChromeExtensionsResult({ opened: false, url: CHROME_EXTENSIONS_PAGE, error: null }), false);
 });
+
+test("packaged extension resource filters preserve every required static icon", async () => {
+  // Use electron-builder's actual matcher rather than duplicating its glob rules.
+  const { getFileMatchers } = require("app-builder-lib/out/fileMatcher");
+  const designRoot = process.cwd();
+  const packageJson = JSON.parse(await fsp.readFile(path.join(designRoot, "package.json"), "utf8"));
+  const extensionRoot = path.resolve(designRoot, "../extension");
+  const manifest = JSON.parse(await fsp.readFile(path.join(extensionRoot, "manifest.json"), "utf8"));
+  const fixtureRoot = await fsp.mkdtemp(path.join(os.tmpdir(), "mdm-packaged-extension-icons-"));
+  try {
+    const resourcesRoot = path.join(fixtureRoot, "resources");
+    const matchers = getFileMatchers(packageJson.build, "extraResources", resourcesRoot, {
+      defaultSrc: designRoot,
+      customBuildOptions: {},
+      globalOutDir: path.join(designRoot, "release"),
+      macroExpander: (value: string) => value,
+    });
+    const extensionMatcher = matchers.find((matcher: { from: string; to: string }) =>
+      matcher.from === extensionRoot && matcher.to === path.join(resourcesRoot, BROWSER_EXTENSION_DIRECTORY_NAME));
+    assert.ok(extensionMatcher, "the packaged app must contain its own browser-extension resource");
+    const filter = extensionMatcher.createFilter();
+    await fsp.cp(extensionMatcher.from, extensionMatcher.to, {
+      recursive: true,
+      filter: async (source: string) => filter(source, await fsp.stat(source)),
+    });
+    for (const icon of new Set<string>([
+      ...Object.values(manifest.icons) as string[],
+      ...Object.values(manifest.action.default_icon) as string[],
+    ])) {
+      assert.deepEqual(await fsp.readFile(path.join(extensionMatcher.to, icon)),
+        await fsp.readFile(path.join(extensionRoot, icon)), `packaged resource preserves ${icon}`);
+    }
+    const userData = path.join(fixtureRoot, "user-data");
+    await installBrowserExtension(extensionMatcher.to, userData, TEST_CAPABILITY);
+    assert.equal((await browserExtensionInstallState(userData, TEST_CAPABILITY)).installed, true);
+
+    // An exact missing packaged icon must still fail the production install gate.
+    await fsp.rm(path.join(extensionMatcher.to, manifest.icons["48"]));
+    await assert.rejects(() => installBrowserExtension(extensionMatcher.to, userData, TEST_CAPABILITY), /static icon.*missing/i);
+  } finally {
+    await fsp.rm(fixtureRoot, { recursive: true, force: true });
+  }
+});
