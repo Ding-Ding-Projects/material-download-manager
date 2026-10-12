@@ -1,5 +1,27 @@
 # Handoff: Material Download Manager
 
+## Platform-aware engine fixture verification (Codex, 2026-10-12)
+
+The two remaining engine failures below were fixture/platform mismatches. Their
+native temporary I/O now uses the existing `DownloadManager` platform-folder
+constructor dependency, with a directory distinct from the USERPROFILE fallback.
+The fixtures retain their routing, explicit-target, category-preview and redaction
+assertions. They no longer redundantly submit native POSIX paths through the
+Windows settings boundary. Production code is unchanged.
+
+Windows drive/UNC values remain accepted by the real settings validator, while
+POSIX and relative configuration remain rejected. A manager-level rejection check
+compares both object identity and a cloned snapshot to prove no settings changed.
+The synthetic Windows strings are validation-only and never used for Linux I/O.
+
+Final Node 22.22.2 checks in the actual fetched-history worktree: typecheck and
+Electron compilation pass, engine **106/106**, Electron **174/174**. Real Linux
+PowerShell checks remain **76/76**, including actual old-release ZIP rejection.
+These results supersede the earlier 103/105 engine count but do not establish
+Windows package/native-window acceptance, a compatible stable release, or current
+Pages deployment. This follow-up remains local with a preservation-only skip
+marker; no additional push, release, dispatch or issue closure is claimed.
+
 ## Fixture follow-up and cross-platform icon diagnostics (Codex, 2026-10-12)
 
 The earlier five-commit preservation branch is available at

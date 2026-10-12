@@ -7,6 +7,7 @@ import path from "node:path";
 import { assertQueueCreatePayload, DownloadManager, type DownloadManagerDistributedDependencies } from "../DownloadManager";
 import type { DownloadQueue, PresentationSettings } from "../../../shared/types";
 import { SETTING_KEYS } from "../../../shared/types";
+import { validateSettingsPatch } from "../../../shared/settings";
 import { startTestServer } from "./testServer";
 import { HistoryStore } from "../../history/HistoryStore";
 import { CredentialVault, type CredentialVaultAdapter } from "../distributed/CredentialVault";
@@ -140,17 +141,32 @@ test("browser handoff query URLs survive restart only through the credential vau
   }
 });
 
+test("default-folder configuration retains Windows drive and UNC validation", () => {
+  for (const folder of ["C:/Downloads/Fixture", String.raw`\\fileserver\share\Fixture`]) {
+    assert.equal(validateSettingsPatch({ defaultSaveFolder: folder }).defaultSaveFolder, folder);
+  }
+  for (const folder of ["/tmp/fixture-downloads", "relative-downloads"]) {
+    assert.throws(() => validateSettingsPatch({ defaultSaveFolder: folder }), /Invalid value for setting: defaultSaveFolder/);
+  }
+});
+
 test("manager applies ordered auto-organize rules without rewriting explicit target folders", async () => {
   const root = await fsp.mkdtemp(path.join(os.tmpdir(), "mdm-auto-organize-manager-test-"));
   const server = await startTestServer(1024);
   const previousUserProfile = process.env.USERPROFILE;
   process.env.USERPROFILE = root;
-  const manager = new DownloadManager(root);
-  const defaultFolder = path.join(root, "Downloads");
+  const defaultFolder = path.join(root, "Platform downloads fixture");
+  const manager = new DownloadManager(root, undefined, { defaultSaveFolder: defaultFolder });
   try {
     await manager.init();
+    assert.equal(manager.getSettings().defaultSaveFolder, defaultFolder);
+    // Native temporary I/O comes from the platform boundary, not a Windows settings patch.
+    const beforeRejectedPath = manager.getSettings();
+    const beforeRejectedSnapshot = structuredClone(beforeRejectedPath);
+    await assert.rejects(manager.setSettings({ defaultSaveFolder: "/tmp/fixture-downloads" }), /Invalid value for setting: defaultSaveFolder/);
+    assert.strictEqual(manager.getSettings(), beforeRejectedPath, "rejected POSIX configuration must not replace settings");
+    assert.deepEqual(manager.getSettings(), beforeRejectedSnapshot, "rejected POSIX configuration must not mutate settings");
     const saved = await manager.setSettings({
-      defaultSaveFolder: defaultFolder,
       autoOrganizeEnabled: true,
       autoOrganizeRules: [{
         id: "documents",
@@ -343,14 +359,14 @@ test("manager preview matches the final category while raw query values stay red
   const server = await startTestServer(1_024);
   const previousUserProfile = process.env.USERPROFILE;
   process.env.USERPROFILE = root;
-  const manager = new DownloadManager(root);
+  const defaultFolder = path.join(root, "Platform downloads fixture");
+  const manager = new DownloadManager(root, undefined, { defaultSaveFolder: defaultFolder });
   let initialized = false;
   try {
     await manager.init();
     initialized = true;
-    const defaultFolder = path.join(root, "Downloads");
+    assert.equal(manager.getSettings().defaultSaveFolder, defaultFolder);
     await manager.setSettings({
-      defaultSaveFolder: defaultFolder,
       autoOrganizeEnabled: true,
       autoOrganizeRules: [{
         id: "long-query-values",

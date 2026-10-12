@@ -5,6 +5,11 @@ or have reached a stable release. Published entries must link the exact commit
 that completed the change. An Unreleased entry names missing evidence instead
 of guessing a commit, release, or date.
 
+## Unreleased — Platform-aware engine fixtures
+
+- **Temporary I/O versus configuration:** two manager fixtures now inject a distinct native temporary download directory through the existing platform boundary instead of submitting a POSIX path through Windows settings validation. Routing, explicit destinations, preview and redaction assertions remain intact. Additional checks accept Windows drive/UNC configuration, reject POSIX/relative configuration, and prove rejection leaves manager settings unchanged.
+- **Verification:** Node 22.22.2 typecheck and Electron compilation pass; complete engine tests pass 106/106 and Electron tests pass 174/174. The existing real PowerShell icon checks pass 76/76 and still reject the old release ZIP. These are Linux checks; Windows installed-app/package acceptance and current-source Pages delivery remain open. Production behavior is unchanged.
+
 ## Unreleased — Current-contract verification fixtures
 
 - **Desktop pending decisions:** update loopback HTTP fixtures to the current signed pending/decision/rollback contract. No transfer is enqueued before confirmation. The focused checks pass 22/22, including five isolated safety mutations with restored passing controls; manager and window-presentation boundaries remain test doubles.
