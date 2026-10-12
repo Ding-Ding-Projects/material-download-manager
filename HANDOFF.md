@@ -1,5 +1,58 @@
 # Handoff: Material Download Manager
 
+## Fixture follow-up and cross-platform icon diagnostics (Codex, 2026-10-12)
+
+The earlier five-commit preservation branch is available at
+[`codex/repair-pages-delivery`](https://github.com/Ding-Ding-Projects/material-download-manager/tree/codex/repair-pages-delivery),
+exact tip `8e05fe228f1c6ff243cd95ab844f0840a80b0282`. The source-only push retained
+`[skip ci]`; the remote SHA was verified, main and stable `v0.1.196` stayed
+unchanged, and no Actions run appeared for that tip. This is preservation, not
+hosted verification or permission to release.
+
+A separate local icon-diagnostic change executes the production validator using
+PowerShell 7.4.6 on Linux: 76 assertions pass over complete and malformed icon
+maps, real ZIP entries and PNG headers/dimensions. The existing icon-free stable
+ZIP remains rejected. Required icons are not made optional. No Windows packaging
+or deployed-Pages result follows from these cross-platform checks.
+
+The local fixture follow-up changes no application behavior:
+
+- Desktop loopback fixtures follow signed pending acknowledgment, authenticated
+  decisions and rollback. They cover presentation failure/readiness, cancellation,
+  expiry, concurrent confirmation, retryable queue failure and rollback ownership.
+  The focused suite passes 22/22 on three runs; premature enqueue, premature
+  readiness acknowledgment, wrong pending state, unauthenticated decisions and
+  premature ownership release each fail in disposable compiled mutations and
+  pass after restoration. Managers and native-window presentation are doubles.
+- The TabStrip contract uses parsed JSX bindings and executes the real extracted
+  projection/update functions. It retains hidden persisted tabs, removes them
+  from visible groups, handles active-tab fallback, and retains normal behavior.
+  Clickable controls pass 8/8, with four negative binding/state mutations.
+- Schema-9 tests cover exact public logo defaults, version-8 migration, independent
+  clones, persisted and reset provenance, round-trip and 16 invalid cases.
+  Persistence passes 16/16. Disabling top-level exact-key validation in a temporary
+  compiled copy makes the private-field case fail; restoring it returns green.
+
+Actual fetched Git history is present in the verification worktree. Passing a
+process-wide GIT_DIR to the entire suite was unsuitable because local-history
+checks create independent repositories; the final run uses the real worktree
+without that override. No history checks were weakened.
+
+The missing Electron import dependency was restored locally through the existing
+helper, using locked Electron 31.7.7 from the official distribution. The Linux
+archive SHA-256 matches the pinned package checksum:
+`00a2e8e5f52fe39c37cfc9d7bd7629e560017d28ee94c51495bf7e39c84b2d47`.
+No runtime binary or cache is committed and no sandbox setting was changed.
+
+Final local results: typecheck and Electron compilation pass; Electron tests
+**174/174**. The engine suite is **103/105**, not green: two unchanged manager
+fixtures use POSIX temporary default-save folders, which the current Windows
+absolute-path contract rejects. They require applicable Windows verification or
+a separately reviewed platform-aware fixture design, not a weakened validator.
+Real installed Windows application/extension interactions, native windows,
+Windows package validation, a compatible stable release, and current-source
+Pages delivery still remain open. Issue #17 and #18 are not closed.
+
 ## Pages delivery preflight and local repairs (Codex, 2026-10-12)
 
 **Status: local verified slices; release and issue closure remain on hold.**

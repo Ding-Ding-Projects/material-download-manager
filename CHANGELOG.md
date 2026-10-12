@@ -5,6 +5,13 @@ or have reached a stable release. Published entries must link the exact commit
 that completed the change. An Unreleased entry names missing evidence instead
 of guessing a commit, release, or date.
 
+## Unreleased — Current-contract verification fixtures
+
+- **Desktop pending decisions:** update loopback HTTP fixtures to the current signed pending/decision/rollback contract. No transfer is enqueued before confirmation. The focused checks pass 22/22, including five isolated safety mutations with restored passing controls; manager and window-presentation boundaries remain test doubles.
+- **Filtered tabs:** replace the stale single-line binding assertion with AST checks and execution of the actual projection/update functions. Clickable-control checks pass 8/8 and reject four wiring/state mutations; no rendered-window acceptance is claimed.
+- **Settings schema 9:** test logo defaults, version-8 migration, cloning, provenance, round-trip, and 16 malformed/private-field rejection cases. Persistence checks pass 16/16; disabling exact-key validation in a disposable compiled copy fails the new private-field check.
+- **Aggregate verification:** with real fetched Git history and the lock-pinned official Electron runtime restored locally, the Electron suite passes 174/174 and typecheck/compilation pass. The engine suite is **103/105**, with two unchanged fixtures submitting POSIX temporary folders to the Windows-only default-folder validator. Windows execution and release/deployment acceptance remain outstanding.
+
 ## Unreleased — Pages icon diagnostics
 
 - **StrictMode validation:** inspect JSON properties before dereferencing optional icon maps and require object maps with string paths. The production validator passes 76 real PowerShell 7.4.6/Linux assertions over ZIP/PNG fixtures, including rejection of the existing icon-free `v0.1.196` ZIP. This improves the failure diagnostic without bypassing required icons. Windows packaging, release publication, and deployed Pages acceptance remain open.

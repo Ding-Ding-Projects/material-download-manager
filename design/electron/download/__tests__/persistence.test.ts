@@ -3,13 +3,14 @@ import fsp from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
+import { DEFAULT_APP_LOGO_SETTINGS } from "../../../shared/appLogo";
 import { createDefaultSettings, SETTINGS_SCHEMA_VERSION } from "../../../shared/settings";
 import { migrateSettings, StateStore } from "../persistence";
 
 test("default settings are versioned and mark every value as compiled-in", () => {
   const settings = createDefaultSettings("C:/Downloads/MaterialDownloadManager");
 
-  assert.equal(SETTINGS_SCHEMA_VERSION, 8);
+  assert.equal(SETTINGS_SCHEMA_VERSION, 9);
   assert.equal(settings.settingsVersion, SETTINGS_SCHEMA_VERSION);
   assert.equal(settings.languageMode, "english");
   assert.equal(settings.displayName, "Material Download Manager");
@@ -33,9 +34,100 @@ test("default settings are versioned and mark every value as compiled-in", () =>
   assert.equal(settings.uiFontSize, 13);
   assert.equal(settings.uiFontWeight, 400);
   assert.equal(settings.externalEditorPath, null);
+  assert.deepEqual(settings.appLogo, {
+    schemaVersion: 1,
+    source: "preset",
+    preset: "material",
+    fit: "contain",
+    crop: { x: 0, y: 0, width: 1, height: 1 },
+    focalPoint: { x: 0.5, y: 0.5 },
+    background: "transparent",
+    backgroundColor: "#16171d",
+  });
+  assert.equal(settings.settingProvenance.appLogo, "compiled-in");
+  assert.notEqual(settings.appLogo, DEFAULT_APP_LOGO_SETTINGS);
+  assert.notEqual(settings.appLogo.crop, DEFAULT_APP_LOGO_SETTINGS.crop);
+  assert.notEqual(settings.appLogo.focalPoint, DEFAULT_APP_LOGO_SETTINGS.focalPoint);
   assert.equal(settings.autoOrganizeEnabled, true);
   assert.deepEqual(settings.autoOrganizeRules, []);
   assert.ok(Object.values(settings.settingProvenance).every((source) => source === "compiled-in"));
+});
+
+test("schema-v8 settings gain schema-v9 app-logo defaults without losing persisted choices", () => {
+  const migrated = migrateSettings(
+    {
+      settingsVersion: 8,
+      theme: "light",
+      settingProvenance: { theme: "persisted" },
+    },
+    "C:/Downloads/MaterialDownloadManager",
+  );
+
+  assert.equal(migrated.settingsVersion, 9);
+  assert.equal(migrated.theme, "light");
+  assert.equal(migrated.settingProvenance.theme, "persisted");
+  assert.deepEqual(migrated.appLogo, DEFAULT_APP_LOGO_SETTINGS);
+  assert.equal(migrated.settingProvenance.appLogo, "compiled-in");
+});
+
+test("schema-v9 app-logo migration clones persisted values and honors compiled-in provenance", () => {
+  const appLogo = {
+    ...DEFAULT_APP_LOGO_SETTINGS,
+    source: "custom" as const,
+    preset: "orbit" as const,
+    fit: "cover" as const,
+    crop: { x: 0.1, y: 0.2, width: 0.7, height: 0.6 },
+    focalPoint: { x: 0.25, y: 0.75 },
+    background: "color" as const,
+    backgroundColor: "#ABCDEF",
+  };
+  const migrated = migrateSettings(
+    { settingsVersion: 9, appLogo, settingProvenance: { appLogo: "persisted" } },
+    "C:/Downloads/MaterialDownloadManager",
+  );
+
+  assert.deepEqual(migrated.appLogo, { ...appLogo, backgroundColor: "#abcdef" });
+  assert.equal(migrated.settingProvenance.appLogo, "persisted");
+  assert.notEqual(migrated.appLogo, appLogo);
+  assert.notEqual(migrated.appLogo.crop, appLogo.crop);
+  assert.notEqual(migrated.appLogo.focalPoint, appLogo.focalPoint);
+
+  const reset = migrateSettings(
+    { settingsVersion: 9, appLogo, settingProvenance: { appLogo: "compiled-in" } },
+    "C:/Downloads/MaterialDownloadManager",
+  );
+  assert.deepEqual(reset.appLogo, DEFAULT_APP_LOGO_SETTINGS);
+  assert.equal(reset.settingProvenance.appLogo, "compiled-in");
+});
+
+test("schema-v9 app-logo migration rejects malformed or private fields without retaining persisted provenance", () => {
+  const invalidLogos = [
+    null,
+    [],
+    {},
+    { ...DEFAULT_APP_LOGO_SETTINGS, schemaVersion: 2 },
+    { ...DEFAULT_APP_LOGO_SETTINGS, source: "remote" },
+    { ...DEFAULT_APP_LOGO_SETTINGS, preset: "unknown" },
+    { ...DEFAULT_APP_LOGO_SETTINGS, fit: "stretch" },
+    { ...DEFAULT_APP_LOGO_SETTINGS, crop: { x: 0.8, y: 0, width: 0.5, height: 1 } },
+    { ...DEFAULT_APP_LOGO_SETTINGS, crop: { x: 0, y: 0, width: 0, height: 1 } },
+    { ...DEFAULT_APP_LOGO_SETTINGS, focalPoint: { x: Number.NaN, y: 0.5 } },
+    { ...DEFAULT_APP_LOGO_SETTINGS, focalPoint: { x: 0.5, y: 1.1 } },
+    { ...DEFAULT_APP_LOGO_SETTINGS, background: "image" },
+    { ...DEFAULT_APP_LOGO_SETTINGS, backgroundColor: "red" },
+    { ...DEFAULT_APP_LOGO_SETTINGS, sourcePath: "C:/private/logo.png" },
+    { ...DEFAULT_APP_LOGO_SETTINGS, imageBytes: "unexpected-payload" },
+    { ...DEFAULT_APP_LOGO_SETTINGS, crop: { ...DEFAULT_APP_LOGO_SETTINGS.crop, extra: true } },
+  ];
+
+  for (const [index, appLogo] of invalidLogos.entries()) {
+    const migrated = migrateSettings(
+      { settingsVersion: 9, appLogo, settingProvenance: { appLogo: "persisted" } },
+      "C:/Downloads/MaterialDownloadManager",
+    );
+    assert.deepEqual(migrated.appLogo, DEFAULT_APP_LOGO_SETTINGS, `invalid app-logo case ${index}`);
+    assert.equal(migrated.settingProvenance.appLogo, "compiled-in", `invalid app-logo provenance ${index}`);
+  }
 });
 
 test("legacy settings migrate safely and preserve provenance per field", () => {
@@ -130,6 +222,7 @@ test("settings round-trip keeps the new values and marks them persisted", async 
       density: "spacious" as const,
       accentSeedColor: "#112233" as const,
       uiFontSize: 16,
+      appLogo: { ...initial.appLogo, preset: "stack" as const, fit: "cover" as const },
       autoOrganizeEnabled: false,
       autoOrganizeRules: [{
         id: "documents",
@@ -145,6 +238,7 @@ test("settings round-trip keeps the new values and marks them persisted", async 
         density: "persisted" as const,
         accentSeedColor: "persisted" as const,
         uiFontSize: "persisted" as const,
+        appLogo: "persisted" as const,
         autoOrganizeEnabled: "persisted" as const,
         autoOrganizeRules: "persisted" as const,
       },
@@ -158,10 +252,12 @@ test("settings round-trip keeps the new values and marks them persisted", async 
     assert.equal(loaded.settings.density, "spacious");
     assert.equal(loaded.settings.accentSeedColor, "#112233");
     assert.equal(loaded.settings.uiFontSize, 16);
+    assert.deepEqual(loaded.settings.appLogo, settings.appLogo);
     assert.equal(loaded.settings.autoOrganizeEnabled, false);
     assert.deepEqual(loaded.settings.autoOrganizeRules, settings.autoOrganizeRules);
     assert.equal(loaded.settings.settingProvenance.languageMode, "persisted");
     assert.equal(loaded.settings.settingProvenance.uiFontSize, "persisted");
+    assert.equal(loaded.settings.settingProvenance.appLogo, "persisted");
     assert.equal(loaded.settings.settingProvenance.autoOrganizeEnabled, "persisted");
     assert.equal(loaded.settings.settingProvenance.autoOrganizeRules, "persisted");
   } finally {
