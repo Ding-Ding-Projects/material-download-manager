@@ -1,10 +1,11 @@
 import assert from "node:assert/strict";
 import { createHash, createHmac } from "node:crypto";
 import { createServer } from "node:http";
-import { readFile } from "node:fs/promises";
+import { cp, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { test } from "node:test";
+import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 import {
   DEFAULT_SETTINGS,
@@ -13,6 +14,7 @@ import {
   NARRATOR_LANGUAGE_MODES,
   NARRATOR_SOUND_MODES,
   HANDOFF_PATH,
+  HANDOFF_DECISION_PATH,
   HANDOFF_PROTOCOL_VERSION,
   makeSettingsExport,
   parseSettingsExport,
@@ -28,6 +30,9 @@ import {
   deriveDownloadFileName,
   handoffRequestProofInput,
   handoffResponseProofInput,
+  handoffDecisionProofInput,
+  handoffDecisionResponseProofInput,
+  handoffRollbackProofInput,
   normalizeDownloadUrl,
   normalizeFileName,
   validateIncomingMessage,
@@ -80,6 +85,19 @@ const extensionRoot = dirname(dirname(fileURLToPath(import.meta.url)));
 const read = (relativePath) => readFile(join(extensionRoot, relativePath), "utf8");
 let nextHarnessId = 0;
 const TEST_CAPABILITY = "a".repeat(43);
+const TEST_HANDOFF_ID = "b".repeat(64);
+const HANDOFF_ALARM = "material-download-manager-pending-handoff";
+
+async function loadPreparedServiceWorker(t) {
+  // Model the app's private prepared copy without ever changing the public
+  // pairing module or placing a real capability in the repository.
+  const stagedRoot = await mkdtemp(join(tmpdir(), "mdm-paired-extension-test-"));
+  t.after(() => rm(stagedRoot, { recursive: true, force: true }));
+  await cp(join(extensionRoot, "src"), join(stagedRoot, "src"), { recursive: true });
+  await writeFile(join(stagedRoot, "package.json"), JSON.stringify({ type: "module" }));
+  await writeFile(join(stagedRoot, "src/shared/pairing.js"), `export const HANDOFF_CAPABILITY = ${JSON.stringify(TEST_CAPABILITY)};\n`);
+  return import(pathToFileURL(join(stagedRoot, "src/service-worker.js")).href);
+}
 
 function assertPersonalVocabularyInventory({ options, optionsScript, popupScript, worker, article, docsIndex }) {
   const required = [
@@ -125,6 +143,31 @@ function challengeBody(url) {
     protocol: HANDOFF_PROTOCOL_VERSION,
     nonce,
     proof: handoffProof(challengeProofInput(nonce)),
+  };
+}
+
+function pendingBody(nonce, overrides = {}) {
+  return {
+    protocol: HANDOFF_PROTOCOL_VERSION,
+    accepted: true,
+    state: "pending",
+    handoffId: TEST_HANDOFF_ID,
+    expiresAt: Date.now() + 60_000,
+    proof: handoffProof(handoffResponseProofInput(nonce, TEST_HANDOFF_ID)),
+    ...overrides,
+  };
+}
+
+function decisionBody(state, overrides = {}) {
+  const downloadId = state === "accepted" ? "automatic-capture-test" : null;
+  return {
+    protocol: HANDOFF_PROTOCOL_VERSION,
+    handoffId: TEST_HANDOFF_ID,
+    state,
+    downloadId,
+    expiresAt: Date.now() + 60_000,
+    proof: handoffProof(handoffDecisionResponseProofInput(TEST_HANDOFF_ID, state, downloadId)),
+    ...overrides,
   };
 }
 
@@ -204,6 +247,11 @@ function createChromeHarness({ initialStorage = {}, initialDownloads = [] } = {}
     runtime,
     contextMenus,
     downloads,
+    alarms: {
+      onAlarm: new FakeEvent(),
+      created: [],
+      async create(name, options) { this.created.push({ name, options }); },
+    },
     storage: {
       local: {
         async get(key) {
@@ -220,7 +268,12 @@ function createChromeHarness({ initialStorage = {}, initialDownloads = [] } = {}
       async setBadgeBackgroundColor() {},
     },
   };
-  return { chromeMock, contextMenus, downloads, failures, items, operations, runtime, storage };
+  const setStorage = (key, newValue) => {
+    const oldValue = storage.get(key);
+    storage.set(key, newValue);
+    chromeMock.storage.onChanged.dispatch({ [key]: { oldValue, newValue } }, "local");
+  };
+  return { chromeMock, contextMenus, downloads, failures, items, operations, runtime, storage, setStorage };
 }
 
 function downloadFingerprint(url, startTime) {
@@ -252,12 +305,13 @@ test("MV3 manifest declares the intended entrypoints and minimized permissions",
   assert.equal(manifest.background.type, "module");
   assert.equal(manifest.action.default_popup, "src/popup.html");
   assert.equal(manifest.options_page, "src/options.html");
-  assert.deepEqual(manifest.permissions, ["activeTab", "contextMenus", "downloads", "storage", "tts"]);
+  assert.deepEqual(manifest.permissions, ["activeTab", "alarms", "contextMenus", "downloads", "storage", "tts"]);
   assert.deepEqual(manifest.host_permissions, ["http://127.0.0.1/*", "http://localhost/*"]);
   assert.equal(manifest.permissions.includes("tabs"), false);
   assert.equal(manifest.permissions.includes("scripting"), false);
   assert.equal(manifest.permissions.includes("downloads"), true);
   assert.equal(manifest.permissions.includes("tts"), true);
+  assert.equal(manifest.permissions.includes("alarms"), true);
   assert.equal(manifest.host_permissions.includes("<all_urls>"), false);
   await import("node:fs/promises").then(({ access }) => Promise.all([
     access(join(extensionRoot, manifest.background.service_worker)),
@@ -386,6 +440,7 @@ test("service worker runtime boundary stores settings and reports disabled hando
   let receivedBody = null;
   let managerAccepted = true;
   let responseProofValid = true;
+  let responseMode = "pending";
   const server = createServer((request, response) => {
     if (request.method === "OPTIONS") {
       response.writeHead(204, {
@@ -418,16 +473,24 @@ test("service worker runtime boundary stores settings and reports disabled hando
           return;
         }
         response.writeHead(202, { "Content-Type": "application/json" });
-        response.end(JSON.stringify({
-          protocol: HANDOFF_PROTOCOL_VERSION,
+        const body = pendingBody(receivedBody.authNonce, {
           accepted: managerAccepted,
-          downloadId: "extension-test-id",
-          ...(managerAccepted ? {
-            proof: responseProofValid
-              ? handoffProof(handoffResponseProofInput(receivedBody.authNonce, "extension-test-id"))
-              : "0".repeat(64),
-          } : {}),
-        }));
+          ...(!responseProofValid ? { proof: "0".repeat(64) } : {}),
+        });
+        if (responseMode === "immediate-accepted") {
+          delete body.state;
+          delete body.handoffId;
+          delete body.expiresAt;
+          body.downloadId = "extension-test-id";
+          body.proof = handoffProof(handoffResponseProofInput(receivedBody.authNonce, body.downloadId));
+        } else if (responseMode === "missing-pending") {
+          delete body.state;
+        } else if (responseMode === "accepted-state") {
+          body.state = "accepted";
+        } else if (responseMode === "expired") {
+          body.expiresAt = Date.now() - 1;
+        }
+        response.end(JSON.stringify(body));
       });
       return;
     }
@@ -508,7 +571,9 @@ test("service worker runtime boundary stores settings and reports disabled hando
     const connection = await send({ type: "TEST_HANDOFF" });
     assert.equal(connection.result.code, "connection-success");
     const handedOff = await send({ type: "HANDOFF_URL", url: "https://example.test/file.zip", title: "Example" });
-    assert.equal(handedOff.result.code, "handoff-success");
+    assert.equal(handedOff.result.code, "handoff-pending");
+    assert.equal(handedOff.result.detail.handoffId, TEST_HANDOFF_ID);
+    assert.ok(handedOff.result.detail.expiresAt > Date.now());
     assert.equal(receivedBody.protocol, HANDOFF_PROTOCOL_VERSION);
     assert.equal(receivedBody.source, "material-download-manager-extension");
     assert.equal(receivedBody.url, "https://example.test/file.zip");
@@ -541,6 +606,11 @@ test("service worker runtime boundary stores settings and reports disabled hando
     const impersonated = await send({ type: "HANDOFF_URL", url: "https://example.test/forged-response.zip" });
     assert.equal(impersonated.result.code, "handoff-failed");
     responseProofValid = true;
+    for (responseMode of ["immediate-accepted", "missing-pending", "accepted-state", "expired"]) {
+      const invalid = await send({ type: "HANDOFF_URL", url: "https://example.test/invalid-acknowledgment.zip" });
+      assert.equal(invalid.result.code, "handoff-failed", `${responseMode} must not replace a pending Start download acknowledgment`);
+    }
+    responseMode = "pending";
     managerAccepted = false;
     const unconfirmed = await send({ type: "HANDOFF_URL", url: "https://example.test/file.zip" });
     assert.equal(unconfirmed.result.code, "handoff-failed");
@@ -572,7 +642,7 @@ test("service worker runtime boundary stores settings and reports disabled hando
   }
 });
 
-test("automatic download capture is fail-safe, privacy-minimal, and coalesces duplicate events", async () => {
+test("automatic download capture is fail-safe, privacy-minimal, and coalesces duplicate events", async (t) => {
   const settings = sanitizeSettings({
     autoCaptureDownloads: true,
     handoffEndpoint: "http://127.0.0.1:47821/v1/downloads",
@@ -581,24 +651,41 @@ test("automatic download capture is fail-safe, privacy-minimal, and coalesces du
   const previousChrome = globalThis.chrome;
   const previousFetch = globalThis.fetch;
   const posts = [];
+  const decisions = [];
+  const rollbacks = [];
   let managerMode = "accepted";
+  let decisionMode = "pending";
+  let rollbackProofValid = true;
   globalThis.chrome = harness.chromeMock;
   globalThis.fetch = async (url, options = {}) => {
     if (managerMode === "offline") throw new TypeError("loopback endpoint offline");
     if (options.method === "GET" && new URL(String(url)).pathname === "/v2/challenge") {
       return new Response(JSON.stringify(challengeBody(url)), { status: 200, headers: { "Content-Type": "application/json" } });
     }
+    if (options.method === "GET" && new URL(String(url)).pathname === `${HANDOFF_DECISION_PATH}/${TEST_HANDOFF_ID}`) {
+      assert.equal(new URL(String(url)).searchParams.get("proof"), handoffProof(handoffDecisionProofInput(TEST_HANDOFF_ID)));
+      decisions.push(decisionMode);
+      const body = decisionMode === "forged-accepted"
+        ? decisionBody("accepted", { proof: "0".repeat(64) })
+        : decisionBody(decisionMode);
+      return new Response(JSON.stringify(body), { status: 200, headers: { "Content-Type": "application/json" } });
+    }
+    if (options.method === "POST" && new URL(String(url)).pathname === `${HANDOFF_DECISION_PATH}/${TEST_HANDOFF_ID}/rollback`) {
+      const body = JSON.parse(options.body);
+      assert.equal(body.downloadId, "automatic-capture-test");
+      assert.equal(body.proof, handoffProof(handoffRollbackProofInput(TEST_HANDOFF_ID, body.downloadId)));
+      rollbacks.push(body);
+      return new Response(JSON.stringify(decisionBody("rejected", rollbackProofValid ? {} : { proof: "0".repeat(64) })), {
+        status: 200, headers: { "Content-Type": "application/json" },
+      });
+    }
     if (options.method !== "POST") throw new Error(`Unexpected request: ${options.method ?? "GET"} ${url}`);
     const body = JSON.parse(options.body);
     posts.push({ url: String(url), options, body });
     assert.equal(body.authProof, handoffProof(handoffRequestProofInput(body, body.authNonce)));
-    const downloadId = "automatic-capture-test";
-    return new Response(JSON.stringify({
-      protocol: HANDOFF_PROTOCOL_VERSION,
+    return new Response(JSON.stringify(pendingBody(body.authNonce, {
       accepted: managerMode === "accepted",
-      downloadId,
-      ...(managerMode === "accepted" ? { proof: handoffProof(handoffResponseProofInput(body.authNonce, downloadId)) } : {}),
-    }), { status: 202, headers: { "Content-Type": "application/json" } });
+    })), { status: 202, headers: { "Content-Type": "application/json" } });
   };
 
   const claimsDoNotContain = (id) => !Object.prototype.hasOwnProperty.call(
@@ -620,13 +707,28 @@ test("automatic download capture is fail-safe, privacy-minimal, and coalesces du
     startTime: `2026-08-11T04:00:${String(id % 60).padStart(2, "0")}.000Z`,
     ...overrides,
   });
+  const waitForPending = async (id) => {
+    await waitFor(
+      () => harness.storage.get("automaticDownloadClaims")?.[id]?.phase === "pending"
+        && harness.storage.get("lastResult")?.code === "automatic-awaiting-decision",
+      `download ${id} did not reach a pending Start download decision`,
+    );
+    assert.equal(harness.items.get(id)?.paused, true);
+    assert.equal(harness.operations.some(([operation, downloadId]) => downloadId === id && ["cancel", "erase", "resume"].includes(operation)), false);
+  };
+  const pollDecision = (state) => {
+    decisionMode = state;
+    harness.chromeMock.alarms.onAlarm.dispatch({ name: HANDOFF_ALARM });
+  };
 
   try {
-    await import(`../src/service-worker.js?automatic-capture-test=${nextHarnessId}`);
+    await loadPreparedServiceWorker(t);
     await waitFor(
       () => harness.downloads.onCreated.listeners.length === 1 && harness.contextMenus.created.length === 1,
       "service worker initialization did not register automatic download capture",
     );
+    await waitFor(() => harness.chromeMock.alarms.created.length === 1, "worker did not create its pending-decision recovery alarm");
+    assert.deepEqual(harness.chromeMock.alarms.created, [{ name: HANDOFF_ALARM, options: { periodInMinutes: 0.5 } }]);
 
     dispatchDownload(baseDownload(101, {
       url: "https://example.test/releases/report%20final.zip",
@@ -636,13 +738,15 @@ test("automatic download capture is fail-safe, privacy-minimal, and coalesces du
       cookies: [{ name: "session", value: "must-not-leak" }],
       requestHeaders: [{ name: "Authorization", value: "must-not-leak" }],
     }));
+    await waitForPending(101);
+    pollDecision("accepted");
     await waitFor(
       () => harness.storage.get("lastResult")?.code === "handoff-success" && claimsDoNotContain(101),
       "accepted automatic download did not finish",
     );
     assert.deepEqual(
       harness.operations.filter(([, id]) => id === 101),
-      [["pause", 101], ["search", 101], ["cancel", 101], ["erase", 101]],
+      [["pause", 101], ["search", 101], ["search", 101], ["cancel", 101], ["erase", 101]],
     );
     assert.equal(posts.length, 1);
     assert.equal(posts[0].url, settings.handoffEndpoint);
@@ -715,24 +819,87 @@ test("automatic download capture is fail-safe, privacy-minimal, and coalesces du
     assert.deepEqual(harness.operations, []);
     assert.deepEqual(posts, []);
 
-    harness.storage.set("settings", { ...settings, autoCaptureDownloads: false });
+    harness.setStorage("settings", { ...settings, autoCaptureDownloads: false });
     dispatchDownload(baseDownload(110));
     for (let tick = 0; tick < 5; tick += 1) await new Promise((resolve) => setTimeout(resolve, 0));
     assert.deepEqual(harness.operations, []);
     assert.deepEqual(posts, []);
 
-    harness.storage.set("settings", settings);
+    harness.setStorage("settings", settings);
     dispatchDownload(baseDownload(111));
     harness.downloads.onCreated.dispatch(baseDownload(111));
+    await waitForPending(111);
+    pollDecision("accepted");
     await waitFor(
       () => harness.storage.get("lastResult")?.code === "handoff-success" && claimsDoNotContain(111),
       "coalesced automatic download did not finish",
     );
     assert.deepEqual(
       harness.operations.filter(([, id]) => id === 111),
-      [["pause", 111], ["search", 111], ["cancel", 111], ["erase", 111]],
+      [["pause", 111], ["search", 111], ["search", 111], ["cancel", 111], ["erase", 111]],
     );
     assert.equal(posts.length, 1);
+
+    harness.operations.length = 0;
+    dispatchDownload(baseDownload(117));
+    await waitForPending(117);
+    const decisionCount = decisions.length;
+    pollDecision("pending");
+    await waitFor(() => decisions.length > decisionCount, "pending decision was not polled");
+    decisionMode = "forged-accepted";
+    await waitFor(() => decisions.length >= decisionCount + 3, "invalid decision proof did not remain pending for a retry", 2_000);
+    assert.equal(harness.items.get(117)?.paused, true);
+    assert.equal(claimsDoNotContain(117), false);
+    assert.equal(harness.operations.some(([operation, id]) => id === 117 && ["cancel", "erase", "resume"].includes(operation)), false);
+    // The next ordinary timer reads a signed terminal decision. Waiting for
+    // real retries also proves a forged acceptance cannot end ownership early.
+    decisionMode = "expired";
+    await waitFor(
+      () => claimsDoNotContain(117) && harness.storage.get("lastResult")?.code === "automatic-kept-in-browser",
+      "signed expiry did not recover the browser copy after an invalid decision proof",
+      2_000,
+    );
+
+    for (const [id, state] of [[114, "rejected"], [115, "expired"]]) {
+      harness.operations.length = 0;
+      dispatchDownload(baseDownload(id));
+      await waitForPending(id);
+      pollDecision(state);
+      await waitFor(
+        () => claimsDoNotContain(id) && harness.storage.get("lastResult")?.code === "automatic-kept-in-browser",
+        `${state} decision did not retain the original browser download`,
+      );
+      assert.deepEqual(harness.operations.filter(([, downloadId]) => downloadId === id), [
+        ["pause", id], ["search", id], ["search", id], ["resume", id],
+      ]);
+    }
+
+    harness.operations.length = 0;
+    dispatchDownload(baseDownload(116));
+    await waitForPending(116);
+    harness.failures.cancel.add(116);
+    rollbackProofValid = false;
+    pollDecision("accepted");
+    await waitFor(
+      () => harness.storage.get("lastResult")?.code === "automatic-cancel-recovery-failed",
+      "an unverified desktop rollback did not preserve the paused browser copy",
+    );
+    assert.equal(rollbacks.length, 1);
+    assert.equal(harness.items.get(116)?.paused, true);
+    assert.equal(claimsDoNotContain(116), false);
+    assert.equal(harness.operations.some(([operation, id]) => id === 116 && ["resume", "erase"].includes(operation)), false);
+    rollbackProofValid = true;
+    pollDecision("accepted");
+    await waitFor(
+      () => claimsDoNotContain(116) && harness.storage.get("lastResult")?.code === "automatic-kept-in-browser",
+      "authenticated rollback did not allow the exact browser copy to resume",
+    );
+    assert.equal(rollbacks.length, 2);
+    assert.equal(harness.items.get(116)?.paused, false);
+    assert.equal(harness.operations.some(([operation, id]) => id === 116 && operation === "erase"), false);
+    assert.equal(decisions.includes("accepted"), true);
+    assert.equal(decisions.includes("rejected"), true);
+    assert.equal(decisions.includes("expired"), true);
 
     harness.operations.length = 0;
     posts.length = 0;
@@ -747,6 +914,46 @@ test("automatic download capture is fail-safe, privacy-minimal, and coalesces du
     assert.deepEqual(harness.operations, []);
     assert.deepEqual(posts, []);
     assert.equal(Object.keys(harness.storage.get("automaticDownloadClaims")).length, 64);
+  } finally {
+    if (previousChrome === undefined) delete globalThis.chrome;
+    else globalThis.chrome = previousChrome;
+    if (previousFetch === undefined) delete globalThis.fetch;
+    else globalThis.fetch = previousFetch;
+  }
+});
+
+test("unpaired public worker leaves automatic downloads untouched even with a stored capability", async () => {
+  const publicPairing = await read("src/shared/pairing.js");
+  assert.match(publicPairing, /export const HANDOFF_CAPABILITY = "";/u);
+  const settings = sanitizeSettings({ autoCaptureDownloads: true });
+  const harness = createChromeHarness({ initialStorage: { settings, handoffCapability: TEST_CAPABILITY } });
+  const previousChrome = globalThis.chrome;
+  const previousFetch = globalThis.fetch;
+  let requestCount = 0;
+  globalThis.chrome = harness.chromeMock;
+  globalThis.fetch = async () => {
+    requestCount += 1;
+    throw new Error("an unpaired automatic capture must not contact the manager");
+  };
+  try {
+    await import(`../src/service-worker.js?unpaired-no-blink-test=${nextHarnessId}`);
+    await waitFor(() => harness.chromeMock.alarms.created.length === 1, "unpaired worker did not initialize");
+    const item = {
+      id: 401,
+      url: "https://example.test/unpaired.zip",
+      startTime: "2026-08-11T04:00:00.000Z",
+      state: "in_progress",
+      paused: false,
+      exists: true,
+      incognito: false,
+    };
+    harness.items.set(item.id, { ...item });
+    harness.downloads.onCreated.dispatch(item);
+    await waitFor(() => harness.storage.get("lastResult")?.code === "handoff-unpaired", "public worker did not report its missing compiled pairing");
+    assert.deepEqual(harness.operations, [], "unpaired capture must never blink through pause/resume or touch another browser operation");
+    assert.equal(requestCount, 0);
+    assert.equal(harness.items.get(item.id)?.paused, false);
+    assert.deepEqual(harness.storage.get("automaticDownloadClaims") ?? {}, {});
   } finally {
     if (previousChrome === undefined) delete globalThis.chrome;
     else globalThis.chrome = previousChrome;

@@ -1,5 +1,121 @@
 # Handoff: Material Download Manager
 
+## Pages delivery preflight and local repairs (Codex, 2026-10-12)
+
+**Status: local verified slices; release and issue closure remain on hold.**
+The base is `2cfc403fcf8f15aab6e13bfbde2ac11c0b04035e` with its actual
+repository history preserved. The changes are separated into package resources,
+obsolete preload imports, renderer integration, generated documentation, and
+extension protocol fixtures. No application release is claimed.
+
+### Original Pages foundation evidence
+
+[Issue #17](https://github.com/Ding-Ding-Projects/material-download-manager/issues/17)
+tracks the Pages inventory/settings foundation; the full cross-surface contract
+remains in [#18](https://github.com/Ding-Ding-Projects/material-download-manager/issues/18).
+The foundation commit `8f5cb05ce087af5b5ab8d35156ceb70b78f80b20` and later
+capture integration `87a08da5650b31d0034b41689f96cb8cce4db01b` are ancestors of
+the base. The two historical 929-by-1004 PNGs still match their recorded hashes.
+The current Pages inventory contains 38 records: one implemented, 21 partial,
+and 16 planned. Its checks/build pass 124 assertions, including negative guards.
+
+A real cloud-Chromium check of the live site verified name and emoji persistence,
+School-mode activation across reload, hidden language/tone/emoji controls and
+surprise, and reset back to the default mode name. It also found that the active
+mode's explanation still exposes the terms it is meant to suppress. The delivered
+`app.js` matches release source `6ad5da62f63a9c8bde8feb693ea60f4604a02ca1`
+after line-ending normalization. The current source already fixes that rendering
+path. Focused execution of the real rendering functions fails for the delivered
+source and passes for the current source while retaining normal-mode copy.
+No new built-Windows or current-source browser capture is claimed.
+
+### Deployment attempt and immutable release boundary
+
+The single authorized manual [Pages run 38293105935](https://github.com/Ding-Ding-Projects/material-download-manager/actions/runs/38293105935)
+used the exact base source. Site staging succeeded; verified-release metadata
+preparation failed before deployment with a missing `icons` property. The existing
+`v0.1.196` extension ZIP was downloaded and checked: 93,649 bytes, SHA-256
+`2628f390a8f3be2af7a5a7bba9010a2e37e121a0a4b3f4d31bc7c7509ac9ecdb`.
+It has no declared or packaged icons. This old package is allowed by Chrome's
+base manifest rules but does not satisfy the repository's newer static-icon
+contract. The contract was not weakened, the release was not edited, and no
+second deployment or application-release run was dispatched.
+
+### Local repairs and verification
+
+All results below are Linux/Node 22.22.2 results, not installed-Windows acceptance.
+
+- `design/package.json` includes existing extension `assets/**/*` in packaged
+  resources. `installExtension.test.ts` uses electron-builder's actual matcher,
+  stages the real resource tree, verifies each declared icon byte-for-byte, and
+  exercises the production installer. Baseline: 12/13; repaired: 13/13. Removing
+  an exact icon still fails the production loadability gate.
+- `design/electron/preload.ts` drops only two unused, nonexistent Ollama refresh
+  imports. The real Electron compilation now passes after baseline TS2305 errors.
+- `DownloadTable.tsx` imports the existing `getUiCopy` helper. `useAppStore.ts`
+  retains one copy of the previously byte-identical refresh/subscription block
+  and its unsubscribe. `node --test scripts/storeLifecycle.test.mjs` from
+  `design/` passes 3/3, including duplicate-registration and missing-cleanup
+  mutations. Full `npm run typecheck` and `npm run build` pass.
+- The generated offline bundle adds three missing site articles and updates two
+  stale records from existing reviewed source. No other article record changes.
+  `npm run docs:bundle:check` and documentation tests 2/2 pass.
+- Extension tests use cleaned-up temporary copies with synthetic compiled pairing
+  and signed protocol-3 pending, decision and rollback responses. Production code
+  and the empty public pairing module remain unchanged. `npm --prefix extension
+  test` passes 61/61 on three consecutive runs. Exact mutations removing the
+  alarms permission, compiled-pairing boundary, or required pending acknowledgment
+  fail; restored sources pass.
+- The historical changelog suite passes 5/5 with actual fetched Git history.
+  Its earlier archive-only failure was an environment issue; the test is unchanged.
+
+### Broad verification is still incomplete
+
+The broader initial Electron run reported 142 passed, 10 failed and one cancelled;
+the engine run reported 80 passed and two failed. These are not green aggregate
+verdicts. The remaining categories must stay distinct:
+
+- Electron executable imports failed in two Electron test files and one engine
+  file after dependencies were installed with lifecycle scripts disabled. This is
+  an unavailable runtime, not proof of a production regression.
+- Desktop handoff fixtures still expect immediate queue acceptance and its old
+  signature. Current production requires a displayed Start-download decision,
+  signed pending acknowledgment and a later authenticated decision. Fixtures
+  without the presentation callback correctly receive 503. Preserve fail-closed
+  behavior when updating the tests.
+- The TabStrip source assertion assumes both old variable names and single-line
+  formatting. The implementation now uses `visibleTabState` and
+  `updateVisibleTabState`; a replacement check must prove the actual add-download
+  binding and filtered-state behavior rather than relax the contract blindly.
+- The settings-default test still expects schema 8 while the source declares 9.
+  Review the version-9 defaults/migration before updating that expectation.
+- PowerShell package checks, actual Windows installer/extension preparation,
+  native handoff windows and current-source deployed Pages interaction/captures
+  remain unverified. No mock browser or Linux fixture substitutes for these.
+
+### Publication caution
+
+Every branch push triggers the stable application release workflow. It reserves
+new version and optional catalog-name tags, publishes unsigned Squirrel and
+extension assets, and advances the default update feed. Installed Squirrel apps
+may download that new update automatically. A successful release also triggers
+Pages for its source; the workflows intentionally run no tests or lint.
+
+These local commits carry `[skip ci]` for a potential separately approved,
+source-preservation-only push. That marker skips push-triggered workflows; it
+is not hosted verification and does not prevent a manual workflow dispatch.
+Before any publication, inspect the current workflow definitions and preserve
+the marker on the pushed tip. Do not dispatch a release or mark either issue
+complete until the applicable outstanding evidence has been reviewed.
+
+### 粵語摘要
+
+今次補返打包漏咗嘅 icon、清走過期 import 同重複 listener，再同步離線文件同
+測試 fixture。細範圍驗證有實際結果，唔會將佢哋湊成「全套綠燈」。Pages 發佈
+喺舊版 extension 缺少新合約要求嘅 icon 嗰步停咗，live copy 問題仲未交付修正。
+Windows 實機、PowerShell 同餘下廣泛測試未完成之前，release 同關 issue 都繼續等。
+
+
 ## Browser-captured downloads, tray startup, and completion flow (released source follow-up, 2026-08-12)
 ## Personal vocabulary JSON foundation (task branch, 2026-08-12)
 
