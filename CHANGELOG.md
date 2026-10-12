@@ -5,6 +5,10 @@ or have reached a stable release. Published entries must link the exact commit
 that completed the change. An Unreleased entry names missing evidence instead
 of guessing a commit, release, or date.
 
+## Unreleased — Pages icon diagnostics
+
+- **StrictMode validation:** inspect JSON properties before dereferencing optional icon maps and require object maps with string paths. The production validator passes 76 real PowerShell 7.4.6/Linux assertions over ZIP/PNG fixtures, including rejection of the existing icon-free `v0.1.196` ZIP. This improves the failure diagnostic without bypassing required icons. Windows packaging, release publication, and deployed Pages acceptance remain open.
+
 ## Unreleased — Pages delivery preflight repairs
 
 - **Scope:** source repairs supporting [Pages foundation #17](https://github.com/Ding-Ding-Projects/material-download-manager/issues/17), with broader acceptance still tracked in [#18](https://github.com/Ding-Ding-Projects/material-download-manager/issues/18). No new release or deployment is claimed.

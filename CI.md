@@ -41,6 +41,16 @@ never describe the workflow itself as having passed tests it did not run.
 The usual local application and extension checks are documented in
 [`README.md`](README.md) and [`extension/README.md`](extension/README.md).
 
+Run `pwsh -NoLogo -NoProfile -NonInteractive -File scripts/tests/test-pages-extension-icons.ps1`
+locally for the Pages static-icon artifact contract. It executes the production validator under StrictMode with
+real ZIP/PNG fixtures, rejects absent, null, malformed, incomplete, and wrongly
+referenced icon maps and missing or malformed ZIP entries, and accepts the
+complete fixture. The optional `-ReleaseZip <path>` asserts that a historical
+ZIP without static icons remains rejected. This cross-platform check does not
+claim Windows, release-publication, or deployed-Pages acceptance and is not an
+Actions test gate.
+
+
 ## Fresh bootstrap
 
 The release job selects Node.js 22, installs the exact dependency graph from

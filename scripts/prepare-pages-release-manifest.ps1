@@ -22,17 +22,24 @@ $staticExtensionIcons = [ordered]@{
 }
 
 function Assert-StaticExtensionIcons($Manifest, $Archive, $EntryNames) {
-  if ($null -eq $Manifest.icons -or $Manifest.icons -isnot [psobject] -or
-      $null -eq $Manifest.action -or $Manifest.action -isnot [psobject] -or
-      $null -eq $Manifest.action.default_icon -or $Manifest.action.default_icon -isnot [psobject]) {
-    Stop-WithMessage 'The browser-extension ZIP has no declared static action icons.'
+  # Look up optional JSON properties before dereferencing them: StrictMode throws
+  # on absent members before the intended artifact-contract diagnostic can run.
+  $iconsProperty = $Manifest.PSObject.Properties['icons']
+  $actionProperty = $Manifest.PSObject.Properties['action']
+  if ($null -eq $iconsProperty -or $iconsProperty.Value -isnot [pscustomobject] -or
+      $null -eq $actionProperty -or $actionProperty.Value -isnot [pscustomobject]) {
+    Stop-WithMessage 'The browser-extension ZIP must declare icons and action as JSON objects with static action icons.'
+  }
+  $defaultIconProperty = $actionProperty.Value.PSObject.Properties['default_icon']
+  if ($null -eq $defaultIconProperty -or $defaultIconProperty.Value -isnot [pscustomobject]) {
+    Stop-WithMessage 'The browser-extension ZIP must declare action.default_icon as a JSON object with static action icons.'
   }
   foreach ($sizeText in $staticExtensionIcons.Keys) {
     $expectedPath = [string]$staticExtensionIcons[$sizeText]
     foreach ($iconSetName in @('icons', 'action.default_icon')) {
-      $iconSet = if ($iconSetName -eq 'icons') { $Manifest.icons } else { $Manifest.action.default_icon }
+      $iconSet = if ($iconSetName -eq 'icons') { $iconsProperty.Value } else { $defaultIconProperty.Value }
       $property = $iconSet.PSObject.Properties[$sizeText]
-      if ($null -eq $property -or [string]$property.Value -ne $expectedPath) {
+      if ($null -eq $property -or $property.Value -isnot [string] -or $property.Value -ne $expectedPath) {
         Stop-WithMessage "The browser-extension ZIP ${iconSetName}[$sizeText] must be $expectedPath."
       }
     }
